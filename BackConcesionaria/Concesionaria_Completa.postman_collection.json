@@ -1,0 +1,379 @@
+{
+    "info": {
+        "_postman_id": "api-concesionaria-saas-completa",
+        "name": "Concesionaria SaaS API (Full)",
+        "description": "Colección completa con todos los módulos implementados: SaaS Core, CRM, Inventario, Operaciones, Gastos y Financiación.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "0. Health & Auth",
+            "item": [
+                {
+                    "name": "Health Check",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{baseUrl}}/health"
+                    }
+                },
+                {
+                    "name": "Login Admin",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.success) {",
+                                    "    pm.environment.set(\"accessToken\", jsonData.data.tokens.access.token);",
+                                    "    pm.environment.set(\"refreshToken\", jsonData.data.tokens.refresh.token);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"admin@demo.com\",\n    \"password\": \"admin123\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": "{{baseUrl}}/auth/login"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "1. SaaS Core",
+            "item": [
+                {
+                    "name": "Concesionarias",
+                    "item": [
+                        {
+                            "name": "List",
+                            "request": {
+                                "method": "GET",
+                                "url": "{{baseUrl}}/concesionarias"
+                            }
+                        },
+                        {
+                            "name": "Get By ID",
+                            "request": {
+                                "method": "GET",
+                                "url": "{{baseUrl}}/concesionarias/1"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Sucursales",
+                    "item": [
+                        {
+                            "name": "List",
+                            "request": {
+                                "method": "GET",
+                                "url": "{{baseUrl}}/sucursales"
+                            }
+                        },
+                        {
+                            "name": "Create",
+                            "request": {
+                                "method": "POST",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\"nombre\": \"Sucursal Norte\", \"direccion\": \"Av. Principal 123\"}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": "{{baseUrl}}/sucursales"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Usuarios",
+                    "item": [
+                        {
+                            "name": "List",
+                            "request": {
+                                "method": "GET",
+                                "url": "{{baseUrl}}/usuarios"
+                            }
+                        },
+                        {
+                            "name": "Create Usuario",
+                            "request": {
+                                "method": "POST",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"nombre\": \"Vendedor Test\",\n    \"email\": \"vendedor@test.com\",\n    \"password\": \"vendedor123\",\n    \"roleIds\": [2]\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": "{{baseUrl}}/usuarios"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "2. CRM",
+            "item": [
+                {
+                    "name": "Clientes",
+                    "item": [
+                        {
+                            "name": "List",
+                            "request": {
+                                "method": "GET",
+                                "url": "{{baseUrl}}/clientes"
+                            }
+                        },
+                        {
+                            "name": "Create",
+                            "request": {
+                                "method": "POST",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\"nombre\": \"Juan Perez\", \"dni\": \"20123456\", \"email\": \"juan@mail.com\"}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": "{{baseUrl}}/clientes"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Proveedores",
+                    "item": [
+                        {
+                            "name": "List",
+                            "request": {
+                                "method": "GET",
+                                "url": "{{baseUrl}}/proveedores"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "3. Inventario",
+            "item": [
+                {
+                    "name": "Vehículos",
+                    "item": [
+                        {
+                            "name": "List Stock",
+                            "request": {
+                                "method": "GET",
+                                "url": "{{baseUrl}}/vehiculos?estado=publicado"
+                            }
+                        },
+                        {
+                            "name": "Create Vehículo",
+                            "request": {
+                                "method": "POST",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"sucursalId\": 1,\n    \"marca\": \"Toyota\",\n    \"modelo\": \"Hilux\",\n    \"anio\": 2022,\n    \"tipo\": \"USADO\",\n    \"origen\": \"compra\",\n    \"fechaIngreso\": \"2023-11-01T12:00:00Z\",\n    \"precioLista\": 45000\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": "{{baseUrl}}/vehiculos"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Movimientos",
+                    "item": [
+                        {
+                            "name": "Transferir entre sucursales",
+                            "request": {
+                                "method": "POST",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\"vehiculoId\": 1, \"sucursalDestinoId\": 2, \"motivo\": \"Exhibición en otra sucursal\"}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": "{{baseUrl}}/vehiculo-movimientos"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "4. Operaciones",
+            "item": [
+                {
+                    "name": "Reservas",
+                    "item": [
+                        {
+                            "name": "Crear Reserva",
+                            "request": {
+                                "method": "POST",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"sucursalId\": 1,\n    \"vendedorId\": 1,\n    \"clienteId\": 1,\n    \"vehiculoId\": 1,\n    \"monto\": 500,\n    \"moneda\": \"USD\",\n    \"fechaVencimiento\": \"2023-12-31T00:00:00Z\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": "{{baseUrl}}/reservas"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Ventas",
+                    "item": [
+                        {
+                            "name": "Registrar Venta Directa",
+                            "request": {
+                                "method": "POST",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"sucursalId\": 1,\n    \"clienteId\": 1,\n    \"vendedorId\": 1,\n    \"vehiculoId\": 1,\n    \"montoTotal\": 42000,\n    \"moneda\": \"USD\",\n    \"items\": [{ \"descripcion\": \"Gastos de transferencia\", \"monto\": 1500 }]\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": "{{baseUrl}}/ventas"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "5. Gastos & Postventa",
+            "item": [
+                {
+                    "name": "Gastos",
+                    "item": [
+                        {
+                            "name": "Crear Gasto Fijo",
+                            "request": {
+                                "method": "POST",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\"monto\": 150000, \"moneda\": \"ARS\", \"tipo\": \"FIJO\", \"categoriaId\": 1, \"sucursalId\": 1, \"fechaGasto\": \"2023-11-20\"}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": "{{baseUrl}}/gastos"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Postventa",
+                    "item": [
+                        {
+                            "name": "Abrir Caso Reparación",
+                            "request": {
+                                "method": "POST",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\"clienteId\": 1, \"vehiculoId\": 1, \"motivo\": \"Falla en frenos\", \"sucursalId\": 1}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "url": "{{baseUrl}}/postventa-casos"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "6. Financiación",
+            "item": [
+                {
+                    "name": "List Financieras",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{baseUrl}}/financieras"
+                    }
+                },
+                {
+                    "name": "Pagar Cuota",
+                    "request": {
+                        "method": "PATCH",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\"estado\": \"PAGADA\", \"montoPagado\": 250}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": "{{baseUrl}}/financiaciones/cuotas/1/pagar"
+                    }
+                }
+            ]
+        }
+    ],
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{accessToken}}",
+                "type": "string"
+            }
+        ]
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost:3000/api"
+        },
+        {
+            "key": "accessToken",
+            "value": ""
+        },
+        {
+            "key": "refreshToken",
+            "value": ""
+        }
+    ]
+}

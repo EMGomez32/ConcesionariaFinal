@@ -1,0 +1,33 @@
+# ── Secretos — NUNCA versionar ──────────────────────────────
+# Cubre .env de raíz, back y front (cualquier nivel). Se permite el template.
+.env
+*.env
+!.env.example
+
+# ── Dependencias y builds ───────────────────────────────────
+node_modules/
+dist/
+build/
+
+# ── Datos subidos por usuarios (PII: DNI, recibos de sueldo) ─
+uploads/
+
+# ── Logs de runtime ─────────────────────────────────────────
+logs/
+*.log
+
+# ── Backups locales de la base ──────────────────────────────
+scripts/*.sql
+scripts/*.sql.gz
+
+# ── Salida generada por herramientas (análisis, no es fuente) ─
+graphify-out/
+
+# ── Config local de tooling / IDE ───────────────────────────
+.claude/
+.vscode/
+.idea/
+
+# ── Archivos del sistema operativo ──────────────────────────
+.DS_Store
+Thumbs.db

@@ -1,0 +1,1266 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Concesionaria {
+  id                      Int                        @id @default(autoincrement())
+  nombre                  String
+  cuit                    String?
+  email                   String?
+  telefono                String?
+  direccion               String?
+  createdAt               DateTime                   @default(now()) @map("created_at")
+  updatedAt               DateTime                   @updatedAt @map("updated_at")
+  deletedAt               DateTime?                  @map("deleted_at")
+  auditLogs               AuditLog[]
+  categoriasGastoFijo     CategoriaGastoFijo[]
+  categoriasGastoVehiculo CategoriaGastoVehiculo[]
+  tiposPostventa          TipoPostventa[]
+  clientes                Cliente[]
+  subscription            ConcesionariaSubscription?
+  financiaciones          Financiacion[]
+  financieras             Financiera[]
+  gastosFijos             GastoFijo[]
+  gastosVehiculo          GastoVehiculo[]
+  ingresosVehiculo        IngresoVehiculo[]
+  postventaCasos          PostventaCaso[]
+  presupuestos            Presupuesto[]
+  proveedores             Proveedor[]
+  reservas                Reserva[]
+  solicitudesFinanciacion SolicitudFinanciacion[]
+  sucursales              Sucursal[]
+  usuarios                Usuario[]
+  vehiculoMovimientos     VehiculoMovimiento[]
+  vehiculos               Vehiculo[]
+  ventas                  Venta[]
+
+  @@map("concesionarias")
+}
+
+model Sucursal {
+  id                       Int                     @id @default(autoincrement())
+  concesionariaId          Int                     @map("concesionaria_id")
+  nombre                   String
+  direccion                String?
+  ciudad                   String?
+  email                    String?
+  telefono                 String?
+  activo                   Boolean                 @default(true)
+  createdAt                DateTime                @default(now()) @map("created_at")
+  updatedAt                DateTime                @updatedAt @map("updated_at")
+  deletedAt                DateTime?               @map("deleted_at")
+  financiaciones           Financiacion[]
+  gastosFijos              GastoFijo[]
+  ingresosVehiculo         IngresoVehiculo[]
+  postventaCasos           PostventaCaso[]
+  presupuestos             Presupuesto[]
+  reservas                 Reserva[]
+  solicitudesFinanciacion  SolicitudFinanciacion[]
+  concesionaria            Concesionaria           @relation(fields: [concesionariaId], references: [id])
+  usuarios                 Usuario[]
+  vehiculoMovimientosDesde VehiculoMovimiento[]    @relation("MovDesdeSucursal")
+  vehiculoMovimientosHasta VehiculoMovimiento[]    @relation("MovHastaSucursal")
+  vehiculos                Vehiculo[]
+  ventas                   Venta[]
+
+  @@unique([concesionariaId, nombre])
+  @@index([concesionariaId])
+  @@map("sucursales")
+}
+
+model Rol {
+  id           Int          @id @default(autoincrement())
+  nombre       RolNombre    @unique
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  deletedAt    DateTime?    @map("deleted_at")
+  usuarioRoles UsuarioRol[]
+
+  @@map("roles")
+}
+
+model Usuario {
+  id                     Int                  @id @default(autoincrement())
+  concesionariaId        Int?                 @map("concesionaria_id")
+  sucursalId             Int?                 @map("sucursal_id")
+  nombre                 String
+  email                  String
+  passwordHash           String?              @map("password_hash")
+  activo                 Boolean              @default(true)
+  createdAt              DateTime             @default(now()) @map("created_at")
+  updatedAt              DateTime             @updatedAt @map("updated_at")
+  deletedAt              DateTime?            @map("deleted_at")
+  auditLogs              AuditLog[]
+  financiacionesCobrador Financiacion[]       @relation("FinanciacionCobrador")
+  ingresosVehiculo       IngresoVehiculo[]    @relation("IngresoRegistradoPor")
+  presupuestos           Presupuesto[]        @relation("PresupuestoVendedor")
+  reservasCreadas        Reserva[]            @relation("ReservaCreadaPor")
+  roles                  UsuarioRol[]
+  concesionaria          Concesionaria?       @relation(fields: [concesionariaId], references: [id])
+  sucursal               Sucursal?            @relation(fields: [sucursalId], references: [id])
+  vehiculoMovimientos    VehiculoMovimiento[] @relation("MovimientoRegistradoPor")
+  ventas                 Venta[]              @relation("VentaVendedor")
+  refreshTokens          RefreshToken[]
+
+  @@unique([concesionariaId, email])
+  @@index([concesionariaId])
+  @@index([email])
+  @@map("usuarios")
+}
+
+model UsuarioRol {
+  id        Int       @id @default(autoincrement())
+  usuarioId Int       @map("usuario_id")
+  rolId     Int       @map("rol_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  rol       Rol       @relation(fields: [rolId], references: [id])
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, rolId])
+  @@map("usuario_roles")
+}
+
+model Cliente {
+  id                      Int                     @id @default(autoincrement())
+  concesionariaId         Int                     @map("concesionaria_id")
+  nombre                  String
+  dni                     String?
+  telefono                String?
+  email                   String?
+  direccion               String?
+  observaciones           String?
+  createdAt               DateTime                @default(now()) @map("created_at")
+  updatedAt               DateTime                @updatedAt @map("updated_at")
+  deletedAt               DateTime?               @map("deleted_at")
+  concesionaria           Concesionaria           @relation(fields: [concesionariaId], references: [id])
+  financiaciones          Financiacion[]
+  ingresosVehiculo        IngresoVehiculo[]
+  postventaCasos          PostventaCaso[]
+  presupuestos            Presupuesto[]
+  reservas                Reserva[]
+  solicitudesFinanciacion SolicitudFinanciacion[]
+  ventas                  Venta[]
+
+  @@index([concesionariaId])
+  @@index([dni])
+  @@index([telefono])
+  @@map("clientes")
+}
+
+model Proveedor {
+  id              Int               @id @default(autoincrement())
+  concesionariaId Int               @map("concesionaria_id")
+  nombre          String
+  tipo            String?
+  telefono        String?
+  email           String?
+  direccion       String?
+  activo          Boolean           @default(true)
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  deletedAt       DateTime?         @map("deleted_at")
+  gastosFijos     GastoFijo[]
+  gastosVehiculo  GastoVehiculo[]
+  ingresosOrigen  IngresoVehiculo[] @relation("IngresoProveedorOrigen")
+  postventaItems  PostventaItem[]
+  concesionaria   Concesionaria     @relation(fields: [concesionariaId], references: [id])
+  vehiculosCompra Vehiculo[]        @relation("VehiculoProveedorCompra")
+  // Unidades enviadas a este proveedor para preparación.
+  movimientosDestino VehiculoMovimiento[] @relation("MovProveedorDestino")
+
+  @@index([concesionariaId])
+  @@index([tipo])
+  @@map("proveedores")
+}
+
+model Vehiculo {
+  id                       Int                  @id @default(autoincrement())
+  concesionariaId          Int                  @map("concesionaria_id")
+  sucursalId               Int                  @map("sucursal_id")
+  tipo                     TipoVehiculo         @default(USADO)
+  origen                   OrigenVehiculo       @default(compra)
+  marca                    String
+  modelo                   String
+  version                  String?
+  anio                     Int?
+  dominio                  String?
+  vin                      String?
+  kmIngreso                Int?                 @map("km_ingreso")
+  color                    String?
+  estado                   EstadoVehiculo       @default(preparacion)
+  fechaIngreso             DateTime             @map("fecha_ingreso") @db.Date
+  fechaCompra              DateTime?            @map("fecha_compra") @db.Date
+  precioCompra             Decimal?             @map("precio_compra") @db.Decimal(12, 2)
+  precioLista              Decimal?             @map("precio_lista") @db.Decimal(12, 2)
+  moneda                   String               @default("ARS")
+  proveedorCompraId        Int?                 @map("proveedor_compra_id")
+  formaPagoCompra          String?              @map("forma_pago_compra")
+  observaciones            String?
+  createdAt                DateTime             @default(now()) @map("created_at")
+  updatedAt                DateTime             @updatedAt @map("updated_at")
+  deletedAt                DateTime?            @map("deleted_at")
+  gastos                   GastoVehiculo[]
+  ingresos                 IngresoVehiculo[]
+  postventaCasos           PostventaCaso[]      @relation("CasoVehiculo")
+  presupuestoCanjeGenerado PresupuestoCanje[]   @relation("VehiculoGeneradoDesdeCanje")
+  presupuestoItems         PresupuestoItem[]
+  reservas                 Reserva[]
+  solicitudesFinanciacion  SolicitudFinanciacion[]
+  archivos                 VehiculoArchivo[]
+  movimientos              VehiculoMovimiento[]
+  concesionaria            Concesionaria        @relation(fields: [concesionariaId], references: [id])
+  proveedorCompra          Proveedor?           @relation("VehiculoProveedorCompra", fields: [proveedorCompraId], references: [id])
+  sucursal                 Sucursal             @relation(fields: [sucursalId], references: [id])
+  ventaCanjeVehiculo       VentaCanjeVehiculo[]
+  ventas                   Venta?
+
+  @@unique([concesionariaId, vin])
+  @@index([concesionariaId])
+  @@index([sucursalId])
+  @@index([dominio])
+  @@index([vin])
+  @@index([estado])
+  @@map("vehiculos")
+}
+
+model VehiculoArchivo {
+  id              Int       @id @default(autoincrement())
+  concesionariaId Int?       @map("concesionaria_id")
+  vehiculoId      Int       @map("vehiculo_id")
+  tipo         String?
+  url          String
+  descripcion  String?
+  originalName String?   @map("original_name")
+  mimeType     String?   @map("mime_type")
+  sizeBytes    Int?      @map("size_bytes")
+  storageKey   String?   @map("storage_key")
+  uploadedById Int?      @map("uploaded_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  vehiculo     Vehiculo  @relation(fields: [vehiculoId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([vehiculoId])
+  @@map("vehiculo_archivos")
+}
+
+model IngresoVehiculo {
+  id                Int                 @id @default(autoincrement())
+  concesionariaId   Int                 @map("concesionaria_id")
+  sucursalId        Int                 @map("sucursal_id")
+  vehiculoId        Int                 @map("vehiculo_id")
+  tipoIngreso       TipoIngresoVehiculo @map("tipo_ingreso")
+  clienteOrigenId   Int?                @map("cliente_origen_id")
+  proveedorOrigenId Int?                @map("proveedor_origen_id")
+  presupuestoId     Int?                @map("presupuesto_id")
+  ventaId           Int?                @map("venta_id")
+  fechaIngreso      DateTime            @map("fecha_ingreso") @db.Date
+  valorTomado       Decimal?            @map("valor_tomado") @db.Decimal(12, 2)
+  observaciones     String?
+  registradoPorId   Int?                @map("registrado_por_id")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  deletedAt         DateTime?           @map("deleted_at")
+  clienteOrigen     Cliente?            @relation(fields: [clienteOrigenId], references: [id])
+  concesionaria     Concesionaria       @relation(fields: [concesionariaId], references: [id])
+  presupuesto       Presupuesto?        @relation(fields: [presupuestoId], references: [id])
+  proveedorOrigen   Proveedor?          @relation("IngresoProveedorOrigen", fields: [proveedorOrigenId], references: [id])
+  registradoPor     Usuario?            @relation("IngresoRegistradoPor", fields: [registradoPorId], references: [id])
+  sucursal          Sucursal            @relation(fields: [sucursalId], references: [id])
+  vehiculo          Vehiculo            @relation(fields: [vehiculoId], references: [id])
+  venta             Venta?              @relation(fields: [ventaId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([sucursalId])
+  @@index([vehiculoId])
+  @@map("ingresos_vehiculo")
+}
+
+model VehiculoMovimiento {
+  id              Int                    @id @default(autoincrement())
+  concesionariaId Int                    @map("concesionaria_id")
+  vehiculoId      Int                    @map("vehiculo_id")
+  desdeSucursalId Int?                   @map("desde_sucursal_id")
+  hastaSucursalId Int?                   @map("hasta_sucursal_id")
+  tipo            TipoMovimientoVehiculo
+  fecha           DateTime               @default(now())
+  motivo          String?
+  // Proveedor externo al que se envía la unidad cuando el movimiento es una
+  // preparación (mecánico, lavadero, chapa y pintura...). En traslados va null.
+  proveedorDestinoId Int?                @map("proveedor_destino_id")
+  // Destino en texto libre: sólo para movimientos históricos previos a que el
+  // destino pasara a ser un proveedor. No se escribe más.
+  destino         String?
+  // Fecha en que la unidad volvió de preparación. Null = todavía afuera.
+  fechaRetorno    DateTime?              @map("fecha_retorno")
+  registradoPorId Int?                   @map("registrado_por_id")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  deletedAt       DateTime?              @map("deleted_at")
+  concesionaria   Concesionaria          @relation(fields: [concesionariaId], references: [id])
+  desdeSucursal   Sucursal?              @relation("MovDesdeSucursal", fields: [desdeSucursalId], references: [id])
+  hastaSucursal   Sucursal?              @relation("MovHastaSucursal", fields: [hastaSucursalId], references: [id])
+  proveedorDestino Proveedor?            @relation("MovProveedorDestino", fields: [proveedorDestinoId], references: [id])
+  registradoPor   Usuario?               @relation("MovimientoRegistradoPor", fields: [registradoPorId], references: [id])
+  vehiculo        Vehiculo               @relation(fields: [vehiculoId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([vehiculoId])
+  @@index([desdeSucursalId])
+  @@index([hastaSucursalId])
+  @@index([proveedorDestinoId])
+  @@map("vehiculo_movimientos")
+}
+
+model Reserva {
+  id              Int           @id @default(autoincrement())
+  concesionariaId Int           @map("concesionaria_id")
+  sucursalId      Int           @map("sucursal_id")
+  vehiculoId      Int           @map("vehiculo_id")
+  clienteId       Int           @map("cliente_id")
+  creadaPorId     Int?          @map("creada_por_id")
+  estado          EstadoReserva @default(activa)
+  fecha           DateTime      @db.Date
+  venceEl         DateTime?     @map("vence_el") @db.Date
+  montoSenia      Decimal?      @map("monto_senia") @db.Decimal(12, 2)
+  moneda          String        @default("ARS")
+  metodo          MetodoPago?
+  referencia      String?
+  observaciones   String?
+  ventaId         Int?          @map("venta_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
+  cliente         Cliente       @relation(fields: [clienteId], references: [id])
+  concesionaria   Concesionaria @relation(fields: [concesionariaId], references: [id])
+  creadaPor       Usuario?      @relation("ReservaCreadaPor", fields: [creadaPorId], references: [id])
+  sucursal        Sucursal      @relation(fields: [sucursalId], references: [id])
+  vehiculo        Vehiculo      @relation(fields: [vehiculoId], references: [id])
+  venta           Venta?        @relation(fields: [ventaId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([sucursalId])
+  @@index([vehiculoId])
+  @@index([clienteId])
+  @@index([estado])
+  @@map("reservas")
+}
+
+model CategoriaGastoVehiculo {
+  id              Int             @id @default(autoincrement())
+  concesionariaId Int             @map("concesionaria_id")
+  nombre          String
+  descripcion     String?
+  activo          Boolean         @default(true)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  deletedAt       DateTime?       @map("deleted_at")
+  concesionaria   Concesionaria   @relation(fields: [concesionariaId], references: [id])
+  gastos          GastoVehiculo[]
+
+  @@unique([concesionariaId, nombre])
+  @@map("categorias_gasto_vehiculo")
+}
+
+model GastoVehiculo {
+  id              Int                    @id @default(autoincrement())
+  concesionariaId Int                    @map("concesionaria_id")
+  vehiculoId      Int                    @map("vehiculo_id")
+  categoriaId     Int                    @map("categoria_id")
+  proveedorId     Int?                   @map("proveedor_id")
+  fecha           DateTime               @db.Date
+  monto           Decimal                @db.Decimal(12, 2)
+  moneda          String                 @default("ARS")
+  descripcion     String?
+  comprobanteUrl  String?                @map("comprobante_url")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  deletedAt       DateTime?              @map("deleted_at")
+  categoria       CategoriaGastoVehiculo @relation(fields: [categoriaId], references: [id])
+  concesionaria   Concesionaria          @relation(fields: [concesionariaId], references: [id])
+  proveedor       Proveedor?             @relation(fields: [proveedorId], references: [id])
+  vehiculo        Vehiculo               @relation(fields: [vehiculoId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([vehiculoId])
+  @@index([fecha])
+  @@index([categoriaId])
+  @@map("gastos_vehiculo")
+}
+
+model CategoriaGastoFijo {
+  id              Int           @id @default(autoincrement())
+  concesionariaId Int           @map("concesionaria_id")
+  nombre          String
+  activo          Boolean       @default(true)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
+  concesionaria   Concesionaria @relation(fields: [concesionariaId], references: [id])
+  gastos          GastoFijo[]
+
+  @@unique([concesionariaId, nombre])
+  @@map("categorias_gasto_fijo")
+}
+
+model GastoFijo {
+  id              Int                @id @default(autoincrement())
+  concesionariaId Int                @map("concesionaria_id")
+  sucursalId      Int?               @map("sucursal_id")
+  categoriaId     Int                @map("categoria_id")
+  proveedorId     Int?               @map("proveedor_id")
+  anio            Int
+  mes             Int
+  descripcion     String
+  monto           Decimal            @db.Decimal(12, 2)
+  moneda          String             @default("ARS")
+  comprobanteUrl  String?            @map("comprobante_url")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  deletedAt       DateTime?          @map("deleted_at")
+  categoria       CategoriaGastoFijo @relation(fields: [categoriaId], references: [id])
+  concesionaria   Concesionaria      @relation(fields: [concesionariaId], references: [id])
+  proveedor       Proveedor?         @relation(fields: [proveedorId], references: [id])
+  sucursal        Sucursal?          @relation(fields: [sucursalId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([sucursalId])
+  @@index([concesionariaId, anio, mes])
+  @@index([categoriaId])
+  @@map("gastos_fijos")
+}
+
+model Presupuesto {
+  id                      Int                     @id @default(autoincrement())
+  concesionariaId         Int                     @map("concesionaria_id")
+  sucursalId              Int                     @map("sucursal_id")
+  nroPresupuesto          String                  @map("nro_presupuesto")
+  clienteId               Int                     @map("cliente_id")
+  vendedorId              Int                     @map("vendedor_id")
+  fechaCreacion           DateTime                @map("fecha_creacion") @db.Date
+  validoHasta             DateTime?               @map("valido_hasta") @db.Date
+  estado                  EstadoPresupuesto       @default(borrador)
+  moneda                  String                  @default("ARS")
+  observaciones           String?
+  pdfUrl                  String?                 @map("pdf_url")
+  createdAt               DateTime                @default(now()) @map("created_at")
+  updatedAt               DateTime                @updatedAt @map("updated_at")
+  deletedAt               DateTime?               @map("deleted_at")
+  ingresosVehiculo        IngresoVehiculo[]
+  canje                   PresupuestoCanje?
+  extras                  PresupuestoExtra[]
+  items                   PresupuestoItem[]
+  cliente                 Cliente                 @relation(fields: [clienteId], references: [id])
+  concesionaria           Concesionaria           @relation(fields: [concesionariaId], references: [id])
+  sucursal                Sucursal                @relation(fields: [sucursalId], references: [id])
+  vendedor                Usuario                 @relation("PresupuestoVendedor", fields: [vendedorId], references: [id])
+  solicitudesFinanciacion SolicitudFinanciacion[]
+  venta                   Venta?
+
+  @@unique([concesionariaId, nroPresupuesto])
+  @@index([concesionariaId])
+  @@index([sucursalId])
+  @@index([clienteId])
+  @@index([vendedorId])
+  @@index([estado])
+  @@map("presupuestos")
+}
+
+model PresupuestoItem {
+  id              Int         @id @default(autoincrement())
+  concesionariaId Int?         @map("concesionaria_id")
+  presupuestoId   Int         @map("presupuesto_id")
+  vehiculoId      Int         @map("vehiculo_id")
+  precioLista     Decimal     @map("precio_lista") @db.Decimal(12, 2)
+  descuento       Decimal     @default(0) @db.Decimal(12, 2)
+  precioFinal     Decimal     @map("precio_final") @db.Decimal(12, 2)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  deletedAt       DateTime?   @map("deleted_at")
+  presupuesto     Presupuesto @relation(fields: [presupuestoId], references: [id])
+  vehiculo        Vehiculo    @relation(fields: [vehiculoId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([presupuestoId])
+  @@index([vehiculoId])
+  @@map("presupuesto_items")
+}
+
+model PresupuestoExtra {
+  id              Int         @id @default(autoincrement())
+  concesionariaId Int?         @map("concesionaria_id")
+  presupuestoId   Int         @map("presupuesto_id")
+  descripcion     String
+  monto           Decimal     @db.Decimal(12, 2)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  deletedAt       DateTime?   @map("deleted_at")
+  presupuesto     Presupuesto @relation(fields: [presupuestoId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([presupuestoId])
+  @@map("presupuesto_extras")
+}
+
+model PresupuestoCanje {
+  id                 Int         @id @default(autoincrement())
+  concesionariaId    Int?         @map("concesionaria_id")
+  presupuestoId      Int         @unique @map("presupuesto_id")
+  descripcion        String?
+  anio               Int?
+  km                 Int?
+  dominio            String?
+  valorTomado        Decimal     @map("valor_tomado") @db.Decimal(12, 2)
+  observaciones      String?
+  crearEnInventario  Boolean     @default(true) @map("crear_en_inventario")
+  vehiculoGeneradoId Int?        @map("vehiculo_generado_id")
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+  deletedAt          DateTime?   @map("deleted_at")
+  presupuesto        Presupuesto @relation(fields: [presupuestoId], references: [id])
+  vehiculoGenerado   Vehiculo?   @relation("VehiculoGeneradoDesdeCanje", fields: [vehiculoGeneradoId], references: [id])
+
+  @@index([concesionariaId])
+  @@map("presupuesto_canje")
+}
+
+model Venta {
+  id                      Int                     @id @default(autoincrement())
+  concesionariaId         Int                     @map("concesionaria_id")
+  sucursalId              Int                     @map("sucursal_id")
+  vehiculoId              Int                     @unique @map("vehiculo_id")
+  presupuestoId           Int?                    @unique @map("presupuesto_id")
+  clienteId               Int                     @map("cliente_id")
+  vendedorId              Int                     @map("vendedor_id")
+  fechaVenta              DateTime                @map("fecha_venta") @db.Date
+  precioVenta             Decimal                 @map("precio_venta") @db.Decimal(12, 2)
+  moneda                  String                  @default("ARS")
+  formaPago               FormaPagoVenta          @default(contado) @map("forma_pago")
+  observaciones           String?
+  estadoEntrega           EstadoEntrega           @default(pendiente) @map("estado_entrega")
+  fechaEntrega            DateTime?               @map("fecha_entrega") @db.Date
+  createdAt               DateTime                @default(now()) @map("created_at")
+  updatedAt               DateTime                @updatedAt @map("updated_at")
+  deletedAt               DateTime?               @map("deleted_at")
+  // Una venta puede acumular varias financiaciones a lo largo del tiempo: la
+  // original y las sucesivas refinanciaciones de su saldo.
+  financiaciones          Financiacion[]
+  ingresosVehiculo        IngresoVehiculo[]
+  postventaCasos          PostventaCaso[]
+  reservas                Reserva[]
+  solicitudesFinanciacion SolicitudFinanciacion[]
+  canjes                  VentaCanjeVehiculo[]
+  extras                  VentaExtra[]
+  pagos                   VentaPago[]
+  cliente                 Cliente                 @relation(fields: [clienteId], references: [id])
+  concesionaria           Concesionaria           @relation(fields: [concesionariaId], references: [id])
+  presupuesto             Presupuesto?            @relation(fields: [presupuestoId], references: [id])
+  sucursal                Sucursal                @relation(fields: [sucursalId], references: [id])
+  vehiculo                Vehiculo                @relation(fields: [vehiculoId], references: [id])
+  vendedor                Usuario                 @relation("VentaVendedor", fields: [vendedorId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([sucursalId])
+  @@index([clienteId])
+  @@index([vendedorId])
+  @@index([fechaVenta])
+  @@index([estadoEntrega])
+  @@map("ventas")
+}
+
+model VentaExtra {
+  id              Int       @id @default(autoincrement())
+  concesionariaId Int?       @map("concesionaria_id")
+  ventaId         Int       @map("venta_id")
+  descripcion     String
+  monto           Decimal   @db.Decimal(12, 2)
+  comprobanteUrl  String?   @map("comprobante_url")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+  venta           Venta     @relation(fields: [ventaId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([ventaId])
+  @@map("venta_extras")
+}
+
+model VentaPago {
+  id              Int        @id @default(autoincrement())
+  concesionariaId Int?        @map("concesionaria_id")
+  ventaId         Int        @map("venta_id")
+  fecha           DateTime   @default(now())
+  monto           Decimal    @db.Decimal(12, 2)
+  metodo          MetodoPago
+  tipo            String?
+  referencia      String?
+  comprobanteUrl  String?    @map("comprobante_url")
+  observaciones   String?
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  deletedAt       DateTime?  @map("deleted_at")
+  venta           Venta      @relation(fields: [ventaId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([ventaId])
+  @@index([fecha])
+  @@map("venta_pagos")
+}
+
+model VentaCanjeVehiculo {
+  id              Int       @id @default(autoincrement())
+  concesionariaId Int?       @map("concesionaria_id")
+  ventaId         Int       @map("venta_id")
+  vehiculoCanjeId Int       @map("vehiculo_canje_id")
+  valorTomado     Decimal   @map("valor_tomado") @db.Decimal(12, 2)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+  vehiculo        Vehiculo  @relation(fields: [vehiculoCanjeId], references: [id])
+  venta           Venta     @relation(fields: [ventaId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([ventaId])
+  @@index([vehiculoCanjeId])
+  @@map("venta_canje_vehiculo")
+}
+
+model Financiacion {
+  id              Int                @id @default(autoincrement())
+  concesionariaId Int                @map("concesionaria_id")
+  sucursalId      Int?               @map("sucursal_id")
+  // Sin @unique: refinanciar genera una nueva financiación sobre la misma venta.
+  // Además, con @unique un contrato soft-borrado seguía ocupando el lugar y esa
+  // venta no se podía volver a financiar nunca.
+  ventaId         Int                @map("venta_id")
+  clienteId       Int                @map("cliente_id")
+  cobradorId      Int?               @map("cobrador_id")
+  fechaInicio     DateTime           @map("fecha_inicio") @db.Date
+  montoFinanciado Decimal            @map("monto_financiado") @db.Decimal(12, 2)
+  moneda          String             @default("ARS")
+  cuotas          Int
+  diaVencimiento  Int                @map("dia_vencimiento")
+  tasaMensual     Decimal?           @map("tasa_mensual") @db.Decimal(8, 4)
+  estado          EstadoFinanciacion @default(activa)
+  observaciones   String?
+  // Contrato al que esta financiación refinancia. Null si es la original.
+  // Sin @unique a propósito: agregar un índice único sobre una tabla con datos
+  // hace abortar al `prisma db push` del arranque (que corre sin
+  // --accept-data-loss), y el contenedor no levantaría. Que un contrato tenga
+  // una sola refinanciación lo garantiza RefinanciarFinanciacion.
+  refinanciaAId   Int?               @map("refinancia_a_id")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  deletedAt       DateTime?          @map("deleted_at")
+  cuotasPlan      Cuota[]
+  // El contrato viejo que quedó saldado por esta refinanciación...
+  refinanciaA     Financiacion?      @relation("Refinanciacion", fields: [refinanciaAId], references: [id])
+  // ...y, del otro lado, la refinanciación que cerró a este contrato. Es una
+  // lista por la limitación de arriba, pero el use-case garantiza a lo sumo una.
+  refinanciadaPor Financiacion[]     @relation("Refinanciacion")
+  cliente         Cliente            @relation(fields: [clienteId], references: [id])
+  cobrador        Usuario?           @relation("FinanciacionCobrador", fields: [cobradorId], references: [id])
+  concesionaria   Concesionaria      @relation(fields: [concesionariaId], references: [id])
+  sucursal        Sucursal?          @relation(fields: [sucursalId], references: [id])
+  venta           Venta              @relation(fields: [ventaId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([sucursalId])
+  @@index([clienteId])
+  @@index([cobradorId])
+  @@map("financiaciones")
+}
+
+model Cuota {
+  id                Int          @id @default(autoincrement())
+  concesionariaId   Int?          @map("concesionaria_id")
+  financiacionId    Int          @map("financiacion_id")
+  nroCuota          Int          @map("nro_cuota")
+  vencimiento       DateTime     @db.Date
+  montoCuota        Decimal      @map("monto_cuota") @db.Decimal(12, 2)
+  saldoCuota        Decimal      @map("saldo_cuota") @db.Decimal(12, 2)
+  estado            EstadoCuota  @default(pendiente)
+  fechaPagoCompleto DateTime?    @map("fecha_pago_completo") @db.Date
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  deletedAt         DateTime?    @map("deleted_at")
+  financiacion      Financiacion @relation(fields: [financiacionId], references: [id])
+  pagos             PagoCuota[]
+
+  @@unique([financiacionId, nroCuota])
+  @@index([concesionariaId])
+  @@index([vencimiento])
+  @@index([estado])
+  @@map("cuotas")
+}
+
+model PagoCuota {
+  id              Int        @id @default(autoincrement())
+  concesionariaId Int?        @map("concesionaria_id")
+  cuotaId         Int        @map("cuota_id")
+  fechaPago       DateTime   @map("fecha_pago")
+  monto           Decimal    @db.Decimal(12, 2)
+  metodo          MetodoPago
+  referencia      String?
+  observaciones   String?
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  deletedAt       DateTime?  @map("deleted_at")
+  cuota           Cuota      @relation(fields: [cuotaId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([cuotaId])
+  @@index([fechaPago])
+  @@map("pagos_cuota")
+}
+
+model Financiera {
+  id              Int                     @id @default(autoincrement())
+  concesionariaId Int                     @map("concesionaria_id")
+  nombre          String
+  tipo            TipoFinanciera          @default(financiera)
+  contacto        String?
+  telefono        String?
+  email           String?
+  activo          Boolean                 @default(true)
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+  deletedAt       DateTime?               @map("deleted_at")
+  concesionaria   Concesionaria           @relation(fields: [concesionariaId], references: [id])
+  solicitudes     SolicitudFinanciacion[]
+
+  @@unique([concesionariaId, nombre])
+  @@index([concesionariaId])
+  @@map("financieras")
+}
+
+model SolicitudFinanciacion {
+  id              Int                            @id @default(autoincrement())
+  concesionariaId Int                            @map("concesionaria_id")
+  sucursalId      Int?                           @map("sucursal_id")
+  ventaId         Int?                           @map("venta_id")
+  presupuestoId   Int?                           @map("presupuesto_id")
+  // Qué unidad se financia. Opcional: existe la pre-aprobación crediticia, donde
+  // el cliente pregunta cuánto le prestan antes de elegir auto. Sin @unique a
+  // propósito: un mismo vehículo puede tener varias solicitudes (a distintos
+  // bancos, o una nueva tras un rechazo). No se deriva de presupuestoId porque
+  // un presupuesto puede tener varios items, ni de ventaId porque la venta
+  // recién existe después de la aprobación.
+  vehiculoId      Int?                           @map("vehiculo_id")
+  clienteId       Int                            @map("cliente_id")
+  financieraId    Int                            @map("financiera_id")
+  estado          EstadoSolicitudFinanciacion    @default(borrador)
+  montoSolicitado Decimal?                       @map("monto_solicitado") @db.Decimal(12, 2)
+  plazoCuotas     Int?                           @map("plazo_cuotas")
+  tasaEstimada    Decimal?                       @map("tasa_estimada") @db.Decimal(8, 4)
+  fechaEnvio      DateTime?                      @map("fecha_envio")
+  fechaRespuesta  DateTime?                      @map("fecha_respuesta")
+  montoAprobado   Decimal?                       @map("monto_aprobado") @db.Decimal(12, 2)
+  tasaFinal       Decimal?                       @map("tasa_final") @db.Decimal(8, 4)
+  observaciones   String?
+  createdAt       DateTime                       @default(now()) @map("created_at")
+  updatedAt       DateTime                       @updatedAt @map("updated_at")
+  deletedAt       DateTime?                      @map("deleted_at")
+  archivos        SolicitudFinanciacionArchivo[]
+  cliente         Cliente                        @relation(fields: [clienteId], references: [id])
+  concesionaria   Concesionaria                  @relation(fields: [concesionariaId], references: [id])
+  financiera      Financiera                     @relation(fields: [financieraId], references: [id])
+  presupuesto     Presupuesto?                   @relation(fields: [presupuestoId], references: [id])
+  sucursal        Sucursal?                      @relation(fields: [sucursalId], references: [id])
+  venta           Venta?                         @relation(fields: [ventaId], references: [id])
+  vehiculo        Vehiculo?                      @relation(fields: [vehiculoId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([sucursalId])
+  @@index([clienteId])
+  @@index([financieraId])
+  @@index([vehiculoId])
+  @@index([estado])
+  @@map("solicitudes_financiacion")
+}
+
+model SolicitudFinanciacionArchivo {
+  id              Int                   @id @default(autoincrement())
+  concesionariaId Int?                   @map("concesionaria_id")
+  solicitudId     Int                   @map("solicitud_id")
+  tipo            String?
+  url             String
+  descripcion     String?
+  originalName    String?               @map("original_name")
+  mimeType        String?               @map("mime_type")
+  sizeBytes       Int?                  @map("size_bytes")
+  storageKey      String?               @map("storage_key")
+  uploadedById    Int?                  @map("uploaded_by_id")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  deletedAt       DateTime?             @map("deleted_at")
+  solicitud       SolicitudFinanciacion @relation(fields: [solicitudId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([solicitudId])
+  @@map("solicitud_financiacion_archivos")
+}
+
+model PostventaCaso {
+  id              Int             @id @default(autoincrement())
+  concesionariaId Int             @map("concesionaria_id")
+  sucursalId      Int             @map("sucursal_id")
+  ventaId         Int             @map("venta_id")
+  vehiculoId      Int             @map("vehiculo_id")
+  clienteId       Int             @map("cliente_id")
+  fechaReclamo    DateTime        @map("fecha_reclamo") @db.Date
+  // Tipo del reclamo, tomado del catálogo TipoPostventa.
+  tipoId          Int?            @map("tipo_id")
+  // Tipo en texto libre: sólo para los casos históricos, cargados antes de que
+  // existiera el catálogo. No se escribe más desde la app; se mantiene para no
+  // perder el dato (y porque borrar la columna haría abortar el `db push` del
+  // arranque). Al leer, gana `tipoRef.nombre` y esto es el fallback.
+  tipo            String?
+  descripcion     String
+  estado          EstadoPostventa @default(pendiente)
+  fechaCierre     DateTime?       @map("fecha_cierre") @db.Date
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  deletedAt       DateTime?       @map("deleted_at")
+  cliente         Cliente         @relation(fields: [clienteId], references: [id])
+  concesionaria   Concesionaria   @relation(fields: [concesionariaId], references: [id])
+  sucursal        Sucursal        @relation(fields: [sucursalId], references: [id])
+  vehiculo        Vehiculo        @relation("CasoVehiculo", fields: [vehiculoId], references: [id])
+  venta           Venta           @relation(fields: [ventaId], references: [id])
+  tipoRef         TipoPostventa?  @relation(fields: [tipoId], references: [id])
+  items           PostventaItem[]
+
+  @@index([concesionariaId])
+  @@index([sucursalId])
+  @@index([ventaId])
+  @@index([vehiculoId])
+  @@index([clienteId])
+  @@index([tipoId])
+  @@index([estado])
+  @@map("postventa_casos")
+}
+
+/// Catálogo de tipos de reclamo de postventa (mecánica, climatización,
+/// tapicería...). Existe para estandarizar: antes el tipo era texto libre y el
+/// desplegable se armaba con lo que hubiera cargado, así que cualquier variante
+/// ortográfica ("mecanica" / "Mecánica") aparecía como un tipo distinto.
+/// Renombrar acá arrastra a todos los casos, porque apuntan por id.
+model TipoPostventa {
+  id              Int             @id @default(autoincrement())
+  concesionariaId Int             @map("concesionaria_id")
+  nombre          String
+  /// Archivar un tipo sin borrarlo: deja de ofrecerse en el alta, pero los casos
+  /// históricos que lo usan lo siguen mostrando.
+  activo          Boolean         @default(true)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  deletedAt       DateTime?       @map("deleted_at")
+  concesionaria   Concesionaria   @relation(fields: [concesionariaId], references: [id])
+  casos           PostventaCaso[]
+
+  @@unique([concesionariaId, nombre])
+  @@index([concesionariaId])
+  @@map("tipos_postventa")
+}
+
+model PostventaItem {
+  id              Int           @id @default(autoincrement())
+  concesionariaId Int?           @map("concesionaria_id")
+  casoId          Int           @map("caso_id")
+  proveedorId     Int?          @map("proveedor_id")
+  fecha           DateTime      @db.Date
+  descripcion     String
+  monto           Decimal       @db.Decimal(12, 2)
+  comprobanteUrl  String?       @map("comprobante_url")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
+  caso            PostventaCaso @relation(fields: [casoId], references: [id])
+  proveedor       Proveedor?    @relation(fields: [proveedorId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([casoId])
+  @@index([proveedorId])
+  @@map("postventa_items")
+}
+
+model AuditLog {
+  id              Int           @id @default(autoincrement())
+  concesionariaId Int           @map("concesionaria_id")
+  usuarioId       Int?          @map("usuario_id")
+  entidad         String
+  entidadId       Int?          @map("entidad_id")
+  accion          AccionAudit
+  detalle         String?
+  ip              String?
+  userAgent       String?       @map("user_agent")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  deletedAt       DateTime?     @map("deleted_at")
+  concesionaria   Concesionaria @relation(fields: [concesionariaId], references: [id])
+  usuario         Usuario?      @relation(fields: [usuarioId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([usuarioId])
+  @@index([entidad])
+  // Reportes de auditoría por período: filtran por tenant y rango de fechas.
+  @@index([concesionariaId, createdAt])
+  @@map("audit_log")
+}
+
+model Plan {
+  id            Int                         @id @default(autoincrement())
+  nombre        String                      @unique
+  interval      PlanInterval                @default(MONTH)
+  precio        Decimal                     @db.Decimal(12, 2)
+  moneda        String                      @default("ARS")
+  maxUsuarios   Int?                        @map("max_usuarios")
+  maxSucursales Int?                        @map("max_sucursales")
+  maxVehiculos  Int?                        @map("max_vehiculos")
+  activo        Boolean                     @default(true)
+  createdAt     DateTime                    @default(now()) @map("created_at")
+  updatedAt     DateTime                    @updatedAt @map("updated_at")
+  deletedAt     DateTime?                   @map("deleted_at")
+  subscriptions ConcesionariaSubscription[]
+
+  @@map("planes")
+}
+
+model ConcesionariaSubscription {
+  id                     Int                @id @default(autoincrement())
+  concesionariaId        Int                @unique @map("concesionaria_id")
+  planId                 Int                @map("plan_id")
+  status                 SubscriptionStatus @default(trialing)
+  trialEndsAt            DateTime?          @map("trial_ends_at")
+  currentPeriodStart     DateTime?          @map("current_period_start")
+  currentPeriodEnd       DateTime?          @map("current_period_end")
+  provider               String?            @map("provider")
+  providerCustomerId     String?            @map("provider_customer_id")
+  providerSubscriptionId String?            @map("provider_subscription_id")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
+  deletedAt              DateTime?          @map("deleted_at")
+  concesionaria          Concesionaria      @relation(fields: [concesionariaId], references: [id])
+  plan                   Plan               @relation(fields: [planId], references: [id])
+  invoices               Invoice[]
+
+  @@index([planId])
+  @@index([status])
+  @@map("concesionaria_subscriptions")
+}
+
+model Invoice {
+  id                Int                       @id @default(autoincrement())
+  concesionariaId   Int?                       @map("concesionaria_id")
+  subscriptionId    Int                       @map("subscription_id")
+  status            InvoiceStatus             @default(open)
+  numero            String?
+  periodoDesde      DateTime?                 @map("periodo_desde")
+  periodoHasta      DateTime?                 @map("periodo_hasta")
+  subtotal          Decimal                   @db.Decimal(12, 2)
+  impuestos         Decimal                   @default(0) @db.Decimal(12, 2)
+  total             Decimal                   @db.Decimal(12, 2)
+  moneda            String                    @default("ARS")
+  dueDate           DateTime?                 @map("due_date")
+  paidAt            DateTime?                 @map("paid_at")
+  providerInvoiceId String?                   @map("provider_invoice_id")
+  pdfUrl            String?                   @map("pdf_url")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+  deletedAt         DateTime?                 @map("deleted_at")
+  subscription      ConcesionariaSubscription @relation(fields: [subscriptionId], references: [id])
+  payments          Payment[]
+
+  @@index([concesionariaId])
+  @@index([subscriptionId])
+  @@index([status])
+  @@map("invoices")
+}
+
+model Payment {
+  id                Int           @id @default(autoincrement())
+  concesionariaId   Int?           @map("concesionaria_id")
+  invoiceId         Int           @map("invoice_id")
+  status            PaymentStatus @default(pending)
+  monto             Decimal       @db.Decimal(12, 2)
+  moneda            String        @default("ARS")
+  provider          String?
+  providerPaymentId String?       @map("provider_payment_id")
+  metodo            MetodoPago?
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  deletedAt         DateTime?     @map("deleted_at")
+  invoice           Invoice       @relation(fields: [invoiceId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([invoiceId])
+  @@index([status])
+  @@map("payments")
+}
+
+enum RolNombre {
+  admin
+  vendedor
+  cobrador
+  postventa
+  lectura
+  super_admin
+}
+
+enum TipoVehiculo {
+  USADO
+  CERO_KM
+}
+
+enum OrigenVehiculo {
+  compra
+  permuta
+  consignacion
+  otro
+}
+
+enum EstadoVehiculo {
+  preparacion
+  publicado
+  reservado
+  vendido
+  devuelto
+}
+
+enum EstadoPresupuesto {
+  borrador
+  enviado
+  aceptado
+  rechazado
+  vencido
+  cancelado
+}
+
+enum FormaPagoVenta {
+  contado
+  transferencia
+  financiado_propio
+  financiado_externo
+  canje_mas_diferencia
+  mixto
+}
+
+enum EstadoEntrega {
+  pendiente
+  bloqueada
+  autorizada
+  entregada
+  cancelada
+}
+
+enum TipoIngresoVehiculo {
+  compra_proveedor
+  compra_particular
+  permuta
+  consignacion
+  otro
+}
+
+enum EstadoReserva {
+  activa
+  vencida
+  cancelada
+  convertida_en_venta
+}
+
+enum MetodoPago {
+  efectivo
+  transferencia
+  tarjeta
+  cheque
+  otro
+}
+
+enum EstadoFinanciacion {
+  activa
+  cancelada
+  en_mora
+  refinanciada
+}
+
+enum EstadoCuota {
+  pendiente
+  parcial
+  pagada
+  vencida
+  // Su saldo se trasladó a una refinanciación. No es "pagada" (no se cobró) ni
+  // sigue siendo deuda viva: sin este estado la deuda se contaría dos veces.
+  refinanciada
+}
+
+enum EstadoSolicitudFinanciacion {
+  borrador
+  enviada
+  pendiente
+  aprobada
+  rechazada
+  cancelada
+}
+
+enum TipoFinanciera {
+  financiera
+  banco
+  otra
+}
+
+enum EstadoPostventa {
+  pendiente
+  en_curso
+  resuelto
+}
+
+enum TipoMovimientoVehiculo {
+  traslado
+  preparacion
+  ingreso
+  egreso
+  asignacion_reserva
+  liberacion_reserva
+  otro
+}
+
+enum AccionAudit {
+  create
+  update
+  cancel
+  delete_soft
+  login
+  logout
+}
+
+enum PlanInterval {
+  MONTH
+  YEAR
+}
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+  paused
+}
+
+enum InvoiceStatus {
+  draft
+  open
+  paid
+  void
+  uncollectible
+}
+
+enum PaymentStatus {
+  pending
+  succeeded
+  failed
+  refunded
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  usuarioId Int      @map("usuario_id")
+  expiresAt DateTime @map("expires_at")
+  isRevoked Boolean  @default(false) @map("is_revoked")
+  createdAt DateTime @default(now()) @map("created_at")
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id])
+
+  @@map("refresh_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Catálogo InfoAuto (fuente: API pública de argautos.com).
+// Datos de referencia globales, compartidos por todas las concesionarias: NO
+// llevan concesionaria_id. Los ids son los de la API (no autoincrement) para
+// poder upsertear en cada sync. Los campos *_synced_at marcan hasta dónde
+// avanzó el sync incremental (la cuota anónima es de ~30 requests/día).
+// ---------------------------------------------------------------------------
+
+model InfoautoBrand {
+  id             Int             @id
+  name           String
+  modelsCount    Int             @default(0) @map("models_count")
+  modelsSyncedAt DateTime?       @map("models_synced_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  deletedAt      DateTime?       @map("deleted_at")
+  models         InfoautoModel[]
+
+  @@index([name])
+  @@map("infoauto_brands")
+}
+
+model InfoautoModel {
+  id               Int               @id
+  brandId          Int               @map("brand_id")
+  name             String
+  versionsCount    Int               @default(0) @map("versions_count")
+  versionsSyncedAt DateTime?         @map("versions_synced_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  deletedAt        DateTime?         @map("deleted_at")
+  brand            InfoautoBrand     @relation(fields: [brandId], references: [id])
+  versions         InfoautoVersion[]
+
+  @@index([brandId])
+  @@index([name])
+  @@map("infoauto_models")
+}
+
+model InfoautoVersion {
+  id             Int             @id
+  modelId        Int             @map("model_id")
+  name           String
+  availableYears Int[]           @map("available_years")
+  pricesSyncedAt DateTime?       @map("prices_synced_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  deletedAt      DateTime?       @map("deleted_at")
+  model          InfoautoModel   @relation(fields: [modelId], references: [id])
+  prices         InfoautoPrice[]
+
+  @@index([modelId])
+  @@map("infoauto_versions")
+}
+
+model InfoautoPrice {
+  id           Int             @id @default(autoincrement())
+  versionId    Int             @map("version_id")
+  // year 0 = 0km (año-modelo más reciente, precio de unidad nueva)
+  year         Int
+  priceUsd     Decimal?        @map("price_usd") @db.Decimal(12, 2)
+  exchangeRate Decimal?        @map("exchange_rate") @db.Decimal(12, 2)
+  recordedAt   DateTime?       @map("recorded_at") @db.Date
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  deletedAt    DateTime?       @map("deleted_at")
+  version      InfoautoVersion @relation(fields: [versionId], references: [id])
+
+  @@unique([versionId, year])
+  @@map("infoauto_prices")
+}
+
+// Tokens de un solo uso para recuperación de contraseña. Se guarda solo el hash
+// del token; el token en claro viaja únicamente en el link enviado por email.
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  usuarioId Int       @map("usuario_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([tokenHash])
+  @@index([usuarioId])
+  @@map("password_reset_tokens")
+}

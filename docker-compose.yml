@@ -1,0 +1,134 @@
+# Rotación de logs: cada servicio guarda hasta 5 archivos de 10 MB.
+# Sin esto, los logs de un contenedor de larga vida pueden llenar el disco.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    logging: *default-logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      # Sin default: si POSTGRES_PASSWORD no está en el .env, el arranque falla.
+      # Nunca dejar "postgres/postgres" con la app expuesta a internet.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requerido en .env}
+      POSTGRES_DB: ${POSTGRES_DB:-concesionaria}
+    # Puerto solo accesible desde la propia máquina (no desde la LAN).
+    # Para conectarte con un cliente SQL, hacelo por SSH tunnel.
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-concesionaria}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./BackConcesionaria
+      dockerfile: Dockerfile
+    restart: always
+    logging: *default-logging
+    # Sin ports: el frontend (nginx) le llega por la red interna de docker
+    # en backend:3000. No hace falta exponerlo al host, y evita choques con
+    # otros servicios que usen el 3000.
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-concesionaria}?sslmode=disable
+      - PORT=3000
+      - NODE_ENV=production
+      # Secretos SIN default: el arranque falla si no están definidos en el .env.
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET requerido en .env}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET requerido en .env}
+      - JWT_EXPIRES_IN=15m
+      - JWT_REFRESH_EXPIRES_IN=7d
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      # 1 = hay un proxy (nginx) delante; deja que la app lea el X-Forwarded-For real.
+      - TRUST_PROXY=1
+      # Lista exacta de orígenes permitidos (browser CORS).
+      # El frontend llama a la API same-origin (nginx proxea /api), así que
+      # CORS no bloquea nada; el dominio del tunnel va igual para evitar
+      # warnings "[cors] origin rechazado" en los logs.
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost,http://localhost:5173,https://autenza.nebulant.com.ar}
+      - UPLOADS_DIR=/app/uploads
+      # URL pública del frontend, para el link de recuperación de contraseña.
+      - APP_URL=${APP_URL:-https://autenza.nebulant.com.ar}
+      # SMTP opcional: si no está, el link de reseteo se loguea en vez de enviarse.
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+    # 'db push' (sin --accept-data-loss) aplica cambios NO destructivos y aborta
+    # si un cambio implicara perder datos — en vez de borrarlos en silencio.
+    # El seed ya NO corre en cada arranque (ver README: se corre una sola vez).
+    command: sh -c "npx prisma db push && npm run init-rls && npm start"
+    volumes:
+      - uploads:/app/uploads
+    healthcheck:
+      # node en vez de curl (la imagen alpine no trae curl por defecto).
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Backup diario de la base. Genera un dump comprimido en el volumen de backups
+  # y borra los de más de RETENTION_DAYS. Ver scripts/restore.sh para restaurar.
+  db-backup:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      - PGUSER=${POSTGRES_USER:-postgres}
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+      - PGDATABASE=${POSTGRES_DB:-concesionaria}
+      - PGHOST=db
+      - RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
+      - ./scripts/restore.sh:/usr/local/bin/restore.sh:ro
+      - backups:/backups
+    entrypoint: ["sh", "-c", "while true; do sh /usr/local/bin/backup.sh; sleep 86400; done"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  prisma-studio:
+    build:
+      context: ./BackConcesionaria
+      dockerfile: Dockerfile
+    restart: always
+    # Solo localhost: para acceder, SSH tunnel a la Pi. Nunca exponer al tunnel
+    # de Cloudflare (es acceso directo a la base sin autenticación).
+    ports:
+      - "127.0.0.1:5555:5555"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-concesionaria}?sslmode=disable
+    command: npx prisma studio --port 5555 --browser none
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./FrontConcesionaria
+      dockerfile: Dockerfile
+    restart: always
+    logging: *default-logging
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  uploads:
+  backups:

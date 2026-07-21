@@ -1,0 +1,272 @@
+[
+  {
+    "id": 99,
+    "name": "ALFA ROMEO",
+    "models_count": 17
+  },
+  {
+    "id": 2234,
+    "name": "ARCFOX",
+    "models_count": 4
+  },
+  {
+    "id": 100,
+    "name": "AUDI",
+    "models_count": 34
+  },
+  {
+    "id": 101,
+    "name": "BAIC",
+    "models_count": 10
+  },
+  {
+    "id": 102,
+    "name": "BMW",
+    "models_count": 58
+  },
+  {
+    "id": 103,
+    "name": "BYD",
+    "models_count": 5
+  },
+  {
+    "id": 104,
+    "name": "CHANGAN",
+    "models_count": 4
+  },
+  {
+    "id": 105,
+    "name": "CHERY",
+    "models_count": 6
+  },
+  {
+    "id": 106,
+    "name": "CHEVROLET",
+    "models_count": 43
+  },
+  {
+    "id": 107,
+    "name": "CHRYSLER",
+    "models_count": 27
+  },
+  {
+    "id": 108,
+    "name": "CITROEN",
+    "models_count": 27
+  },
+  {
+    "id": 110,
+    "name": "DOMY",
+    "models_count": 1
+  },
+  {
+    "id": 111,
+    "name": "DONGFENG",
+    "models_count": 3
+  },
+  {
+    "id": 3028,
+    "name": "DONGFENG CAM",
+    "models_count": 3
+  },
+  {
+    "id": 112,
+    "name": "DS AUTOMOBILES",
+    "models_count": 4
+  },
+  {
+    "id": 2728,
+    "name": "FERRARI",
+    "models_count": 15
+  },
+  {
+    "id": 113,
+    "name": "FIAT",
+    "models_count": 33
+  },
+  {
+    "id": 114,
+    "name": "FORD",
+    "models_count": 26
+  },
+  {
+    "id": 115,
+    "name": "FORTHING",
+    "models_count": 5
+  },
+  {
+    "id": 117,
+    "name": "GAC",
+    "models_count": 5
+  },
+  {
+    "id": 118,
+    "name": "GEELY",
+    "models_count": 5
+  },
+  {
+    "id": 119,
+    "name": "GREAT WALL",
+    "models_count": 4
+  },
+  {
+    "id": 120,
+    "name": "HAVAL",
+    "models_count": 5
+  },
+  {
+    "id": 121,
+    "name": "HONDA",
+    "models_count": 16
+  },
+  {
+    "id": 122,
+    "name": "HYUNDAI",
+    "models_count": 30
+  },
+  {
+    "id": 126,
+    "name": "JAC MOTORS",
+    "models_count": 14
+  },
+  {
+    "id": 2739,
+    "name": "JAGUAR",
+    "models_count": 16
+  },
+  {
+    "id": 128,
+    "name": "JETOUR",
+    "models_count": 5
+  },
+  {
+    "id": 130,
+    "name": "JMEV",
+    "models_count": 1
+  },
+  {
+    "id": 131,
+    "name": "KAIYI",
+    "models_count": 2
+  },
+  {
+    "id": 132,
+    "name": "KAMA",
+    "models_count": 2
+  },
+  {
+    "id": 133,
+    "name": "KIA",
+    "models_count": 24
+  },
+  {
+    "id": 135,
+    "name": "LANDKING",
+    "models_count": 1
+  },
+  {
+    "id": 137,
+    "name": "MAXUS",
+    "models_count": 4
+  },
+  {
+    "id": 2109,
+    "name": "MAZDA",
+    "models_count": 9
+  },
+  {
+    "id": 138,
+    "name": "MERCEDES BENZ",
+    "models_count": 30
+  },
+  {
+    "id": 140,
+    "name": "MINI COOPER",
+    "models_count": 7
+  },
+  {
+    "id": 141,
+    "name": "MITSUBISHI",
+    "models_count": 13
+  },
+  {
+    "id": 142,
+    "name": "NISSAN",
+    "models_count": 28
+  },
+  {
+    "id": 143,
+    "name": "PEUGEOT",
+    "models_count": 31
+  },
+  {
+    "id": 144,
+    "name": "PORSCHE",
+    "models_count": 9
+  },
+  {
+    "id": 146,
+    "name": "RELY",
+    "models_count": 1
+  },
+  {
+    "id": 147,
+    "name": "RENAULT",
+    "models_count": 28
+  },
+  {
+    "id": 2120,
+    "name": "ROVER-LAND ROV.",
+    "models_count": 21
+  },
+  {
+    "id": 150,
+    "name": "SHACMAN",
+    "models_count": 2
+  },
+  {
+    "id": 152,
+    "name": "SITRAK",
+    "models_count": 1
+  },
+  {
+    "id": 2290,
+    "name": "SKYWELL",
+    "models_count": 2
+  },
+  {
+    "id": 153,
+    "name": "SUBARU",
+    "models_count": 8
+  },
+  {
+    "id": 154,
+    "name": "SUZUKI",
+    "models_count": 11
+  },
+  {
+    "id": 155,
+    "name": "TANK",
+    "models_count": 1
+  },
+  {
+    "id": 156,
+    "name": "TOYOTA",
+    "models_count": 28
+  },
+  {
+    "id": 157,
+    "name": "VOLKSWAGEN",
+    "models_count": 31
+  },
+  {
+    "id": 159,
+    "name": "VOLVO",
+    "models_count": 23
+  },
+  {
+    "id": 2299,
+    "name": "XEV",
+    "models_count": 1
+  }
+]
