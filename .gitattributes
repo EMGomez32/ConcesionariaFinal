@@ -1,0 +1,19 @@
+# El repo se despliega en Linux (Raspberry Pi). Normalizamos a LF en el repo
+# para que los scripts de shell y los archivos de config no lleguen con CRLF.
+* text=auto eol=lf
+
+# Scripts de shell: SIEMPRE LF. Con CRLF fallan en la Pi con "bad interpreter: ^M".
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Binarios: sin conversión de fin de línea.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text
+*.woff binary
+*.woff2 binary
