@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { UsuarioController } from '../controllers/UsuarioController';
 import { authenticate } from '../middlewares/authenticate.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
+import { validateBody } from '../middlewares/validate.middleware';
+import { createUsuarioSchema, updateUsuarioSchema } from '../validation/usuario.schema';
 
 const router = Router();
 
@@ -126,7 +128,7 @@ router.get('/:id', authenticate, UsuarioController.getById);
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.post('/', authenticate, authorize('admin', 'super_admin'), UsuarioController.create);
+router.post('/', authenticate, authorize('admin', 'super_admin'), validateBody(createUsuarioSchema), UsuarioController.create);
 
 /**
  * @openapi
@@ -156,7 +158,7 @@ router.post('/', authenticate, authorize('admin', 'super_admin'), UsuarioControl
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', authenticate, authorize('admin', 'super_admin'), UsuarioController.update);
+router.patch('/:id', authenticate, authorize('admin', 'super_admin'), validateBody(updateUsuarioSchema), UsuarioController.update);
 
 /**
  * @openapi

@@ -73,7 +73,18 @@ export class SucursalController {
     static async update(req: Request, res: Response, next: NextFunction) {
         try {
             const id = parseId(req.params.id as string);
-            const result = await updateSucursalUC.execute(id, req.body);
+            const actor = context.getUser();
+            const isSuper = actor?.roles?.includes('super_admin');
+            const data = { ...req.body };
+            // RBAC multi-tenant (mismo criterio que create): sólo super_admin puede
+            // reasignar la sucursal a otro tenant. Para un admin se ignora
+            // concesionariaId del body → no puede mover sucursales cross-tenant
+            // armando un PATCH manual. La RLS lo rebota igual por WITH CHECK, pero
+            // eso sería un 500 opaco: acá queda limpio y explícito.
+            if (!isSuper) {
+                delete data.concesionariaId;
+            }
+            const result = await updateSucursalUC.execute(id, data);
             await audit({
                 entidad: 'Sucursal',
                 accion: 'update',
