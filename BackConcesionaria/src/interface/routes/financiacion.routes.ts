@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { FinanciacionController } from '../controllers/FinanciacionController';
 import { authorize } from '../middlewares/authorize.middleware';
+import { validateBody } from '../middlewares/validate.middleware';
+import { createFinanciacionSchema, refinanciarFinanciacionSchema, updateFinanciacionSchema, pagarCuotaSchema } from '../validation/financiacion.schema';
 
 const router = Router();
 
@@ -71,7 +73,7 @@ router.get('/:id', FinanciacionController.getById);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/', FinanciacionController.create);
+router.post('/', validateBody(createFinanciacionSchema), FinanciacionController.create);
 
 /**
  * @openapi
@@ -107,7 +109,7 @@ router.post('/', FinanciacionController.create);
  *       404: { $ref: '#/components/responses/NotFound' }
  *       422: { description: El contrato no es refinanciable (estado inválido, ya refinanciado o sin saldo) }
  */
-router.post('/:id/refinanciar', authorize('admin', 'vendedor'), FinanciacionController.refinanciar);
+router.post('/:id/refinanciar', authorize('admin', 'vendedor'), validateBody(refinanciarFinanciacionSchema), FinanciacionController.refinanciar);
 
 /**
  * @openapi
@@ -132,7 +134,7 @@ router.post('/:id/refinanciar', authorize('admin', 'vendedor'), FinanciacionCont
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', FinanciacionController.update);
+router.patch('/:id', validateBody(updateFinanciacionSchema), FinanciacionController.update);
 
 /**
  * @openapi
@@ -176,6 +178,6 @@ router.delete('/:id', FinanciacionController.delete);
  *       404: { $ref: '#/components/responses/NotFound' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.patch('/cuotas/:cuotaId/pagar', FinanciacionController.pagarCuota);
+router.patch('/cuotas/:cuotaId/pagar', validateBody(pagarCuotaSchema), FinanciacionController.pagarCuota);
 
 export default router;

@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { ConcesionariaController } from '../controllers/ConcesionariaController';
 import { authorize } from '../middlewares/authorize.middleware';
+import { validateBody } from '../middlewares/validate.middleware';
+import { createConcesionariaSchema, updateConcesionariaSchema } from '../validation/concesionaria.schema';
 
 const router = Router();
 
@@ -33,7 +35,7 @@ const router = Router();
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
 router.get('/me', ConcesionariaController.getMine);
-router.patch('/me', authorize('admin'), ConcesionariaController.updateMine);
+router.patch('/me', authorize('admin'), validateBody(updateConcesionariaSchema), ConcesionariaController.updateMine);
 
 // A partir de acá, todo administra los TENANTS y es sólo para super_admin: sin
 // esta guarda, cualquier admin de una concesionaria podía listar, crear o borrar
@@ -117,7 +119,7 @@ router.get('/:id', ConcesionariaController.getById);
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.post('/', ConcesionariaController.create);
+router.post('/', validateBody(createConcesionariaSchema), ConcesionariaController.create);
 
 /**
  * @openapi
@@ -149,7 +151,7 @@ router.post('/', ConcesionariaController.create);
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', ConcesionariaController.update);
+router.patch('/:id', validateBody(updateConcesionariaSchema), ConcesionariaController.update);
 
 /**
  * @openapi
