@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
-import { Car, X, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { X, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import Isotipo from '../brand/Isotipo';
 import { useAuthStore } from '../../store/authStore';
 import { useSidebarStore } from '../../store/sidebarStore';
 import { NAV_SECTIONS } from '../../config/nav';
@@ -20,7 +21,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     <aside className={`sidebar ${isOpen ? 'open' : ''} ${collapsed ? 'is-collapsed' : ''}`}>
       <div className="sidebar-header">
         <div className="logo-container" aria-hidden="true">
-          <Car size={collapsed ? 22 : 28} color="#fff" />
+          <Isotipo size={collapsed ? 22 : 28} color="#fff" />
         </div>
         {!collapsed && (
           <div className="logo-text-wrapper">

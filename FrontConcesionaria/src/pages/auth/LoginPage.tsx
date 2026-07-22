@@ -3,7 +3,8 @@ import { useAuthStore } from '../../store/authStore';
 import { useNavigate, Link } from 'react-router-dom';
 import client from '../../api/client';
 import { getApiErrorMessage } from '../../utils/error';
-import { Car, Key, Mail, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Key, Mail, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import Isotipo from '../../components/brand/Isotipo';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -58,7 +59,7 @@ const LoginPage = () => {
       <main className="login-card animate-scale-in" role="main">
         <header className="login-header">
           <div className="login-logo">
-            <Car size={26} color="#ffffff" />
+            <Isotipo size={26} color="#ffffff" />
           </div>
           <h1 className="login-brand">AUTENZA</h1>
           <p className="login-tag">Dealer Operating System</p>
