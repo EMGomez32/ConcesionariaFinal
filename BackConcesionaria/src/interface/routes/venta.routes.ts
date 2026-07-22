@@ -1,6 +1,15 @@
 import { Router } from 'express';
 import { VentaController } from '../controllers/VentaController';
 import { ComprobanteController } from '../controllers/ComprobanteController';
+import { validateBody } from '../middlewares/validate.middleware';
+import {
+    createVentaSchema,
+    updateVentaSchema,
+    changeEstadoEntregaSchema,
+    addPagoSchema,
+    addExtraSchema,
+    addCanjeSchema,
+} from '../validation/venta.schema';
 
 const router = Router();
 
@@ -89,7 +98,7 @@ router.get('/:id', VentaController.getById);
  *       409: { $ref: '#/components/responses/Conflict' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.post('/', VentaController.create);
+router.post('/', validateBody(createVentaSchema), VentaController.create);
 
 /**
  * @openapi
@@ -115,7 +124,7 @@ router.post('/', VentaController.create);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', VentaController.update);
+router.patch('/:id', validateBody(updateVentaSchema), VentaController.update);
 
 /**
  * @openapi
@@ -141,7 +150,7 @@ router.patch('/:id', VentaController.update);
  *       404: { $ref: '#/components/responses/NotFound' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.patch('/:id/estado-entrega', VentaController.changeEstadoEntrega);
+router.patch('/:id/estado-entrega', validateBody(changeEstadoEntregaSchema), VentaController.changeEstadoEntrega);
 
 /**
  * @openapi
@@ -199,7 +208,7 @@ router.get('/:id/pagos', VentaController.listPagos);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/:id/pagos', VentaController.addPago);
+router.post('/:id/pagos', validateBody(addPagoSchema), VentaController.addPago);
 
 /**
  * @openapi
@@ -256,7 +265,7 @@ router.get('/:id/extras', VentaController.listExtras);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/:id/extras', VentaController.addExtra);
+router.post('/:id/extras', validateBody(addExtraSchema), VentaController.addExtra);
 
 /**
  * @openapi
@@ -314,7 +323,7 @@ router.get('/:id/canjes', VentaController.listCanjes);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/:id/canjes', VentaController.addCanje);
+router.post('/:id/canjes', validateBody(addCanjeSchema), VentaController.addCanje);
 
 /**
  * @openapi
