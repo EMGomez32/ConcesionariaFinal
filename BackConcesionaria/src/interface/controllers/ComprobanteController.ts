@@ -47,8 +47,29 @@ export class ComprobanteController {
             const doc = new PDFDocument({ size: 'A4', margin: 50 });
             doc.pipe(res);
 
-            const accent = '#4f46e5';
+            // ── Paleta AUTENZA ────────────────────────────────────────────────────
+            const accent = '#10b981';      // emerald de marca (antes índigo #4f46e5)
             const muted = '#6b7280';
+            const brandStops: Array<[number, string]> = [[0, '#10b981'], [0.5, '#06b6d4'], [1, '#8b5cf6']];
+            const W = doc.page.width;
+
+            // Isotipo AUTENZA dibujado como vector (mismos paths que el SVG de marca).
+            const drawIsotipo = (x: number, y: number, size: number, color: string) => {
+                const s = size / 56;
+                doc.save();
+                doc.translate(x, y).scale(s);
+                doc.strokeColor(color).lineJoin('round').lineCap('round');
+                doc.lineWidth(2.6).path('M28 6 L47 17 L47 39 L28 50 L9 39 L9 17 Z').stroke();
+                doc.lineWidth(3.4).path('M19 43 L28 21 L37 43').stroke();
+                doc.lineWidth(3.4).path('M23 34 L33 34').stroke();
+                doc.fillColor(color).circle(28, 6, 3.2).fill();
+                doc.restore();
+            };
+
+            // Franja de gradiente de marca en el borde superior (firma visual AUTENZA).
+            const topBand = doc.linearGradient(0, 0, W, 0);
+            brandStops.forEach(([o, c]) => topBand.stop(o, c));
+            doc.rect(0, 0, W, 6).fill(topBand);
 
             // ── Encabezado ────────────────────────────────────────────────────────
             doc.fillColor(accent).fontSize(20).font('Helvetica-Bold')
@@ -130,7 +151,16 @@ export class ComprobanteController {
                 }
             }
 
-            // ── Pie ───────────────────────────────────────────────────────────────
+            // ── Pie con marca de plataforma AUTENZA ───────────────────────────────
+            const footerTop = 720;
+            const ruleGrad = doc.linearGradient(50, 0, 545, 0);
+            brandStops.forEach(([o, c]) => ruleGrad.stop(o, c));
+            doc.rect(50, footerTop, 495, 1.5).fill(ruleGrad);
+
+            drawIsotipo(W / 2 - 6.5, footerTop + 10, 13, accent);
+            doc.fillColor(accent).fontSize(8).font('Helvetica-Bold')
+                .text('AUTENZA', 50, footerTop + 27, { align: 'center', width: W - 100, characterSpacing: 2 });
+
             doc.fillColor(muted).fontSize(8).font('Helvetica')
                 .text(
                     `Vendedor: ${venta.vendedor?.nombre || '—'}   ·   Generado el ${new Date().toLocaleString('es-AR')}`,
