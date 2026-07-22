@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { CategoriaGastoController } from '../controllers/CategoriaGastoController';
 import { authorize } from '../middlewares/authorize.middleware';
+import { validateBody } from '../middlewares/validate.middleware';
+import { createCategoriaGastoSchema, updateCategoriaGastoSchema } from '../validation/categoria-gasto.schema';
 
 const router = Router();
 
@@ -38,7 +40,7 @@ router.get('/', CategoriaGastoController.getAll);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.post('/', authorize('admin'), CategoriaGastoController.create);
+router.post('/', authorize('admin'), validateBody(createCategoriaGastoSchema), CategoriaGastoController.create);
 
 /**
  * @openapi
@@ -65,7 +67,7 @@ router.post('/', authorize('admin'), CategoriaGastoController.create);
  *       404: { $ref: '#/components/responses/NotFound' }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.patch('/:id', authorize('admin'), CategoriaGastoController.update);
+router.patch('/:id', authorize('admin'), validateBody(updateCategoriaGastoSchema), CategoriaGastoController.update);
 
 /**
  * @openapi

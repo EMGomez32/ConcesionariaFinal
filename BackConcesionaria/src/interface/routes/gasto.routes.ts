@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { GastoController } from '../controllers/GastoController';
 import { authorize } from '../middlewares/authorize.middleware';
+import { validateBody } from '../middlewares/validate.middleware';
+import { createGastoSchema, updateGastoSchema } from '../validation/gasto.schema';
 
 const router = Router();
 
@@ -98,7 +100,7 @@ router.get('/:id', GastoController.getById);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/', authorize('admin', 'vendedor'), GastoController.create);
+router.post('/', authorize('admin', 'vendedor'), validateBody(createGastoSchema), GastoController.create);
 
 /**
  * @openapi
@@ -126,7 +128,7 @@ router.post('/', authorize('admin', 'vendedor'), GastoController.create);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', authorize('admin', 'vendedor'), GastoController.update);
+router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updateGastoSchema), GastoController.update);
 
 /**
  * @openapi

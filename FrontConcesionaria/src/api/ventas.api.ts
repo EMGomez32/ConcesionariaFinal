@@ -1,5 +1,5 @@
 import client from './client';
-import type { Venta } from '../types/venta.types';
+import type { Venta, EstadoEntrega } from '../types/venta.types';
 import type { PaginationOptions } from '../types/vehiculo.types';
 import type { PaginatedResponse } from '../types/api.types';
 
@@ -46,8 +46,15 @@ export const ventasApi = {
         return client.post<Venta>('/ventas', data);
     },
 
-    update: (id: number, data: { estadoEntrega?: string; observaciones?: string }) => {
+    update: (id: number, data: { observaciones?: string }) => {
         return client.patch<Venta>(`/ventas/${id}`, data);
+    },
+
+    // Cambio de estado de logística: endpoint dedicado que valida la transición
+    // (state machine) y setea fechaEntrega al entregar. El endpoint genérico
+    // /ventas/:id (update) descarta estadoEntrega a propósito.
+    changeEstadoEntrega: (id: number, estadoEntrega: EstadoEntrega) => {
+        return client.patch<Venta>(`/ventas/${id}/estado-entrega`, { estadoEntrega });
     },
 
     delete: (id: number) => {

@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { ReservaController } from '../controllers/ReservaController';
+import { validateBody } from '../middlewares/validate.middleware';
+import { createReservaSchema, updateReservaSchema } from '../validation/reserva.schema';
 
 const router = Router();
 
@@ -73,7 +75,7 @@ router.get('/:id', ReservaController.getById);
  *       409: { $ref: '#/components/responses/Conflict' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.post('/', ReservaController.create);
+router.post('/', validateBody(createReservaSchema), ReservaController.create);
 
 /**
  * @openapi
@@ -99,7 +101,7 @@ router.post('/', ReservaController.create);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', ReservaController.update);
+router.patch('/:id', validateBody(updateReservaSchema), ReservaController.update);
 
 /**
  * @openapi
