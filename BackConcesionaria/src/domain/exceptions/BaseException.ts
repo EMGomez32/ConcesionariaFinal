@@ -30,8 +30,8 @@ export class NotFoundException extends BaseException {
 }
 
 export class ValidationException extends BaseException {
-    constructor(errors: any) {
-        super(400, 'Error de validación', 'VALIDATION_ERROR');
+    constructor(errors: any, message = 'Error de validación') {
+        super(400, message, 'VALIDATION_ERROR');
         (this as any).details = errors;
     }
 }
