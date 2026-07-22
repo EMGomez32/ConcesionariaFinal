@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import type { CreateVentaDto } from '../../api/ventas.api';
 import { useUIStore } from '../../store/uiStore';
 import { useConfirm } from '../../hooks/useConfirm';
-import { useVentas, useVenta, useCreateVenta, useUpdateVenta, useDeleteVenta } from '../../hooks/useVentas';
+import { useVentas, useVenta, useCreateVenta, useDeleteVenta, useChangeEstadoEntrega } from '../../hooks/useVentas';
 import { useClientes } from '../../hooks/useClientes';
 import { useUsuarios } from '../../hooks/useUsuarios';
 import { useSucursales } from '../../hooks/useSucursales';
@@ -133,7 +133,7 @@ const VentasPage = () => {
 
     // Mutations
     const createMutation = useCreateVenta();
-    const updateMutation = useUpdateVenta();
+    const changeEstadoEntregaMutation = useChangeEstadoEntrega();
     const deleteMutation = useDeleteVenta();
 
     const handleCreate = async () => {
@@ -203,10 +203,11 @@ const VentasPage = () => {
 
     const handleEstadoEntrega = async (id: number, estadoEntrega: EstadoEntrega) => {
         try {
-            await updateMutation.mutateAsync({ id, data: { estadoEntrega } });
+            await changeEstadoEntregaMutation.mutateAsync({ id, estadoEntrega });
             addToast(`Estado de logística actualizado a: ${entregaStatusMap[estadoEntrega].label.toUpperCase()} `, 'success');
-        } catch {
-            addToast('Error al procesar la transición de logística', 'error');
+        } catch (err: unknown) {
+            const apiError = err as ApiError;
+            addToast(apiError?.message ?? 'Error al procesar la transición de logística', 'error');
         }
     };
 
