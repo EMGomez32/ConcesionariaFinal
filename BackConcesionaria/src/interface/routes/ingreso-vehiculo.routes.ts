@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { IngresoVehiculoController } from '../controllers/IngresoVehiculoController';
+import { validateBody } from '../middlewares/validate.middleware';
+import { createIngresoVehiculoSchema } from '../validation/ingreso-vehiculo.schema';
 
 const router = Router();
 
@@ -73,7 +75,7 @@ router.get('/:id', IngresoVehiculoController.getById);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/', IngresoVehiculoController.create);
+router.post('/', validateBody(createIngresoVehiculoSchema), IngresoVehiculoController.create);
 
 /**
  * @openapi

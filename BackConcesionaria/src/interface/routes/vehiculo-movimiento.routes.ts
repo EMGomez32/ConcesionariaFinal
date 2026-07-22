@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { VehiculoMovimientoController } from '../controllers/VehiculoMovimientoController';
+import { validateBody } from '../middlewares/validate.middleware';
+import { createMovimientoSchema, marcarRetornoSchema } from '../validation/vehiculo-movimiento.schema';
 
 const router = Router();
 
@@ -55,7 +57,7 @@ router.get('/', VehiculoMovimientoController.getAll);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/', VehiculoMovimientoController.create);
+router.post('/', validateBody(createMovimientoSchema), VehiculoMovimientoController.create);
 
 /**
  * @openapi
@@ -71,6 +73,6 @@ router.post('/', VehiculoMovimientoController.create);
  *       400: { $ref: '#/components/responses/ValidationError' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id/retorno', VehiculoMovimientoController.marcarRetorno);
+router.patch('/:id/retorno', validateBody(marcarRetornoSchema), VehiculoMovimientoController.marcarRetorno);
 
 export default router;
