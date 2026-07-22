@@ -89,13 +89,9 @@ export class AuthController {
     // POST /auth/reset-password { token, password }
     static async resetPassword(req: Request, res: Response, next: NextFunction) {
         try {
-            const { token, password } = req.body || {};
-            if (!token || typeof token !== 'string') {
-                return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Token inválido.' });
-            }
-            if (!password || String(password).length < 10) {
-                return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'La contraseña debe tener al menos 10 caracteres.' });
-            }
+            // token y password ya vienen validados por validateBody(resetPasswordSchema)
+            // en la ruta (presencia + longitud mínima 10).
+            const { token, password } = req.body;
 
             const registro = await rawPrisma.passwordResetToken.findFirst({
                 where: { tokenHash: sha256(token), usedAt: null, expiresAt: { gt: new Date() } },

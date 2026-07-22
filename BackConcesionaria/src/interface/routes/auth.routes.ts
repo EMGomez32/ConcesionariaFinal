@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { AuthController } from '../controllers/AuthController';
 import { loginLimiter } from '../middlewares/rateLimiters';
+import { validateBody } from '../middlewares/validate.middleware';
+import { loginSchema, refreshSchema, resetPasswordSchema } from '../validation/auth.schema';
 
 const router = Router();
 
@@ -30,7 +32,7 @@ const router = Router();
  *         description: Usuario inactivo
  *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
  */
-router.post('/login', loginLimiter, AuthController.login);
+router.post('/login', loginLimiter, validateBody(loginSchema), AuthController.login);
 
 /**
  * @openapi
@@ -61,7 +63,7 @@ router.post('/login', loginLimiter, AuthController.login);
  *                 refresh: { type: string }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.post('/refresh', AuthController.refresh);
+router.post('/refresh', validateBody(refreshSchema), AuthController.refresh);
 
 /**
  * @openapi
@@ -107,6 +109,6 @@ router.post('/forgot-password', loginLimiter, AuthController.forgotPassword);
  *       200: { description: Contraseña actualizada }
  *       400: { description: Token inválido o expirado }
  */
-router.post('/reset-password', AuthController.resetPassword);
+router.post('/reset-password', validateBody(resetPasswordSchema), AuthController.resetPassword);
 
 export default router;
