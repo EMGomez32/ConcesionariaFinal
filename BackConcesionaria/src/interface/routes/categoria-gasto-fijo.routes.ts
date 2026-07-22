@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { CategoriaGastoFijoController } from '../controllers/CategoriaGastoFijoController';
 import { authorize } from '../middlewares/authorize.middleware';
+import { validateBody } from '../middlewares/validate.middleware';
+import { createCategoriaGastoFijoSchema, updateCategoriaGastoFijoSchema } from '../validation/categoria-gasto-fijo.schema';
 
 const router = Router();
 
@@ -38,7 +40,7 @@ router.get('/', CategoriaGastoFijoController.getAll);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.post('/', authorize('admin'), CategoriaGastoFijoController.create);
+router.post('/', authorize('admin'), validateBody(createCategoriaGastoFijoSchema), CategoriaGastoFijoController.create);
 
 /**
  * @openapi
@@ -63,7 +65,7 @@ router.post('/', authorize('admin'), CategoriaGastoFijoController.create);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', authorize('admin'), CategoriaGastoFijoController.update);
+router.patch('/:id', authorize('admin'), validateBody(updateCategoriaGastoFijoSchema), CategoriaGastoFijoController.update);
 
 /**
  * @openapi

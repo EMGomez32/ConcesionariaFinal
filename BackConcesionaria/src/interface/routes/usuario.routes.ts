@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { UsuarioController } from '../controllers/UsuarioController';
 import { authenticate } from '../middlewares/authenticate.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
+import { validateBody } from '../middlewares/validate.middleware';
+import { createUsuarioSchema, updateUsuarioSchema, resetUsuarioPasswordSchema, updateMeSchema, changeMyPasswordSchema } from '../validation/usuario.schema';
 
 const router = Router();
 
@@ -57,7 +59,7 @@ router.get('/', authenticate, UsuarioController.getAll);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.patch('/me', authenticate, UsuarioController.updateMe);
+router.patch('/me', authenticate, validateBody(updateMeSchema), UsuarioController.updateMe);
 
 /**
  * @openapi
@@ -81,7 +83,7 @@ router.patch('/me', authenticate, UsuarioController.updateMe);
  *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.post('/me/password', authenticate, UsuarioController.changeMyPassword);
+router.post('/me/password', authenticate, validateBody(changeMyPasswordSchema), UsuarioController.changeMyPassword);
 
 /**
  * @openapi
@@ -126,7 +128,7 @@ router.get('/:id', authenticate, UsuarioController.getById);
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.post('/', authenticate, authorize('admin', 'super_admin'), UsuarioController.create);
+router.post('/', authenticate, authorize('admin', 'super_admin'), validateBody(createUsuarioSchema), UsuarioController.create);
 
 /**
  * @openapi
@@ -156,7 +158,7 @@ router.post('/', authenticate, authorize('admin', 'super_admin'), UsuarioControl
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', authenticate, authorize('admin', 'super_admin'), UsuarioController.update);
+router.patch('/:id', authenticate, authorize('admin', 'super_admin'), validateBody(updateUsuarioSchema), UsuarioController.update);
 
 /**
  * @openapi
@@ -183,7 +185,7 @@ router.patch('/:id', authenticate, authorize('admin', 'super_admin'), UsuarioCon
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/:id/reset-password', authenticate, authorize('admin', 'super_admin'), UsuarioController.resetPassword);
+router.post('/:id/reset-password', authenticate, authorize('admin', 'super_admin'), validateBody(resetUsuarioPasswordSchema), UsuarioController.resetPassword);
 
 /**
  * @openapi
