@@ -1,4 +1,4 @@
-import { Car } from 'lucide-react';
+import Isotipo from '../brand/Isotipo';
 
 const PageLoader = () => {
     return (
@@ -6,7 +6,7 @@ const PageLoader = () => {
             <div className="page-loader-logo">
                 <div className="page-loader-orb"></div>
                 <div className="page-loader-icon">
-                    <Car size={28} color="#ffffff" />
+                    <Isotipo size={28} color="#ffffff" />
                 </div>
             </div>
 

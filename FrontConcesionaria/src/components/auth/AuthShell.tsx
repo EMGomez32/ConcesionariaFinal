@@ -1,12 +1,12 @@
 import React from 'react';
-import { Car } from 'lucide-react';
+import Isotipo from '../brand/Isotipo';
 
 /** Contenedor centrado con estética dark para pantallas de auth secundarias. */
 const AuthShell = ({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) => (
     <div className="auth-shell">
         <main className="auth-card animate-scale-in" role="main">
             <header className="auth-head">
-                <div className="auth-logo"><Car size={24} color="#fff" /></div>
+                <div className="auth-logo"><Isotipo size={24} color="#fff" /></div>
                 <h1 className="auth-brand">AUTENZA</h1>
             </header>
             <div className="auth-body">
