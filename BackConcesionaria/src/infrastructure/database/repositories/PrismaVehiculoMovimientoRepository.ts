@@ -4,6 +4,7 @@ import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
+import { assertMismoTenant } from '../../security/tenantGuard';
 
 export class PrismaVehiculoMovimientoRepository implements IVehiculoMovimientoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<VehiculoMovimiento>> {
@@ -70,12 +71,16 @@ export class PrismaVehiculoMovimientoRepository implements IVehiculoMovimientoRe
             if (desdeSucursalId === Number(hastaSucursalId)) {
                 throw new BaseException(400, 'La sucursal de destino debe ser diferente a la de origen', 'SAME_SUCURSAL');
             }
+            // La sucursal destino tiene que ser del tenant del vehículo: sin esto un
+            // admin podría trasladar la unidad a una sucursal de otra concesionaria
+            // (para el admin la ajena da 404; para super_admin se rechaza el cruce).
+            await assertMismoTenant('sucursal', hastaSucursalId, v.concesionariaId);
         } else {
             if (!proveedorDestinoId) {
                 throw new BaseException(400, 'Seleccioná el proveedor de destino', 'DESTINO_REQUERIDO');
             }
-            const prov = await prisma.proveedor.findUnique({ where: { id: Number(proveedorDestinoId) } });
-            if (!prov) throw new NotFoundException('Proveedor de destino');
+            // El proveedor destino tiene que ser del mismo tenant que el vehículo.
+            const prov: any = await assertMismoTenant('proveedor', proveedorDestinoId, v.concesionariaId);
             if (!prov.activo) {
                 throw new BaseException(400, `El proveedor "${prov.nombre}" está inactivo`, 'PROVEEDOR_INACTIVO');
             }

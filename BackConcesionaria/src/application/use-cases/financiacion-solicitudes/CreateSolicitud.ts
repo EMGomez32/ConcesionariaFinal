@@ -1,6 +1,7 @@
 import { ISolicitudFinanciacionRepository } from '../../../domain/repositories/ISolicitudFinanciacionRepository';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import prisma from '../../../infrastructure/database/prisma';
+import { assertMismoTenant, resolveTenantDestino } from '../../../infrastructure/security/tenantGuard';
 
 /**
  * Verifica que el vehículo exista y sea de la concesionaria del token.
@@ -20,6 +21,15 @@ export class CreateSolicitud {
 
     async execute(data: any) {
         await assertVehiculoDelTenant(data?.vehiculoId);
+        // El resto de las FKs del legajo (sucursal, venta, presupuesto, cliente y
+        // financiera) tienen que ser del tenant destino: para el admin una ajena da
+        // 404; para super_admin se rechaza el cruce contra la concesionaria destino.
+        const tenantId = resolveTenantDestino(data?.concesionariaId);
+        await assertMismoTenant('sucursal', data?.sucursalId, tenantId);
+        await assertMismoTenant('venta', data?.ventaId, tenantId);
+        await assertMismoTenant('presupuesto', data?.presupuestoId, tenantId);
+        await assertMismoTenant('cliente', data?.clienteId, tenantId);
+        await assertMismoTenant('financiera', data?.financieraId, tenantId);
         return this.repository.create(data);
     }
 }

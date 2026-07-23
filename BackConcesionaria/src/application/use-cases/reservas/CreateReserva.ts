@@ -3,6 +3,7 @@ import { IVehiculoRepository } from '../../../domain/repositories/IVehiculoRepos
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import prisma from '../../../infrastructure/database/prisma';
 import { context } from '../../../infrastructure/security/context';
+import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 
 export class CreateReserva {
     constructor(
@@ -17,6 +18,13 @@ export class CreateReserva {
         if (vehiculo.estado === 'reservado' || vehiculo.estado === 'vendido') {
             throw new BaseException(400, 'El vehículo no está disponible para reserva', 'VEHICULO_NOT_AVAILABLE');
         }
+
+        // La reserva hereda el tenant del vehículo: cliente y sucursal tienen que
+        // ser de esa misma concesionaria (ajena → 404 para admin, rechazo para
+        // super_admin).
+        const tenantId = (vehiculo as any).concesionariaId;
+        await assertMismoTenant('cliente', data.clienteId, tenantId);
+        await assertMismoTenant('sucursal', data.sucursalId, tenantId);
 
         const user = context.getUser();
 

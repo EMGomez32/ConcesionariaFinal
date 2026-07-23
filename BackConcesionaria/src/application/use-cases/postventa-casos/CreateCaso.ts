@@ -1,6 +1,7 @@
 import { IPostventaCasoRepository } from '../../../domain/repositories/IPostventaCasoRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import prisma from '../../../infrastructure/database/prisma';
+import { assertMismoTenant, resolveTenantDestino } from '../../../infrastructure/security/tenantGuard';
 
 /**
  * Verifica que el tipo exista, sea de la concesionaria del token y esté activo.
@@ -31,6 +32,14 @@ export class CreateCaso {
 
     async execute(data: any) {
         await assertTipoUsable(data?.tipoId);
+        // Cliente, vehículo, sucursal y venta del reclamo tienen que ser del tenant
+        // destino: para el admin una fila ajena da 404; para super_admin se rechaza
+        // el cruce contra la concesionaria destino.
+        const tenantId = resolveTenantDestino(data?.concesionariaId);
+        await assertMismoTenant('cliente', data?.clienteId, tenantId);
+        await assertMismoTenant('vehiculo', data?.vehiculoId, tenantId);
+        await assertMismoTenant('sucursal', data?.sucursalId, tenantId);
+        await assertMismoTenant('venta', data?.ventaId, tenantId);
         return this.repository.create(data);
     }
 }

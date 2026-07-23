@@ -2,6 +2,7 @@ import { ISolicitudFinanciacionRepository } from '../../../domain/repositories/I
 import { NotFoundException, BaseException } from '../../../domain/exceptions/BaseException';
 import { assertValidTransition } from '../../../domain/services/stateMachine';
 import { assertVehiculoDelTenant } from './CreateSolicitud';
+import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 
 export class UpdateSolicitud {
     constructor(private readonly repository: ISolicitudFinanciacionRepository) { }
@@ -25,6 +26,13 @@ export class UpdateSolicitud {
             }
             await assertVehiculoDelTenant(patch.vehiculoId);
         }
+
+        // El repo permite reasignar sucursal/venta/presupuesto en el update:
+        // confinarlas al tenant de la solicitud.
+        const tenantId = exists.concesionariaId;
+        await assertMismoTenant('sucursal', patch.sucursalId, tenantId);
+        await assertMismoTenant('venta', patch.ventaId, tenantId);
+        await assertMismoTenant('presupuesto', patch.presupuestoId, tenantId);
 
         if (patch.estado && patch.estado !== exists.estado) {
             assertValidTransition('solicitudFinanciacion', exists.estado, patch.estado);

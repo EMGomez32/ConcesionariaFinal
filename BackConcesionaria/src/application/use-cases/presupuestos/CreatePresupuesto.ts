@@ -1,5 +1,6 @@
 import { IPresupuestoRepository } from '../../../domain/repositories/IPresupuestoRepository';
 import { BaseException } from '../../../domain/exceptions/BaseException';
+import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 
 export class CreatePresupuesto {
     constructor(private readonly presupuestoRepository: IPresupuestoRepository) { }
@@ -7,6 +8,21 @@ export class CreatePresupuesto {
     async execute(data: any) {
         if (!data.concesionariaId) {
             throw new BaseException(400, 'concesionariaId es obligatorio', 'VALIDATION_ERROR');
+        }
+
+        // El tenant del presupuesto es el que inyecta el controller desde el token
+        // (data.concesionariaId). Todas las FKs del body — sucursal, cliente, el
+        // vehículo de cada ítem y el vehículo generado del canje — tienen que ser
+        // de ese tenant: una ajena da 404 para el admin y rechazo para super_admin.
+        const tenantId = data.concesionariaId;
+        await assertMismoTenant('sucursal', data.sucursalId, tenantId);
+        await assertMismoTenant('cliente', data.clienteId, tenantId);
+        for (const item of Array.isArray(data.items) ? data.items : []) {
+            await assertMismoTenant('vehiculo', item?.vehiculoId, tenantId);
+        }
+        const canje = data.canjes ?? data.canje;
+        if (canje) {
+            await assertMismoTenant('vehiculo', canje.vehiculoGeneradoId, tenantId);
         }
 
         // HU-55: si el cliente no manda nroPresupuesto, autogenerarlo como

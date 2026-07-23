@@ -4,6 +4,7 @@ import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
+import { assertMismoTenant } from '../../security/tenantGuard';
 
 export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<IngresoVehiculo>> {
@@ -57,6 +58,17 @@ export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoReposito
 
         const v = await prisma.vehiculo.findUnique({ where: { id: vehiculoId } });
         if (!v) throw new NotFoundException('Vehículo');
+
+        // El ingreso hereda el tenant del vehículo (v.concesionariaId, abajo). El
+        // resto de las FKs del body tienen que ser de ese mismo tenant: para el
+        // admin una ajena da 404; para super_admin se rechaza el cruce. Además
+        // sucursalId se escribe también en vehiculo.update, así que un id ajeno
+        // movería el vehículo a una sucursal de otra concesionaria.
+        await assertMismoTenant('sucursal', sucursalId, v.concesionariaId);
+        await assertMismoTenant('cliente', rest.clienteOrigenId, v.concesionariaId);
+        await assertMismoTenant('proveedor', rest.proveedorOrigenId, v.concesionariaId);
+        await assertMismoTenant('presupuesto', rest.presupuestoId, v.concesionariaId);
+        await assertMismoTenant('venta', rest.ventaId, v.concesionariaId);
 
         return prisma.$transaction(async (tx) => {
             const i = await tx.ingresoVehiculo.create({

@@ -2,6 +2,7 @@ import { IVehiculoRepository } from '../../../domain/repositories/IVehiculoRepos
 import { BaseException } from '../../../domain/exceptions/BaseException';
 import prisma from '../../../infrastructure/database/prisma';
 import { context } from '../../../infrastructure/security/context';
+import { assertMismoTenant, resolveTenantDestino } from '../../../infrastructure/security/tenantGuard';
 
 export class CreateVehiculo {
     constructor(private readonly vehiculoRepository: IVehiculoRepository) { }
@@ -14,6 +15,14 @@ export class CreateVehiculo {
         // clienteOrigenId es dato del INGRESO, no del vehículo: se separa para no
         // pasarlo a prisma.vehiculo.create (que lo rechazaría).
         const { clienteOrigenId, ...vehiculoData } = data;
+
+        // Sucursal/proveedor/cliente de origen tienen que ser del tenant destino
+        // (token para el admin, body.concesionariaId para super_admin): una fila
+        // ajena da 404 para el admin y rechazo para super_admin.
+        const tenantId = resolveTenantDestino(vehiculoData.concesionariaId);
+        await assertMismoTenant('sucursal', vehiculoData.sucursalId, tenantId);
+        await assertMismoTenant('proveedor', vehiculoData.proveedorCompraId, tenantId);
+        await assertMismoTenant('cliente', clienteOrigenId, tenantId);
 
         // Los inputs type="date" mandan "YYYY-MM-DD" y los selects mandan strings;
         // Prisma 7 exige Date/ISO para @db.Date y number para las FK.
