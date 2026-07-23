@@ -12,6 +12,9 @@ import { z } from 'zod';
 // concesionariaId DEBE declararse (opcional) en el create: si lo strippeáramos, el
 // super_admin no podría elegir tenant y el use-case tiraría 'concesionariaId es
 // obligatorio'. Para un admin común el campo no viene y lo pone el controller.
+// En update aplica el mismo reparto: el schema deja pasar concesionariaId para que
+// super_admin pueda REASIGNAR tenant, y UsuarioController.update lo strippea para
+// cualquier otro rol (RBAC del controller, no del schema).
 
 // FK opcional: 0 / '' / null se interpretan como "sin FK" (undefined), porque el
 // form inicializa sucursalId en 0 y manda `sucursalId || undefined`. Si viene un id
@@ -53,6 +56,8 @@ export const updateUsuarioSchema = z.object({
         (v) => (v === '' ? undefined : v),
         z.string().min(6, 'La contraseña debe tener al menos 6 caracteres').optional(),
     ),
+    // Opcional para que super_admin pueda REASIGNAR tenant. Un admin común no puede:
+    // UsuarioController.update lo strippea salvo super_admin (ver cabecera).
     concesionariaId: optionalFk,
     sucursalId: optionalFk,
     activo: z.boolean().optional(),
