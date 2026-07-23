@@ -92,8 +92,14 @@ export class PrismaProveedorRepository implements IProveedorRepository {
     }
 
     async create(data: any): Promise<Proveedor> {
-        // concesionariaId lo inyecta la extensión RLS de Prisma.
-        const p = await prisma.proveedor.create({ data: this.pickEditable(data) as any });
+        const payload = this.pickEditable(data);
+        // super_admin no recibe la inyección de concesionariaId del RLS: el
+        // controller lo resuelve (body para super_admin, token para el resto) y
+        // acá se setea explícito, fuera de pickEditable.
+        if (data.concesionariaId != null) {
+            payload.concesionariaId = Number(data.concesionariaId);
+        }
+        const p = await prisma.proveedor.create({ data: payload as any });
         return this.mapToEntity(p);
     }
 

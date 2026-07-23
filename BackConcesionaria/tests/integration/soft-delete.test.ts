@@ -69,7 +69,9 @@ describe('Soft delete (extension intercepta delete)', () => {
                 vehiculoId: vehId, categoriaId: catId,
                 concesionariaId,
                 proveedorId: provId, monto: 100,
-                fecha: '2026-04-25T00:00:00Z',
+                // El front (gastos.api.ts) y el schema Zod usan `fechaGasto`; el
+                // repo lo persiste en la columna `fecha`.
+                fechaGasto: '2026-04-25T00:00:00Z',
                 descripcion: 'gasto test',
             },
             authHeaders(token)

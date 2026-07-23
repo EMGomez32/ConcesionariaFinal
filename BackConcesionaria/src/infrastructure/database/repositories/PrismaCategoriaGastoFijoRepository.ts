@@ -28,7 +28,13 @@ export class PrismaCategoriaGastoFijoRepository implements ICategoriaGastoFijoRe
     }
 
     async create(data: any): Promise<CategoriaGastoFijo> {
-        const c = await prisma.categoriaGastoFijo.create({ data: pickEditable(data) as any });
+        const payload = pickEditable(data);
+        // super_admin no recibe la inyección de concesionariaId del RLS: el
+        // controller lo resuelve y acá se setea explícito, fuera de pickEditable.
+        if (data.concesionariaId != null) {
+            payload.concesionariaId = Number(data.concesionariaId);
+        }
+        const c = await prisma.categoriaGastoFijo.create({ data: payload as any });
         return this.mapToEntity(c);
     }
 

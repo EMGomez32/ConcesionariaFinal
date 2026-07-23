@@ -6,6 +6,7 @@ import { CreateFinanciera } from '../../application/use-cases/financieras/Create
 import { UpdateFinanciera } from '../../application/use-cases/financieras/UpdateFinanciera';
 import { DeleteFinanciera } from '../../application/use-cases/financieras/DeleteFinanciera';
 import { context } from '../../infrastructure/security/context';
+import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import { audit } from '../../infrastructure/security/audit';
 
 const repository = new PrismaFinancieraRepository();
@@ -38,7 +39,8 @@ export class FinancieraController {
 
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
-            const result = await createFinancieraUC.execute(req.body);
+            const concesionariaId = resolveConcesionariaId(req.body?.concesionariaId);
+            const result = await createFinancieraUC.execute({ ...req.body, concesionariaId });
             await audit({
                 entidad: 'Financiera',
                 accion: 'create',

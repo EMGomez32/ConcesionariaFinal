@@ -8,6 +8,7 @@ import { DeleteCliente } from '../../application/use-cases/clientes/DeleteClient
 import { cleanFilters } from '../../utils/cleanFilters';
 import parseNumericFields from '../../utils/parseNumericFields';
 import { audit } from '../../infrastructure/security/audit';
+import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 
 const repository = new PrismaClienteRepository();
 const getClientesUC = new GetClientes(repository);
@@ -44,7 +45,8 @@ export class ClienteController {
         try {
             // Convertir campos numéricos del body
             const data = parseNumericFields(req.body, ['concesionariaId']);
-            const result = await createClienteUC.execute(data);
+            const concesionariaId = resolveConcesionariaId(data.concesionariaId);
+            const result = await createClienteUC.execute({ ...data, concesionariaId });
             await audit({
                 entidad: 'Cliente',
                 accion: 'create',

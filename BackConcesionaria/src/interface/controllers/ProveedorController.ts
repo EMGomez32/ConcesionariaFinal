@@ -6,6 +6,7 @@ import { CreateProveedor } from '../../application/use-cases/proveedores/CreateP
 import { UpdateProveedor } from '../../application/use-cases/proveedores/UpdateProveedor';
 import { DeleteProveedor } from '../../application/use-cases/proveedores/DeleteProveedor';
 import { audit } from '../../infrastructure/security/audit';
+import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 
 const repository = new PrismaProveedorRepository();
 const getProveedoresUC = new GetProveedores(repository);
@@ -37,7 +38,8 @@ export class ProveedorController {
 
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
-            const result = await createProveedorUC.execute(req.body);
+            const concesionariaId = resolveConcesionariaId(req.body?.concesionariaId);
+            const result = await createProveedorUC.execute({ ...req.body, concesionariaId });
             await audit({
                 entidad: 'Proveedor',
                 accion: 'create',
