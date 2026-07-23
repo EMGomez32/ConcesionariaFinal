@@ -76,12 +76,18 @@ export class PrismaPostventaCasoRepository implements IPostventaCasoRepository {
     }
 
     async create(data: any): Promise<PostventaCaso> {
+        const payload: any = {
+            ...pickEditable(data, EDITABLE_CREATE),
+            // Todo caso arranca pendiente: no se acepta del body.
+            estado: 'pendiente',
+        };
+        // super_admin no recibe la inyección de concesionariaId del RLS: el
+        // controller lo resuelve y acá se setea explícito, fuera de pickEditable.
+        if (data.concesionariaId != null) {
+            payload.concesionariaId = Number(data.concesionariaId);
+        }
         const c = await prisma.postventaCaso.create({
-            data: {
-                ...pickEditable(data, EDITABLE_CREATE),
-                // Todo caso arranca pendiente: no se acepta del body.
-                estado: 'pendiente'
-            } as any,
+            data: payload,
             include: { tipoRef: true }
         });
         return this.mapToEntity(c);

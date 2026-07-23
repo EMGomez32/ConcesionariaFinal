@@ -97,8 +97,14 @@ export class PrismaSolicitudFinanciacionRepository implements ISolicitudFinancia
     }
 
     async create(data: any): Promise<SolicitudFinanciacion> {
+        const payload = pick(data, CREATABLE);
+        // super_admin no recibe la inyección de concesionariaId del RLS: el
+        // controller lo resuelve y acá se setea explícito, fuera del pick.
+        if (data.concesionariaId != null) {
+            payload.concesionariaId = Number(data.concesionariaId);
+        }
         const s = await prisma.solicitudFinanciacion.create({
-            data: pick(data, CREATABLE) as any,
+            data: payload as any,
             include: INCLUDES,
         });
         return this.mapToEntity(s);

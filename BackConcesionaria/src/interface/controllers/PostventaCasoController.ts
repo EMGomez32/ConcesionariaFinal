@@ -6,6 +6,7 @@ import { CreateCaso } from '../../application/use-cases/postventa-casos/CreateCa
 import { UpdateCaso } from '../../application/use-cases/postventa-casos/UpdateCaso';
 import { DeleteCaso } from '../../application/use-cases/postventa-casos/DeleteCaso';
 import { audit } from '../../infrastructure/security/audit';
+import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import prisma from '../../infrastructure/database/prisma';
 
 const repository = new PrismaPostventaCasoRepository();
@@ -38,7 +39,8 @@ export class PostventaCasoController {
 
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
-            const result = await createCasoUC.execute(req.body);
+            const concesionariaId = resolveConcesionariaId(req.body?.concesionariaId);
+            const result = await createCasoUC.execute({ ...req.body, concesionariaId });
             await audit({
                 entidad: 'PostventaCaso',
                 accion: 'create',

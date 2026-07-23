@@ -29,7 +29,13 @@ export class PrismaFinancieraRepository implements IFinancieraRepository {
     }
 
     async create(data: any): Promise<Financiera> {
-        const f = await prisma.financiera.create({ data: pickEditable(data) as any });
+        const payload = pickEditable(data);
+        // super_admin no recibe la inyección de concesionariaId del RLS: el
+        // controller lo resuelve y acá se setea explícito, fuera de pickEditable.
+        if (data.concesionariaId != null) {
+            payload.concesionariaId = Number(data.concesionariaId);
+        }
+        const f = await prisma.financiera.create({ data: payload as any });
         return this.mapToEntity(f);
     }
 

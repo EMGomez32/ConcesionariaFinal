@@ -28,7 +28,9 @@ export class PrismaCategoriaGastoRepository implements ICategoriaGastoRepository
             payload.descripcion = data.descripcion ? String(data.descripcion).trim() : null;
         }
         if (data.activo !== undefined) payload.activo = Boolean(data.activo);
-        // concesionariaId lo inyecta la extensión RLS de Prisma.
+        // super_admin no recibe la inyección de concesionariaId del RLS: el
+        // controller lo resuelve y acá se setea explícito.
+        if (data.concesionariaId != null) payload.concesionariaId = Number(data.concesionariaId);
 
         const c = await prisma.categoriaGastoVehiculo.create({ data: payload });
         return this.mapToEntity(c);

@@ -62,7 +62,13 @@ export class PrismaTipoPostventaRepository implements ITipoPostventaRepository {
     }
 
     async create(data: any): Promise<TipoPostventa> {
-        const t = await prisma.tipoPostventa.create({ data: pickEditable(data) as any });
+        const payload = pickEditable(data);
+        // super_admin no recibe la inyección de concesionariaId del RLS: el
+        // controller lo resuelve y acá se setea explícito, fuera de pickEditable.
+        if (data.concesionariaId != null) {
+            payload.concesionariaId = Number(data.concesionariaId);
+        }
+        const t = await prisma.tipoPostventa.create({ data: payload as any });
         return this.mapToEntity(t);
     }
 

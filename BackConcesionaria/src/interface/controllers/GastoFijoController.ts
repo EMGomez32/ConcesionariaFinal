@@ -6,6 +6,7 @@ import { CreateGastoFijo } from '../../application/use-cases/gastos-fijos/Create
 import { UpdateGastoFijo } from '../../application/use-cases/gastos-fijos/UpdateGastoFijo';
 import { DeleteGastoFijo } from '../../application/use-cases/gastos-fijos/DeleteGastoFijo';
 import { audit } from '../../infrastructure/security/audit';
+import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import prisma from '../../infrastructure/database/prisma';
 import { BaseException } from '../../domain/exceptions/BaseException';
 
@@ -39,7 +40,8 @@ export class GastoFijoController {
 
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
-            const result = await createGastoUC.execute(req.body);
+            const concesionariaId = resolveConcesionariaId(req.body?.concesionariaId);
+            const result = await createGastoUC.execute({ ...req.body, concesionariaId });
             await audit({
                 entidad: 'GastoFijo',
                 accion: 'create',

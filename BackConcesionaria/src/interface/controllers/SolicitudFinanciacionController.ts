@@ -7,6 +7,7 @@ import { UpdateSolicitud } from '../../application/use-cases/financiacion-solici
 import { DeleteSolicitud } from '../../application/use-cases/financiacion-solicitudes/DeleteSolicitud';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
+import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import { storage } from '../../infrastructure/storage/LocalStorageAdapter';
 import { BaseException } from '../../domain/exceptions/BaseException';
 import prisma from '../../infrastructure/database/prisma';
@@ -41,7 +42,8 @@ export class SolicitudFinanciacionController {
 
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
-            const result = await createSolicitudUC.execute(req.body);
+            const concesionariaId = resolveConcesionariaId(req.body?.concesionariaId);
+            const result = await createSolicitudUC.execute({ ...req.body, concesionariaId });
             await audit({
                 entidad: 'SolicitudFinanciacion',
                 accion: 'create',
