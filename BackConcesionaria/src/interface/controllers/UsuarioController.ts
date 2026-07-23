@@ -70,11 +70,23 @@ export class UsuarioController {
     static async update(req: Request, res: Response, next: NextFunction) {
         try {
             const id = parseInt(req.params.id as string, 10);
+            const actor = context.getUser();
+            const isSuper = actor?.roles?.includes('super_admin');
             const data = { ...req.body };
+            // RBAC multi-tenant (mismo criterio que create): el tenant NO se
+            // reasigna desde el body salvo super_admin. Sin este strip, un admin
+            // podía armar un PATCH manual con { concesionariaId: <otra> } y mover
+            // al usuario a otro tenant. El schema declara concesionariaId opcional
+            // a propósito (para que super_admin SÍ pueda reasignar), así que el
+            // candado vive acá, no en Zod. La RLS de Postgres además lo rebota por
+            // WITH CHECK, pero eso sería un 500 opaco: acá lo cerramos limpio.
+            if (!isSuper) {
+                delete data.concesionariaId;
+            }
             // Anti auto-lockout: editándote a vos mismo desde el ABM no podés
             // cambiar tus roles ni tu estado (te quedarías sin admin o inactivo,
             // sin nadie que lo revierta). Nombre/email sí, o usá Configuración.
-            if (context.getUser()?.userId === id) {
+            if (actor?.userId === id) {
                 delete data.roleIds;
                 delete data.roles;
                 delete data.activo;

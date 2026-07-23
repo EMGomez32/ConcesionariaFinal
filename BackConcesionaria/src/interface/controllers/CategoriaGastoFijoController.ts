@@ -5,6 +5,7 @@ import { CreateCategoriaGastoFijo } from '../../application/use-cases/gastos-fij
 import { UpdateCategoriaGastoFijo } from '../../application/use-cases/gastos-fijos-categorias/UpdateCategoriaGastoFijo';
 import { DeleteCategoriaGastoFijo } from '../../application/use-cases/gastos-fijos-categorias/DeleteCategoriaGastoFijo';
 import { context } from '../../infrastructure/security/context';
+import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import { audit } from '../../infrastructure/security/audit';
 
 const repository = new PrismaCategoriaGastoFijoRepository();
@@ -26,7 +27,8 @@ export class CategoriaGastoFijoController {
 
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
-            const result = await createCategoriaUC.execute(req.body);
+            const concesionariaId = resolveConcesionariaId(req.body?.concesionariaId);
+            const result = await createCategoriaUC.execute({ ...req.body, concesionariaId });
             await audit({
                 entidad: 'CategoriaGastoFijo',
                 accion: 'create',

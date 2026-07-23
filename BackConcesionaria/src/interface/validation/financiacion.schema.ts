@@ -10,10 +10,12 @@ import { z } from 'zod';
 // se podría inyectar estado/id/concesionariaId/montoFinanciado, etc. Zod descarta
 // todo lo no declarado.
 //
-// TENANT: el controller NO inyecta el tenant. `concesionariaId` lo agrega la
-// extensión de Prisma (prisma.extension.ts, en el `create`/`where` a partir del
-// contexto de request), por eso NO se declara acá (además el front no lo manda).
-// `sucursalId` es opcional en el modelo y el front tampoco lo envía en el create.
+// TENANT: el controller resuelve el tenant (body para super_admin, token para el
+// resto). Para el NO super_admin lo inyecta además la extensión de Prisma
+// (prisma.extension.ts); para super_admin NO, así que `concesionariaId` se declara
+// acá (opcional) para que sobreviva al strip de Zod y el super_admin pueda elegir
+// tenant por body. `sucursalId` es opcional en el modelo y el front no lo envía en
+// el create.
 
 const idField = (label: string) =>
     z.coerce.number({ error: `${label} es obligatorio` }).int(`${label} inválido`).positive(`${label} es obligatorio`);
@@ -73,6 +75,9 @@ export const createFinanciacionSchema = z.object({
         .max(31, 'El día de vencimiento debe estar entre 1 y 31'),
     tasaMensual: optionalTasa,
     observaciones: z.string().optional(),
+    // Lo resuelve el controller; declarado para que el super_admin pueda elegir
+    // tenant por body sin que el strip de Zod lo borre (ver cabecera TENANT).
+    concesionariaId: optionalFk,
 });
 
 // POST /financiaciones/:id/refinanciar — el monto NO se recibe: el backend lo

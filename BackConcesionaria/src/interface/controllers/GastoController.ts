@@ -6,6 +6,7 @@ import { CreateGasto } from '../../application/use-cases/gastos/CreateGasto';
 import { UpdateGasto } from '../../application/use-cases/gastos/UpdateGasto';
 import { DeleteGasto } from '../../application/use-cases/gastos/DeleteGasto';
 import { audit } from '../../infrastructure/security/audit';
+import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import prisma from '../../infrastructure/database/prisma';
 
 const repository = new PrismaGastoRepository();
@@ -38,7 +39,8 @@ export class GastoController {
 
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
-            const result = await createGastoUC.execute(req.body);
+            const concesionariaId = resolveConcesionariaId(req.body?.concesionariaId);
+            const result = await createGastoUC.execute({ ...req.body, concesionariaId });
             await audit({
                 entidad: 'GastoVehiculo',
                 accion: 'create',

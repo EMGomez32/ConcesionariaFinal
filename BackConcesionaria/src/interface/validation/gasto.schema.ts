@@ -13,9 +13,11 @@ import { z } from 'zod';
 //   - `tipo` ('VEHICULO'/'FIJO') lo manda el front pero el repo lo IGNORA por
 //     completo; se acepta sólo para no rechazar el payload real.
 //
-// `concesionariaId` NO se valida ni se acepta: lo inyecta la extensión RLS de
-// Prisma en el create (nadie puede colarlo desde el body). `sucursalId` es
-// derivado del vehículo y no es columna de este modelo: tampoco se modela.
+// `concesionariaId` lo resuelve el controller (body para super_admin, token para
+// el resto). Para el NO super_admin lo inyecta la extensión RLS; para super_admin
+// NO, así que se declara acá (opcional) para que sobreviva al strip de Zod y el
+// super_admin pueda elegir tenant por body. `sucursalId` es derivado del vehículo
+// y no es columna de este modelo: no se modela.
 
 const idField = (label: string) =>
     z.coerce.number({ error: `${label} es obligatorio` }).int(`${label} inválido`).positive(`${label} es obligatorio`);
@@ -51,6 +53,9 @@ export const createGastoSchema = z.object({
     fecha: z.string().min(1, 'La fecha del gasto no puede estar vacía').optional(),
     comprobanteUrl: z.string().optional(),
     urlComprobante: z.string().optional(),
+    // Lo resuelve el controller; declarado para que el super_admin pueda elegir
+    // tenant por body sin que el strip de Zod lo borre (ver cabecera).
+    concesionariaId: optionalFk,
 });
 
 // PATCH /gastos/:id. El DTO tipado del front sólo permite { monto, descripcion,

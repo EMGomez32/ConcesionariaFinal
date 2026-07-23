@@ -5,6 +5,7 @@ import { CreateTipoPostventa } from '../../application/use-cases/postventa-tipos
 import { UpdateTipoPostventa } from '../../application/use-cases/postventa-tipos/UpdateTipoPostventa';
 import { DeleteTipoPostventa } from '../../application/use-cases/postventa-tipos/DeleteTipoPostventa';
 import { context } from '../../infrastructure/security/context';
+import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import { audit } from '../../infrastructure/security/audit';
 
 const repository = new PrismaTipoPostventaRepository();
@@ -26,7 +27,8 @@ export class TipoPostventaController {
 
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
-            const result = await createTipoUC.execute(req.body);
+            const concesionariaId = resolveConcesionariaId(req.body?.concesionariaId);
+            const result = await createTipoUC.execute({ ...req.body, concesionariaId });
             await audit({
                 entidad: 'TipoPostventa',
                 accion: 'create',

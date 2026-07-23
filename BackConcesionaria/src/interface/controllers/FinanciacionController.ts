@@ -8,6 +8,7 @@ import { DeleteFinanciacion } from '../../application/use-cases/financiaciones/D
 import { RegistrarPagoCuota } from '../../application/use-cases/financiaciones/RegistrarPagoCuota';
 import { RefinanciarFinanciacion } from '../../application/use-cases/financiaciones/RefinanciarFinanciacion';
 import { audit } from '../../infrastructure/security/audit';
+import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 
 const repository = new PrismaFinanciacionRepository();
 const refinanciarUC = new RefinanciarFinanciacion(repository);
@@ -41,7 +42,8 @@ export class FinanciacionController {
 
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
-            const result = await createFinanciacionUC.execute(req.body);
+            const concesionariaId = resolveConcesionariaId(req.body?.concesionariaId);
+            const result = await createFinanciacionUC.execute({ ...req.body, concesionariaId });
             await audit({
                 entidad: 'Financiacion',
                 accion: 'create',

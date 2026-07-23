@@ -72,7 +72,9 @@ export class PrismaGastoRepository implements IGastoRepository {
         if (data.proveedorId) payload.proveedorId = Number(data.proveedorId);
         const comprobante = data.comprobanteUrl ?? data.urlComprobante;
         if (comprobante) payload.comprobanteUrl = comprobante;
-        // concesionariaId lo inyecta la extensión RLS de Prisma en el create.
+        // super_admin no recibe la inyección de concesionariaId del RLS: el
+        // controller lo resuelve y acá se setea explícito.
+        if (data.concesionariaId != null) payload.concesionariaId = Number(data.concesionariaId);
 
         const g = await prisma.gastoVehiculo.create({ data: payload });
         return this.findById(g.id) as Promise<Gasto>;

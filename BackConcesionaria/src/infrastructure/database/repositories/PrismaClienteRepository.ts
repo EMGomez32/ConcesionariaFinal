@@ -98,8 +98,15 @@ export class PrismaClienteRepository implements IClienteRepository {
     }
 
     async create(data: any): Promise<Cliente> {
-        // concesionariaId lo inyecta la extensión RLS de Prisma.
-        const c = await prisma.cliente.create({ data: this.pickEditable(data) as any });
+        const payload = this.pickEditable(data);
+        // Para un admin, el RLS inyecta concesionariaId solo; para un super_admin
+        // NO (no está atado a un tenant), así que el controller lo resuelve y acá
+        // se setea explícito. `pickEditable` no lo incluye a propósito: el valor
+        // lo controla el controller, no el body crudo del cliente.
+        if (data.concesionariaId != null) {
+            payload.concesionariaId = Number(data.concesionariaId);
+        }
+        const c = await prisma.cliente.create({ data: payload as any });
         return this.mapToEntity(c);
     }
 
