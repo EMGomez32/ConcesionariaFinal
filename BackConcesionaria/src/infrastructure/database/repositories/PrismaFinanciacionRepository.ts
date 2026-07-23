@@ -4,6 +4,7 @@ import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { assertMismoTenant } from '../../security/tenantGuard';
 
 /**
  * Vencimiento de la cuota nro `i` (1-based) contando desde la fecha de inicio.
@@ -211,6 +212,10 @@ export class PrismaFinanciacionRepository implements IFinanciacionRepository {
             include: { cuotasPlan: { where: { deletedAt: null } } },
         });
         if (!original) throw new NotFoundException('Financiación');
+
+        // El contrato refinanciado hereda el tenant del original: si viene un
+        // cobrador nuevo en el body, tiene que ser de esa misma concesionaria.
+        await assertMismoTenant('usuario', data?.cobradorId, original.concesionariaId);
 
         if (original.estado !== 'activa' && original.estado !== 'en_mora') {
             throw new BaseException(

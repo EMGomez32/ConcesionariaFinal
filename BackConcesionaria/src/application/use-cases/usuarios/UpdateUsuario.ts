@@ -1,5 +1,6 @@
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
+import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 import bcrypt from 'bcryptjs';
 
 export class UpdateUsuario {
@@ -12,6 +13,9 @@ export class UpdateUsuario {
         }
 
         const { password, ...updateData } = data;
+
+        // Reasignar la sucursal no puede sacar al usuario de su tenant.
+        await assertMismoTenant('sucursal', updateData.sucursalId, exists.concesionariaId);
 
         // HU-11: si cambia el email, validar unicidad antes de tirar P2002.
         if (updateData.email && updateData.email !== exists.email) {

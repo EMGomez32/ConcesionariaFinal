@@ -1,6 +1,7 @@
 import { IVehiculoRepository } from '../../../domain/repositories/IVehiculoRepository';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertValidTransition } from '../../../domain/services/stateMachine';
+import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 
 export class UpdateVehiculo {
     constructor(private readonly vehiculoRepository: IVehiculoRepository) { }
@@ -14,6 +15,13 @@ export class UpdateVehiculo {
         if (data.estado && data.estado !== exists.estado) {
             assertValidTransition('vehiculo', exists.estado, data.estado);
         }
+
+        // El body de update llega crudo (vehiculo.validation es express-validator y
+        // no strippea claves): sucursalId/proveedorCompraId son sobreescribibles y
+        // hay que confinarlos al tenant del vehículo.
+        const tenantId = exists.concesionariaId;
+        await assertMismoTenant('sucursal', data.sucursalId, tenantId);
+        await assertMismoTenant('proveedor', data.proveedorCompraId, tenantId);
 
         // clienteOrigenId es dato del ingreso, no del vehículo: se descarta.
         const { clienteOrigenId, ...vehiculoData } = data;

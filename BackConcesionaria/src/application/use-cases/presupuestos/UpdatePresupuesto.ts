@@ -1,6 +1,7 @@
 import { IPresupuestoRepository } from '../../../domain/repositories/IPresupuestoRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertValidTransition } from '../../../domain/services/stateMachine';
+import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 
 // Campos que SOLO pueden modificarse mientras el presupuesto está en `borrador`
 // (HU-57). Cambios de estado puro o de observaciones siempre se permiten.
@@ -29,6 +30,12 @@ export class UpdatePresupuesto {
                 'INVALID_STATE'
             );
         }
+
+        // Reasignar sucursal/cliente/vendedor no puede sacar el presupuesto de su tenant.
+        const tenantId = exists.concesionariaId;
+        await assertMismoTenant('sucursal', data.sucursalId, tenantId);
+        await assertMismoTenant('cliente', data.clienteId, tenantId);
+        await assertMismoTenant('usuario', data.vendedorId, tenantId);
 
         return this.presupuestoRepository.update(id, data);
     }

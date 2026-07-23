@@ -1,5 +1,6 @@
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { BaseException } from '../../../domain/exceptions/BaseException';
+import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 import bcrypt from 'bcryptjs';
 
 export class CreateUsuario {
@@ -19,6 +20,10 @@ export class CreateUsuario {
         if (!userData.concesionariaId) {
             throw new BaseException(400, 'concesionariaId es obligatorio', 'VALIDATION_ERROR');
         }
+
+        // La sucursal asignada tiene que ser de la concesionaria del usuario: sin
+        // esto un admin podría asignar a alguien a una sucursal de otro tenant.
+        await assertMismoTenant('sucursal', userData.sucursalId, userData.concesionariaId);
 
         // HU-09: validar unicidad email dentro de la concesionaria.
         // Mejor que dejar a Prisma tirar P2002 con mensaje genérico.

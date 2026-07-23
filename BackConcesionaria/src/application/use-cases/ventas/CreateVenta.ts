@@ -2,6 +2,7 @@ import { IVentaRepository } from '../../../domain/repositories/IVentaRepository'
 import { IVehiculoRepository } from '../../../domain/repositories/IVehiculoRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import prisma from '../../../infrastructure/database/prisma';
+import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 
 export class CreateVenta {
     constructor(
@@ -16,6 +17,22 @@ export class CreateVenta {
         if (!vehiculo) throw new NotFoundException('Vehículo');
         if (vehiculo.estado === 'vendido') {
             throw new BaseException(400, 'El vehículo ya está vendido', 'VEHICULO_VENDIDO');
+        }
+
+        // La venta hereda el tenant del vehículo (línea de abajo). El resto de las
+        // FKs del body tienen que apuntar a ese mismo tenant: si no, un admin
+        // podría vincular un cliente/sucursal/presupuesto ajeno (para el admin la
+        // fila ajena da 404; para super_admin salta el chequeo de concesionaria).
+        const tenantId = (vehiculo as any).concesionariaId;
+        await assertMismoTenant('cliente', ventaData.clienteId, tenantId);
+        await assertMismoTenant('sucursal', ventaData.sucursalId, tenantId);
+        await assertMismoTenant('usuario', ventaData.vendedorId, tenantId);
+        await assertMismoTenant('presupuesto', presupuestoId, tenantId);
+        await assertMismoTenant('reserva', reservaId, tenantId);
+        // Cada canje trae el vehículo que se toma en parte de pago: también tiene
+        // que ser del tenant de la venta (el create anida `canjes` sin lookup).
+        for (const canje of Array.isArray(canjes) ? canjes : []) {
+            await assertMismoTenant('vehiculo', canje?.vehiculoCanjeId, tenantId);
         }
 
         // We can use the Prisma transaction here.
