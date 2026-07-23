@@ -17,6 +17,7 @@ export class CreatePresupuesto {
         const tenantId = data.concesionariaId;
         await assertMismoTenant('sucursal', data.sucursalId, tenantId);
         await assertMismoTenant('cliente', data.clienteId, tenantId);
+        await assertMismoTenant('usuario', data.vendedorId, tenantId);
         for (const item of Array.isArray(data.items) ? data.items : []) {
             await assertMismoTenant('vehiculo', item?.vehiculoId, tenantId);
         }

@@ -21,8 +21,10 @@ export class PrismaVehiculoArchivoRepository implements IVehiculoArchivoReposito
         // El archivo cuelga de un vehículo y hereda su tenant (trigger de
         // concesionaria_id). Confirmar que el vehículo es del tenant del actor:
         // para el admin un vehiculoId ajeno da 404 en vez de adjuntar el archivo a
-        // una unidad de otra concesionaria.
-        await assertMismoTenant('vehiculo', data?.vehiculoId);
+        // una unidad de otra concesionaria. El uploadedById (endpoint JSON legacy)
+        // también tiene que ser un usuario de ese tenant.
+        const vehiculo = await assertMismoTenant('vehiculo', data?.vehiculoId);
+        await assertMismoTenant('usuario', data?.uploadedById, vehiculo?.concesionariaId);
         const a = await prisma.vehiculoArchivo.create({ data });
         return this.mapToEntity(a);
     }

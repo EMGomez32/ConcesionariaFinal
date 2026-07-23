@@ -31,10 +31,11 @@ export class UpdatePresupuesto {
             );
         }
 
-        // Reasignar sucursal/cliente no puede sacar el presupuesto de su tenant.
+        // Reasignar sucursal/cliente/vendedor no puede sacar el presupuesto de su tenant.
         const tenantId = exists.concesionariaId;
         await assertMismoTenant('sucursal', data.sucursalId, tenantId);
         await assertMismoTenant('cliente', data.clienteId, tenantId);
+        await assertMismoTenant('usuario', data.vendedorId, tenantId);
 
         return this.presupuestoRepository.update(id, data);
     }
