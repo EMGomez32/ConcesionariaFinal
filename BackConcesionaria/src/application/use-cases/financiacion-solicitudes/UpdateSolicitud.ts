@@ -1,7 +1,6 @@
 import { ISolicitudFinanciacionRepository } from '../../../domain/repositories/ISolicitudFinanciacionRepository';
 import { NotFoundException, BaseException } from '../../../domain/exceptions/BaseException';
 import { assertValidTransition } from '../../../domain/services/stateMachine';
-import { assertVehiculoDelTenant } from './CreateSolicitud';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 
 export class UpdateSolicitud {
@@ -16,6 +15,12 @@ export class UpdateSolicitud {
         // El vehículo se puede corregir mientras la solicitud es un borrador. Una
         // vez enviada, el legajo ya está en el banco con esa unidad: cambiarla
         // acá dejaría al sistema diciendo algo distinto de lo que se presentó.
+        // El repo permite reasignar sucursal/venta/presupuesto/vehículo en el
+        // update: confinarlas al tenant de la solicitud. El vehículo se compara
+        // igual que el resto (antes usaba un chequeo de sólo-existencia que dejaba
+        // a un super_admin apuntar la solicitud a un vehículo de otro tenant).
+        const tenantId = exists.concesionariaId;
+
         if (patch.vehiculoId !== undefined && patch.vehiculoId !== exists.vehiculoId) {
             if (exists.estado !== 'borrador') {
                 throw new BaseException(
@@ -24,12 +29,9 @@ export class UpdateSolicitud {
                     'INVALID_STATE'
                 );
             }
-            await assertVehiculoDelTenant(patch.vehiculoId);
+            await assertMismoTenant('vehiculo', patch.vehiculoId, tenantId);
         }
 
-        // El repo permite reasignar sucursal/venta/presupuesto en el update:
-        // confinarlas al tenant de la solicitud.
-        const tenantId = exists.concesionariaId;
         await assertMismoTenant('sucursal', patch.sucursalId, tenantId);
         await assertMismoTenant('venta', patch.ventaId, tenantId);
         await assertMismoTenant('presupuesto', patch.presupuestoId, tenantId);

@@ -24,11 +24,15 @@ describe('Integridad cross-tenant de FKs del body', () => {
     let tenantBId: number;
     let sucursalBId: number;
     let clienteBId: number;
+    let vehiculoBId: number;
 
     // Fixtures del tenant del admin (tenant A).
     let sucursalAId: number;
     let vehiculoAId: number;
     let clienteAId: number;
+    // Vehículo + venta propios para probar el sub-recurso de canje.
+    let vehiculoA2Id: number;
+    let ventaA2Id: number;
 
     beforeAll(async () => {
         const sa = await loginAsSuperAdmin();
@@ -63,6 +67,19 @@ describe('Integridad cross-tenant de FKs del body', () => {
         expect(cliBRes.status).toBe(201);
         clienteBId = cliBRes.data.id;
 
+        const vehBRes = await api.post(
+            '/api/vehiculos',
+            {
+                marca: unique('MB'), modelo: 'VB', anio: 2019,
+                concesionariaId: tenantBId, sucursalId: sucursalBId,
+                fechaIngreso: '2026-04-25T00:00:00Z', tipo: 'USADO',
+                precioCompra: 3000, precioLista: 4000, estado: 'publicado', origen: 'compra',
+            },
+            authHeaders(saToken),
+        );
+        expect(vehBRes.status).toBe(201);
+        vehiculoBId = vehBRes.data.id;
+
         // --- Fixtures del tenant A (los crea super_admin en adTenantId para no
         // depender de permisos de ABM del admin ni del contenido del seed) ---
         const sucARes = await api.post(
@@ -94,12 +111,42 @@ describe('Integridad cross-tenant de FKs del body', () => {
         );
         expect(cliARes.status).toBe(201);
         clienteAId = cliARes.data.id;
+
+        // Vehículo propio + venta propia para el sub-recurso de canje (no se toca
+        // vehiculoAId, que queda disponible para el control positivo de reserva).
+        const vehA2Res = await api.post(
+            '/api/vehiculos',
+            {
+                marca: unique('MA2'), modelo: 'VA2', anio: 2020,
+                concesionariaId: adTenantId, sucursalId: sucursalAId,
+                fechaIngreso: '2026-04-25T00:00:00Z', tipo: 'USADO',
+                precioCompra: 5000, precioLista: 6000, estado: 'publicado', origen: 'compra',
+            },
+            authHeaders(saToken),
+        );
+        expect(vehA2Res.status).toBe(201);
+        vehiculoA2Id = vehA2Res.data.id;
+
+        const ventaA2Res = await api.post(
+            '/api/ventas',
+            {
+                sucursalId: sucursalAId, clienteId: clienteAId, vendedorId: adVendedorId,
+                vehiculoId: vehiculoA2Id, precioVenta: 6000, moneda: 'ARS',
+                formaPago: 'contado', fechaVenta: '2026-04-25T00:00:00Z',
+            },
+            authHeaders(adToken),
+        );
+        expect(ventaA2Res.status).toBe(201);
+        ventaA2Id = ventaA2Res.data.id;
     });
 
     afterAll(async () => {
+        await tryDelete(`/api/ventas/${ventaA2Id}`, saToken);
+        await tryDelete(`/api/vehiculos/${vehiculoA2Id}`, saToken);
         await tryDelete(`/api/vehiculos/${vehiculoAId}`, saToken);
         await tryDelete(`/api/clientes/${clienteAId}`, adToken);
         await tryDelete(`/api/sucursales/${sucursalAId}`, saToken);
+        await tryDelete(`/api/vehiculos/${vehiculoBId}`, saToken);
         await tryDelete(`/api/clientes/${clienteBId}`, saToken);
         await tryDelete(`/api/sucursales/${sucursalBId}`, saToken);
         await tryDelete(`/api/concesionarias/${tenantBId}`, saToken);
@@ -153,6 +200,15 @@ describe('Integridad cross-tenant de FKs del body', () => {
         const res = await api.post(
             '/api/vehiculo-movimientos',
             { vehiculoId: vehiculoAId, tipo: 'traslado', hastaSucursalId: sucursalBId },
+            authHeaders(adToken),
+        );
+        expect(res.status).toBe(404);
+    });
+
+    test('admin NO puede tomar en canje (sub-recurso de venta) un vehículo de otro tenant', async () => {
+        const res = await api.post(
+            `/api/ventas/${ventaA2Id}/canjes`,
+            { vehiculoCanjeId: vehiculoBId, valorTomado: 1000 }, // ← vehículo ajeno
             authHeaders(adToken),
         );
         expect(res.status).toBe(404);

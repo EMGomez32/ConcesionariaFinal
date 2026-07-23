@@ -25,6 +25,11 @@ const MODEL_LABELS = {
     venta: 'Venta',
     reserva: 'Reserva',
     proveedor: 'Proveedor',
+    // Usuario tiene concesionariaId NULLABLE (los super_admin pueden no tener
+    // tenant). La comparación sólo aplica cuando se pasa expectedTenantId y el
+    // usuario referenciado ya tiene tenant: un vendedor/cobrador normal siempre
+    // lo tiene.
+    usuario: 'Usuario',
     categoriaGastoVehiculo: 'Categoría de gasto',
     categoriaGastoFijo: 'Categoría de gasto fijo',
     financiera: 'Financiera',

@@ -26,8 +26,14 @@ export class CreateVenta {
         const tenantId = (vehiculo as any).concesionariaId;
         await assertMismoTenant('cliente', ventaData.clienteId, tenantId);
         await assertMismoTenant('sucursal', ventaData.sucursalId, tenantId);
+        await assertMismoTenant('usuario', ventaData.vendedorId, tenantId);
         await assertMismoTenant('presupuesto', presupuestoId, tenantId);
         await assertMismoTenant('reserva', reservaId, tenantId);
+        // Cada canje trae el vehículo que se toma en parte de pago: también tiene
+        // que ser del tenant de la venta (el create anida `canjes` sin lookup).
+        for (const canje of Array.isArray(canjes) ? canjes : []) {
+            await assertMismoTenant('vehiculo', canje?.vehiculoCanjeId, tenantId);
+        }
 
         // We can use the Prisma transaction here.
         // In a more pure Clean Architecture, we'd use a UnitOfWork.

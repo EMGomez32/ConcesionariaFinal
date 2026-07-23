@@ -3,6 +3,8 @@ import { Venta } from '../../../domain/entities/Venta';
 import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { NotFoundException } from '../../../domain/exceptions/BaseException';
+import { assertMismoTenant } from '../../security/tenantGuard';
 
 export class PrismaVentaRepository implements IVentaRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Venta>> {
@@ -104,6 +106,14 @@ export class PrismaVentaRepository implements IVentaRepository {
     }
 
     async addCanje(ventaId: number, data: any): Promise<any> {
+        // Este endpoint (POST /ventas/:id/canjes) no pasa por CreateVenta. El
+        // vehiculoCanjeId del body tiene que ser del tenant de la venta: si no, un
+        // admin podría tomar en canje un vehículo de otra concesionaria. La venta
+        // se busca con el prisma extendido (ajena → 404 para el admin) y su tenant
+        // es la referencia para comparar (cubre super_admin).
+        const venta = await prisma.venta.findUnique({ where: { id: ventaId } });
+        if (!venta) throw new NotFoundException('Venta');
+        await assertMismoTenant('vehiculo', data?.vehiculoCanjeId, (venta as any).concesionariaId);
         return prisma.ventaCanjeVehiculo.create({ data: { ...data, ventaId } });
     }
 

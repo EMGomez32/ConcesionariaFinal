@@ -9,7 +9,10 @@ export class CreateFinanciacion {
         // cliente del body tienen que ser de esa concesionaria: para un admin la
         // fila ajena da 404; para super_admin se compara la concesionaria destino.
         const venta = await assertMismoTenant('venta', data.ventaId, resolveTenantDestino(data.concesionariaId));
-        await assertMismoTenant('cliente', data.clienteId, venta?.concesionariaId ?? resolveTenantDestino(data.concesionariaId));
+        const tenantId = venta?.concesionariaId ?? resolveTenantDestino(data.concesionariaId);
+        await assertMismoTenant('cliente', data.clienteId, tenantId);
+        // cobradorId es un Usuario opcional: si viene, del mismo tenant.
+        await assertMismoTenant('usuario', data.cobradorId, tenantId);
         return this.repository.create(data);
     }
 }

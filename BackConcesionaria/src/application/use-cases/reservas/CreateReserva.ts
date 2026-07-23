@@ -25,6 +25,8 @@ export class CreateReserva {
         const tenantId = (vehiculo as any).concesionariaId;
         await assertMismoTenant('cliente', data.clienteId, tenantId);
         await assertMismoTenant('sucursal', data.sucursalId, tenantId);
+        // vendedorId se persiste como creadaPorId (un Usuario): también del tenant.
+        await assertMismoTenant('usuario', data.vendedorId, tenantId);
 
         const user = context.getUser();
 
