@@ -92,6 +92,17 @@ services:
       - PGDATABASE=${POSTGRES_DB:-concesionaria}
       - PGHOST=db
       - RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
+      # Backup OFFSITE (opcional) a un remote S3-compatible (Cloudflare R2) vía
+      # rclone. Se activa SOLO si BACKUP_OFFSITE_REMOTE está en el .env (master
+      # switch). El remote se configura por env vars (sin archivo rclone.conf):
+      # los secretos viven en el .env, nunca en el repo. Ver .env.example.
+      - BACKUP_OFFSITE_REMOTE=${BACKUP_OFFSITE_REMOTE:-}
+      - RCLONE_CONFIG_R2_TYPE=${RCLONE_CONFIG_R2_TYPE:-}
+      - RCLONE_CONFIG_R2_PROVIDER=${RCLONE_CONFIG_R2_PROVIDER:-}
+      - RCLONE_CONFIG_R2_ACCESS_KEY_ID=${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}
+      - RCLONE_CONFIG_R2_SECRET_ACCESS_KEY=${RCLONE_CONFIG_R2_SECRET_ACCESS_KEY:-}
+      - RCLONE_CONFIG_R2_ENDPOINT=${RCLONE_CONFIG_R2_ENDPOINT:-}
+      - RCLONE_CONFIG_R2_ACL=private
     volumes:
       - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
       - ./scripts/restore.sh:/usr/local/bin/restore.sh:ro
