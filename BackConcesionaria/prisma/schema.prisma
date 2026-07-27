@@ -373,7 +373,9 @@ model GastoVehiculo {
   id              Int                    @id @default(autoincrement())
   concesionariaId Int                    @map("concesionaria_id")
   vehiculoId      Int                    @map("vehiculo_id")
-  categoriaId     Int                    @map("categoria_id")
+  // Nullable: los gastos ahora se clasifican por proveedor. Los gastos viejos
+  // conservan su categoría; los nuevos van sin rubro.
+  categoriaId     Int?                   @map("categoria_id")
   proveedorId     Int?                   @map("proveedor_id")
   fecha           DateTime               @db.Date
   monto           Decimal                @db.Decimal(12, 2)
@@ -383,7 +385,7 @@ model GastoVehiculo {
   createdAt       DateTime               @default(now()) @map("created_at")
   updatedAt       DateTime               @updatedAt @map("updated_at")
   deletedAt       DateTime?              @map("deleted_at")
-  categoria       CategoriaGastoVehiculo @relation(fields: [categoriaId], references: [id])
+  categoria       CategoriaGastoVehiculo? @relation(fields: [categoriaId], references: [id])
   concesionaria   Concesionaria          @relation(fields: [concesionariaId], references: [id])
   proveedor       Proveedor?             @relation(fields: [proveedorId], references: [id])
   vehiculo        Vehiculo               @relation(fields: [vehiculoId], references: [id])

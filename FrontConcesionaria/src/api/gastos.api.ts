@@ -9,7 +9,8 @@ export interface GastoVehiculo {
     monto: number;
     moneda: MonedaGasto;
     tipo: TipoGasto;
-    categoriaId: number;
+    /** Opcional: los gastos ahora se clasifican por proveedor. Los viejos conservan su categoría. */
+    categoriaId?: number;
     vehiculoId?: number;
     /** Derivado del vehículo por el backend: no se envía al crear. */
     sucursalId?: number;
@@ -29,6 +30,7 @@ export interface GastoVehiculo {
 export interface GastoFilter {
     tipo?: TipoGasto;
     categoriaId?: number;
+    proveedorId?: number;
     vehiculoId?: number;
     sucursalId?: number;
     descripcion?: string;
@@ -42,7 +44,7 @@ export const gastosApi = {
 
     create: (data: {
         vehiculoId: number;
-        categoriaId: number;
+        categoriaId?: number;
         monto: number;
         moneda: MonedaGasto;
         fechaGasto: string;
