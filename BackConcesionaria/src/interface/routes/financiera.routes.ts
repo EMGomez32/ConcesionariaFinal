@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { FinancieraController } from '../controllers/FinancieraController';
 import { authorize } from '../middlewares/authorize.middleware';
-import * as financieraValidation from '../../modules/financieras/financiera.validation';
-import { validate } from '../../middlewares/validate';
 
+import { validateBody } from '../middlewares/validate.middleware';
+import { createFinancieraSchema, updateFinancieraSchema } from '../validation/financiera.schema';
 const router = Router();
 
 /**
@@ -57,7 +57,7 @@ router.get('/:id', FinancieraController.getById);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.post('/', authorize('admin', 'vendedor'), financieraValidation.createFinanciera, validate, FinancieraController.create);
+router.post('/', authorize('admin', 'vendedor'), validateBody(createFinancieraSchema), FinancieraController.create);
 
 /**
  * @openapi
@@ -84,7 +84,7 @@ router.post('/', authorize('admin', 'vendedor'), financieraValidation.createFina
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', authorize('admin', 'vendedor'), financieraValidation.updateFinanciera, validate, FinancieraController.update);
+router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updateFinancieraSchema), FinancieraController.update);
 
 /**
  * @openapi

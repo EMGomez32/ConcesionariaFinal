@@ -2,9 +2,9 @@ import { Router } from 'express';
 import { VehiculoController } from '../controllers/VehiculoController';
 import { authenticate } from '../middlewares/authenticate.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
-import * as vehiculoValidation from '../../modules/vehiculos/vehiculo.validation';
-import { validate } from '../../middlewares/validate';
 
+import { validateBody } from '../middlewares/validate.middleware';
+import { createVehiculoSchema, updateVehiculoSchema } from '../validation/vehiculo.schema';
 const router = Router();
 
 /**
@@ -80,7 +80,7 @@ router.get('/:id', authenticate, VehiculoController.getById);
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.post('/', authenticate, authorize('admin', 'vendedor'), vehiculoValidation.createVehiculo, validate, VehiculoController.create);
+router.post('/', authenticate, authorize('admin', 'vendedor'), validateBody(createVehiculoSchema), VehiculoController.create);
 
 /**
  * @openapi
@@ -115,7 +115,7 @@ router.post('/', authenticate, authorize('admin', 'vendedor'), vehiculoValidatio
  *       404: { $ref: '#/components/responses/NotFound' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.patch('/:id', authenticate, authorize('admin', 'vendedor'), vehiculoValidation.updateVehiculo, validate, VehiculoController.update);
+router.patch('/:id', authenticate, authorize('admin', 'vendedor'), validateBody(updateVehiculoSchema), VehiculoController.update);
 
 /**
  * @openapi

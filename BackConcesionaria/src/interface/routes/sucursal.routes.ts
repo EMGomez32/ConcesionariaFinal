@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { SucursalController } from '../controllers/SucursalController';
 import { authorize } from '../middlewares/authorize.middleware';
-import * as sucursalValidation from '../../modules/sucursales/sucursal.validation';
-import { validate } from '../../middlewares/validate';
 
+import { validateBody } from '../middlewares/validate.middleware';
+import { createSucursalSchema, updateSucursalSchema } from '../validation/sucursal.schema';
 const router = Router();
 
 /**
@@ -60,7 +60,7 @@ router.get('/:id', SucursalController.getById);
  *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.post('/', authorize('admin'), sucursalValidation.createSucursal, validate, SucursalController.create);
+router.post('/', authorize('admin'), validateBody(createSucursalSchema), SucursalController.create);
 
 /**
  * @openapi
@@ -89,7 +89,7 @@ router.post('/', authorize('admin'), sucursalValidation.createSucursal, validate
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', authorize('admin'), sucursalValidation.updateSucursal, validate, SucursalController.update);
+router.patch('/:id', authorize('admin'), validateBody(updateSucursalSchema), SucursalController.update);
 
 /**
  * @openapi

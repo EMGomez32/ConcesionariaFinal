@@ -2,9 +2,9 @@ import { Router } from 'express';
 import { SolicitudFinanciacionController } from '../controllers/SolicitudFinanciacionController';
 import { uploadSingle } from '../middlewares/upload.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
-import * as solicitudValidation from '../../modules/financiacion-solicitudes/solicitud.validation';
-import { validate } from '../../middlewares/validate';
 
+import { validateBody } from '../middlewares/validate.middleware';
+import { createSolicitudSchema, updateSolicitudSchema } from '../validation/solicitud-financiacion.schema';
 const router = Router();
 
 /**
@@ -74,7 +74,7 @@ router.get('/:id', SolicitudFinanciacionController.getById);
  *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.post('/', authorize('admin', 'vendedor'), solicitudValidation.createSolicitud, validate, SolicitudFinanciacionController.create);
+router.post('/', authorize('admin', 'vendedor'), validateBody(createSolicitudSchema), SolicitudFinanciacionController.create);
 
 /**
  * @openapi
@@ -102,7 +102,7 @@ router.post('/', authorize('admin', 'vendedor'), solicitudValidation.createSolic
  *       404: { $ref: '#/components/responses/NotFound' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.patch('/:id', authorize('admin', 'vendedor'), solicitudValidation.updateSolicitud, validate, SolicitudFinanciacionController.update);
+router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updateSolicitudSchema), SolicitudFinanciacionController.update);
 
 /**
  * @openapi
