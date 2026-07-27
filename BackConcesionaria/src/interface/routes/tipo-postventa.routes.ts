@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { TipoPostventaController } from '../controllers/TipoPostventaController';
 import { authorize } from '../middlewares/authorize.middleware';
-import * as tipoValidation from '../../modules/postventa-tipos/tipo.validation';
-import { validate } from '../../middlewares/validate';
 
+import { validateBody } from '../middlewares/validate.middleware';
+import { createTipoPostventaSchema, updateTipoPostventaSchema } from '../validation/tipo-postventa.schema';
 const router = Router();
 
 /**
@@ -41,7 +41,7 @@ router.get('/', TipoPostventaController.getAll);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       409: { description: Ya existe un tipo con ese nombre }
  */
-router.post('/', authorize('admin', 'postventa'), tipoValidation.createTipoPostventa, validate, TipoPostventaController.create);
+router.post('/', authorize('admin', 'postventa'), validateBody(createTipoPostventaSchema), TipoPostventaController.create);
 
 /**
  * @openapi
@@ -70,7 +70,7 @@ router.post('/', authorize('admin', 'postventa'), tipoValidation.createTipoPostv
  *       404: { $ref: '#/components/responses/NotFound' }
  *       409: { description: Ya existe un tipo con ese nombre }
  */
-router.patch('/:id', authorize('admin', 'postventa'), tipoValidation.updateTipoPostventa, validate, TipoPostventaController.update);
+router.patch('/:id', authorize('admin', 'postventa'), validateBody(updateTipoPostventaSchema), TipoPostventaController.update);
 
 /**
  * @openapi

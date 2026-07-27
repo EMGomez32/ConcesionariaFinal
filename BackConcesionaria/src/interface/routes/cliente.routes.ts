@@ -2,9 +2,9 @@ import { Router } from 'express';
 import { ClienteController } from '../controllers/ClienteController';
 import { authenticate } from '../middlewares/authenticate.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
-import * as clienteValidation from '../../modules/clientes/cliente.validation';
-import { validate } from '../../middlewares/validate';
 
+import { validateBody } from '../middlewares/validate.middleware';
+import { createClienteSchema, updateClienteSchema } from '../validation/cliente.schema';
 const router = Router();
 
 /**
@@ -75,7 +75,7 @@ router.get('/:id', authenticate, ClienteController.getById);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.post('/', authenticate, authorize('admin', 'vendedor'), clienteValidation.createCliente, validate, ClienteController.create);
+router.post('/', authenticate, authorize('admin', 'vendedor'), validateBody(createClienteSchema), ClienteController.create);
 
 /**
  * @openapi
@@ -105,7 +105,7 @@ router.post('/', authenticate, authorize('admin', 'vendedor'), clienteValidation
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', authenticate, authorize('admin', 'vendedor'), clienteValidation.updateCliente, validate, ClienteController.update);
+router.patch('/:id', authenticate, authorize('admin', 'vendedor'), validateBody(updateClienteSchema), ClienteController.update);
 
 /**
  * @openapi

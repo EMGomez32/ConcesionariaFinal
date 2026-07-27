@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { ProveedorController } from '../controllers/ProveedorController';
 import { authorize } from '../middlewares/authorize.middleware';
-import * as proveedorValidation from '../../modules/proveedores/proveedor.validation';
-import { validate } from '../../middlewares/validate';
 
+import { validateBody } from '../middlewares/validate.middleware';
+import { createProveedorSchema, updateProveedorSchema } from '../validation/proveedor.schema';
 const router = Router();
 
 /**
@@ -72,7 +72,7 @@ router.get('/:id', ProveedorController.getById);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.post('/', authorize('admin', 'vendedor'), proveedorValidation.createProveedor, validate, ProveedorController.create);
+router.post('/', authorize('admin', 'vendedor'), validateBody(createProveedorSchema), ProveedorController.create);
 
 /**
  * @openapi
@@ -100,7 +100,7 @@ router.post('/', authorize('admin', 'vendedor'), proveedorValidation.createProve
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', authorize('admin', 'vendedor'), proveedorValidation.updateProveedor, validate, ProveedorController.update);
+router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updateProveedorSchema), ProveedorController.update);
 
 /**
  * @openapi

@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { PostventaItemController } from '../controllers/PostventaItemController';
 import { authorize } from '../middlewares/authorize.middleware';
-import * as itemValidation from '../../modules/postventa-items/item.validation';
-import { validate } from '../../middlewares/validate';
 
+import { validateBody } from '../middlewares/validate.middleware';
+import { createItemSchema } from '../validation/postventa-item.schema';
 const router = Router();
 
 /**
@@ -29,7 +29,7 @@ const router = Router();
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/', authorize('admin', 'postventa'), itemValidation.createItem, validate, PostventaItemController.create);
+router.post('/', authorize('admin', 'postventa'), validateBody(createItemSchema), PostventaItemController.create);
 
 /**
  * @openapi

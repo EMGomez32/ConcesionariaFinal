@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { PostventaCasoController } from '../controllers/PostventaCasoController';
 import { authorize } from '../middlewares/authorize.middleware';
-import * as casoValidation from '../../modules/postventa-casos/caso.validation';
-import { validate } from '../../middlewares/validate';
 
+import { validateBody } from '../middlewares/validate.middleware';
+import { createCasoSchema, updateCasoSchema } from '../validation/postventa-caso.schema';
 const router = Router();
 
 /**
@@ -98,7 +98,7 @@ router.get('/:id/total', PostventaCasoController.total);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/', authorize('admin', 'postventa', 'vendedor'), casoValidation.createCaso, validate, PostventaCasoController.create);
+router.post('/', authorize('admin', 'postventa', 'vendedor'), validateBody(createCasoSchema), PostventaCasoController.create);
 
 /**
  * @openapi
@@ -126,7 +126,7 @@ router.post('/', authorize('admin', 'postventa', 'vendedor'), casoValidation.cre
  *       404: { $ref: '#/components/responses/NotFound' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.patch('/:id', authorize('admin', 'postventa', 'vendedor'), casoValidation.updateCaso, validate, PostventaCasoController.update);
+router.patch('/:id', authorize('admin', 'postventa', 'vendedor'), validateBody(updateCasoSchema), PostventaCasoController.update);
 
 /**
  * @openapi

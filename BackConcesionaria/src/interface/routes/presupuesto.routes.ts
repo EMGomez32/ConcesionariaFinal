@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { PresupuestoController } from '../controllers/PresupuestoController';
 import { authorize } from '../middlewares/authorize.middleware';
-import * as presupuestoValidation from '../../modules/presupuestos/presupuesto.validation';
-import { validate } from '../../middlewares/validate';
 
+import { validateBody } from '../middlewares/validate.middleware';
+import { createPresupuestoSchema, updatePresupuestoSchema } from '../validation/presupuesto.schema';
 const router = Router();
 
 /**
@@ -99,7 +99,7 @@ router.get('/:id/total', PresupuestoController.total);
  *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.post('/', authorize('admin', 'vendedor'), presupuestoValidation.createPresupuesto, validate, PresupuestoController.create);
+router.post('/', authorize('admin', 'vendedor'), validateBody(createPresupuestoSchema), PresupuestoController.create);
 
 /**
  * @openapi
@@ -126,7 +126,7 @@ router.post('/', authorize('admin', 'vendedor'), presupuestoValidation.createPre
  *       404: { $ref: '#/components/responses/NotFound' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.patch('/:id', authorize('admin', 'vendedor'), presupuestoValidation.updatePresupuesto, validate, PresupuestoController.update);
+router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updatePresupuestoSchema), PresupuestoController.update);
 
 /**
  * @openapi

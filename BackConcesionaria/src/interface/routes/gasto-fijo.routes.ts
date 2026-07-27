@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { GastoFijoController } from '../controllers/GastoFijoController';
 import { authorize } from '../middlewares/authorize.middleware';
-import * as gastoFijoValidation from '../../modules/gastos-fijos/gasto-fijo.validation';
-import { validate } from '../../middlewares/validate';
 
+import { validateBody } from '../middlewares/validate.middleware';
+import { createGastoFijoSchema, updateGastoFijoSchema } from '../validation/gasto-fijo.schema';
 const router = Router();
 
 /**
@@ -103,7 +103,7 @@ router.get('/:id', GastoFijoController.getById);
  *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.post('/', authorize('admin'), gastoFijoValidation.createGastoFijo, validate, GastoFijoController.create);
+router.post('/', authorize('admin'), validateBody(createGastoFijoSchema), GastoFijoController.create);
 
 /**
  * @openapi
@@ -135,7 +135,7 @@ router.post('/', authorize('admin'), gastoFijoValidation.createGastoFijo, valida
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', authorize('admin'), gastoFijoValidation.updateGastoFijo, validate, GastoFijoController.update);
+router.patch('/:id', authorize('admin'), validateBody(updateGastoFijoSchema), GastoFijoController.update);
 
 /**
  * @openapi
