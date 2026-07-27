@@ -63,12 +63,14 @@ export class PrismaGastoRepository implements IGastoRepository {
         const fechaRaw = data.fecha ?? data.fechaGasto;
         const payload: any = {
             vehiculoId: Number(data.vehiculoId),
-            categoriaId: Number(data.categoriaId),
             monto: data.monto,
             moneda: data.moneda || 'ARS',
             fecha: fechaRaw ? new Date(fechaRaw) : new Date(),
             descripcion: data.descripcion ?? null,
         };
+        // categoría ahora es OPCIONAL: los gastos nuevos se clasifican por proveedor
+        // (los viejos conservan su categoría). Se setea sólo si viene, igual que proveedorId.
+        if (data.categoriaId != null) payload.categoriaId = Number(data.categoriaId);
         if (data.proveedorId) payload.proveedorId = Number(data.proveedorId);
         const comprobante = data.comprobanteUrl ?? data.urlComprobante;
         if (comprobante) payload.comprobanteUrl = comprobante;

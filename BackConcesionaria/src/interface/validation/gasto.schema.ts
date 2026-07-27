@@ -43,7 +43,10 @@ const tipoGastoEnum = z.enum(['VEHICULO', 'FIJO']);
 // los borre si el front los agrega en el futuro (hoy no los manda).
 export const createGastoSchema = z.object({
     vehiculoId: idField('El vehículo'),
-    categoriaId: idField('La categoría'),
+    // Ahora los gastos se clasifican por PROVEEDOR (no por rubro). `categoriaId`
+    // pasó a opcional: los gastos viejos conservan su categoría, los nuevos van
+    // sin ella (0/''/null → undefined). Ver GastoVehiculo.categoriaId nullable.
+    categoriaId: optionalFk,
     monto: montoField('El monto'),
     moneda: monedaEnum.optional(),
     fechaGasto: z.string({ error: 'La fecha del gasto es obligatoria' }).min(1, 'La fecha del gasto es obligatoria'),
