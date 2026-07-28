@@ -67,4 +67,18 @@ router.get('/mora', authorize('admin', 'vendedor'), ReporteController.mora);
  */
 router.get('/rentabilidad', authorize('admin'), ReporteController.rentabilidad);
 
+/**
+ * @openapi
+ * /reportes/proximos-vencimientos:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Cuotas por vencer (próximos N días)
+ *     description: El espejo proactivo de la mora — cuotas que vencen dentro de la ventana, para cobrar antes de que caigan. Usar ?format=csv para descargar.
+ *     parameters:
+ *       - { in: query, name: dias, schema: { type: integer, default: 7, minimum: 1, maximum: 90 } }
+ *       - { in: query, name: consolidar, schema: { type: string, enum: [ARS, USD] } }
+ *       - { in: query, name: format, schema: { type: string, enum: [csv] } }
+ */
+router.get('/proximos-vencimientos', authorize('admin', 'vendedor'), ReporteController.proximosVencimientos);
+
 export default router;

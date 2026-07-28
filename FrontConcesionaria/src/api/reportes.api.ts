@@ -41,6 +41,11 @@ export interface ConsolidadoRenta extends ConsolidadoBase {
     rentabilidad: number;
 }
 
+export interface ConsolidadoProximos extends ConsolidadoBase {
+    cuotasPorVencer: number;
+    saldo: number;
+}
+
 // ── Tipos de respuesta ───────────────────────────────────────────────────────
 
 export interface ReporteVentasItem {
@@ -143,6 +148,29 @@ export interface ReporteRentabilidad {
     sinCotizacion?: boolean;
 }
 
+export interface ProximoVencimientoItem {
+    financiacionId: number | null;
+    clienteId: number | null;
+    cliente: string;
+    telefono: string;
+    vehiculo: string;
+    dominio: string;
+    nroCuota: number;
+    vencimiento: string;
+    /** Días desde hoy hasta el vencimiento (0 = vence hoy). */
+    diasParaVencer: number;
+    moneda: string;
+    saldo: number;
+}
+
+export interface ReporteProximos {
+    ventana: { dias: number; desde: string; hasta: string };
+    resumen: { cuotasPorVencer: number; clientes: number; porMoneda: TotalPorMoneda[] };
+    items: ProximoVencimientoItem[];
+    consolidado?: ConsolidadoProximos | null;
+    sinCotizacion?: boolean;
+}
+
 export interface RangoFiltro {
     desde?: string;
     hasta?: string;
@@ -170,6 +198,9 @@ export const reportesApi = {
     rentabilidad: (params: RangoFiltro = {}) =>
         client.get<ReporteRentabilidad>('/reportes/rentabilidad', { params }),
 
+    proximosVencimientos: (params: { dias?: number; consolidar?: MonedaConsol } = {}) =>
+        client.get<ReporteProximos>('/reportes/proximos-vencimientos', { params }),
+
     /**
      * Variante CSV. Devuelve el blob y el nombre de archivo que mandó el
      * backend en el Content-Disposition, que ya incluye el período: sin él, dos
@@ -177,7 +208,7 @@ export const reportesApi = {
      * pisaba al primero en la carpeta de descargas.
      */
     exportCsv: async (
-        reporte: 'ventas' | 'caja' | 'mora' | 'rentabilidad',
+        reporte: 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos-vencimientos',
         params: Record<string, unknown> = {},
     ): Promise<{ blob: Blob; filename?: string }> => {
         const res = await client.getRaw<Blob>(`/reportes/${reporte}`, {

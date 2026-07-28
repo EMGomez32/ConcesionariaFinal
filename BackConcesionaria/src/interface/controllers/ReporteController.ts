@@ -684,4 +684,122 @@ export class ReporteController {
             next(error);
         }
     }
+
+    // ── 5. Próximos vencimientos (cuotas por vencer) ─────────────────────────
+    // GET /api/reportes/proximos-vencimientos?dias=&consolidar=&format=csv
+    // El espejo PROACTIVO de la mora: en vez de lo ya vencido, las cuotas que
+    // vencen en los próximos N días para llamar al cliente antes de que caiga.
+    static async proximosVencimientos(req: Request, res: Response, next: NextFunction) {
+        try {
+            // Ventana: de HOY (inclusive) a hoy + dias. Default 7, tope 90.
+            const dias = enteroEnRango(req.query.dias, 1, 90, 7, 'dias');
+            // `vencimiento` es @db.Date (medianoche UTC). Se compara contra fechas
+            // puras en UTC, igual criterio que el reporte de mora.
+            const ahora = new Date();
+            const inicioHoy = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
+            // Ventana de EXACTAMENTE `dias` días calendario: [hoy, hoy+dias). El
+            // límite superior es exclusivo (lt) a propósito; con `lte` la ventana
+            // abarcaba dias+1 días (8 para "próximos 7 días"). Así diasParaVencer
+            // va de 0 (hoy) a dias-1.
+            const finVentana = new Date(inicioHoy);
+            finVentana.setUTCDate(finVentana.getUTCDate() + dias);
+
+            const cuotas = await prisma.cuota.findMany({
+                where: {
+                    vencimiento: { gte: inicioHoy, lt: finVentana },
+                    saldoCuota: { gt: 0 },
+                    // Ni las pagadas ni las refinanciadas son deuda por cobrar: la
+                    // refinanciada movió su saldo a otro contrato (ver enum EstadoCuota).
+                    estado: { notIn: ['pagada', 'refinanciada'] },
+                    // Igual que en mora: una financiación borrada no tiene deuda viva.
+                    financiacion: { deletedAt: null },
+                },
+                orderBy: { vencimiento: 'asc' },
+                include: {
+                    financiacion: {
+                        select: {
+                            id: true,
+                            moneda: true,
+                            clienteId: true,
+                            cliente: { select: { nombre: true, telefono: true } },
+                            venta: { select: { vehiculo: { select: { marca: true, modelo: true, dominio: true } } } },
+                        },
+                    },
+                },
+            });
+
+            const items = cuotas.map((c) => {
+                // Días completos desde hoy hasta el vencimiento (0 = vence hoy).
+                const diasParaVencer = Math.max(0, Math.round((c.vencimiento.getTime() - inicioHoy.getTime()) / 86400000));
+                const veh = c.financiacion?.venta?.vehiculo;
+                return {
+                    financiacionId: c.financiacion?.id ?? null,
+                    clienteId: c.financiacion?.clienteId ?? null,
+                    cliente: c.financiacion?.cliente?.nombre ?? '',
+                    telefono: c.financiacion?.cliente?.telefono ?? '',
+                    vehiculo: veh ? `${veh.marca} ${veh.modelo}`.trim() : '',
+                    dominio: veh?.dominio ?? '',
+                    nroCuota: c.nroCuota,
+                    vencimiento: c.vencimiento.toISOString().slice(0, 10),
+                    diasParaVencer,
+                    moneda: c.financiacion?.moneda ?? 'ARS',
+                    saldo: num(c.saldoCuota),
+                };
+            });
+
+            const resumen = {
+                cuotasPorVencer: items.length,
+                clientes: new Set(items.map((i) => i.clienteId).filter((id) => id !== null)).size,
+                porMoneda: agruparPorMoneda(items, ['saldo']),
+            };
+
+            if (req.query.format === 'csv') {
+                return sendCsv(res, `reporte-proximos-vencimientos-${dias}d`, [
+                    { key: 'cliente', header: 'Cliente' },
+                    { key: 'telefono', header: 'Teléfono' },
+                    { key: 'vehiculo', header: 'Vehículo' },
+                    { key: 'dominio', header: 'Dominio' },
+                    { key: 'nroCuota', header: 'N° cuota' },
+                    { key: 'vencimiento', header: 'Vencimiento' },
+                    { key: 'diasParaVencer', header: 'Días para vencer' },
+                    { key: 'moneda', header: 'Moneda' },
+                    { key: 'saldo', header: 'Saldo a cobrar' },
+                ], items);
+            }
+
+            // Consolidación opcional a una sola moneda (?consolidar=ARS|USD).
+            const consolidar = parseConsolidar(req.query);
+            let consolidado: any = null;
+            let sinCotizacion = false;
+            if (consolidar) {
+                const cot = await getCotizacionParaConsolidar();
+                if (!cot) sinCotizacion = true;
+                else consolidado = {
+                    moneda: consolidar,
+                    valor: cot.valor,
+                    fechaCotizacion: cot.fecha,
+                    cuotasPorVencer: items.length,
+                    ...consolidarBuckets(resumen.porMoneda, ['saldo'], consolidar, cot.valor),
+                };
+            }
+
+            // finVentana es exclusivo: el último día incluido es el anterior.
+            const ultimoDia = new Date(finVentana);
+            ultimoDia.setUTCDate(ultimoDia.getUTCDate() - 1);
+
+            res.json({
+                ventana: {
+                    dias,
+                    desde: inicioHoy.toISOString().slice(0, 10),
+                    hasta: ultimoDia.toISOString().slice(0, 10),
+                },
+                resumen,
+                items,
+                consolidado,
+                sinCotizacion,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
