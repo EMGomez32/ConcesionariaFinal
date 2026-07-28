@@ -24,6 +24,11 @@ const MESES = [
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
 
+// Prefijo de moneda: US$ para dólares, $ para pesos. Sin esto, un gasto en USD
+// se imprimía con '$' y se leía como pesos.
+const money = (n: number, moneda = 'ARS') =>
+    `${moneda === 'USD' ? 'US$' : '$'}${Number(n || 0).toLocaleString('es-AR')}`;
+
 const EMPTY_FORM = {
     categoriaId: '',
     sucursalId: '',
@@ -31,6 +36,7 @@ const EMPTY_FORM = {
     anio: String(CURRENT_YEAR),
     mes: String(new Date().getMonth() + 1),
     monto: '',
+    moneda: 'ARS',
     descripcion: '',
     comprobanteUrl: '',
 };
@@ -151,6 +157,7 @@ const GastosFijosPage = () => {
                 anio: Number(createForm.anio),
                 mes: Number(createForm.mes),
                 monto: parseFloat(createForm.monto),
+                moneda: createForm.moneda,
                 descripcion: createForm.descripcion.trim(),
             };
             if (createForm.sucursalId) payload.sucursalId = Number(createForm.sucursalId);
@@ -179,6 +186,7 @@ const GastosFijosPage = () => {
             anio: String(g.anio),
             mes: String(g.mes),
             monto: String(g.monto),
+            moneda: g.moneda ?? 'ARS',
             descripcion: g.descripcion,
             comprobanteUrl: g.comprobanteUrl ?? '',
         });
@@ -198,6 +206,7 @@ const GastosFijosPage = () => {
                 anio: Number(editForm.anio),
                 mes: Number(editForm.mes),
                 monto: parseFloat(editForm.monto),
+                moneda: editForm.moneda,
                 descripcion: editForm.descripcion.trim(),
                 sucursalId: editForm.sucursalId ? Number(editForm.sucursalId) : null,
                 proveedorId: editForm.proveedorId ? Number(editForm.proveedorId) : null,
@@ -341,7 +350,7 @@ const GastosFijosPage = () => {
                                     <div className="flex items-baseline gap-3">
                                         {monedasOrdenadas.map(m => (
                                             <span key={m} className="text-2xl font-black text-white tabular-nums">
-                                                ${totalesPorMoneda[m].toLocaleString('es-AR')}
+                                                {money(totalesPorMoneda[m], m)}
                                                 <span className="text-[10px] font-black text-muted"> {m}</span>
                                             </span>
                                         ))}
@@ -438,8 +447,9 @@ const GastosFijosPage = () => {
                                                     <span className="text-xs font-semibold text-slate-300 line-clamp-2" title={g.descripcion}>{g.descripcion}</span>
                                                 </td>
                                                 <td>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-lg font-black text-white tabular-nums">${Number(g.monto).toLocaleString('es-AR')}</span>
+                                                    <div className="flex items-baseline gap-1.5">
+                                                        <span className="text-lg font-black text-white tabular-nums">{money(Number(g.monto), g.moneda)}</span>
+                                                        <span className="text-[10px] font-black text-muted">{g.moneda ?? 'ARS'}</span>
                                                     </div>
                                                 </td>
                                                 <td>
@@ -617,11 +627,22 @@ const GastosFijosPage = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="form-group">
-                            <label className="form-label">Importe (ARS) *</label>
-                            <div className="relative">
-                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-accent font-black">$</div>
-                                <input type="number" className="form-input pl-8 font-black text-xl" value={editTarget ? editForm.monto : createForm.monto}
-                                    onChange={e => editTarget ? setEditForm(f => ({ ...f, monto: e.target.value })) : setCreateForm(f => ({ ...f, monto: e.target.value }))} />
+                            <label className="form-label">Importe *</label>
+                            <div className="flex gap-3">
+                                <select
+                                    className="form-input"
+                                    style={{ maxWidth: '6.5rem' }}
+                                    value={editTarget ? editForm.moneda : createForm.moneda}
+                                    onChange={e => editTarget ? setEditForm(f => ({ ...f, moneda: e.target.value })) : setCreateForm(f => ({ ...f, moneda: e.target.value }))}
+                                >
+                                    <option value="ARS">ARS</option>
+                                    <option value="USD">USD</option>
+                                </select>
+                                <div className="relative flex-1">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-accent font-black">{(editTarget ? editForm.moneda : createForm.moneda) === 'USD' ? 'US$' : '$'}</div>
+                                    <input type="number" className="form-input pl-10 font-black text-xl" value={editTarget ? editForm.monto : createForm.monto}
+                                        onChange={e => editTarget ? setEditForm(f => ({ ...f, monto: e.target.value })) : setCreateForm(f => ({ ...f, monto: e.target.value }))} />
+                                </div>
                             </div>
                         </div>
                         <div className="form-group">
