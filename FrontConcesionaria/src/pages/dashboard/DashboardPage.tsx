@@ -1,10 +1,23 @@
-import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart } from 'lucide-react';
-import { useDashboardStats, useStockDistribution } from '../../hooks/useDashboard';
+import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useDashboardStats, useStockDistribution, useDashboardFinanzas, type FinanzaKpi } from '../../hooks/useDashboard';
 import { useAuditLogs } from '../../hooks/useAuditLogs';
 import type { AuditLog } from '../../api/auditoria.api';
 import { useAuthStore } from '../../store/authStore';
 import AnimatedNumber from '../../components/ui/AnimatedNumber';
 import DonutChart from '../../components/ui/DonutChart';
+
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+const money = (n: number, moneda = 'ARS') =>
+  `${moneda === 'USD' ? 'US$' : '$'}${Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
+
+// El KPI muestra el total consolidado en ARS si hay cotización; si no, el
+// desglose por moneda ("$X · US$Y"): nunca se suma ARS con USD sin cotización.
+const kpiValue = (kpi: FinanzaKpi) =>
+  kpi.consolidado != null
+    ? money(kpi.consolidado, 'ARS')
+    : (kpi.porMoneda.length ? kpi.porMoneda.map((m) => money(m.valor, m.moneda)).join(' · ') : money(0));
 
 const DashboardPage = () => {
   const { user } = useAuthStore();
@@ -15,6 +28,8 @@ const DashboardPage = () => {
   const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useDashboardStats();
   const { data: stockData, isLoading: stockLoading, refetch: refetchStock } = useStockDistribution();
   const { data: auditsData, isLoading: auditsLoading } = useAuditLogs({}, { limit: 5 }, { enabled: isAdmin });
+  // Finanzas del mes: dato de dueño, solo admin (igual criterio que Actividad Reciente).
+  const { data: finanzas, isLoading: finanzasLoading, isError: finanzasError, refetch: refetchFinanzas } = useDashboardFinanzas(isAdmin);
 
   const stats = [
     { label: 'Vehículos en Stock', value: statsData?.vehiculos ?? 0, icon: Car, color: 'var(--primary-navy)' },
@@ -26,9 +41,20 @@ const DashboardPage = () => {
   const audits = (auditsData as { results?: AuditLog[] })?.results ?? [];
   const stockTotal = (stockData ?? []).reduce((sum, s) => sum + s.value, 0);
 
+  const financeCards = finanzas ? [
+    { label: 'Ventas del mes', value: kpiValue(finanzas.ventasMes), sub: `${finanzas.ventasMes.cantidad} ${finanzas.ventasMes.cantidad === 1 ? 'operación' : 'operaciones'}`, icon: TrendingUp, color: 'var(--accent)' },
+    { label: 'Ingresos del mes', value: kpiValue(finanzas.ingresosMes), sub: 'cobros de ventas y cuotas', icon: ArrowUpRight, color: 'var(--success, #16a34a)' },
+    { label: 'Egresos del mes', value: kpiValue(finanzas.egresosMes), sub: 'gastos de unidades y fijos', icon: ArrowDownRight, color: 'var(--danger, #dc2626)' },
+    { label: 'Resultado neto', value: kpiValue(finanzas.netoMes), sub: 'ingresos − egresos', icon: Wallet, color: (finanzas.netoMes.consolidado != null ? finanzas.netoMes.consolidado < 0 : finanzas.netoMes.porMoneda.some((m) => m.valor < 0)) ? 'var(--danger, #dc2626)' : 'var(--success, #16a34a)' },
+    { label: 'En mora', value: kpiValue(finanzas.mora), sub: `${finanzas.mora.cuotas} ${finanzas.mora.cuotas === 1 ? 'cuota vencida' : 'cuotas vencidas'}`, icon: AlertTriangle, color: 'var(--danger, #dc2626)' },
+  ] : [];
+
   const onSync = () => {
     refetchStats();
     refetchStock();
+    // refetch dispara la query aunque esté enabled:false; sólo tiene sentido para
+    // admin (es quien ve —y consulta— las finanzas).
+    if (isAdmin) refetchFinanzas();
   };
 
   return (
@@ -69,6 +95,52 @@ const DashboardPage = () => {
           </div>
         ))}
       </div>
+
+      {isAdmin && (
+        <section style={{ marginTop: '1.75rem' }}>
+          <div className="flex items-center justify-between flex-wrap gap-2" style={{ marginBottom: '1rem' }}>
+            <div className="flex items-center gap-2">
+              <Wallet size={18} className="text-accent" />
+              <h3 style={{ margin: 0 }}>Finanzas de {MESES[(finanzas?.periodo.mes ?? new Date().getMonth() + 1) - 1]}</h3>
+            </div>
+            {!finanzasLoading && !finanzasError && (finanzas?.cotizacion
+              ? <span className="text-xs text-muted">Consolidado en pesos a {money(finanzas.cotizacion.valor)}/US$ del {new Date(finanzas.cotizacion.fecha + 'T00:00:00').toLocaleDateString('es-AR')}</span>
+              : <span className="text-xs text-muted">Sin cotización cargada · <Link to="/reportes" className="text-accent">cargá una</Link> para ver el total en pesos</span>)}
+          </div>
+          {finanzasError ? (
+            <div className="card glass" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              No se pudieron cargar las finanzas del mes.{' '}
+              <button className="btn btn-secondary btn-sm" type="button" onClick={() => refetchFinanzas()}>Reintentar</button>
+            </div>
+          ) : (
+            <div className="stats-grid stagger">
+              {finanzasLoading
+                ? Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="card stat-card">
+                    <div className="stat-content">
+                      <span className="skeleton skeleton-text" style={{ width: '60%' }} />
+                      <span className="skeleton skeleton-text-lg" style={{ width: '6ch', display: 'inline-block', marginTop: '0.5rem' }} />
+                    </div>
+                  </div>
+                ))
+                : financeCards.map((c) => (
+                  <div key={c.label} className="card stat-card">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="stat-icon-wrapper" style={{ backgroundColor: `${c.color}10`, color: c.color }}>
+                        <c.icon size={20} />
+                      </div>
+                    </div>
+                    <div className="stat-content">
+                      <span className="text-muted font-bold text-xs uppercase tracking-wider mb-1">{c.label}</span>
+                      <span className="stat-value" style={{ color: c.color, fontSize: '1.4rem', lineHeight: 1.2, wordBreak: 'break-word' }}>{c.value}</span>
+                      {c.sub && <span className="text-muted text-xs" style={{ marginTop: '0.35rem' }}>{c.sub}</span>}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="dashboard-grid" style={!isAdmin ? { gridTemplateColumns: '1fr' } : undefined}>
         <div className="card chart-card">
