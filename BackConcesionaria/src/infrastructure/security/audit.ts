@@ -4,7 +4,9 @@ import { logger } from '../logging/logger';
 
 // 'refinanciar' mueve deuda de un contrato a otro: merece su propio rastro y no
 // confundirse con un 'create' cualquiera.
-type AccionAudit = 'create' | 'update' | 'cancel' | 'delete_soft' | 'login' | 'logout' | 'refinanciar';
+// 'delete_soft' es la baja lógica (la de la mayoría de recursos). 'delete' es la
+// baja FÍSICA, reservada para datos de referencia sin soft-delete (p. ej. cotizaciones).
+type AccionAudit = 'create' | 'update' | 'cancel' | 'delete_soft' | 'delete' | 'login' | 'logout' | 'refinanciar';
 
 interface AuditParams {
     entidad: string;
