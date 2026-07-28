@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3 } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil } from 'lucide-react';
 import {
     reportesApi,
     type ReporteVentasItem,
@@ -8,15 +8,19 @@ import {
     type ReporteRentabilidadItem,
     type TotalPorMoneda,
 } from '../../api/reportes.api';
+import { cotizacionesApi } from '../../api/cotizaciones.api';
 import { useSucursales } from '../../hooks/useSucursales';
 import { useUsuarios } from '../../hooks/useUsuarios';
 import { useUIStore } from '../../store/uiStore';
+import { useAuthStore } from '../../store/authStore';
 import { formatFecha } from '../../utils/fecha';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import Modal from '../../components/ui/Modal';
 
 type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad';
+type Consolidar = '' | 'ARS' | 'USD';
 
 const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
     { key: 'ventas', label: 'Ventas', icon: TrendingUp },
@@ -53,7 +57,7 @@ const sinContarTexto = (r: { moneda: string; sinContar?: Record<string, number> 
         .map(([m, n]) => money(Number(n), m))
         .join(' + ');
     return otras
-        ? `No se puede calcular: la venta es en ${r.moneda} pero hay costos por ${otras}. Haría falta una cotización.`
+        ? `No se puede calcular: la venta es en ${r.moneda} pero hay costos por ${otras}. Consolidá con una cotización para verla.`
         : 'No se puede calcular: hay costos en otra moneda.';
 };
 
@@ -84,8 +88,46 @@ const ErrorCard = ({ mensaje, onRetry }: { mensaje: string; onRetry: () => void 
     </div>
 );
 
+/** Banda con el total ya convertido a una sola moneda (cuando el usuario consolida). */
+const ConsolidadoCard = ({
+    etiqueta,
+    valor,
+    cot,
+}: {
+    etiqueta: string;
+    valor: number;
+    cot: { moneda: string; valor: number; fechaCotizacion: string };
+}) => (
+    <div className="card glass" style={{ marginBottom: '1.5rem', padding: '1rem 1.5rem', borderLeft: '3px solid var(--accent)' }}>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex flex-col">
+                <span className="text-muted font-bold text-xs uppercase tracking-wider">{etiqueta} · consolidado en {cot.moneda}</span>
+                <span className="stat-value" style={{ color: 'var(--accent)' }}>{money(valor, cot.moneda)}</span>
+            </div>
+            <span className="text-xs text-muted" style={{ maxWidth: '18rem', textAlign: 'right' }}>
+                Convertido a cotización {money(cot.valor)}/US$ del {formatFecha(cot.fechaCotizacion)}
+            </span>
+        </div>
+    </div>
+);
+
+/** Aviso cuando se pidió consolidar pero no hay ninguna cotización cargada. */
+const SinCotizacionCard = ({ isAdmin, onCargar }: { isAdmin: boolean; onCargar: () => void }) => (
+    <div className="card glass" style={{ marginBottom: '1.5rem', padding: '1rem 1.5rem' }}>
+        <div className="flex items-center gap-3 flex-wrap text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <AlertTriangle size={16} />
+            <span>No hay ninguna cotización cargada, así que no se puede consolidar.</span>
+            {isAdmin
+                ? <button className="btn btn-secondary btn-sm" type="button" onClick={onCargar}>Cargar cotización</button>
+                : <span>Pedile a un administrador que cargue la cotización del día.</span>}
+        </div>
+    </div>
+);
+
 const ReportesPage = () => {
     const { addToast } = useUIStore();
+    const queryClient = useQueryClient();
+    const isAdmin = useAuthStore((s) => !!s.user?.roles.some((r) => r === 'admin' || r === 'super_admin'));
     const [tab, setTab] = useState<Tab>('ventas');
     const [exporting, setExporting] = useState(false);
 
@@ -97,10 +139,50 @@ const ReportesPage = () => {
     // Filtros de caja.
     const [anio, setAnio] = useState(hoy.getFullYear());
     const [mes, setMes] = useState(hoy.getMonth() + 1);
+    // Consolidación de monedas ('' = mostrar ARS y USD por separado).
+    const [consolidar, setConsolidar] = useState<Consolidar>('');
+    const consolidarParam = consolidar || undefined;
 
     const { data: sucursales = [] } = useSucursales();
     const { data: usuariosData } = useUsuarios({}, { limit: 1000 });
     const vendedores = usuariosData?.results ?? [];
+
+    // ── Cotización del dólar ────────────────────────────────────────────────
+    const cotizacionQ = useQuery({
+        queryKey: ['cotizacion', 'vigente'],
+        queryFn: () => cotizacionesApi.getVigente(),
+    });
+    const [showCotModal, setShowCotModal] = useState(false);
+    const [cotFecha, setCotFecha] = useState(hoyStr);
+    const [cotValor, setCotValor] = useState('');
+    const [cotError, setCotError] = useState('');
+    const cotMutation = useMutation({
+        mutationFn: (data: { fecha: string; valor: number }) => cotizacionesApi.upsert(data),
+        onSuccess: () => {
+            addToast('Cotización guardada', 'success');
+            setShowCotModal(false);
+            setCotValor('');
+            // Refresca el chip de cotización y todos los reportes (para reconsolidar).
+            queryClient.invalidateQueries({ queryKey: ['cotizacion'] });
+            queryClient.invalidateQueries({ queryKey: ['reporte'] });
+        },
+        onError: (e: unknown) => setCotError((e as { message?: string })?.message ?? 'No se pudo guardar la cotización'),
+    });
+    const openCotModal = () => {
+        setCotError('');
+        setCotFecha(hoyStr);
+        setCotValor(cotizacionQ.data ? String(cotizacionQ.data.valor) : '');
+        setShowCotModal(true);
+    };
+    const handleSaveCotizacion = () => {
+        const valorNum = parseFloat(cotValor);
+        if (!cotFecha || !valorNum || valorNum <= 0) {
+            setCotError('Ingresá una fecha y un valor mayor a 0.');
+            return;
+        }
+        setCotError('');
+        cotMutation.mutate({ fecha: cotFecha, valor: valorNum });
+    };
 
     const rango = {
         desde: desde || undefined,
@@ -109,23 +191,23 @@ const ReportesPage = () => {
     };
 
     const ventasQ = useQuery({
-        queryKey: ['reporte', 'ventas', { ...rango, vendedorId }],
-        queryFn: () => reportesApi.ventas({ ...rango, vendedorId: vendedorId ? Number(vendedorId) : undefined }),
+        queryKey: ['reporte', 'ventas', { ...rango, vendedorId, consolidar }],
+        queryFn: () => reportesApi.ventas({ ...rango, vendedorId: vendedorId ? Number(vendedorId) : undefined, consolidar: consolidarParam }),
         enabled: tab === 'ventas',
     });
     const cajaQ = useQuery({
-        queryKey: ['reporte', 'caja', anio, mes],
-        queryFn: () => reportesApi.caja({ anio, mes }),
+        queryKey: ['reporte', 'caja', anio, mes, consolidar],
+        queryFn: () => reportesApi.caja({ anio, mes, consolidar: consolidarParam }),
         enabled: tab === 'caja',
     });
     const moraQ = useQuery({
-        queryKey: ['reporte', 'mora'],
-        queryFn: () => reportesApi.mora(),
+        queryKey: ['reporte', 'mora', consolidar],
+        queryFn: () => reportesApi.mora({ consolidar: consolidarParam }),
         enabled: tab === 'mora',
     });
     const rentaQ = useQuery({
-        queryKey: ['reporte', 'rentabilidad', rango],
-        queryFn: () => reportesApi.rentabilidad(rango),
+        queryKey: ['reporte', 'rentabilidad', { ...rango, consolidar }],
+        queryFn: () => reportesApi.rentabilidad({ ...rango, consolidar: consolidarParam }),
         enabled: tab === 'rentabilidad',
     });
 
@@ -187,23 +269,47 @@ const ReportesPage = () => {
         { header: 'Compra', align: 'right', accessor: (r) => money(r.precioCompra, r.moneda) },
         { header: 'Gastos', align: 'right', accessor: (r) => money(r.gastos, r.moneda) },
         // rentabilidad viene en null cuando el auto tiene costos en otra moneda:
-        // sin cotización no hay margen posible, así que se dice eso en vez de
-        // mostrar un número inventado.
+        // sin cotización no hay margen posible. Si el usuario consolida y el backend
+        // devolvió la versión convertida, se muestra ésa (ya no hay "—").
         {
-            header: 'Rentabilidad', align: 'right', accessor: (r) => (
-                r.rentabilidad === null
+            header: 'Rentabilidad', align: 'right', accessor: (r) => {
+                if (consolidar && r.consolidado) {
+                    const rc = r.consolidado.rentabilidad;
+                    return (
+                        <span className="font-bold" title={`Convertido a ${r.consolidado.moneda}`} style={{ color: rc >= 0 ? 'var(--success, #16a34a)' : 'var(--danger, #dc2626)' }}>
+                            {money(rc, r.consolidado.moneda)}<span className="text-muted"> *</span>
+                        </span>
+                    );
+                }
+                return r.rentabilidad === null
                     ? <span className="text-muted" title={sinContarTexto(r)}>—</span>
-                    : <span className="font-bold" style={{ color: r.rentabilidad >= 0 ? 'var(--success, #16a34a)' : 'var(--danger, #dc2626)' }}>{money(r.rentabilidad, r.moneda)}</span>
-            )
+                    : <span className="font-bold" style={{ color: r.rentabilidad >= 0 ? 'var(--success, #16a34a)' : 'var(--danger, #dc2626)' }}>{money(r.rentabilidad, r.moneda)}</span>;
+            }
         },
         {
-            header: 'Margen', align: 'right', accessor: (r) => (
-                r.margenPct === null
+            header: 'Margen', align: 'right', accessor: (r) => {
+                if (consolidar && r.consolidado) {
+                    return r.consolidado.margenPct === null ? <span className="text-muted">—</span> : <span title={`Convertido a ${r.consolidado.moneda}`}>{r.consolidado.margenPct}% <span className="text-muted">*</span></span>;
+                }
+                return r.margenPct === null
                     ? <span className="text-muted" title={sinContarTexto(r)}>—</span>
-                    : `${r.margenPct}%`
-            )
+                    : `${r.margenPct}%`;
+            }
         },
     ];
+
+    // Banda consolidada / aviso, reutilizada por cada tab.
+    const renderConsolidado = (
+        data: { consolidado?: unknown; sinCotizacion?: boolean } | undefined,
+        etiqueta: string,
+        getValor: (c: any) => number,
+    ) => {
+        if (!consolidar) return null;
+        if (data?.sinCotizacion) return <SinCotizacionCard isAdmin={isAdmin} onCargar={openCotModal} />;
+        const c = data?.consolidado as any;
+        if (!c) return null;
+        return <ConsolidadoCard etiqueta={etiqueta} valor={getValor(c)} cot={c} />;
+    };
 
     return (
         <div className="page-container">
@@ -212,7 +318,33 @@ const ReportesPage = () => {
                     <h1>Reportes</h1>
                     <p>Ventas, caja, mora y rentabilidad. Exportá cualquier reporte a CSV.</p>
                 </div>
-                <div className="header-actions">
+                <div className="header-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Chip de cotización: muestra la última cargada; admin puede editarla. */}
+                    <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={isAdmin ? openCotModal : undefined}
+                        title={isAdmin ? 'Cargar / actualizar la cotización del dólar' : 'Cotización del dólar vigente'}
+                        style={{ cursor: isAdmin ? 'pointer' : 'default', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                    >
+                        <DollarSign size={14} />
+                        {cotizacionQ.data
+                            ? <>Dólar {money(cotizacionQ.data.valor)} <span className="text-muted">· {formatFecha(cotizacionQ.data.fecha)}</span></>
+                            : <span className="text-muted">Sin cotización</span>}
+                        {isAdmin && <Pencil size={12} />}
+                    </button>
+                    {/* Consolidar en una sola moneda */}
+                    <select
+                        className="form-input"
+                        value={consolidar}
+                        onChange={(e) => setConsolidar(e.target.value as Consolidar)}
+                        title="Convertir todos los totales a una sola moneda"
+                        style={{ width: 'auto' }}
+                    >
+                        <option value="">Ver ARS y USD por separado</option>
+                        <option value="ARS">Consolidar en ARS</option>
+                        <option value="USD">Consolidar en USD</option>
+                    </select>
                     <Button variant="secondary" onClick={handleExport} loading={exporting}>
                         <Download size={16} /> Exportar CSV
                     </Button>
@@ -298,6 +430,7 @@ const ReportesPage = () => {
                             <StatCard label="Total general" value={fmtMoneda(ventasQ.data?.resumen.porMoneda, 'total')} color="var(--accent)" />
                         </div>
                     )}
+                    {!ventasQ.isError && renderConsolidado(ventasQ.data, 'Total general', (c) => c.total)}
                     <DataTable
                         columns={ventasCols}
                         data={ventasQ.data?.items ?? []}
@@ -325,6 +458,7 @@ const ReportesPage = () => {
                     </div>
                 ) : (
                     <div className="flex flex-col gap-6">
+                        {renderConsolidado(cajaQ.data, 'Resultado neto', (c) => c.neto)}
                         {(cajaQ.data?.porMoneda ?? []).map((c) => (
                             <div key={c.moneda}>
                                 <div className="flex items-center gap-2 mb-3">
@@ -364,6 +498,7 @@ const ReportesPage = () => {
                             <StatCard label="Clientes en mora" value={String(moraQ.data?.resumen.clientes ?? 0)} />
                         </div>
                     )}
+                    {!moraQ.isError && renderConsolidado(moraQ.data, 'Saldo total en mora', (c) => c.saldo)}
                     <DataTable
                         columns={moraCols}
                         data={(moraQ.data?.items ?? []).map((it, i) => ({ ...it, id: i }))}
@@ -389,6 +524,7 @@ const ReportesPage = () => {
                             <StatCard label="Rentabilidad total" value={fmtMoneda(rentaQ.data?.resumen.porMoneda, 'rentabilidad')} color="var(--accent)" />
                         </div>
                     )}
+                    {!rentaQ.isError && renderConsolidado(rentaQ.data, 'Rentabilidad total', (c) => c.rentabilidad)}
                     <DataTable
                         columns={rentaCols}
                         data={(rentaQ.data?.items ?? []).map((it, i) => ({ ...it, id: i }))}
@@ -398,8 +534,57 @@ const ReportesPage = () => {
                         onRetry={() => rentaQ.refetch()}
                         emptyMessage="No hay ventas en el período seleccionado"
                     />
+                    {consolidar && (rentaQ.data?.items ?? []).some((it) => it.consolidado) && (
+                        <p className="text-xs text-muted" style={{ marginTop: '0.75rem' }}>
+                            * Rentabilidad y margen convertidos a {consolidar} con la cotización cargada.
+                        </p>
+                    )}
                 </>
             )}
+
+            {/* Modal de carga de cotización (solo admin) */}
+            <Modal
+                isOpen={showCotModal}
+                onClose={() => setShowCotModal(false)}
+                title="Cotización del dólar"
+                subtitle="Pesos por 1 USD. Se usa para consolidar los totales de los reportes."
+                maxWidth="440px"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setShowCotModal(false)}>Cancelar</Button>
+                        <Button variant="primary" onClick={handleSaveCotizacion} loading={cotMutation.isPending}>Guardar</Button>
+                    </>
+                }
+            >
+                <div className="space-y-6">
+                    <div className="form-group">
+                        <label className="form-label">Fecha</label>
+                        <input type="date" className="form-input" value={cotFecha} onChange={(e) => setCotFecha(e.target.value)} max={hoyStr} />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Valor (ARS por 1 USD) *</label>
+                        <div className="relative">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-accent font-black">$</div>
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="form-input pl-8 font-black text-xl"
+                                value={cotValor}
+                                onChange={(e) => setCotValor(e.target.value)}
+                                placeholder="1450"
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+                    {cotError && (
+                        <div className="uploader-alert uploader-alert-error">
+                            <AlertTriangle size={14} />
+                            <span>{cotError}</span>
+                        </div>
+                    )}
+                </div>
+            </Modal>
         </div>
     );
 };

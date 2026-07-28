@@ -40,6 +40,7 @@ const TENANT_TABLES = [
     'gastos_vehiculo',
     'categorias_gasto_fijo',
     'gastos_fijos',
+    'cotizaciones',
     'presupuestos',
     'presupuesto_items',
     'presupuesto_extras',

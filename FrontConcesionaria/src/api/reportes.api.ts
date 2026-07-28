@@ -1,5 +1,46 @@
 import client from './client';
 
+// ── Consolidación de monedas ─────────────────────────────────────────────────
+// Cuando se pide ?consolidar=ARS|USD, el backend convierte todo a esa moneda con
+// la última cotización cargada y devuelve un total consolidado junto al desglose
+// por moneda. `sinCotizacion: true` significa que se pidió consolidar pero no hay
+// ninguna cotización cargada todavía.
+
+export type MonedaConsol = 'ARS' | 'USD';
+
+interface ConsolidadoBase {
+    moneda: MonedaConsol;
+    /** Cotización usada: pesos por 1 USD. */
+    valor: number;
+    /** Fecha de esa cotización (YYYY-MM-DD). */
+    fechaCotizacion: string;
+}
+
+export interface ConsolidadoVentas extends ConsolidadoBase {
+    cantidad: number;
+    precioVenta: number;
+    extras: number;
+    total: number;
+}
+
+export interface ConsolidadoCaja extends ConsolidadoBase {
+    ingresos: { cobrosVentas: number; cobrosCuotas: number; total: number };
+    egresos: { gastosVehiculos: number; gastosFijos: number; total: number };
+    neto: number;
+}
+
+export interface ConsolidadoMora extends ConsolidadoBase {
+    cuotasVencidas: number;
+    saldo: number;
+}
+
+export interface ConsolidadoRenta extends ConsolidadoBase {
+    cantidad: number;
+    precioVenta: number;
+    costo: number;
+    rentabilidad: number;
+}
+
 // ── Tipos de respuesta ───────────────────────────────────────────────────────
 
 export interface ReporteVentasItem {
@@ -26,6 +67,8 @@ export interface TotalPorMoneda {
 export interface ReporteVentas {
     resumen: { cantidad: number; porMoneda: TotalPorMoneda[] };
     items: ReporteVentasItem[];
+    consolidado?: ConsolidadoVentas | null;
+    sinCotizacion?: boolean;
 }
 
 /** Una caja por cada moneda: el neto de pesos y el de dólares no se suman. */
@@ -39,6 +82,8 @@ export interface CajaPorMoneda {
 export interface ReporteCaja {
     periodo: { anio: number; mes: number };
     porMoneda: CajaPorMoneda[];
+    consolidado?: ConsolidadoCaja | null;
+    sinCotizacion?: boolean;
 }
 
 export interface ReporteMoraItem {
@@ -59,6 +104,8 @@ export interface ReporteMoraItem {
 export interface ReporteMora {
     resumen: { cuotasVencidas: number; clientes: number; porMoneda: TotalPorMoneda[] };
     items: ReporteMoraItem[];
+    consolidado?: ConsolidadoMora | null;
+    sinCotizacion?: boolean;
 }
 
 export interface ReporteRentabilidadItem {
@@ -77,11 +124,23 @@ export interface ReporteRentabilidadItem {
     incompleto?: boolean;
     /** Importes en otra moneda que quedaron sin restar, por moneda. */
     sinContar?: Record<string, number>;
+    /** Mismos números convertidos a la moneda de consolidación (si se pidió). */
+    consolidado?: {
+        moneda: MonedaConsol;
+        precioVenta: number;
+        precioCompra: number;
+        gastos: number;
+        costo: number;
+        rentabilidad: number;
+        margenPct: number | null;
+    };
 }
 
 export interface ReporteRentabilidad {
     resumen: { cantidad: number; porMoneda: TotalPorMoneda[] };
     items: ReporteRentabilidadItem[];
+    consolidado?: ConsolidadoRenta | null;
+    sinCotizacion?: boolean;
 }
 
 export interface RangoFiltro {
@@ -89,11 +148,14 @@ export interface RangoFiltro {
     hasta?: string;
     sucursalId?: number;
     vendedorId?: number;
+    /** Convertir todo a esta moneda con la última cotización cargada. */
+    consolidar?: MonedaConsol;
 }
 
 export interface CajaFiltro {
     anio: number;
     mes: number;
+    consolidar?: MonedaConsol;
 }
 
 // ── Endpoints ────────────────────────────────────────────────────────────────
@@ -103,8 +165,8 @@ export const reportesApi = {
         client.get<ReporteVentas>('/reportes/ventas', { params }),
     caja: (params: CajaFiltro) =>
         client.get<ReporteCaja>('/reportes/caja', { params }),
-    mora: () =>
-        client.get<ReporteMora>('/reportes/mora'),
+    mora: (params: { consolidar?: MonedaConsol } = {}) =>
+        client.get<ReporteMora>('/reportes/mora', { params }),
     rentabilidad: (params: RangoFiltro = {}) =>
         client.get<ReporteRentabilidad>('/reportes/rentabilidad', { params }),
 

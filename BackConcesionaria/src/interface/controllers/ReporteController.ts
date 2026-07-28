@@ -119,6 +119,65 @@ function filtroInstante(campo: string, desde?: Date, hasta?: Date): Record<strin
     return { [campo]: cond };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Consolidación de monedas (opcional, ?consolidar=ARS|USD).
+//
+// Los reportes separan ARS de USD a propósito: sumarlos no significa nada sin una
+// cotización. Cuando el usuario pide consolidar, se convierte todo a la moneda
+// destino usando la ÚLTIMA cotización cargada ("el dólar de hoy") y se devuelve un
+// total consolidado JUNTO al desglose por moneda (que se mantiene intacto para no
+// perder la trazabilidad). Si no hay ninguna cotización cargada, se responde
+// `sinCotizacion: true` y el front invita a cargarla.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type MonedaConsolidacion = 'ARS' | 'USD';
+
+/** Valida ?consolidar=. Ausente → null. Distinto de ARS/USD → 400. */
+function parseConsolidar(query: any): MonedaConsolidacion | null {
+    const c = query.consolidar;
+    if (c === undefined || c === '') return null;
+    if (c === 'ARS' || c === 'USD') return c;
+    throw new BaseException(400, 'consolidar debe ser ARS o USD', 'VALIDATION_ERROR');
+}
+
+/** Convierte `monto` de `origen` a `destino` con `valor` (pesos por 1 USD). */
+function convertir(monto: number, origen: string, destino: MonedaConsolidacion, valor: number): number {
+    const m = num(monto);
+    if (!m) return 0;
+    if (origen === destino) return m;
+    if (origen === 'USD' && destino === 'ARS') return m * valor;
+    if (origen === 'ARS' && destino === 'USD') return m / valor;
+    // El sistema sólo maneja ARS/USD; cualquier otra se deja sin convertir en vez
+    // de inventar un número. No debería ocurrir en datos reales.
+    return m;
+}
+
+/**
+ * La cotización a usar para consolidar: la más reciente cargada por el tenant.
+ * La extensión RLS inyecta el tenant para el admin; el super_admin ve la última
+ * global (mismo criterio que el resto de reportes, que no acotan por tenant para él).
+ */
+async function getCotizacionParaConsolidar(): Promise<{ valor: number; fecha: string } | null> {
+    const c = await prisma.cotizacion.findFirst({ orderBy: { fecha: 'desc' } });
+    if (!c) return null;
+    return { valor: num(c.valor), fecha: c.fecha.toISOString().slice(0, 10) };
+}
+
+/** Suma los buckets `porMoneda` convertidos a `destino`, campo por campo. */
+function consolidarBuckets(
+    porMoneda: any[],
+    campos: string[],
+    destino: MonedaConsolidacion,
+    valor: number,
+): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const c of campos) out[c] = 0;
+    for (const b of porMoneda) {
+        for (const c of campos) out[c] += convertir(num(b[c]), String(b.moneda ?? 'ARS'), destino, valor);
+    }
+    return out;
+}
+
 export class ReporteController {
     // ── 1. Ventas por período ────────────────────────────────────────────────
     // GET /api/reportes/ventas?desde=&hasta=&sucursalId=&vendedorId=&format=csv
@@ -185,7 +244,23 @@ export class ReporteController {
                 ], items);
             }
 
-            res.json({ resumen, items });
+            // Consolidación opcional a una sola moneda (?consolidar=ARS|USD).
+            const consolidar = parseConsolidar(req.query);
+            let consolidado: any = null;
+            let sinCotizacion = false;
+            if (consolidar) {
+                const cot = await getCotizacionParaConsolidar();
+                if (!cot) sinCotizacion = true;
+                else consolidado = {
+                    moneda: consolidar,
+                    valor: cot.valor,
+                    fechaCotizacion: cot.fecha,
+                    cantidad: items.length,
+                    ...consolidarBuckets(resumen.porMoneda, ['precioVenta', 'extras', 'total'], consolidar, cot.valor),
+                };
+            }
+
+            res.json({ resumen, items, consolidado, sinCotizacion });
         } catch (error) {
             next(error);
         }
@@ -292,7 +367,37 @@ export class ReporteController {
                 ], filas);
             }
 
-            res.json(resultado);
+            // Consolidación opcional a una sola moneda (?consolidar=ARS|USD).
+            const consolidar = parseConsolidar(req.query);
+            let consolidado: any = null;
+            let sinCotizacion = false;
+            if (consolidar) {
+                const cot = await getCotizacionParaConsolidar();
+                if (!cot) {
+                    sinCotizacion = true;
+                } else {
+                    const ingresos = { cobrosVentas: 0, cobrosCuotas: 0, total: 0 };
+                    const egresos = { gastosVehiculos: 0, gastosFijos: 0, total: 0 };
+                    for (const b of porMoneda) {
+                        ingresos.cobrosVentas += convertir(b.ingresos.cobrosVentas, b.moneda, consolidar, cot.valor);
+                        ingresos.cobrosCuotas += convertir(b.ingresos.cobrosCuotas, b.moneda, consolidar, cot.valor);
+                        egresos.gastosVehiculos += convertir(b.egresos.gastosVehiculos, b.moneda, consolidar, cot.valor);
+                        egresos.gastosFijos += convertir(b.egresos.gastosFijos, b.moneda, consolidar, cot.valor);
+                    }
+                    ingresos.total = ingresos.cobrosVentas + ingresos.cobrosCuotas;
+                    egresos.total = egresos.gastosVehiculos + egresos.gastosFijos;
+                    consolidado = {
+                        moneda: consolidar,
+                        valor: cot.valor,
+                        fechaCotizacion: cot.fecha,
+                        ingresos,
+                        egresos,
+                        neto: ingresos.total - egresos.total,
+                    };
+                }
+            }
+
+            res.json({ ...resultado, consolidado, sinCotizacion });
         } catch (error) {
             next(error);
         }
@@ -382,7 +487,23 @@ export class ReporteController {
                 ], items);
             }
 
-            res.json({ resumen, items });
+            // Consolidación opcional a una sola moneda (?consolidar=ARS|USD).
+            const consolidar = parseConsolidar(req.query);
+            let consolidado: any = null;
+            let sinCotizacion = false;
+            if (consolidar) {
+                const cot = await getCotizacionParaConsolidar();
+                if (!cot) sinCotizacion = true;
+                else consolidado = {
+                    moneda: consolidar,
+                    valor: cot.valor,
+                    fechaCotizacion: cot.fecha,
+                    cuotasVencidas: items.length,
+                    ...consolidarBuckets(resumen.porMoneda, ['saldo'], consolidar, cot.valor),
+                };
+            }
+
+            res.json({ resumen, items, consolidado, sinCotizacion });
         } catch (error) {
             next(error);
         }
@@ -440,6 +561,13 @@ export class ReporteController {
                 return otras;
             };
 
+            // Consolidación opcional (?consolidar=ARS|USD). Con una cotización, el
+            // costo en otra moneda YA es restable: la rentabilidad que antes salía
+            // en null (—) ahora se puede calcular convirtiendo todo a una moneda.
+            const consolidar = parseConsolidar(req.query);
+            const cot = consolidar ? await getCotizacionParaConsolidar() : null;
+            const sinCotizacion = !!consolidar && !cot;
+
             const items = ventas.map((v) => {
                 const moneda = v.moneda;
                 const precioVenta = num(v.precioVenta);
@@ -467,6 +595,31 @@ export class ReporteController {
                     ? Math.round((rentabilidad / precioVenta) * 1000) / 10
                     : null;
 
+                // Versión consolidada del item: convierte compra, gastos y venta a
+                // la moneda destino. Acá SÍ se resta todo (no queda `sinContar`),
+                // porque la cotización permite comparar peras con peras.
+                let consolidadoItem: any = undefined;
+                if (consolidar && cot) {
+                    const pvConv = convertir(precioVenta, moneda, consolidar, cot.valor);
+                    const compraConv = convertir(num(v.vehiculo?.precioCompra), String(v.vehiculo?.moneda ?? 'ARS'), consolidar, cot.valor);
+                    let gastosConv = 0;
+                    for (const [clave, monto] of gastosPorVehiculo) {
+                        const [id, m] = clave.split('|');
+                        if (Number(id) === v.vehiculoId) gastosConv += convertir(monto, m, consolidar, cot.valor);
+                    }
+                    const costoConv = compraConv + gastosConv;
+                    const rentaConv = pvConv - costoConv;
+                    consolidadoItem = {
+                        moneda: consolidar,
+                        precioVenta: pvConv,
+                        precioCompra: compraConv,
+                        gastos: gastosConv,
+                        costo: costoConv,
+                        rentabilidad: rentaConv,
+                        margenPct: pvConv > 0 ? Math.round((rentaConv / pvConv) * 1000) / 10 : null,
+                    };
+                }
+
                 return {
                     fecha: v.fechaVenta.toISOString().slice(0, 10),
                     vehiculo: `${v.vehiculo?.marca ?? ''} ${v.vehiculo?.modelo ?? ''}`.trim(),
@@ -482,6 +635,8 @@ export class ReporteController {
                     incompleto,
                     /** Importes en otra moneda que no se pudieron restar. */
                     sinContar: incompleto ? otras : undefined,
+                    /** Mismos números convertidos a la moneda de consolidación (si se pidió). */
+                    consolidado: consolidadoItem,
                 };
             });
 
@@ -505,7 +660,26 @@ export class ReporteController {
                 ], items);
             }
 
-            res.json({ resumen, items });
+            // Total consolidado: suma de los items ya convertidos a la moneda destino.
+            let consolidado: any = null;
+            if (consolidar && cot) {
+                const acc = { precioVenta: 0, costo: 0, rentabilidad: 0 };
+                for (const it of items) {
+                    if (!it.consolidado) continue;
+                    acc.precioVenta += it.consolidado.precioVenta;
+                    acc.costo += it.consolidado.costo;
+                    acc.rentabilidad += it.consolidado.rentabilidad;
+                }
+                consolidado = {
+                    moneda: consolidar,
+                    valor: cot.valor,
+                    fechaCotizacion: cot.fecha,
+                    cantidad: items.length,
+                    ...acc,
+                };
+            }
+
+            res.json({ resumen, items, consolidado, sinCotizacion });
         } catch (error) {
             next(error);
         }

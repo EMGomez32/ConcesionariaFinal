@@ -22,6 +22,7 @@ model Concesionaria {
   categoriasGastoVehiculo CategoriaGastoVehiculo[]
   tiposPostventa          TipoPostventa[]
   clientes                Cliente[]
+  cotizaciones            Cotizacion[]
   subscription            ConcesionariaSubscription?
   financiaciones          Financiacion[]
   financieras             Financiera[]
@@ -437,6 +438,29 @@ model GastoFijo {
   @@index([concesionariaId, anio, mes])
   @@index([categoriaId])
   @@map("gastos_fijos")
+}
+
+// Cotización del dólar por día y por tenant. La usan los reportes para
+// consolidar totales que hoy se muestran separados por moneda (ARS/USD). Es
+// dato de referencia: NO es soft-delete (no tiene deleted_at; se borra físico o
+// se pisa por fecha). `valor` = pesos por 1 USD. La extensión RLS inyecta el
+// tenant en create/where para el admin; el super_admin lo elige por body.
+model Cotizacion {
+  id              Int           @id @default(autoincrement())
+  concesionariaId Int           @map("concesionaria_id")
+  // @db.Date: la cotización es de un día, no de un instante. Igual criterio que
+  // gastoVehiculo.fecha para que las comparaciones de rango sean en UTC puro.
+  fecha           DateTime      @db.Date
+  // pesos por 1 USD. 4 decimales para no perder precisión en cotizaciones altas.
+  valor           Decimal       @db.Decimal(14, 4)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  concesionaria   Concesionaria @relation(fields: [concesionariaId], references: [id])
+
+  // Una sola cotización por día y por tenant: la carga es un upsert por fecha.
+  @@unique([concesionariaId, fecha])
+  @@index([concesionariaId, fecha])
+  @@map("cotizaciones")
 }
 
 model Presupuesto {
