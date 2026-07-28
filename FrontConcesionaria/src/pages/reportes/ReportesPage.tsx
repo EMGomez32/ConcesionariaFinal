@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil } from 'lucide-react';
+import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock } from 'lucide-react';
 import {
     reportesApi,
     type ReporteVentasItem,
     type ReporteMoraItem,
     type ReporteRentabilidadItem,
+    type ProximoVencimientoItem,
     type TotalPorMoneda,
 } from '../../api/reportes.api';
 import { cotizacionesApi } from '../../api/cotizaciones.api';
@@ -19,13 +20,14 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 
-type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad';
+type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos';
 type Consolidar = '' | 'ARS' | 'USD';
 
 const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
     { key: 'ventas', label: 'Ventas', icon: TrendingUp },
     { key: 'caja', label: 'Caja mensual', icon: Wallet },
     { key: 'mora', label: 'Cartera de mora', icon: AlertTriangle },
+    { key: 'proximos', label: 'Por vencer', icon: CalendarClock },
     { key: 'rentabilidad', label: 'Rentabilidad', icon: BarChart3 },
 ];
 
@@ -142,6 +144,8 @@ const ReportesPage = () => {
     // Consolidación de monedas ('' = mostrar ARS y USD por separado).
     const [consolidar, setConsolidar] = useState<Consolidar>('');
     const consolidarParam = consolidar || undefined;
+    // Ventana del reporte "Por vencer" (días hacia adelante).
+    const [dias, setDias] = useState(7);
 
     const { data: sucursales = [] } = useSucursales();
     const { data: usuariosData } = useUsuarios({}, { limit: 1000 });
@@ -210,6 +214,11 @@ const ReportesPage = () => {
         queryFn: () => reportesApi.rentabilidad({ ...rango, consolidar: consolidarParam }),
         enabled: tab === 'rentabilidad',
     });
+    const proximosQ = useQuery({
+        queryKey: ['reporte', 'proximos', dias, consolidar],
+        queryFn: () => reportesApi.proximosVencimientos({ dias, consolidar: consolidarParam }),
+        enabled: tab === 'proximos',
+    });
 
     const handleExport = async () => {
         setExporting(true);
@@ -217,8 +226,11 @@ const ReportesPage = () => {
             const params: Record<string, unknown> =
                 tab === 'caja' ? { anio, mes }
                     : tab === 'mora' ? {}
-                        : { ...rango, ...(tab === 'ventas' && vendedorId ? { vendedorId: Number(vendedorId) } : {}) };
-            const { blob, filename } = await reportesApi.exportCsv(tab, params);
+                        : tab === 'proximos' ? { dias }
+                            : { ...rango, ...(tab === 'ventas' && vendedorId ? { vendedorId: Number(vendedorId) } : {}) };
+            // El tab 'proximos' mapea al endpoint 'proximos-vencimientos'.
+            const reporteCsv = tab === 'proximos' ? 'proximos-vencimientos' : tab;
+            const { blob, filename } = await reportesApi.exportCsv(reporteCsv, params);
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -298,6 +310,23 @@ const ReportesPage = () => {
         },
     ];
 
+    const proximosCols: Column<ProximoVencimientoItem & { id: number }>[] = [
+        { header: 'Cliente', accessor: (r) => <span className="font-bold">{r.cliente}</span> },
+        { header: 'Teléfono', accessor: (r) => r.telefono },
+        { header: 'Vehículo', accessor: (r) => `${r.vehiculo}${r.dominio ? ` (${r.dominio})` : ''}` },
+        { header: 'Cuota', accessor: (r) => `#${r.nroCuota}` },
+        { header: 'Vencimiento', accessor: (r) => formatFecha(r.vencimiento) },
+        {
+            header: 'Vence', align: 'center', accessor: (r) => {
+                const label = r.diasParaVencer === 0 ? 'Hoy' : r.diasParaVencer === 1 ? 'Mañana' : `En ${r.diasParaVencer} días`;
+                const variant = r.diasParaVencer <= 1 ? 'danger' : r.diasParaVencer <= 3 ? 'warning' : 'info';
+                return <Badge variant={variant}>{label}</Badge>;
+            }
+        },
+        // r.moneda es obligatorio: un saldo en USD con '$' se leería como pesos.
+        { header: 'Saldo', align: 'right', accessor: (r) => <span className="font-bold">{money(r.saldo, r.moneda)}</span> },
+    ];
+
     // Banda consolidada / aviso, reutilizada por cada tab.
     const renderConsolidado = (
         data: { consolidado?: unknown; sinCotizacion?: boolean } | undefined,
@@ -316,7 +345,7 @@ const ReportesPage = () => {
             <header className="page-header">
                 <div className="header-title">
                     <h1>Reportes</h1>
-                    <p>Ventas, caja, mora y rentabilidad. Exportá cualquier reporte a CSV.</p>
+                    <p>Ventas, caja, mora, próximos vencimientos y rentabilidad. Exportá cualquier reporte a CSV.</p>
                 </div>
                 <div className="header-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     {/* Chip de cotización: muestra la última cargada; admin puede editarla. */}
@@ -412,6 +441,20 @@ const ReportesPage = () => {
                                 const y = hoy.getFullYear() - i;
                                 return <option key={y} value={y}>{y}</option>;
                             })}
+                        </select>
+                    </div>
+                </div>
+            )}
+
+            {/* Filtro de ventana (próximos vencimientos) */}
+            {tab === 'proximos' && (
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div className="filter-group">
+                        <label className="filter-label">Ventana</label>
+                        <select className="form-input" value={dias} onChange={(e) => setDias(Number(e.target.value))}>
+                            <option value={7}>Próximos 7 días</option>
+                            <option value={15}>Próximos 15 días</option>
+                            <option value={30}>Próximos 30 días</option>
                         </select>
                     </div>
                 </div>
@@ -539,6 +582,29 @@ const ReportesPage = () => {
                             * Rentabilidad y margen convertidos a {consolidar} con la cotización cargada.
                         </p>
                     )}
+                </>
+            )}
+
+            {/* ── PRÓXIMOS VENCIMIENTOS ── */}
+            {tab === 'proximos' && (
+                <>
+                    {!proximosQ.isError && (
+                        <div className="stats-grid stagger" style={{ marginBottom: '1.5rem' }}>
+                            <StatCard label="Cuotas por vencer" value={String(proximosQ.data?.resumen.cuotasPorVencer ?? 0)} />
+                            <StatCard label="Saldo a cobrar" value={fmtMoneda(proximosQ.data?.resumen.porMoneda, 'saldo')} color="var(--accent)" />
+                            <StatCard label="Clientes" value={String(proximosQ.data?.resumen.clientes ?? 0)} />
+                        </div>
+                    )}
+                    {!proximosQ.isError && renderConsolidado(proximosQ.data, 'Saldo a cobrar', (c) => c.saldo)}
+                    <DataTable
+                        columns={proximosCols}
+                        data={(proximosQ.data?.items ?? []).map((it, i) => ({ ...it, id: i }))}
+                        isLoading={proximosQ.isLoading}
+                        isError={proximosQ.isError}
+                        errorMessage="No se pudo cargar el reporte de próximos vencimientos"
+                        onRetry={() => proximosQ.refetch()}
+                        emptyMessage="No hay cuotas por vencer en la ventana seleccionada"
+                    />
                 </>
             )}
 
