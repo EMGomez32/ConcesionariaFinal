@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVehiculos, useChangeVehiculoEstado, useDeleteVehiculo } from '../../hooks/useVehiculos';
 import { useSucursales } from '../../hooks/useSucursales';
@@ -60,6 +60,15 @@ const VehiculosPage: React.FC = () => {
     const [filterSucursal, setFilterSucursal] = useState('');
     const [orden, setOrden] = useState<'recientes' | 'antiguedad'>('recientes');
     const [page, setPage] = useState(1);
+
+    // Cualquier cambio de filtro/búsqueda/orden vuelve a la página 1: si el nuevo
+    // resultado tiene menos páginas, quedarse en la página actual dejaba una
+    // página vacía. Se observa `debouncedSearch` (no `searchTerm`) para resetear
+    // recién cuando la búsqueda realmente se aplica, no en cada tecla. `page` no
+    // va en las deps a propósito: si no, se resetearía sola al paginar.
+    useEffect(() => {
+        setPage(1);
+    }, [debouncedSearch, filterEstado, filterTipo, filterSucursal, orden]);
 
     const { data: sucursales = [] } = useSucursales();
 
@@ -273,7 +282,7 @@ const VehiculosPage: React.FC = () => {
 
                 <div className="filter-group">
                     <label className="filter-label">Ordenar por</label>
-                    <select className="form-input" value={orden} onChange={e => { setOrden(e.target.value as 'recientes' | 'antiguedad'); setPage(1); }}>
+                    <select className="form-input" value={orden} onChange={e => setOrden(e.target.value as 'recientes' | 'antiguedad')}>
                         <option value="recientes">Ingreso reciente</option>
                         <option value="antiguedad">Antigüedad en stock</option>
                     </select>
