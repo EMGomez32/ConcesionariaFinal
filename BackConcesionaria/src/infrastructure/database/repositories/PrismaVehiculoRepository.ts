@@ -3,11 +3,18 @@ import { Vehiculo } from '../../../domain/entities/Vehiculo';
 import prisma from '../prisma';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 
+// Sólo se puede ordenar por columnas reales: `sortBy` viene de la query y hasta
+// ahora se pasaba crudo a Prisma (un valor inventado → 500). El orden por
+// `fechaIngreso` es el que habilita la antigüedad de stock (más antiguos primero).
+const SORTABLE = ['createdAt', 'updatedAt', 'fechaIngreso', 'fechaCompra', 'precioLista', 'anio', 'kmIngreso', 'marca', 'modelo'];
+
 export class PrismaVehiculoRepository implements IVehiculoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Vehiculo>> {
         const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
         const limitNum = Number(limit);
         const pageNum = Number(page);
+        const orderKey = SORTABLE.includes(String(sortBy)) ? String(sortBy) : 'createdAt';
+        const orderDir = sortOrder === 'asc' ? 'asc' : 'desc';
 
         // A diferencia del resto de los repos, acá `filter` NO son query params
         // crudos: VehiculoController.getAll ya arma el where de Prisma (OR con
@@ -17,7 +24,11 @@ export class PrismaVehiculoRepository implements IVehiculoRepository {
             where: filter,
             take: limitNum,
             skip: (pageNum - 1) * limitNum,
-            orderBy: { [sortBy as string]: sortOrder },
+            // Desempate estable por id: fechaIngreso es @db.Date (granularidad de
+            // día) y es común ingresar varias unidades el mismo día; sin este
+            // segundo criterio, los empates quedan en orden no determinístico y una
+            // fila podría repetirse o saltarse entre páginas (LIMIT/OFFSET).
+            orderBy: [{ [orderKey]: orderDir }, { id: 'asc' }],
             include: {
                 sucursal: true,
                 archivos: { where: { deletedAt: null } },

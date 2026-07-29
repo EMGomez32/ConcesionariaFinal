@@ -33,6 +33,21 @@ const NEXT_ESTADOS: Record<EstadoVehiculo, EstadoVehiculo[]> = {
     devuelto: ['preparacion', 'publicado'],
 };
 
+// La antigüedad sólo cuenta para unidades EN stock: una vendida o devuelta ya
+// no envejece en el parque.
+const EN_STOCK: EstadoVehiculo[] = ['preparacion', 'publicado', 'reservado'];
+
+/** Días desde el ingreso a stock (fechaIngreso llega como ISO/'YYYY-MM-DD'). */
+const diasEnStock = (fechaIngreso: string): number => {
+    const ingreso = new Date(fechaIngreso);
+    if (isNaN(ingreso.getTime())) return 0;
+    return Math.max(0, Math.floor((Date.now() - ingreso.getTime()) / 86400000));
+};
+
+/** Color del badge según antigüedad: verde fresco → rojo estancado. */
+const antiguedadVariant = (dias: number): 'success' | 'info' | 'warning' | 'danger' =>
+    dias > 90 ? 'danger' : dias > 60 ? 'warning' : dias > 30 ? 'info' : 'success';
+
 const VehiculosPage: React.FC = () => {
     const navigate = useNavigate();
     const { addToast } = useUIStore();
@@ -43,6 +58,7 @@ const VehiculosPage: React.FC = () => {
     const [filterEstado, setFilterEstado] = useState('');
     const [filterTipo, setFilterTipo] = useState('');
     const [filterSucursal, setFilterSucursal] = useState('');
+    const [orden, setOrden] = useState<'recientes' | 'antiguedad'>('recientes');
     const [page, setPage] = useState(1);
 
     const { data: sucursales = [] } = useSucursales();
@@ -52,7 +68,15 @@ const VehiculosPage: React.FC = () => {
         estado: filterEstado ? (filterEstado as EstadoVehiculo) : undefined,
         tipo: filterTipo ? (filterTipo as TipoVehiculo) : undefined,
         sucursalId: filterSucursal ? Number(filterSucursal) : undefined,
-    }, { page, limit: 10 });
+    }, {
+        page,
+        limit: 10,
+        // "Antigüedad" = los que más tiempo llevan en stock primero (ingreso más
+        // viejo). Así la página 1 muestra las unidades a priorizar/repreciar.
+        ...(orden === 'antiguedad'
+            ? { sortBy: 'fechaIngreso', sortOrder: 'asc' as const }
+            : { sortBy: 'createdAt', sortOrder: 'desc' as const }),
+    });
 
     const vehiculos = payload?.results || [];
     const totalPages = payload?.totalPages || 1;
@@ -158,6 +182,15 @@ const VehiculosPage: React.FC = () => {
             )
         },
         {
+            header: 'Antigüedad',
+            accessor: (v) => {
+                // Una unidad vendida/devuelta ya no envejece: se muestra "—".
+                if (!EN_STOCK.includes(v.estado)) return <span className="text-slate-600 text-xs">—</span>;
+                const d = diasEnStock(v.fechaIngreso);
+                return <Badge variant={antiguedadVariant(d)}>{d} {d === 1 ? 'día' : 'días'}</Badge>;
+            }
+        },
+        {
             header: 'Acciones',
             align: 'right',
             accessor: (v) => (
@@ -235,6 +268,14 @@ const VehiculosPage: React.FC = () => {
                     <select className="form-input" value={filterSucursal} onChange={e => setFilterSucursal(e.target.value)}>
                         <option value="">Todas las sedes</option>
                         {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                    </select>
+                </div>
+
+                <div className="filter-group">
+                    <label className="filter-label">Ordenar por</label>
+                    <select className="form-input" value={orden} onChange={e => { setOrden(e.target.value as 'recientes' | 'antiguedad'); setPage(1); }}>
+                        <option value="recientes">Ingreso reciente</option>
+                        <option value="antiguedad">Antigüedad en stock</option>
                     </select>
                 </div>
             </div>
