@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy } from 'lucide-react';
+import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy, MessageCircle } from 'lucide-react';
 import {
     reportesApi,
     type ReporteVentasItem,
@@ -42,6 +42,17 @@ const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'O
 
 const money = (n: number, moneda = 'ARS') =>
     `${moneda === 'USD' ? 'US$' : '$'}${Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
+
+// Arma el link de WhatsApp con un mensaje YA REDACTADO. NO envía nada: abre el
+// chat con el borrador y el usuario revisa y manda (como un mailto:).
+// Normalización AR best-effort: dígitos, con prefijo 54 si falta. Devuelve null
+// si no hay un número usable → el botón se muestra deshabilitado ("—").
+const waHref = (telefono: string | undefined, mensaje: string): string | null => {
+    const d = (telefono || '').replace(/\D/g, '');
+    if (d.length < 8) return null;
+    const num = d.startsWith('54') ? d : `54${d}`;
+    return `https://wa.me/${num}?text=${encodeURIComponent(mensaje)}`;
+};
 
 // Formatea un total desglosado por moneda: "$1.500.000 · US$20.000" (o "—").
 const fmtMoneda = (arr: TotalPorMoneda[] | undefined, campo: string) => {
@@ -293,6 +304,15 @@ const ReportesPage = () => {
         // r.moneda es obligatorio acá: sin él, un saldo en USD se imprimía con '$'
         // y se leía como pesos.
         { header: 'Saldo', align: 'right', accessor: (r) => <span className="font-bold">{money(r.saldo, r.moneda)}</span> },
+        {
+            header: 'Contacto', align: 'center', accessor: (r) => {
+                const msg = `Hola ${r.cliente}, te recordamos que la cuota N° ${r.nroCuota}${r.vehiculo ? ` de ${r.vehiculo}` : ''} venció el ${formatFecha(r.vencimiento)} y registra un saldo de ${money(r.saldo, r.moneda)}. ¿Coordinamos el pago? ¡Gracias!`;
+                const href = waHref(r.telefono, msg);
+                return href
+                    ? <a href={href} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar por WhatsApp (revisá antes de enviar)"><MessageCircle size={16} /></a>
+                    : <span className="text-muted">—</span>;
+            }
+        },
     ];
 
     const rentaCols: Column<ReporteRentabilidadItem & { id: number }>[] = [
@@ -346,6 +366,16 @@ const ReportesPage = () => {
         },
         // r.moneda es obligatorio: un saldo en USD con '$' se leería como pesos.
         { header: 'Saldo', align: 'right', accessor: (r) => <span className="font-bold">{money(r.saldo, r.moneda)}</span> },
+        {
+            header: 'Contacto', align: 'center', accessor: (r) => {
+                const cuando = r.diasParaVencer === 0 ? 'vence hoy' : r.diasParaVencer === 1 ? 'vence mañana' : `vence el ${formatFecha(r.vencimiento)}`;
+                const msg = `Hola ${r.cliente}, te recordamos que la cuota N° ${r.nroCuota}${r.vehiculo ? ` de ${r.vehiculo}` : ''} ${cuando}, por ${money(r.saldo, r.moneda)}. ¡Gracias!`;
+                const href = waHref(r.telefono, msg);
+                return href
+                    ? <a href={href} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar por WhatsApp (revisá antes de enviar)"><MessageCircle size={16} /></a>
+                    : <span className="text-muted">—</span>;
+            }
+        },
     ];
 
     // Muestra facturado/rentabilidad del vendedor: consolidado en una moneda si se
