@@ -94,4 +94,20 @@ router.get('/proximos-vencimientos', authorize('admin', 'vendedor'), ReporteCont
  */
 router.get('/stock-antiguedad', authorize('admin'), ReporteController.stockAntiguedad);
 
+/**
+ * @openapi
+ * /reportes/ranking-vendedores:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Ranking de vendedores por período
+ *     description: Unidades, facturado y rentabilidad por vendedor. Expone márgenes y facturación, por eso es solo admin. Usar ?format=csv para descargar.
+ *     parameters:
+ *       - { in: query, name: desde, schema: { type: string, format: date } }
+ *       - { in: query, name: hasta, schema: { type: string, format: date } }
+ *       - { in: query, name: sucursalId, schema: { type: integer } }
+ *       - { in: query, name: consolidar, schema: { type: string, enum: [ARS, USD] } }
+ *       - { in: query, name: format, schema: { type: string, enum: [csv] } }
+ */
+router.get('/ranking-vendedores', authorize('admin'), ReporteController.rankingVendedores);
+
 export default router;
