@@ -250,6 +250,26 @@ export interface EstadoCuenta {
     };
 }
 
+export interface VentaMensualItem {
+    anio: number;
+    mes: number;
+    /** Etiqueta corta para el eje, ej "Jul 25". */
+    label: string;
+    cantidad: number;
+    porMoneda: { moneda: string; facturado: number }[];
+    /** Facturado convertido a la moneda de consolidación, o null si no hay cotización. */
+    facturadoConsolidado: number | null;
+}
+
+export interface ReporteVentasMensuales {
+    meses: number;
+    moneda: MonedaConsol | null;
+    valorCotizacion: number | null;
+    fechaCotizacion: string | null;
+    items: VentaMensualItem[];
+    sinCotizacion?: boolean;
+}
+
 export interface RangoFiltro {
     desde?: string;
     hasta?: string;
@@ -288,6 +308,9 @@ export const reportesApi = {
 
     estadoCuenta: (clienteId: number) =>
         client.get<EstadoCuenta>('/reportes/estado-cuenta', { params: { clienteId } }),
+
+    ventasMensuales: (params: { meses?: number; consolidar?: MonedaConsol } = {}) =>
+        client.get<ReporteVentasMensuales>('/reportes/ventas-mensuales', { params }),
 
     /**
      * Variante CSV. Devuelve el blob y el nombre de archivo que mandó el

@@ -1,6 +1,7 @@
 import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useDashboardStats, useStockDistribution, useDashboardFinanzas, useDashboardAlertas, type FinanzaKpi, type AlertaItem } from '../../hooks/useDashboard';
+import { useDashboardStats, useStockDistribution, useDashboardFinanzas, useDashboardAlertas, useDashboardTendencia, type FinanzaKpi, type AlertaItem } from '../../hooks/useDashboard';
+import type { VentaMensualItem } from '../../api/reportes.api';
 import { useAuditLogs } from '../../hooks/useAuditLogs';
 import type { AuditLog } from '../../api/auditoria.api';
 import { useAuthStore } from '../../store/authStore';
@@ -38,6 +39,8 @@ const DashboardPage = () => {
   const { data: finanzas, isLoading: finanzasLoading, isError: finanzasError, refetch: refetchFinanzas } = useDashboardFinanzas(isAdmin);
   // Acciones del día: alertas accionables (estancados / por vencer / mora), solo admin.
   const { data: alertas, isLoading: alertasLoading, isError: alertasError, refetch: refetchAlertas } = useDashboardAlertas(isAdmin);
+  // Tendencia de ventas (últimos 6 meses), solo admin.
+  const { data: tendencia, isLoading: tendenciaLoading } = useDashboardTendencia(isAdmin);
 
   const stats = [
     { label: 'Vehículos en Stock', value: statsData?.vehiculos ?? 0, icon: Car, color: 'var(--primary-navy)' },
@@ -62,6 +65,23 @@ const DashboardPage = () => {
     { key: 'porvencer', label: `Cuotas vencen en ${alertas.porVencer.dias} días`, count: alertas.porVencer.count, monto: alertaMonto(alertas.porVencer), montoLabel: 'a cobrar', icon: Clock, color: 'var(--accent)', to: '/reportes?tab=proximos' },
     { key: 'mora', label: 'Cuotas en mora', count: alertas.mora.count, monto: alertaMonto(alertas.mora), montoLabel: 'saldo adeudado', icon: AlertTriangle, color: 'var(--danger, #dc2626)', to: '/reportes?tab=mora' },
   ] : [];
+
+  // ── Tendencia de ventas ──
+  const tItems: VentaMensualItem[] = tendencia?.items ?? [];
+  const tMax = Math.max(1, ...tItems.map((i) => i.cantidad));
+  const tTotalUnidades = tItems.reduce((s, i) => s + i.cantidad, 0);
+  const tHayCotizacion = tItems.some((i) => i.facturadoConsolidado != null);
+  const facturadoMes = (m: VentaMensualItem) =>
+    m.facturadoConsolidado != null
+      ? money(m.facturadoConsolidado, 'ARS')
+      : (m.porMoneda.length ? m.porMoneda.map((x) => money(x.facturado, x.moneda)).join(' · ') : money(0));
+  const tTotalFacturado = (() => {
+    if (tHayCotizacion) return money(tItems.reduce((s, i) => s + (i.facturadoConsolidado ?? 0), 0), 'ARS');
+    const acc: Record<string, number> = {};
+    tItems.forEach((i) => i.porMoneda.forEach((x) => { acc[x.moneda] = (acc[x.moneda] ?? 0) + x.facturado; }));
+    const keys = Object.keys(acc).sort();
+    return keys.length ? keys.map((k) => money(acc[k], k)).join(' · ') : money(0);
+  })();
 
   const onSync = () => {
     refetchStats();
@@ -203,6 +223,55 @@ const DashboardPage = () => {
                 ))}
             </div>
           )}
+        </section>
+      )}
+
+      {isAdmin && (tendenciaLoading || tendencia) && (
+        <section style={{ marginTop: '1.75rem' }}>
+          <div className="flex items-center justify-between flex-wrap gap-2" style={{ marginBottom: '1rem' }}>
+            <div className="flex items-center gap-2">
+              <TrendingUp size={18} className="text-accent" />
+              <h3 style={{ margin: 0 }}>Tendencia de ventas</h3>
+            </div>
+            {!tendenciaLoading && (
+              <span className="text-xs text-muted">
+                {tTotalUnidades} {tTotalUnidades === 1 ? 'unidad' : 'unidades'} · {tTotalFacturado} · últimos {tendencia?.meses ?? 6} meses
+              </span>
+            )}
+          </div>
+          <div className="card" style={{ padding: '1.5rem' }}>
+            {tendenciaLoading ? (
+              <span className="skeleton" style={{ display: 'block', height: '180px', width: '100%', borderRadius: '0.75rem' }} />
+            ) : tTotalUnidades === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-secondary)' }}>
+                Sin ventas registradas en los últimos {tendencia?.meses ?? 6} meses.
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.75rem' }}>
+                  {tItems.map((m) => {
+                    const barPct = Math.round((m.cantidad / tMax) * 100);
+                    return (
+                      <div
+                        key={`${m.anio}-${m.mes}`}
+                        title={`${m.label}: ${m.cantidad} ${m.cantidad === 1 ? 'unidad' : 'unidades'} · ${facturadoMes(m)}`}
+                        style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}
+                      >
+                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: m.cantidad > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>{m.cantidad}</span>
+                        <div style={{ width: '100%', height: '140px', display: 'flex', alignItems: 'flex-end', marginTop: '0.25rem' }}>
+                          <div style={{ width: '100%', maxWidth: '46px', margin: '0 auto', height: `${barPct}%`, minHeight: m.cantidad > 0 ? '6px' : '0', background: 'var(--accent)', borderRadius: '5px 5px 0 0', transition: 'height .3s var(--easing-soft, ease)' }} />
+                        </div>
+                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.4rem', whiteSpace: 'nowrap' }}>{m.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted" style={{ marginTop: '1rem', textAlign: 'center' }}>
+                  Barras: unidades vendidas por mes. Pasá el mouse para ver el facturado.
+                </p>
+              </>
+            )}
+          </div>
         </section>
       )}
 
