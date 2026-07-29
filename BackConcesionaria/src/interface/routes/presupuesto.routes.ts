@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PresupuestoController } from '../controllers/PresupuestoController';
+import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authorize } from '../middlewares/authorize.middleware';
 
 import { validateBody } from '../middlewares/validate.middleware';
@@ -72,6 +73,21 @@ router.get('/:id', PresupuestoController.getById);
  *       404: { $ref: '#/components/responses/NotFound' }
  */
 router.get('/:id/total', PresupuestoController.total);
+
+/**
+ * @openapi
+ * /presupuestos/{id}/pdf:
+ *   get:
+ *     tags: [Presupuestos]
+ *     summary: Presupuesto en PDF (para enviar al cliente)
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     responses:
+ *       200: { description: PDF del presupuesto, content: { application/pdf: {} } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.get('/:id/pdf', ComprobanteController.presupuestoPdf);
 
 /**
  * @openapi

@@ -324,4 +324,161 @@ export class ComprobanteController {
             next(error);
         }
     }
+
+    // GET /api/presupuestos/:id/pdf → PDF del presupuesto para enviar al cliente.
+    static async presupuestoPdf(req: Request, res: Response, next: NextFunction) {
+        try {
+            const id = Number(req.params.id);
+            const p = await prisma.presupuesto.findFirst({
+                where: { id },
+                include: {
+                    cliente: true,
+                    vendedor: { select: { nombre: true, email: true } },
+                    sucursal: true,
+                    concesionaria: { select: { nombre: true, cuit: true, email: true, telefono: true } },
+                    // Mismos filtros de borrados que PrismaPresupuestoRepository: sin
+                    // ellos, un extra anulado inflaría el total del PDF.
+                    items: { where: { deletedAt: null }, include: { vehiculo: true } },
+                    extras: { where: { deletedAt: null } },
+                    canje: { where: { deletedAt: null } },
+                },
+            }) as any;
+
+            if (!p) throw new NotFoundException('Presupuesto');
+
+            const moneda = p.moneda || 'ARS';
+            const subtotalItems = p.items.reduce((s: number, i: any) => s + Number(i.precioFinal), 0);
+            const totalExtras = p.extras.reduce((s: number, e: any) => s + Number(e.monto), 0);
+            const valorCanje = p.canje ? Number(p.canje.valorTomado) : 0;
+            const total = subtotalItems + totalExtras - valorCanje;
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="presupuesto-${p.nroPresupuesto || p.id}.pdf"`);
+
+            const doc = new PDFDocument({ size: 'A4', margin: 50 });
+            doc.pipe(res);
+
+            // ── Paleta AUTENZA (misma firma visual que el comprobante de venta) ────
+            const accent = '#10b981';
+            const muted = '#6b7280';
+            const brandStops: Array<[number, string]> = [[0, '#10b981'], [0.5, '#06b6d4'], [1, '#8b5cf6']];
+            const W = doc.page.width;
+
+            const drawIsotipo = (x: number, y: number, size: number, color: string) => {
+                const s = size / 56;
+                doc.save();
+                doc.translate(x, y).scale(s);
+                doc.strokeColor(color).lineJoin('round').lineCap('round');
+                doc.lineWidth(2.6).path('M28 6 L47 17 L47 39 L28 50 L9 39 L9 17 Z').stroke();
+                doc.lineWidth(3.4).path('M19 43 L28 21 L37 43').stroke();
+                doc.lineWidth(3.4).path('M23 34 L33 34').stroke();
+                doc.fillColor(color).circle(28, 6, 3.2).fill();
+                doc.restore();
+            };
+
+            const topBand = doc.linearGradient(0, 0, W, 0);
+            brandStops.forEach(([o, c]) => topBand.stop(o, c));
+            doc.rect(0, 0, W, 6).fill(topBand);
+
+            // ── Encabezado ────────────────────────────────────────────────────────
+            doc.fillColor(accent).fontSize(20).font('Helvetica-Bold')
+                .text(p.concesionaria?.nombre || 'Concesionaria', 50, 50);
+            doc.fillColor(muted).fontSize(9).font('Helvetica');
+            if (p.concesionaria?.cuit) doc.text(`CUIT: ${p.concesionaria.cuit}`);
+            if (p.sucursal?.nombre) doc.text(`Sucursal: ${p.sucursal.nombre}`);
+            if (p.concesionaria?.telefono) doc.text(`Tel: ${p.concesionaria.telefono}`);
+
+            doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold')
+                .text('PRESUPUESTO', 50, 50, { align: 'right' });
+            doc.fillColor(muted).fontSize(10).font('Helvetica')
+                .text(`N° ${p.nroPresupuesto || String(p.id).padStart(6, '0')}`, { align: 'right' })
+                .text(`Fecha: ${fecha(p.fechaCreacion)}`, { align: 'right' });
+            if (p.validoHasta) doc.text(`Válido hasta: ${fecha(p.validoHasta)}`, { align: 'right' });
+
+            doc.moveTo(50, 130).lineTo(545, 130).strokeColor('#e5e7eb').stroke();
+
+            // ── Cliente y vendedor ────────────────────────────────────────────────
+            let y = 150;
+            const bloque = (titulo: string, lineas: string[], x: number) => {
+                doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text(titulo.toUpperCase(), x, y);
+                doc.fillColor('#111827').fontSize(10).font('Helvetica');
+                lineas.forEach((l, i) => doc.text(l, x, y + 15 + i * 14, { width: 230 }));
+            };
+
+            bloque('Cliente', [
+                p.cliente?.nombre || '—',
+                p.cliente?.dni ? `DNI/CUIT: ${p.cliente.dni}` : '',
+                p.cliente?.telefono ? `Tel: ${p.cliente.telefono}` : '',
+                p.cliente?.email || '',
+            ].filter(Boolean), 50);
+
+            bloque('Atendido por', [
+                p.vendedor?.nombre || '—',
+                p.vendedor?.email || '',
+            ].filter(Boolean), 310);
+
+            y += 90;
+
+            // ── Detalle ───────────────────────────────────────────────────────────
+            const fila = (label: string, valor: string, negrita = false) => {
+                doc.fillColor('#111827').fontSize(10).font(negrita ? 'Helvetica-Bold' : 'Helvetica');
+                doc.text(label, 50, y, { width: 380 });
+                doc.text(valor, 430, y, { width: 115, align: 'right' });
+                y += 18;
+            };
+
+            doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text('DETALLE', 50, y);
+            y += 16;
+            doc.moveTo(50, y).lineTo(545, y).strokeColor('#e5e7eb').stroke();
+            y += 8;
+
+            for (const it of p.items) {
+                const v = it.vehiculo;
+                const nombre = `${v?.marca || ''} ${v?.modelo || ''}${v?.anio ? ` ${v.anio}` : ''}${v?.dominio ? ` (${v.dominio})` : ''}`.trim() || 'Vehículo';
+                const desc = Number(it.descuento);
+                fila(nombre, money(it.precioLista, moneda));
+                if (desc > 0) fila('   Descuento', `- ${money(desc, moneda)}`);
+            }
+            for (const e of p.extras) fila(`Extra: ${e.descripcion}`, money(e.monto, moneda));
+            if (p.canje) {
+                const det = [p.canje.descripcion, p.canje.dominio ? `(${p.canje.dominio})` : ''].filter(Boolean).join(' ');
+                fila(`Canje: ${det || 'vehículo entregado'}`, `- ${money(valorCanje, moneda)}`);
+            }
+
+            y += 4;
+            doc.moveTo(50, y).lineTo(545, y).strokeColor('#e5e7eb').stroke();
+            y += 8;
+            fila('TOTAL', money(total, moneda), true);
+
+            // ── Observaciones ─────────────────────────────────────────────────────
+            if (p.observaciones) {
+                y += 14;
+                doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text('OBSERVACIONES', 50, y);
+                y += 16;
+                doc.fillColor('#111827').fontSize(9).font('Helvetica')
+                    .text(p.observaciones, 50, y, { width: 495 });
+            }
+
+            // ── Pie con marca de plataforma AUTENZA ───────────────────────────────
+            const footerTop = 720;
+            const ruleGrad = doc.linearGradient(50, 0, 545, 0);
+            brandStops.forEach(([o, c]) => ruleGrad.stop(o, c));
+            doc.rect(50, footerTop, 495, 1.5).fill(ruleGrad);
+
+            drawIsotipo(W / 2 - 6.5, footerTop + 10, 13, accent);
+            doc.fillColor(accent).fontSize(8).font('Helvetica-Bold')
+                .text('AUTENZA', 50, footerTop + 27, { align: 'center', width: W - 100, characterSpacing: 2 });
+
+            doc.fillColor(muted).fontSize(8).font('Helvetica')
+                .text(
+                    `Presupuesto sujeto a disponibilidad de las unidades.   ·   Generado el ${new Date().toLocaleString('es-AR')}`,
+                    50, 760, { align: 'center', width: 495 }
+                );
+            doc.text('Documento no válido como factura.', 50, 772, { align: 'center', width: 495 });
+
+            doc.end();
+        } catch (error) {
+            next(error);
+        }
+    }
 }

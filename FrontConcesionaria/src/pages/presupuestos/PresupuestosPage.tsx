@@ -75,7 +75,7 @@ import {
     Plus, Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
     SendHorizonal, CheckCircle, XCircle, Clock, FileText, Car,
     ArrowRightLeft, DollarSign, Calendar, User,
-    MapPin, Hash, RefreshCw, Briefcase, Calculator, ArrowRight
+    MapPin, Hash, RefreshCw, Briefcase, Calculator, ArrowRight, FileDown
 } from 'lucide-react';
 
 const FORMA_PAGO_OPTIONS_CONV: { value: FormaPagoVenta; label: string }[] = [
@@ -140,6 +140,23 @@ const blankForm = () => ({
 const PresupuestosPage = () => {
     const { addToast } = useUIStore();
     const navigate = useNavigate();
+
+    // Descarga el presupuesto en PDF (mismo patrón que el comprobante de venta).
+    const handlePdf = async (id: number) => {
+        try {
+            const blob = await presupuestosApi.pdf(id) as unknown as Blob;
+            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `presupuesto-${id}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            addToast('Error al generar el PDF del presupuesto', 'error');
+        }
+    };
 
     /* ── convertir en venta ── */
     const [convertirId, setConvertirId] = useState<number | null>(null);
@@ -573,6 +590,7 @@ const PresupuestosPage = () => {
                                                     <ArrowRight size={16} />
                                                 </button>
                                             )}
+                                            <button className="icon-btn" title="Descargar PDF" onClick={() => handlePdf(p.id)}><FileDown size={16} /></button>
                                             <button className="icon-btn" title="Ver Expediente" onClick={() => setDetailId(p.id)}><Eye size={16} /></button>
                                             <button className="icon-btn" title="Editar Metadatos" onClick={() => openEdit(p)}><Pencil size={16} /></button>
                                             <button className="icon-btn danger" title="Anular" onClick={() => setDeleteId(p.id)}><Trash2 size={16} /></button>
