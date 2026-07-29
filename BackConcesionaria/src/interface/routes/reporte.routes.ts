@@ -81,4 +81,17 @@ router.get('/rentabilidad', authorize('admin'), ReporteController.rentabilidad);
  */
 router.get('/proximos-vencimientos', authorize('admin', 'vendedor'), ReporteController.proximosVencimientos);
 
+/**
+ * @openapi
+ * /reportes/stock-antiguedad:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Antigüedad del stock (distribución + estancados)
+ *     description: Unidades en stock por antigüedad y capital inmovilizado de las estancadas (> umbral días). Expone precio de compra, por eso es solo admin.
+ *     parameters:
+ *       - { in: query, name: umbral, schema: { type: integer, default: 60, minimum: 1, maximum: 3650 } }
+ *       - { in: query, name: consolidar, schema: { type: string, enum: [ARS, USD] } }
+ */
+router.get('/stock-antiguedad', authorize('admin'), ReporteController.stockAntiguedad);
+
 export default router;

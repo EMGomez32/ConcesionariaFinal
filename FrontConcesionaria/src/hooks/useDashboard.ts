@@ -10,6 +10,7 @@ export const dashboardKeys = {
     stats: () => [...dashboardKeys.all, 'stats'] as const,
     stockDistribution: () => [...dashboardKeys.all, 'stockDistribution'] as const,
     finanzas: () => [...dashboardKeys.all, 'finanzas'] as const,
+    alertas: () => [...dashboardKeys.all, 'alertas'] as const,
 };
 
 export const useDashboardStats = () => {
@@ -143,6 +144,64 @@ export const useDashboardFinanzas = (enabled = true) => {
                     consolidado: mora.consolidado ? mora.consolidado.saldo : null,
                     porMoneda: (mora.resumen?.porMoneda ?? []).map((m) => ({ moneda: m.moneda, valor: Number(m.saldo ?? 0) })),
                     cuotas: mora.resumen?.cuotasVencidas ?? 0,
+                },
+            };
+        },
+    });
+};
+
+// ── Acciones del día (centro de alertas) ─────────────────────────────────────
+// Junta las 3 señales accionables de la home: unidades estancadas, cuotas por
+// vencer esta semana y cuotas en mora. Cada una linkea al lugar donde se actúa.
+// Sólo admin (stock-antiguedad expone precio de compra).
+
+/** Una alerta accionable: un conteo + su monto (consolidado o por moneda). */
+export interface AlertaItem {
+    count: number;
+    montoConsolidado: number | null;
+    porMoneda: ImportePorMoneda[];
+}
+
+export interface DashboardAlertas {
+    cotizacion: { valor: number; fecha: string } | null;
+    estancados: AlertaItem & { umbral: number };
+    porVencer: AlertaItem & { dias: number };
+    mora: AlertaItem;
+}
+
+export const useDashboardAlertas = (enabled = true) => {
+    return useQuery<DashboardAlertas>({
+        queryKey: dashboardKeys.alertas(),
+        enabled,
+        staleTime: 1000 * 60 * 2,
+        queryFn: async () => {
+            const DIAS_POR_VENCER = 7;
+            // Se pide consolidar en ARS: con cotización cargada da un monto en pesos;
+            // si no, cada endpoint devuelve consolidado:null + el desglose por moneda.
+            const [stock, proximos, mora] = await Promise.all([
+                reportesApi.stockAntiguedad({ umbral: 60, consolidar: 'ARS' }),
+                reportesApi.proximosVencimientos({ dias: DIAS_POR_VENCER, consolidar: 'ARS' }),
+                reportesApi.mora({ consolidar: 'ARS' }),
+            ]);
+            const cot = stock.consolidado || proximos.consolidado || mora.consolidado || null;
+            return {
+                cotizacion: cot ? { valor: cot.valor, fecha: cot.fechaCotizacion } : null,
+                estancados: {
+                    umbral: stock.estancados.umbral,
+                    count: stock.estancados.count,
+                    montoConsolidado: stock.consolidado ? stock.consolidado.capital : null,
+                    porMoneda: (stock.estancados.porMoneda ?? []).map((m) => ({ moneda: m.moneda, valor: Number(m.capital ?? 0) })),
+                },
+                porVencer: {
+                    dias: DIAS_POR_VENCER,
+                    count: proximos.resumen?.cuotasPorVencer ?? 0,
+                    montoConsolidado: proximos.consolidado ? proximos.consolidado.saldo : null,
+                    porMoneda: (proximos.resumen?.porMoneda ?? []).map((m) => ({ moneda: m.moneda, valor: Number(m.saldo ?? 0) })),
+                },
+                mora: {
+                    count: mora.resumen?.cuotasVencidas ?? 0,
+                    montoConsolidado: mora.consolidado ? mora.consolidado.saldo : null,
+                    porMoneda: (mora.resumen?.porMoneda ?? []).map((m) => ({ moneda: m.moneda, valor: Number(m.saldo ?? 0) })),
                 },
             };
         },

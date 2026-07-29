@@ -171,6 +171,28 @@ export interface ReporteProximos {
     sinCotizacion?: boolean;
 }
 
+export interface StockAntiguedadBucket {
+    key: string;
+    label: string;
+    count: number;
+}
+
+/** Capital inmovilizado consolidado. `valor` es la cotización; `capital` el monto. */
+export interface ConsolidadoCapital extends ConsolidadoBase {
+    count: number;
+    capital: number;
+}
+
+export interface ReporteStockAntiguedad {
+    total: number;
+    antiguedadMax: number;
+    buckets: StockAntiguedadBucket[];
+    /** porMoneda[].capital = capital inmovilizado (precio de compra) de las estancadas. */
+    estancados: { umbral: number; count: number; porMoneda: TotalPorMoneda[] };
+    consolidado?: ConsolidadoCapital | null;
+    sinCotizacion?: boolean;
+}
+
 export interface RangoFiltro {
     desde?: string;
     hasta?: string;
@@ -200,6 +222,9 @@ export const reportesApi = {
 
     proximosVencimientos: (params: { dias?: number; consolidar?: MonedaConsol } = {}) =>
         client.get<ReporteProximos>('/reportes/proximos-vencimientos', { params }),
+
+    stockAntiguedad: (params: { umbral?: number; consolidar?: MonedaConsol } = {}) =>
+        client.get<ReporteStockAntiguedad>('/reportes/stock-antiguedad', { params }),
 
     /**
      * Variante CSV. Devuelve el blob y el nombre de archivo que mandó el

@@ -802,4 +802,71 @@ export class ReporteController {
             next(error);
         }
     }
+
+    // ── 6. Antigüedad de stock (agregado para el centro de alertas) ──────────
+    // GET /api/reportes/stock-antiguedad?umbral=&consolidar=
+    // Distribución de las unidades EN stock por antigüedad + cuántas y cuánto
+    // capital (precio de compra) están "estancadas" (más de `umbral` días).
+    static async stockAntiguedad(req: Request, res: Response, next: NextFunction) {
+        try {
+            const umbral = enteroEnRango(req.query.umbral, 1, 3650, 60, 'umbral');
+            const ahora = new Date();
+            const inicioHoy = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
+
+            // Sólo lo que sigue en el parque: vendido/devuelto ya no envejece.
+            const vehiculos = await prisma.vehiculo.findMany({
+                where: { estado: { in: ['preparacion', 'publicado', 'reservado'] } },
+                select: { fechaIngreso: true, precioCompra: true, moneda: true },
+            });
+
+            // Días en stock, en UTC puro (fechaIngreso es @db.Date).
+            const diasDe = (f: Date) =>
+                Math.max(0, Math.round((inicioHoy.getTime() - Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), f.getUTCDate())) / 86400000));
+
+            const buckets = [
+                { key: '0-30', label: '0 a 30 días', count: 0 },
+                { key: '31-60', label: '31 a 60 días', count: 0 },
+                { key: '61-90', label: '61 a 90 días', count: 0 },
+                { key: '90+', label: 'Más de 90 días', count: 0 },
+            ];
+            // Capital inmovilizado de las estancadas, por moneda (precio de compra).
+            // El campo se llama `capital` (no `valor`) a propósito: `valor` es la
+            // cotización usada en el consolidado, y colisionarían en el spread.
+            const estancadosItems: { moneda: string; capital: number }[] = [];
+            let antiguedadMax = 0;
+
+            for (const v of vehiculos) {
+                const d = diasDe(v.fechaIngreso);
+                antiguedadMax = Math.max(antiguedadMax, d);
+                if (d <= 30) buckets[0].count++;
+                else if (d <= 60) buckets[1].count++;
+                else if (d <= 90) buckets[2].count++;
+                else buckets[3].count++;
+                if (d > umbral) estancadosItems.push({ moneda: v.moneda ?? 'ARS', capital: num(v.precioCompra) });
+            }
+
+            const porMoneda = agruparPorMoneda(estancadosItems, ['capital']);
+            const estancados = { umbral, count: estancadosItems.length, porMoneda };
+
+            // Consolidación opcional del capital inmovilizado (?consolidar=ARS|USD).
+            const consolidar = parseConsolidar(req.query);
+            let consolidado: any = null;
+            let sinCotizacion = false;
+            if (consolidar) {
+                const cot = await getCotizacionParaConsolidar();
+                if (!cot) sinCotizacion = true;
+                else consolidado = {
+                    moneda: consolidar,
+                    valor: cot.valor,
+                    fechaCotizacion: cot.fecha,
+                    count: estancadosItems.length,
+                    ...consolidarBuckets(porMoneda, ['capital'], consolidar, cot.valor),
+                };
+            }
+
+            res.json({ total: vehiculos.length, antiguedadMax, buckets, estancados, consolidado, sinCotizacion });
+        } catch (error) {
+            next(error);
+        }
+    }
 }

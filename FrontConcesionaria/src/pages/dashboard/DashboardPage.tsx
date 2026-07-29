@@ -1,6 +1,6 @@
 import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useDashboardStats, useStockDistribution, useDashboardFinanzas, type FinanzaKpi } from '../../hooks/useDashboard';
+import { useDashboardStats, useStockDistribution, useDashboardFinanzas, useDashboardAlertas, type FinanzaKpi, type AlertaItem } from '../../hooks/useDashboard';
 import { useAuditLogs } from '../../hooks/useAuditLogs';
 import type { AuditLog } from '../../api/auditoria.api';
 import { useAuthStore } from '../../store/authStore';
@@ -19,6 +19,12 @@ const kpiValue = (kpi: FinanzaKpi) =>
     ? money(kpi.consolidado, 'ARS')
     : (kpi.porMoneda.length ? kpi.porMoneda.map((m) => money(m.valor, m.moneda)).join(' · ') : money(0));
 
+// El monto de una alerta: consolidado en ARS si hay cotización, si no por moneda.
+const alertaMonto = (a: AlertaItem) =>
+  a.montoConsolidado != null
+    ? money(a.montoConsolidado, 'ARS')
+    : (a.porMoneda.length ? a.porMoneda.map((m) => money(m.valor, m.moneda)).join(' · ') : money(0));
+
 const DashboardPage = () => {
   const { user } = useAuthStore();
   // El log de auditoría es admin-only (dato sensible: acciones de todos + IP).
@@ -30,6 +36,8 @@ const DashboardPage = () => {
   const { data: auditsData, isLoading: auditsLoading } = useAuditLogs({}, { limit: 5 }, { enabled: isAdmin });
   // Finanzas del mes: dato de dueño, solo admin (igual criterio que Actividad Reciente).
   const { data: finanzas, isLoading: finanzasLoading, isError: finanzasError, refetch: refetchFinanzas } = useDashboardFinanzas(isAdmin);
+  // Acciones del día: alertas accionables (estancados / por vencer / mora), solo admin.
+  const { data: alertas, isLoading: alertasLoading, isError: alertasError, refetch: refetchAlertas } = useDashboardAlertas(isAdmin);
 
   const stats = [
     { label: 'Vehículos en Stock', value: statsData?.vehiculos ?? 0, icon: Car, color: 'var(--primary-navy)' },
@@ -49,12 +57,21 @@ const DashboardPage = () => {
     { label: 'En mora', value: kpiValue(finanzas.mora), sub: `${finanzas.mora.cuotas} ${finanzas.mora.cuotas === 1 ? 'cuota vencida' : 'cuotas vencidas'}`, icon: AlertTriangle, color: 'var(--danger, #dc2626)' },
   ] : [];
 
+  const alertCards = alertas ? [
+    { key: 'estancados', label: `Estancadas (+${alertas.estancados.umbral} días)`, count: alertas.estancados.count, monto: alertaMonto(alertas.estancados), montoLabel: 'capital inmovilizado', icon: Car, color: 'var(--warning)', to: '/vehiculos' },
+    { key: 'porvencer', label: `Cuotas vencen en ${alertas.porVencer.dias} días`, count: alertas.porVencer.count, monto: alertaMonto(alertas.porVencer), montoLabel: 'a cobrar', icon: Clock, color: 'var(--accent)', to: '/reportes?tab=proximos' },
+    { key: 'mora', label: 'Cuotas en mora', count: alertas.mora.count, monto: alertaMonto(alertas.mora), montoLabel: 'saldo adeudado', icon: AlertTriangle, color: 'var(--danger, #dc2626)', to: '/reportes?tab=mora' },
+  ] : [];
+
   const onSync = () => {
     refetchStats();
     refetchStock();
     // refetch dispara la query aunque esté enabled:false; sólo tiene sentido para
-    // admin (es quien ve —y consulta— las finanzas).
-    if (isAdmin) refetchFinanzas();
+    // admin (es quien ve —y consulta— finanzas y alertas).
+    if (isAdmin) {
+      refetchFinanzas();
+      refetchAlertas();
+    }
   };
 
   return (
@@ -95,6 +112,53 @@ const DashboardPage = () => {
           </div>
         ))}
       </div>
+
+      {isAdmin && (alertasLoading || alertas || alertasError) && (
+        <section style={{ marginTop: '1.75rem' }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: '1rem' }}>
+            <Zap size={18} className="text-accent" />
+            <h3 style={{ margin: 0 }}>Acciones del día</h3>
+          </div>
+          {alertasError ? (
+            <div className="card glass" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              No se pudieron cargar las alertas.{' '}
+              <button className="btn btn-secondary btn-sm" type="button" onClick={() => refetchAlertas()}>Reintentar</button>
+            </div>
+          ) : (
+          <div className="stats-grid stagger">
+            {alertasLoading
+              ? Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="card stat-card">
+                  <div className="stat-content">
+                    <span className="skeleton skeleton-text" style={{ width: '55%' }} />
+                    <span className="skeleton skeleton-text-lg" style={{ width: '4ch', display: 'inline-block', marginTop: '0.5rem' }} />
+                  </div>
+                </div>
+              ))
+              : alertCards.map((a) => {
+                // Verde cuando no hay nada que atender; el color de alerta si hay.
+                const color = a.count > 0 ? a.color : 'var(--success, #16a34a)';
+                return (
+                  <Link key={a.key} to={a.to} className="card stat-card" style={{ textDecoration: 'none', borderLeft: `3px solid ${color}` }}>
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="stat-icon-wrapper" style={{ backgroundColor: `${color}10`, color }}>
+                        <a.icon size={20} />
+                      </div>
+                      <span className="text-3xl font-black tabular-nums" style={{ color }}>{a.count}</span>
+                    </div>
+                    <div className="stat-content">
+                      <span className="text-muted font-bold text-xs uppercase tracking-wider mb-1">{a.label}</span>
+                      <span className="text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>
+                        {a.monto} <span className="text-muted text-xs">{a.montoLabel}</span>
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+          </div>
+          )}
+        </section>
+      )}
 
       {isAdmin && (
         <section style={{ marginTop: '1.75rem' }}>
