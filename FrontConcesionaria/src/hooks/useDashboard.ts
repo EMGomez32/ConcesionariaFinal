@@ -11,6 +11,7 @@ export const dashboardKeys = {
     stockDistribution: () => [...dashboardKeys.all, 'stockDistribution'] as const,
     finanzas: () => [...dashboardKeys.all, 'finanzas'] as const,
     alertas: () => [...dashboardKeys.all, 'alertas'] as const,
+    tendencia: (meses: number) => [...dashboardKeys.all, 'tendencia', meses] as const,
 };
 
 export const useDashboardStats = () => {
@@ -205,5 +206,17 @@ export const useDashboardAlertas = (enabled = true) => {
                 },
             };
         },
+    });
+};
+
+// ── Tendencia de ventas (últimos meses) ──────────────────────────────────────
+// Serie mensual para el gráfico de tendencia del Dashboard. Se pide consolidar en
+// ARS: con cotización cargada, `facturadoConsolidado` viene en pesos.
+export const useDashboardTendencia = (enabled = true, meses = 6) => {
+    return useQuery({
+        queryKey: dashboardKeys.tendencia(meses),
+        enabled,
+        staleTime: 1000 * 60 * 5,
+        queryFn: () => reportesApi.ventasMensuales({ meses, consolidar: 'ARS' }),
     });
 };

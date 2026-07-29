@@ -1110,4 +1110,83 @@ export class ReporteController {
             next(error);
         }
     }
+
+    // ── 9. Tendencia de ventas (últimos N meses) ─────────────────────────────
+    // GET /api/reportes/ventas-mensuales?meses=6&consolidar=
+    // Serie mensual de unidades vendidas y facturado, para el gráfico de
+    // tendencia del Dashboard. Incluye los meses sin ventas (en 0).
+    static async ventasMensuales(req: Request, res: Response, next: NextFunction) {
+        try {
+            const meses = enteroEnRango(req.query.meses, 1, 24, 6, 'meses');
+            const ahora = new Date();
+            // Primer día del mes más viejo de la ventana. fechaVenta es @db.Date:
+            // se compara en UTC puro (igual criterio que el resto de reportes).
+            const desdeFecha = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth() - (meses - 1), 1));
+
+            const ventas = await prisma.venta.findMany({
+                where: { fechaVenta: { gte: desdeFecha } },
+                select: {
+                    fechaVenta: true,
+                    precioVenta: true,
+                    moneda: true,
+                    extras: { where: { deletedAt: null }, select: { monto: true } },
+                },
+            });
+
+            const consolidar = parseConsolidar(req.query);
+            const cot = consolidar ? await getCotizacionParaConsolidar() : null;
+            const sinCotizacion = !!consolidar && !cot;
+
+            const MESES_LBL = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+            // Pre-crea los N meses (así aparecen aunque no tengan ventas).
+            const buckets = new Map<string, any>();
+            for (let i = 0; i < meses; i++) {
+                const d = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth() - (meses - 1) + i, 1));
+                const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+                buckets.set(key, {
+                    anio: d.getUTCFullYear(),
+                    mes: d.getUTCMonth() + 1,
+                    label: `${MESES_LBL[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}`,
+                    cantidad: 0,
+                    _pm: new Map<string, number>(),
+                    _cons: 0,
+                });
+            }
+
+            for (const v of ventas) {
+                const f = v.fechaVenta;
+                const key = `${f.getUTCFullYear()}-${f.getUTCMonth()}`;
+                const b = buckets.get(key);
+                if (!b) continue; // fuera de la ventana (borde)
+                b.cantidad += 1;
+                const extras = v.extras.reduce((s, e) => s + num(e.monto), 0);
+                const facturado = num(v.precioVenta) + extras;
+                b._pm.set(v.moneda, (b._pm.get(v.moneda) ?? 0) + facturado);
+                if (cot) b._cons += convertir(facturado, v.moneda, consolidar as any, cot.valor);
+            }
+
+            const items = Array.from(buckets.values()).map((b) => ({
+                anio: b.anio,
+                mes: b.mes,
+                label: b.label,
+                cantidad: b.cantidad,
+                porMoneda: Array.from((b._pm as Map<string, number>).entries())
+                    .map(([moneda, facturado]) => ({ moneda, facturado }))
+                    .sort((x, y) => String(x.moneda).localeCompare(String(y.moneda))),
+                facturadoConsolidado: cot ? b._cons : null,
+            }));
+
+            res.json({
+                meses,
+                moneda: consolidar || null,
+                valorCotizacion: cot?.valor ?? null,
+                fechaCotizacion: cot?.fecha ?? null,
+                items,
+                sinCotizacion,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }

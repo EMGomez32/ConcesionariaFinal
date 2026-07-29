@@ -126,4 +126,17 @@ router.get('/ranking-vendedores', authorize('admin'), ReporteController.rankingV
  */
 router.get('/estado-cuenta', authorize('admin', 'vendedor'), ReporteController.estadoCuenta);
 
+/**
+ * @openapi
+ * /reportes/ventas-mensuales:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Tendencia de ventas (serie mensual)
+ *     description: Unidades vendidas y facturado por mes en los últimos N meses. Alimenta el gráfico de tendencia del Dashboard.
+ *     parameters:
+ *       - { in: query, name: meses, schema: { type: integer, default: 6, minimum: 1, maximum: 24 } }
+ *       - { in: query, name: consolidar, schema: { type: string, enum: [ARS, USD] } }
+ */
+router.get('/ventas-mensuales', authorize('admin', 'vendedor'), ReporteController.ventasMensuales);
+
 export default router;
