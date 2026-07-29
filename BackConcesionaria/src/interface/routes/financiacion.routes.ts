@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { FinanciacionController } from '../controllers/FinanciacionController';
+import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
 import { createFinanciacionSchema, refinanciarFinanciacionSchema, updateFinanciacionSchema, pagarCuotaSchema } from '../validation/financiacion.schema';
@@ -179,5 +180,20 @@ router.delete('/:id', FinanciacionController.delete);
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
 router.patch('/cuotas/:cuotaId/pagar', validateBody(pagarCuotaSchema), FinanciacionController.pagarCuota);
+
+/**
+ * @openapi
+ * /financiaciones/cuotas/{cuotaId}/recibo:
+ *   get:
+ *     tags: [Financiación]
+ *     summary: Recibo de pago de una cuota en PDF
+ *     parameters:
+ *       - { name: cuotaId, in: path, required: true, schema: { type: integer } }
+ *     responses:
+ *       200: { description: PDF del recibo, content: { application/pdf: {} } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.get('/cuotas/:cuotaId/recibo', ComprobanteController.cuotaReciboPdf);
 
 export default router;

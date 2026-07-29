@@ -53,4 +53,8 @@ export const financiacionesApi = {
 
     pagarCuota: (cuotaId: number, data: PagarCuotaDto) =>
         client.patch(`/financiaciones/cuotas/${cuotaId}/pagar`, data),
+
+    /** Recibo de pago de una cuota en PDF (blob descargable). */
+    reciboCuotaPdf: (cuotaId: number) =>
+        client.get<Blob>(`/financiaciones/cuotas/${cuotaId}/recibo`, { responseType: 'blob' }),
 };

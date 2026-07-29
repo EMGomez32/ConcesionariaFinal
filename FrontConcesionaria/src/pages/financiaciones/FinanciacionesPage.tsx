@@ -12,7 +12,7 @@ import {
     Plus, Search, Eye, Trash2, RefreshCw,
     CreditCard, DollarSign, ChevronLeft,
     ChevronRight, Calendar, User, ShoppingBag,
-    AlertCircle, CheckCircle2, Car, TrendingUp
+    AlertCircle, CheckCircle2, Car, TrendingUp, Receipt
 } from 'lucide-react';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -360,6 +360,24 @@ const FinanciacionesPage = () => {
         } catch (e: unknown) {
             const err = e as { response?: { data?: { message?: string } } };
             addToast(err?.response?.data?.message ?? 'Error al revocar plan', 'error');
+        }
+    };
+
+    // Descarga el recibo de pago de una cuota (PDF), mismo patrón que el
+    // comprobante de venta.
+    const handleRecibo = async (cuotaId: number) => {
+        try {
+            const blob = await financiacionesApi.reciboCuotaPdf(cuotaId) as unknown as Blob;
+            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `recibo-cuota-${cuotaId}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            addToast('Error al generar el recibo', 'error');
         }
     };
 
@@ -896,12 +914,19 @@ const FinanciacionesPage = () => {
                                                     </Badge>
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
-                                                    {(c.estado === 'pendiente' || c.estado === 'parcial' || c.estado === 'vencida') && (
-                                                        <Button variant="primary" size="sm" onClick={() => openPagarCuota(c)}>
-                                                            RECAUDAR
-                                                        </Button>
-                                                    )}
-                                                    {c.estado === 'pagada' && <CheckCircle2 size={20} className="text-emerald-500 ml-auto" />}
+                                                    <div className="flex items-center gap-2 justify-end">
+                                                        {(c.estado === 'pendiente' || c.estado === 'parcial' || c.estado === 'vencida') && (
+                                                            <Button variant="primary" size="sm" onClick={() => openPagarCuota(c)}>
+                                                                RECAUDAR
+                                                            </Button>
+                                                        )}
+                                                        {(c.estado === 'pagada' || c.estado === 'parcial') && (
+                                                            <button className="icon-btn" title="Descargar recibo de pago" onClick={() => handleRecibo(c.id)}>
+                                                                <Receipt size={16} />
+                                                            </button>
+                                                        )}
+                                                        {c.estado === 'pagada' && <CheckCircle2 size={20} className="text-emerald-500" />}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
