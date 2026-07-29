@@ -46,4 +46,8 @@ export const presupuestosApi = {
     delete: (id: number) => {
         return client.delete<void>(`/presupuestos/${id}`);
     },
+
+    /** Presupuesto en PDF (blob descargable) para enviar al cliente. */
+    pdf: (id: number) =>
+        client.get<Blob>(`/presupuestos/${id}/pdf`, { responseType: 'blob' }),
 };
