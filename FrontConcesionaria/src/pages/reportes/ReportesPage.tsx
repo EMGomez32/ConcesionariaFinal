@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock } from 'lucide-react';
+import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy } from 'lucide-react';
 import {
     reportesApi,
     type ReporteVentasItem,
     type ReporteMoraItem,
     type ReporteRentabilidadItem,
     type ProximoVencimientoItem,
+    type RankingVendedorItem,
     type TotalPorMoneda,
 } from '../../api/reportes.api';
 import { cotizacionesApi } from '../../api/cotizaciones.api';
@@ -21,7 +22,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 
-type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos';
+type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos' | 'ranking';
 type Consolidar = '' | 'ARS' | 'USD';
 
 const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
@@ -29,8 +30,13 @@ const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
     { key: 'caja', label: 'Caja mensual', icon: Wallet },
     { key: 'mora', label: 'Cartera de mora', icon: AlertTriangle },
     { key: 'proximos', label: 'Por vencer', icon: CalendarClock },
+    { key: 'ranking', label: 'Ranking', icon: Trophy },
     { key: 'rentabilidad', label: 'Rentabilidad', icon: BarChart3 },
 ];
+
+// Tabs con datos sensibles (márgenes y facturación): solo admin. El backend ya
+// los bloquea con 403; acá se ocultan para no mostrar una pestaña que fallaría.
+const ADMIN_TABS: Tab[] = ['rentabilidad', 'ranking'];
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -135,7 +141,10 @@ const ReportesPage = () => {
     // alertas del Dashboard para aterrizar directo en el reporte relevante.
     const [searchParams] = useSearchParams();
     const paramTab = searchParams.get('tab');
-    const [tab, setTab] = useState<Tab>(TABS.some((t) => t.key === paramTab) ? (paramTab as Tab) : 'ventas');
+    const puedeVerTab = (k: string | null): k is Tab => TABS.some((t) => t.key === k) && (isAdmin || !ADMIN_TABS.includes(k as Tab));
+    const [tab, setTab] = useState<Tab>(puedeVerTab(paramTab) ? paramTab : 'ventas');
+    // Pestañas visibles según rol (las admin-only se ocultan al resto).
+    const visibleTabs = TABS.filter((t) => isAdmin || !ADMIN_TABS.includes(t.key));
     const [exporting, setExporting] = useState(false);
 
     // Filtros compartidos por rango (ventas / rentabilidad).
@@ -224,6 +233,11 @@ const ReportesPage = () => {
         queryFn: () => reportesApi.proximosVencimientos({ dias, consolidar: consolidarParam }),
         enabled: tab === 'proximos',
     });
+    const rankingQ = useQuery({
+        queryKey: ['reporte', 'ranking', { ...rango, consolidar }],
+        queryFn: () => reportesApi.rankingVendedores({ ...rango, consolidar: consolidarParam }),
+        enabled: tab === 'ranking',
+    });
 
     const handleExport = async () => {
         setExporting(true);
@@ -233,8 +247,10 @@ const ReportesPage = () => {
                     : tab === 'mora' ? {}
                         : tab === 'proximos' ? { dias }
                             : { ...rango, ...(tab === 'ventas' && vendedorId ? { vendedorId: Number(vendedorId) } : {}) };
-            // El tab 'proximos' mapea al endpoint 'proximos-vencimientos'.
-            const reporteCsv = tab === 'proximos' ? 'proximos-vencimientos' : tab;
+            // Algunos tabs mapean a un nombre de endpoint distinto.
+            const reporteCsv = tab === 'proximos' ? 'proximos-vencimientos'
+                : tab === 'ranking' ? 'ranking-vendedores'
+                    : tab;
             const { blob, filename } = await reportesApi.exportCsv(reporteCsv, params);
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -332,6 +348,39 @@ const ReportesPage = () => {
         { header: 'Saldo', align: 'right', accessor: (r) => <span className="font-bold">{money(r.saldo, r.moneda)}</span> },
     ];
 
+    // Muestra facturado/rentabilidad del vendedor: consolidado en una moneda si se
+    // pidió, o el desglose por moneda si no.
+    const fmtRank = (item: RankingVendedorItem, campo: 'facturado' | 'rentabilidad') => {
+        if (consolidar && item.consolidado) return money(item.consolidado[campo], item.consolidado.moneda);
+        if (!item.porMoneda.length) return money(0);
+        return item.porMoneda.map((m) => money(m[campo], m.moneda)).join(' · ');
+    };
+
+    const rankingCols: Column<RankingVendedorItem & { id: number; _pos: number }>[] = [
+        {
+            header: '#', align: 'center', accessor: (r) => {
+                const medalla = r._pos === 1 ? '🥇' : r._pos === 2 ? '🥈' : r._pos === 3 ? '🥉' : null;
+                return medalla ? <span style={{ fontSize: '1.15rem' }}>{medalla}</span> : <span className="text-muted font-bold">{r._pos}</span>;
+            }
+        },
+        { header: 'Vendedor', accessor: (r) => <span className="font-bold">{r.vendedor}</span> },
+        { header: 'Unidades', align: 'center', accessor: (r) => <Badge variant="info">{r.unidades}</Badge> },
+        { header: 'Facturado', align: 'right', accessor: (r) => <span className="font-bold">{fmtRank(r, 'facturado')}</span> },
+        { header: 'Rentabilidad', align: 'right', accessor: (r) => fmtRank(r, 'rentabilidad') },
+    ];
+
+    // Facturado total del ranking: consolidado si se pidió, si no la suma por
+    // moneda de todos los vendedores (no se mezcla ARS con USD).
+    const rankingFacturadoTotal = () => {
+        const data = rankingQ.data;
+        if (!data) return money(0);
+        if (data.consolidado) return money(data.consolidado.facturado, data.consolidado.moneda);
+        const acc: Record<string, number> = {};
+        for (const it of data.items) for (const m of it.porMoneda) acc[m.moneda] = (acc[m.moneda] ?? 0) + m.facturado;
+        const keys = Object.keys(acc).sort();
+        return keys.length ? keys.map((k) => money(acc[k], k)).join(' · ') : money(0);
+    };
+
     // Banda consolidada / aviso, reutilizada por cada tab.
     const renderConsolidado = (
         data: { consolidado?: unknown; sinCotizacion?: boolean } | undefined,
@@ -387,7 +436,7 @@ const ReportesPage = () => {
 
             {/* Tabs — control .segmented del design system, igual que GastosPage. */}
             <div className="segmented" role="tablist" style={{ marginBottom: '1.5rem' }}>
-                {TABS.map(({ key, label, icon: Icon }) => (
+                {visibleTabs.map(({ key, label, icon: Icon }) => (
                     <button
                         key={key}
                         role="tab"
@@ -400,8 +449,8 @@ const ReportesPage = () => {
                 ))}
             </div>
 
-            {/* Filtros por rango (ventas / rentabilidad) */}
-            {(tab === 'ventas' || tab === 'rentabilidad') && (
+            {/* Filtros por rango (ventas / rentabilidad / ranking) */}
+            {(tab === 'ventas' || tab === 'rentabilidad' || tab === 'ranking') && (
                 <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                     <div className="filter-group">
                         <label className="filter-label">Desde</label>
@@ -609,6 +658,29 @@ const ReportesPage = () => {
                         errorMessage="No se pudo cargar el reporte de próximos vencimientos"
                         onRetry={() => proximosQ.refetch()}
                         emptyMessage="No hay cuotas por vencer en la ventana seleccionada"
+                    />
+                </>
+            )}
+
+            {/* ── RANKING DE VENDEDORES ── */}
+            {tab === 'ranking' && (
+                <>
+                    {!rankingQ.isError && (
+                        <div className="stats-grid stagger" style={{ marginBottom: '1.5rem' }}>
+                            <StatCard label="Vendedores" value={String(rankingQ.data?.resumen.vendedores ?? 0)} />
+                            <StatCard label="Unidades vendidas" value={String(rankingQ.data?.resumen.unidades ?? 0)} />
+                            <StatCard label="Facturado total" value={rankingFacturadoTotal()} color="var(--accent)" />
+                        </div>
+                    )}
+                    {!rankingQ.isError && renderConsolidado(rankingQ.data, 'Facturado total', (c) => c.facturado)}
+                    <DataTable
+                        columns={rankingCols}
+                        data={(rankingQ.data?.items ?? []).map((it, i) => ({ ...it, id: i, _pos: i + 1 }))}
+                        isLoading={rankingQ.isLoading}
+                        isError={rankingQ.isError}
+                        errorMessage="No se pudo cargar el ranking de vendedores"
+                        onRetry={() => rankingQ.refetch()}
+                        emptyMessage="No hay ventas en el período seleccionado"
                     />
                 </>
             )}

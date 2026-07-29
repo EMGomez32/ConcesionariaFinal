@@ -193,6 +193,34 @@ export interface ReporteStockAntiguedad {
     sinCotizacion?: boolean;
 }
 
+export interface RankingMoneda {
+    moneda: string;
+    facturado: number;
+    rentabilidad: number;
+}
+
+export interface RankingVendedorItem {
+    vendedorId: number;
+    vendedor: string;
+    unidades: number;
+    porMoneda: RankingMoneda[];
+    /** Totales del vendedor convertidos a la moneda de consolidación (si se pidió). */
+    consolidado: { moneda: string; facturado: number; rentabilidad: number } | null;
+}
+
+export interface ConsolidadoRanking extends ConsolidadoBase {
+    facturado: number;
+    rentabilidad: number;
+}
+
+export interface ReporteRanking {
+    periodo: { desde: string | null; hasta: string | null };
+    items: RankingVendedorItem[];
+    resumen: { vendedores: number; unidades: number };
+    consolidado?: ConsolidadoRanking | null;
+    sinCotizacion?: boolean;
+}
+
 export interface RangoFiltro {
     desde?: string;
     hasta?: string;
@@ -226,6 +254,9 @@ export const reportesApi = {
     stockAntiguedad: (params: { umbral?: number; consolidar?: MonedaConsol } = {}) =>
         client.get<ReporteStockAntiguedad>('/reportes/stock-antiguedad', { params }),
 
+    rankingVendedores: (params: RangoFiltro = {}) =>
+        client.get<ReporteRanking>('/reportes/ranking-vendedores', { params }),
+
     /**
      * Variante CSV. Devuelve el blob y el nombre de archivo que mandó el
      * backend en el Content-Disposition, que ya incluye el período: sin él, dos
@@ -233,7 +264,7 @@ export const reportesApi = {
      * pisaba al primero en la carpeta de descargas.
      */
     exportCsv: async (
-        reporte: 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos-vencimientos',
+        reporte: 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos-vencimientos' | 'ranking-vendedores',
         params: Record<string, unknown> = {},
     ): Promise<{ blob: Blob; filename?: string }> => {
         const res = await client.getRaw<Blob>(`/reportes/${reporte}`, {

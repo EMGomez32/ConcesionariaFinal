@@ -869,4 +869,162 @@ export class ReporteController {
             next(error);
         }
     }
+
+    // ── 7. Ranking de vendedores ─────────────────────────────────────────────
+    // GET /api/reportes/ranking-vendedores?desde=&hasta=&sucursalId=&consolidar=&format=csv
+    // Performance del equipo comercial en el período: unidades, facturado y
+    // rentabilidad por vendedor. Reutiliza la lógica de ventas + rentabilidad.
+    static async rankingVendedores(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { desde, hasta } = parseRango(req.query);
+            const where: any = { ...filtroFecha('fechaVenta', desde, hasta) };
+            const sucursalId = idOpcional(req.query.sucursalId, 'sucursalId');
+            if (sucursalId) where.sucursalId = sucursalId;
+
+            const ventas = await prisma.venta.findMany({
+                where,
+                include: {
+                    vendedor: { select: { id: true, nombre: true } },
+                    vehiculo: { select: { id: true, precioCompra: true, moneda: true } },
+                    // Los extras anulados no suman al facturado (el filtro de borrados
+                    // de la extensión no alcanza a los include).
+                    extras: { where: { deletedAt: null }, select: { monto: true } },
+                },
+            });
+
+            // Gastos por vehículo Y moneda de una sola vez (evita N+1), igual que
+            // el reporte de rentabilidad.
+            const vehiculoIds = ventas.map((v) => v.vehiculoId);
+            const gastosPorVehiculo = new Map<string, number>();
+            if (vehiculoIds.length > 0) {
+                const grupos = await prisma.gastoVehiculo.groupBy({
+                    by: ['vehiculoId', 'moneda'],
+                    _sum: { monto: true },
+                    where: { vehiculoId: { in: vehiculoIds } },
+                });
+                for (const g of grupos) gastosPorVehiculo.set(`${g.vehiculoId}|${g.moneda}`, num(g._sum.monto));
+            }
+            const gastosEn = (vid: number, m: string) => gastosPorVehiculo.get(`${vid}|${m}`) ?? 0;
+
+            const consolidar = parseConsolidar(req.query);
+            const cot = consolidar ? await getCotizacionParaConsolidar() : null;
+            const sinCotizacion = !!consolidar && !cot;
+
+            // vendedorId -> acumulado
+            const map = new Map<number, any>();
+            const bucket = (id: number, nombre: string) => {
+                if (!map.has(id)) {
+                    map.set(id, { vendedorId: id, vendedor: nombre, unidades: 0, _porMoneda: new Map<string, any>(), _consFacturado: 0, _consRenta: 0 });
+                }
+                return map.get(id);
+            };
+
+            for (const v of ventas) {
+                const vendId = v.vendedorId ?? v.vendedor?.id ?? 0;
+                const acc = bucket(vendId, v.vendedor?.nombre ?? 'Sin asignar');
+                acc.unidades += 1;
+
+                const moneda = v.moneda;
+                const precioVenta = num(v.precioVenta);
+                const extras = v.extras.reduce((s, e) => s + num(e.monto), 0);
+                const facturado = precioVenta + extras;
+
+                // Rentabilidad SÓLO cuando el costo es de la misma moneda que la
+                // venta (mismo criterio que el reporte de rentabilidad): si hay
+                // costos en otra moneda, sin cotización el margen no es calculable.
+                const compraEsRestable = (v.vehiculo?.moneda ?? 'ARS') === moneda;
+                const precioCompra = compraEsRestable ? num(v.vehiculo?.precioCompra) : 0;
+                const gastos = gastosEn(v.vehiculoId, moneda);
+                let incompleto = !compraEsRestable && !!v.vehiculo?.precioCompra;
+                if (!incompleto) {
+                    for (const [clave] of gastosPorVehiculo) {
+                        const [id, m] = clave.split('|');
+                        if (Number(id) === v.vehiculoId && m !== moneda) { incompleto = true; break; }
+                    }
+                }
+                const rentabilidad = incompleto ? null : precioVenta - (precioCompra + gastos);
+
+                const pm = acc._porMoneda;
+                if (!pm.has(moneda)) pm.set(moneda, { moneda, facturado: 0, rentabilidad: 0 });
+                const pmb = pm.get(moneda);
+                pmb.facturado += facturado;
+                pmb.rentabilidad += num(rentabilidad); // null → 0, como agruparPorMoneda
+
+                if (consolidar && cot) {
+                    const facturadoConv = convertir(facturado, moneda, consolidar, cot.valor);
+                    const pvConv = convertir(precioVenta, moneda, consolidar, cot.valor);
+                    const compraConv = convertir(num(v.vehiculo?.precioCompra), String(v.vehiculo?.moneda ?? 'ARS'), consolidar, cot.valor);
+                    let gastosConv = 0;
+                    for (const [clave, monto] of gastosPorVehiculo) {
+                        const [id, m] = clave.split('|');
+                        if (Number(id) === v.vehiculoId) gastosConv += convertir(monto, m, consolidar, cot.valor);
+                    }
+                    acc._consFacturado += facturadoConv;
+                    acc._consRenta += pvConv - (compraConv + gastosConv);
+                }
+            }
+
+            const items = Array.from(map.values()).map((a) => ({
+                vendedorId: a.vendedorId,
+                vendedor: a.vendedor,
+                unidades: a.unidades,
+                porMoneda: Array.from(a._porMoneda.values()).sort((x: any, y: any) => String(x.moneda).localeCompare(y.moneda)),
+                consolidado: (consolidar && cot) ? { moneda: consolidar, facturado: a._consFacturado, rentabilidad: a._consRenta } : null,
+            }));
+
+            // Ranking: por facturado consolidado si se pidió; si no, por unidades
+            // (currency-agnostic, siempre comparable).
+            items.sort((a, b) => {
+                if (a.consolidado && b.consolidado) return b.consolidado.facturado - a.consolidado.facturado;
+                return b.unidades - a.unidades;
+            });
+
+            const resumen = {
+                vendedores: items.length,
+                unidades: items.reduce((s, i) => s + i.unidades, 0),
+            };
+
+            if (req.query.format === 'csv') {
+                // Una fila por vendedor y moneda (el CSV no consolida).
+                const filas = items.flatMap((i) => i.porMoneda.map((pm: any) => ({
+                    vendedor: i.vendedor,
+                    unidades: i.unidades,
+                    moneda: pm.moneda,
+                    facturado: pm.facturado,
+                    rentabilidad: pm.rentabilidad,
+                })));
+                return sendCsv(res, 'reporte-ranking-vendedores', [
+                    { key: 'vendedor', header: 'Vendedor' },
+                    { key: 'unidades', header: 'Unidades' },
+                    { key: 'moneda', header: 'Moneda' },
+                    { key: 'facturado', header: 'Facturado' },
+                    { key: 'rentabilidad', header: 'Rentabilidad' },
+                ], filas);
+            }
+
+            let consolidado: any = null;
+            if (consolidar && cot) {
+                consolidado = {
+                    moneda: consolidar,
+                    valor: cot.valor,
+                    fechaCotizacion: cot.fecha,
+                    facturado: items.reduce((s, i) => s + (i.consolidado?.facturado ?? 0), 0),
+                    rentabilidad: items.reduce((s, i) => s + (i.consolidado?.rentabilidad ?? 0), 0),
+                };
+            }
+
+            res.json({
+                periodo: {
+                    desde: desde ? desde.toISOString().slice(0, 10) : null,
+                    hasta: hasta ? hasta.toISOString().slice(0, 10) : null,
+                },
+                items,
+                resumen,
+                consolidado,
+                sinCotizacion,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
