@@ -7,6 +7,7 @@ import { reservasApi } from '../../api/reservas.api';
 import { financiacionesApi } from '../../api/financiaciones.api';
 import solicitudesFinanciacionApi from '../../api/solicitudesFinanciacion.api';
 import { postventaApi } from '../../api/postventa.api';
+import { reportesApi, type EstadoCuenta } from '../../api/reportes.api';
 import type { Cliente } from '../../types/cliente.types';
 import Button from '../../components/ui/Button';
 import {
@@ -21,6 +22,15 @@ type AnyRow = Record<string, unknown>;
 
 const fmtMoney = (v: unknown) =>
     v != null && Number(v) ? `$${Number(v).toLocaleString('es-AR')}` : '-';
+
+const money = (n: number, moneda = 'ARS') =>
+    `${moneda === 'USD' ? 'US$' : '$'}${Number(n || 0).toLocaleString('es-AR')}`;
+
+/** "$X · US$Y" para un campo de un array por moneda; omite las monedas en 0. */
+const porMonedaStr = (arr: { moneda: string;[k: string]: unknown }[] | undefined, campo: string) => {
+    const list = (arr ?? []).filter((m) => Number(m[campo] ?? 0) !== 0);
+    return list.length ? list.map((m) => money(Number(m[campo] ?? 0), String(m.moneda))).join(' · ') : money(0);
+};
 
 const fmtDate = (v: unknown) =>
     v ? new Date(String(v)).toLocaleDateString('es-AR') : '-';
@@ -43,6 +53,7 @@ const ClienteDetallePage = () => {
     const [financiaciones, setFinanciaciones] = useState<AnyRow[]>([]);
     const [solicitudes, setSolicitudes] = useState<AnyRow[]>([]);
     const [postventaCasos, setPostventaCasos] = useState<AnyRow[]>([]);
+    const [estadoCuenta, setEstadoCuenta] = useState<EstadoCuenta | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +64,7 @@ const ClienteDetallePage = () => {
             setLoading(true);
             setError(null);
             try {
-                const [clienteRes, ventasRes, presupuestosRes, reservasRes, financiacionesRes, solicitudesRes, postventaRes] = await Promise.all([
+                const [clienteRes, ventasRes, presupuestosRes, reservasRes, financiacionesRes, solicitudesRes, postventaRes, estadoCuentaRes] = await Promise.all([
                     clientesApi.getById(cid),
                     ventasApi.getAll({ clienteId: cid }),
                     presupuestosApi.getAll({ clienteId: cid }),
@@ -61,6 +72,9 @@ const ClienteDetallePage = () => {
                     financiacionesApi.getAll({ clienteId: cid }),
                     solicitudesFinanciacionApi.getAll({ clienteId: cid }),
                     postventaApi.getCasos({ clienteId: cid }),
+                    // El estado de cuenta es admin/vendedor: si el rol no tiene acceso
+                    // (o falla), se degrada a null y la sección simplemente no aparece.
+                    reportesApi.estadoCuenta(cid).catch(() => null),
                 ]);
                 setCliente(clienteRes);
                 setVentas(extractList(ventasRes));
@@ -69,6 +83,7 @@ const ClienteDetallePage = () => {
                 setFinanciaciones(extractList(financiacionesRes));
                 setSolicitudes(extractList(solicitudesRes));
                 setPostventaCasos(extractList(postventaRes));
+                setEstadoCuenta(estadoCuentaRes);
             } catch {
                 setError('No se pudo cargar el cliente.');
             } finally {
@@ -148,6 +163,17 @@ const ClienteDetallePage = () => {
                         <div className="stat-label">Total facturado</div>
                     </div>
                 </div>
+                {estadoCuenta && estadoCuenta.resumen.financiaciones > 0 && (
+                    <div className="stat-card glass">
+                        <Banknote size={20} style={{ color: estadoCuenta.resumen.cuotasVencidas > 0 ? '#ef4444' : '#10b981' }} />
+                        <div>
+                            <div className="stat-value">{porMonedaStr(estadoCuenta.resumen.porMoneda, 'saldoPendiente')}</div>
+                            <div className="stat-label">
+                                Saldo pendiente{estadoCuenta.resumen.cuotasVencidas > 0 ? ` · ${estadoCuenta.resumen.cuotasVencidas} vencidas` : ''}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="tabs-bar glass">
@@ -299,8 +325,47 @@ const ClienteDetallePage = () => {
 
                 {activeTab === 'financiaciones' && (
                     <div>
-                        {financiaciones.length === 0 ? (
+                        {estadoCuenta && estadoCuenta.financiaciones.length > 0 && (
+                            <div className="ec-banner">
+                                <div className="ec-item">
+                                    <span className="ec-label">Saldo pendiente</span>
+                                    <span className="ec-value" style={{ color: '#ef4444' }}>{porMonedaStr(estadoCuenta.resumen.porMoneda, 'saldoPendiente')}</span>
+                                </div>
+                                <div className="ec-item">
+                                    <span className="ec-label">Cuotas vencidas</span>
+                                    <span className="ec-value">{estadoCuenta.resumen.cuotasVencidas}</span>
+                                </div>
+                                <div className="ec-item">
+                                    <span className="ec-label">Próximo vencimiento</span>
+                                    <span className="ec-value">{estadoCuenta.resumen.proximaCuota
+                                        ? `${fmtDate(estadoCuenta.resumen.proximaCuota.vencimiento)} · ${money(estadoCuenta.resumen.proximaCuota.monto, estadoCuenta.resumen.proximaCuota.moneda)}`
+                                        : '—'}</span>
+                                </div>
+                            </div>
+                        )}
+                        {(estadoCuenta ? estadoCuenta.financiaciones.length : financiaciones.length) === 0 ? (
                             <div className="empty-state"><Banknote size={48} style={{ opacity: 0.2 }} /><p>Sin financiaciones.</p></div>
+                        ) : estadoCuenta ? (
+                            <table className="data-table">
+                                <thead><tr><th>Vehículo</th><th>Inicio</th><th>Monto</th><th>Progreso</th><th>Saldo</th><th>Vencidas</th><th>Próx. venc.</th><th>Estado</th></tr></thead>
+                                <tbody>
+                                    {estadoCuenta.financiaciones.map((f) => (
+                                        <tr key={f.id}>
+                                            <td>
+                                                <div className="fw-bold">{f.vehiculo || `Financiación #${f.id}`}</div>
+                                                {f.dominio && <div className="text-muted-sm">{f.dominio}</div>}
+                                            </td>
+                                            <td><div className="flex-cell"><Calendar size={14} />{fmtDate(f.fechaInicio)}</div></td>
+                                            <td><div className="flex-cell"><DollarSign size={14} />{money(f.montoFinanciado, f.moneda)}</div></td>
+                                            <td>{f.cuotasPagadas}/{f.cuotasTotal} <span className="text-muted-sm">pagas</span></td>
+                                            <td><span className="fw-bold" style={{ color: f.saldoPendiente > 0 ? '#ef4444' : '#10b981' }}>{money(f.saldoPendiente, f.moneda)}</span></td>
+                                            <td>{f.cuotasVencidas > 0 ? <span className="badge badge-danger">{f.cuotasVencidas}</span> : <span className="text-muted-sm">—</span>}</td>
+                                            <td className="text-muted-sm">{f.proximaCuota ? fmtDate(f.proximaCuota.vencimiento) : '—'}</td>
+                                            <td><span className={`badge badge-${f.estado === 'activa' ? 'emerald' : 'warning'}`}>{f.estado}</span></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         ) : (
                             <table className="data-table">
                                 <thead><tr><th>ID</th><th>Inicio</th><th>Monto</th><th>Cuotas</th><th>Estado</th></tr></thead>
@@ -386,10 +451,14 @@ const ClienteDetallePage = () => {
                 .cliente-avatar-lg { width: 64px; height: 64px; border-radius: 1rem; background: linear-gradient(135deg, #6366f1, #818cf8); color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
                 .cliente-hero h1 { font-size: 1.875rem; font-weight: 800; letter-spacing: -0.03em; }
                 .text-muted { color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.25rem; }
-                .stats-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+                .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
                 .stat-card { display: flex; align-items: center; gap: 1rem; padding: 1.25rem 1.5rem; border-radius: 1rem; border: 1px solid var(--border); }
                 .stat-value { font-size: 1.375rem; font-weight: 800; letter-spacing: -0.02em; }
                 .stat-label { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.2rem; }
+                .ec-banner { display: flex; flex-wrap: wrap; gap: 2.5rem; padding: 1rem 1.5rem; margin-bottom: 1.5rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 0.75rem; }
+                .ec-item { display: flex; flex-direction: column; gap: 0.25rem; }
+                .ec-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 700; }
+                .ec-value { font-size: 1.05rem; font-weight: 800; color: var(--text-primary); }
                 .tabs-bar { display: flex; gap: 0.5rem; padding: 0.5rem; border-radius: 1rem; border: 1px solid var(--border); flex-wrap: wrap; }
                 .tab-btn { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 1.25rem; border-radius: 0.625rem; font-weight: 600; font-size: 0.875rem; color: var(--text-secondary); transition: all 0.15s; }
                 .tab-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }

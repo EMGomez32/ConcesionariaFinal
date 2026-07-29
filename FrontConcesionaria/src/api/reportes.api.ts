@@ -221,6 +221,35 @@ export interface ReporteRanking {
     sinCotizacion?: boolean;
 }
 
+export interface EstadoCuentaFinanciacion {
+    id: number;
+    fechaInicio: string;
+    moneda: string;
+    montoFinanciado: number;
+    estado: string;
+    vehiculo: string;
+    dominio: string;
+    cuotasTotal: number;
+    cuotasPagadas: number;
+    saldoPendiente: number;
+    cuotasVencidas: number;
+    saldoVencido: number;
+    proximaCuota: { nroCuota: number; vencimiento: string; monto: number } | null;
+}
+
+export interface EstadoCuenta {
+    clienteId: number;
+    financiaciones: EstadoCuentaFinanciacion[];
+    resumen: {
+        financiaciones: number;
+        activas: number;
+        cuotasVencidas: number;
+        /** porMoneda[]: montoFinanciado / saldoPendiente / saldoVencido por moneda. */
+        porMoneda: TotalPorMoneda[];
+        proximaCuota: { nroCuota: number; vencimiento: string; monto: number; financiacionId: number; moneda: string } | null;
+    };
+}
+
 export interface RangoFiltro {
     desde?: string;
     hasta?: string;
@@ -256,6 +285,9 @@ export const reportesApi = {
 
     rankingVendedores: (params: RangoFiltro = {}) =>
         client.get<ReporteRanking>('/reportes/ranking-vendedores', { params }),
+
+    estadoCuenta: (clienteId: number) =>
+        client.get<EstadoCuenta>('/reportes/estado-cuenta', { params: { clienteId } }),
 
     /**
      * Variante CSV. Devuelve el blob y el nombre de archivo que mandó el

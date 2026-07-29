@@ -1027,4 +1027,87 @@ export class ReporteController {
             next(error);
         }
     }
+
+    // ── 8. Estado de cuenta de un cliente ────────────────────────────────────
+    // GET /api/reportes/estado-cuenta?clienteId=
+    // Foto de la deuda del cliente: por cada financiación, progreso de pago y
+    // saldo; y los totales (saldo pendiente, cuotas vencidas, próximo vencimiento).
+    static async estadoCuenta(req: Request, res: Response, next: NextFunction) {
+        try {
+            const clienteId = idOpcional(req.query.clienteId, 'clienteId');
+            if (!clienteId) {
+                throw new BaseException(400, 'clienteId es obligatorio', 'VALIDATION_ERROR');
+            }
+
+            // Hoy a medianoche UTC (mismo criterio de vencido que el reporte de mora).
+            const ahora = new Date();
+            const inicioHoy = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
+
+            const financiaciones = await prisma.financiacion.findMany({
+                where: { clienteId },
+                orderBy: { fechaInicio: 'desc' },
+                include: {
+                    // El filtro de borrados de la extensión no alcanza al include.
+                    cuotasPlan: { where: { deletedAt: null } },
+                    venta: { select: { vehiculo: { select: { marca: true, modelo: true, dominio: true } } } },
+                },
+            });
+
+            const items = financiaciones.map((f) => {
+                const cuotas = f.cuotasPlan;
+                // Cuotas "vivas": ni pagadas ni refinanciadas (su saldo se movió a otro contrato).
+                const vivas = cuotas.filter((c) => c.estado !== 'pagada' && c.estado !== 'refinanciada' && num(c.saldoCuota) > 0);
+                const saldoPendiente = vivas.reduce((s, c) => s + num(c.saldoCuota), 0);
+                const vencidas = vivas.filter((c) => c.vencimiento < inicioHoy);
+                const saldoVencido = vencidas.reduce((s, c) => s + num(c.saldoCuota), 0);
+                const futuras = vivas
+                    .filter((c) => c.vencimiento >= inicioHoy)
+                    .sort((a, b) => a.vencimiento.getTime() - b.vencimiento.getTime());
+                const proxima = futuras[0]
+                    ? { nroCuota: futuras[0].nroCuota, vencimiento: futuras[0].vencimiento.toISOString().slice(0, 10), monto: num(futuras[0].saldoCuota) }
+                    : null;
+                const veh = f.venta?.vehiculo;
+                return {
+                    id: f.id,
+                    fechaInicio: f.fechaInicio.toISOString().slice(0, 10),
+                    moneda: f.moneda,
+                    montoFinanciado: num(f.montoFinanciado),
+                    estado: f.estado,
+                    vehiculo: veh ? `${veh.marca} ${veh.modelo}`.trim() : '',
+                    dominio: veh?.dominio ?? '',
+                    cuotasTotal: cuotas.length,
+                    cuotasPagadas: cuotas.filter((c) => c.estado === 'pagada').length,
+                    saldoPendiente,
+                    cuotasVencidas: vencidas.length,
+                    saldoVencido,
+                    proximaCuota: proxima,
+                };
+            });
+
+            const porMoneda = agruparPorMoneda(
+                items.map((i) => ({ moneda: i.moneda, montoFinanciado: i.montoFinanciado, saldoPendiente: i.saldoPendiente, saldoVencido: i.saldoVencido })),
+                ['montoFinanciado', 'saldoPendiente', 'saldoVencido'],
+            );
+
+            // La próxima cuota a nivel cliente: la más cercana entre todas las financiaciones.
+            const proximas = items
+                .filter((i) => i.proximaCuota)
+                .map((i) => ({ ...i.proximaCuota!, financiacionId: i.id, moneda: i.moneda }))
+                .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento));
+
+            res.json({
+                clienteId,
+                financiaciones: items,
+                resumen: {
+                    financiaciones: items.length,
+                    activas: items.filter((i) => i.estado === 'activa').length,
+                    cuotasVencidas: items.reduce((s, i) => s + i.cuotasVencidas, 0),
+                    porMoneda,
+                    proximaCuota: proximas[0] ?? null,
+                },
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
