@@ -110,4 +110,20 @@ router.get('/stock-antiguedad', authorize('admin'), ReporteController.stockAntig
  */
 router.get('/ranking-vendedores', authorize('admin'), ReporteController.rankingVendedores);
 
+/**
+ * @openapi
+ * /reportes/estado-cuenta:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Estado de cuenta de un cliente
+ *     description: Deuda del cliente por financiación (progreso, saldo, vencidas) y totales. El vendedor lo usa al atender al cliente.
+ *     parameters:
+ *       - { in: query, name: clienteId, required: true, schema: { type: integer } }
+ *     responses:
+ *       200: { description: Estado de cuenta }
+ *       400: { $ref: '#/components/responses/ValidationError' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ */
+router.get('/estado-cuenta', authorize('admin', 'vendedor'), ReporteController.estadoCuenta);
+
 export default router;
