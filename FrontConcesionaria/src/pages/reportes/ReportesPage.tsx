@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock } from 'lucide-react';
 import {
@@ -130,7 +131,11 @@ const ReportesPage = () => {
     const { addToast } = useUIStore();
     const queryClient = useQueryClient();
     const isAdmin = useAuthStore((s) => !!s.user?.roles.some((r) => r === 'admin' || r === 'super_admin'));
-    const [tab, setTab] = useState<Tab>('ventas');
+    // Pestaña inicial por deep-link (?tab=mora, ?tab=proximos…). Lo usan las
+    // alertas del Dashboard para aterrizar directo en el reporte relevante.
+    const [searchParams] = useSearchParams();
+    const paramTab = searchParams.get('tab');
+    const [tab, setTab] = useState<Tab>(TABS.some((t) => t.key === paramTab) ? (paramTab as Tab) : 'ventas');
     const [exporting, setExporting] = useState(false);
 
     // Filtros compartidos por rango (ventas / rentabilidad).
