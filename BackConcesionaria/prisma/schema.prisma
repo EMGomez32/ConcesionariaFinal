@@ -23,6 +23,7 @@ model Concesionaria {
   tiposPostventa          TipoPostventa[]
   clientes                Cliente[]
   cotizaciones            Cotizacion[]
+  metasVenta              MetaVenta[]
   subscription            ConcesionariaSubscription?
   financiaciones          Financiacion[]
   financieras             Financiera[]
@@ -461,6 +462,29 @@ model Cotizacion {
   @@unique([concesionariaId, fecha])
   @@index([concesionariaId, fecha])
   @@map("cotizaciones")
+}
+
+// Objetivo de ventas mensual por tenant. El dueño fija cuántas unidades y/o
+// cuánto facturado se propone para un mes; el Dashboard muestra el progreso.
+// Dato de configuración: NO es soft-delete (se pisa por período). Mismo patrón
+// tenant-scoped que Cotizacion.
+model MetaVenta {
+  id               Int           @id @default(autoincrement())
+  concesionariaId  Int           @map("concesionaria_id")
+  anio             Int
+  mes              Int
+  // Al menos uno de los dos objetivos; el otro puede quedar nulo.
+  unidadesObjetivo Int?          @map("unidades_objetivo")
+  montoObjetivo    Decimal?      @map("monto_objetivo") @db.Decimal(14, 2)
+  moneda           String        @default("ARS")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  concesionaria    Concesionaria @relation(fields: [concesionariaId], references: [id])
+
+  // Una sola meta por mes y por tenant: la carga es un upsert por período.
+  @@unique([concesionariaId, anio, mes])
+  @@index([concesionariaId, anio, mes])
+  @@map("metas_venta")
 }
 
 model Presupuesto {

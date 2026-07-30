@@ -4,6 +4,7 @@ import { ventasApi } from '../api/ventas.api';
 import { clientesApi } from '../api/clientes.api';
 import { reservasApi } from '../api/reservas.api';
 import { reportesApi } from '../api/reportes.api';
+import { metasApi } from '../api/metas.api';
 
 export const dashboardKeys = {
     all: ['dashboard'] as const,
@@ -12,6 +13,7 @@ export const dashboardKeys = {
     finanzas: () => [...dashboardKeys.all, 'finanzas'] as const,
     alertas: () => [...dashboardKeys.all, 'alertas'] as const,
     tendencia: (meses: number) => [...dashboardKeys.all, 'tendencia', meses] as const,
+    meta: () => [...dashboardKeys.all, 'meta'] as const,
 };
 
 export const useDashboardStats = () => {
@@ -226,5 +228,22 @@ export const useDashboardTendencia = (enabled = true, meses = 6) => {
         enabled,
         staleTime: 1000 * 60 * 5,
         queryFn: () => reportesApi.ventasMensuales({ meses, consolidar: 'ARS' }),
+    });
+};
+
+// ── Meta de ventas del mes ───────────────────────────────────────────────────
+export const useDashboardMeta = (enabled = true) => {
+    return useQuery({
+        queryKey: dashboardKeys.meta(),
+        enabled,
+        staleTime: 1000 * 60 * 5,
+        // Se pasa el mes calculado en el CLIENTE (mismo criterio que finanzas y que
+        // la escritura de la meta): si dejáramos que lo elija el servidor (su reloj),
+        // a fin de mes con el server en otra zona horaria la lectura y la escritura
+        // quedarían en meses distintos y la meta recién guardada no aparecería.
+        queryFn: () => {
+            const n = new Date();
+            return metasApi.actual(n.getFullYear(), n.getMonth() + 1);
+        },
     });
 };

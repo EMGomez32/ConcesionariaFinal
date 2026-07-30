@@ -27,6 +27,7 @@ import auditoriaRoutes from '../interface/routes/audit-log.routes';
 import billingRoutes from '../interface/routes/billing.routes';
 import reporteRoutes from '../interface/routes/reporte.routes';
 import cotizacionRoutes from '../interface/routes/cotizacion.routes';
+import metaVentaRoutes from '../interface/routes/meta-venta.routes';
 import debugRoutes from '../interface/routes/debug.routes';
 import { authenticate } from '../interface/middlewares/authenticate.middleware';
 import { authorize } from '../interface/middlewares/authorize.middleware';
@@ -103,6 +104,10 @@ router.use('/reportes', reporteRoutes);
 // Cotización del dólar — la usan los reportes para consolidar totales ARS/USD.
 // Lectura: cualquier usuario autenticado. Escritura: solo admin (en el router).
 router.use('/cotizaciones', cotizacionRoutes);
+
+// Metas de ventas mensuales — el Dashboard muestra el progreso vs el objetivo.
+// Lectura: cualquier autenticado. Escritura: solo admin (en el router).
+router.use('/metas', metaVentaRoutes);
 
 // SaaS Billing — módulo de facturación/suscripción: solo admin.
 router.use('/billing', authorize('admin'), billingRoutes);
