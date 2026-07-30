@@ -12,7 +12,7 @@ export interface Presupuesto {
     total?: number;
 
     // Relaciones
-    cliente?: { nombre: string };
+    cliente?: { nombre: string; telefono?: string };
     vendedor?: { nombre: string };
     items?: unknown[];
 }
