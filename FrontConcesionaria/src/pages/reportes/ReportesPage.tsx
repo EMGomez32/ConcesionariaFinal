@@ -17,6 +17,7 @@ import { useUsuarios } from '../../hooks/useUsuarios';
 import { useUIStore } from '../../store/uiStore';
 import { useAuthStore } from '../../store/authStore';
 import { formatFecha } from '../../utils/fecha';
+import { waLink } from '../../utils/whatsapp';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -42,17 +43,6 @@ const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'O
 
 const money = (n: number, moneda = 'ARS') =>
     `${moneda === 'USD' ? 'US$' : '$'}${Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
-
-// Arma el link de WhatsApp con un mensaje YA REDACTADO. NO envía nada: abre el
-// chat con el borrador y el usuario revisa y manda (como un mailto:).
-// Normalización AR best-effort: dígitos, con prefijo 54 si falta. Devuelve null
-// si no hay un número usable → el botón se muestra deshabilitado ("—").
-const waHref = (telefono: string | undefined, mensaje: string): string | null => {
-    const d = (telefono || '').replace(/\D/g, '');
-    if (d.length < 8) return null;
-    const num = d.startsWith('54') ? d : `54${d}`;
-    return `https://wa.me/${num}?text=${encodeURIComponent(mensaje)}`;
-};
 
 // Formatea un total desglosado por moneda: "$1.500.000 · US$20.000" (o "—").
 const fmtMoneda = (arr: TotalPorMoneda[] | undefined, campo: string) => {
@@ -307,7 +297,7 @@ const ReportesPage = () => {
         {
             header: 'Contacto', align: 'center', accessor: (r) => {
                 const msg = `Hola ${r.cliente}, te recordamos que la cuota N° ${r.nroCuota}${r.vehiculo ? ` de ${r.vehiculo}` : ''} venció el ${formatFecha(r.vencimiento)} y registra un saldo de ${money(r.saldo, r.moneda)}. ¿Coordinamos el pago? ¡Gracias!`;
-                const href = waHref(r.telefono, msg);
+                const href = waLink(r.telefono, msg);
                 return href
                     ? <a href={href} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar por WhatsApp (revisá antes de enviar)"><MessageCircle size={16} /></a>
                     : <span className="text-muted">—</span>;
@@ -370,7 +360,7 @@ const ReportesPage = () => {
             header: 'Contacto', align: 'center', accessor: (r) => {
                 const cuando = r.diasParaVencer === 0 ? 'vence hoy' : r.diasParaVencer === 1 ? 'vence mañana' : `vence el ${formatFecha(r.vencimiento)}`;
                 const msg = `Hola ${r.cliente}, te recordamos que la cuota N° ${r.nroCuota}${r.vehiculo ? ` de ${r.vehiculo}` : ''} ${cuando}, por ${money(r.saldo, r.moneda)}. ¡Gracias!`;
-                const href = waHref(r.telefono, msg);
+                const href = waLink(r.telefono, msg);
                 return href
                     ? <a href={href} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar por WhatsApp (revisá antes de enviar)"><MessageCircle size={16} /></a>
                     : <span className="text-muted">—</span>;

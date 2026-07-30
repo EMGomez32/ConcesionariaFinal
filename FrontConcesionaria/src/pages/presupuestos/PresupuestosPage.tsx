@@ -75,8 +75,9 @@ import {
     Plus, Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
     SendHorizonal, CheckCircle, XCircle, Clock, FileText, Car,
     ArrowRightLeft, DollarSign, Calendar, User,
-    MapPin, Hash, RefreshCw, Briefcase, Calculator, ArrowRight, FileDown
+    MapPin, Hash, RefreshCw, Briefcase, Calculator, ArrowRight, FileDown, MessageCircle
 } from 'lucide-react';
+import { waLink } from '../../utils/whatsapp';
 
 const FORMA_PAGO_OPTIONS_CONV: { value: FormaPagoVenta; label: string }[] = [
     { value: 'contado', label: 'Contado / Efectivo' },
@@ -156,6 +157,19 @@ const PresupuestosPage = () => {
         } catch {
             addToast('Error al generar el PDF del presupuesto', 'error');
         }
+    };
+
+    // Abre WhatsApp con un mensaje al cliente sobre su presupuesto. NO envía: el
+    // vendedor revisa, adjunta el PDF (botón de al lado) y manda.
+    const handleWhatsapp = (p: Presupuesto) => {
+        const totalTxt = p.total ? ` por un total de ${p.moneda === 'USD' ? 'US$' : '$'}${Number(p.total).toLocaleString('es-AR')}` : '';
+        const msg = `Hola ${p.cliente?.nombre ?? ''}, te comparto el presupuesto N° ${p.nroPresupuesto}${totalTxt}. Te adjunto el PDF con el detalle. Cualquier consulta quedo a disposición. ¡Saludos!`;
+        const link = waLink(p.cliente?.telefono, msg);
+        if (!link) {
+            addToast('El cliente no tiene un teléfono válido cargado', 'error');
+            return;
+        }
+        window.open(link, '_blank', 'noopener');
     };
 
     /* ── convertir en venta ── */
@@ -590,6 +604,7 @@ const PresupuestosPage = () => {
                                                     <ArrowRight size={16} />
                                                 </button>
                                             )}
+                                            <button className="icon-btn" title="Enviar por WhatsApp" onClick={() => handleWhatsapp(p)}><MessageCircle size={16} /></button>
                                             <button className="icon-btn" title="Descargar PDF" onClick={() => handlePdf(p.id)}><FileDown size={16} /></button>
                                             <button className="icon-btn" title="Ver Expediente" onClick={() => setDetailId(p.id)}><Eye size={16} /></button>
                                             <button className="icon-btn" title="Editar Metadatos" onClick={() => openEdit(p)}><Pencil size={16} /></button>
