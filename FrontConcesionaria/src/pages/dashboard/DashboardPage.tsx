@@ -1,10 +1,16 @@
-import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle, Bookmark } from 'lucide-react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle, Bookmark, Target } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useDashboardStats, useStockDistribution, useDashboardFinanzas, useDashboardAlertas, useDashboardTendencia, type FinanzaKpi, type AlertaItem } from '../../hooks/useDashboard';
+import { useDashboardStats, useStockDistribution, useDashboardFinanzas, useDashboardAlertas, useDashboardTendencia, useDashboardMeta, dashboardKeys, type FinanzaKpi, type AlertaItem } from '../../hooks/useDashboard';
 import type { VentaMensualItem } from '../../api/reportes.api';
+import { metasApi } from '../../api/metas.api';
 import { useAuditLogs } from '../../hooks/useAuditLogs';
 import type { AuditLog } from '../../api/auditoria.api';
 import { useAuthStore } from '../../store/authStore';
+import { useUIStore } from '../../store/uiStore';
+import Modal from '../../components/ui/Modal';
+import Button from '../../components/ui/Button';
 import AnimatedNumber from '../../components/ui/AnimatedNumber';
 import DonutChart from '../../components/ui/DonutChart';
 
@@ -26,6 +32,24 @@ const alertaMonto = (a: AlertaItem) =>
     ? money(a.montoConsolidado, 'ARS')
     : (a.porMoneda.length ? a.porMoneda.map((m) => money(m.valor, m.moneda)).join(' · ') : money(0));
 
+// Barra de progreso etiquetada (objetivo del mes). Verde al cumplir, ámbar lejos.
+const ProgressRow = ({ etiqueta, actual, objetivo, pct }: { etiqueta: string; actual: string; objetivo: string; pct: number }) => {
+  const color = pct >= 100 ? 'var(--success, #16a34a)' : pct >= 60 ? 'var(--accent)' : 'var(--warning, #f59e0b)';
+  return (
+    <div>
+      <div className="flex items-center justify-between flex-wrap gap-1" style={{ marginBottom: '0.4rem' }}>
+        <span className="text-muted font-bold text-xs uppercase tracking-wider">{etiqueta}</span>
+        <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+          {actual} <span className="text-muted">de {objetivo}</span> · <span style={{ color }}>{pct}%</span>
+        </span>
+      </div>
+      <div style={{ height: '10px', width: '100%', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '999px', transition: 'width .4s var(--easing-soft, ease)' }} />
+      </div>
+    </div>
+  );
+};
+
 const DashboardPage = () => {
   const { user } = useAuthStore();
   // El log de auditoría es admin-only (dato sensible: acciones de todos + IP).
@@ -41,6 +65,48 @@ const DashboardPage = () => {
   const { data: alertas, isLoading: alertasLoading, isError: alertasError, refetch: refetchAlertas } = useDashboardAlertas(isAdmin);
   // Tendencia de ventas (últimos 6 meses), solo admin.
   const { data: tendencia, isLoading: tendenciaLoading } = useDashboardTendencia(isAdmin);
+
+  // ── Objetivo del mes (meta de ventas), solo admin ──
+  const { data: meta, isLoading: metaLoading } = useDashboardMeta(isAdmin);
+  const queryClient = useQueryClient();
+  const { addToast } = useUIStore();
+  const hoyDate = new Date();
+  const mesActualLabel = MESES[hoyDate.getMonth()];
+  const [showMetaModal, setShowMetaModal] = useState(false);
+  const [metaUnidades, setMetaUnidades] = useState('');
+  const [metaMonto, setMetaMonto] = useState('');
+  const [metaMoneda, setMetaMoneda] = useState<'ARS' | 'USD'>('ARS');
+  const [metaError, setMetaError] = useState('');
+  const metaMutation = useMutation({
+    mutationFn: (data: { anio: number; mes: number; unidadesObjetivo?: number | null; montoObjetivo?: number | null; moneda: 'ARS' | 'USD' }) => metasApi.upsert(data),
+    onSuccess: () => {
+      addToast('Objetivo guardado', 'success');
+      setShowMetaModal(false);
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.meta() });
+    },
+    onError: (e: unknown) => setMetaError((e as { message?: string })?.message ?? 'No se pudo guardar el objetivo'),
+  });
+  const openMetaModal = () => {
+    setMetaError('');
+    setMetaUnidades(meta?.unidadesObjetivo != null ? String(meta.unidadesObjetivo) : '');
+    setMetaMonto(meta?.montoObjetivo != null ? String(meta.montoObjetivo) : '');
+    setMetaMoneda((meta?.moneda as 'ARS' | 'USD') || 'ARS');
+    setShowMetaModal(true);
+  };
+  const handleSaveMeta = () => {
+    // Un objetivo válido es > 0; vacío / 0 / inválido = "sin objetivo" (null), igual
+    // que el backend (positive()). Así fijar 0 no cuenta como objetivo.
+    const posOrNull = (s: string) => { const n = Number(s); return s.trim() && !isNaN(n) && n > 0 ? n : null; };
+    const u = posOrNull(metaUnidades);
+    const m = posOrNull(metaMonto);
+    if (u == null && m == null) { setMetaError('Fijá al menos un objetivo mayor a 0: unidades y/o facturado.'); return; }
+    setMetaError('');
+    metaMutation.mutate({ anio: hoyDate.getFullYear(), mes: hoyDate.getMonth() + 1, unidadesObjetivo: u, montoObjetivo: m, moneda: metaMoneda });
+  };
+  // Progreso: ventas del mes (de finanzas) contra el objetivo.
+  const unidadesVendidas = finanzas?.ventasMes.cantidad ?? 0;
+  const facturadoMonedaMeta = (finanzas?.ventasMes.porMoneda ?? []).find((m) => m.moneda === (meta?.moneda ?? 'ARS'))?.valor ?? 0;
+  const pctMeta = (actual: number, objetivo: number) => (objetivo > 0 ? Math.min(100, Math.round((actual / objetivo) * 100)) : 0);
 
   const stats = [
     { label: 'Vehículos en Stock', value: statsData?.vehiculos ?? 0, icon: Car, color: 'var(--primary-navy)' },
@@ -133,6 +199,42 @@ const DashboardPage = () => {
           </div>
         ))}
       </div>
+
+      {isAdmin && (
+        <section style={{ marginTop: '1.75rem' }}>
+          <div className="flex items-center justify-between flex-wrap gap-2" style={{ marginBottom: '1rem' }}>
+            <div className="flex items-center gap-2">
+              <Target size={18} className="text-accent" />
+              <h3 style={{ margin: 0 }}>Objetivo de {mesActualLabel}</h3>
+            </div>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={openMetaModal}>
+              {meta ? 'Editar objetivo' : 'Fijar objetivo'}
+            </button>
+          </div>
+          <div className="card" style={{ padding: '1.5rem' }}>
+            {/* La visibilidad de esta sección NO depende de finanzas: aunque falle,
+                el admin tiene que poder fijar/editar el objetivo. */}
+            {metaLoading ? (
+              <span className="skeleton" style={{ display: 'block', height: '56px', width: '100%', borderRadius: '0.75rem' }} />
+            ) : !meta ? (
+              <div style={{ color: 'var(--text-secondary)' }}>Todavía no fijaste un objetivo para este mes. Fijá uno para seguir el progreso de tus ventas.</div>
+            ) : finanzasLoading ? (
+              <span className="skeleton" style={{ display: 'block', height: '56px', width: '100%', borderRadius: '0.75rem' }} />
+            ) : !finanzas ? (
+              <div style={{ color: 'var(--text-secondary)' }}>No se pudieron cargar las ventas del mes para calcular el progreso.</div>
+            ) : (
+              <div className="flex flex-col gap-5">
+                {meta.unidadesObjetivo != null && (
+                  <ProgressRow etiqueta="Unidades vendidas" actual={String(unidadesVendidas)} objetivo={String(meta.unidadesObjetivo)} pct={pctMeta(unidadesVendidas, meta.unidadesObjetivo)} />
+                )}
+                {meta.montoObjetivo != null && (
+                  <ProgressRow etiqueta={`Facturado (${meta.moneda})`} actual={money(facturadoMonedaMeta, meta.moneda)} objetivo={money(meta.montoObjetivo, meta.moneda)} pct={pctMeta(facturadoMonedaMeta, meta.montoObjetivo)} />
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {isAdmin && (alertasLoading || alertas || alertasError) && (
         <section style={{ marginTop: '1.75rem' }}>
@@ -275,6 +377,44 @@ const DashboardPage = () => {
           </div>
         </section>
       )}
+
+      {/* Modal: fijar / editar el objetivo del mes (solo admin) */}
+      <Modal
+        isOpen={showMetaModal}
+        onClose={() => setShowMetaModal(false)}
+        title={`Objetivo de ${mesActualLabel}`}
+        subtitle="Fijá tu meta de ventas del mes. Podés poner unidades, facturado, o ambos."
+        maxWidth="440px"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowMetaModal(false)}>Cancelar</Button>
+            <Button variant="primary" onClick={handleSaveMeta} loading={metaMutation.isPending}>Guardar</Button>
+          </>
+        }
+      >
+        <div className="space-y-6">
+          <div className="form-group">
+            <label className="form-label">Unidades a vender</label>
+            <input type="number" min="0" className="form-input" value={metaUnidades} onChange={(e) => setMetaUnidades(e.target.value)} placeholder="Ej: 12" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Facturado objetivo</label>
+            <div className="flex gap-3">
+              <select className="form-input" style={{ maxWidth: '6.5rem' }} value={metaMoneda} onChange={(e) => setMetaMoneda(e.target.value as 'ARS' | 'USD')}>
+                <option value="ARS">ARS</option>
+                <option value="USD">USD</option>
+              </select>
+              <input type="number" min="0" className="form-input" value={metaMonto} onChange={(e) => setMetaMonto(e.target.value)} placeholder="Ej: 180000000" />
+            </div>
+          </div>
+          {metaError && (
+            <div className="uploader-alert uploader-alert-error">
+              <AlertTriangle size={14} />
+              <span>{metaError}</span>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       <div className="dashboard-grid" style={!isAdmin ? { gridTemplateColumns: '1fr' } : undefined}>
         <div className="card chart-card">
