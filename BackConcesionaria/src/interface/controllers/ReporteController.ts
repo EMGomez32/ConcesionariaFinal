@@ -1189,4 +1189,75 @@ export class ReporteController {
             next(error);
         }
     }
+
+    // ── 10. Reservas por vencer ──────────────────────────────────────────────
+    // GET /api/reportes/reservas-por-vencer?dias=&consolidar=
+    // Reservas ACTIVAS cuya seña vence en los próximos N días: hay que cerrar la
+    // venta o el auto se libera. Espejo del reporte de cuotas por vencer.
+    static async reservasPorVencer(req: Request, res: Response, next: NextFunction) {
+        try {
+            const dias = enteroEnRango(req.query.dias, 1, 90, 7, 'dias');
+            const ahora = new Date();
+            // venceEl es @db.Date (medianoche UTC): se compara en UTC puro.
+            const inicioHoy = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
+            const finVentana = new Date(inicioHoy);
+            finVentana.setUTCDate(finVentana.getUTCDate() + dias);
+
+            const reservas = await prisma.reserva.findMany({
+                where: {
+                    estado: 'activa',
+                    // El rango excluye automáticamente las de venceEl null (sin fecha
+                    // de vencimiento no están "por vencer").
+                    venceEl: { gte: inicioHoy, lt: finVentana },
+                },
+                orderBy: { venceEl: 'asc' },
+                include: {
+                    cliente: { select: { nombre: true, telefono: true } },
+                    vehiculo: { select: { marca: true, modelo: true, dominio: true } },
+                },
+            });
+
+            const items = reservas.map((r) => {
+                const diasParaVencer = r.venceEl
+                    ? Math.max(0, Math.round((r.venceEl.getTime() - inicioHoy.getTime()) / 86400000))
+                    : 0;
+                const veh = r.vehiculo;
+                return {
+                    reservaId: r.id,
+                    cliente: r.cliente?.nombre ?? '',
+                    telefono: r.cliente?.telefono ?? '',
+                    vehiculo: veh ? `${veh.marca} ${veh.modelo}`.trim() : '',
+                    dominio: veh?.dominio ?? '',
+                    venceEl: r.venceEl ? r.venceEl.toISOString().slice(0, 10) : '',
+                    diasParaVencer,
+                    moneda: r.moneda ?? 'ARS',
+                    montoSenia: num(r.montoSenia),
+                };
+            });
+
+            const resumen = {
+                cantidad: items.length,
+                porMoneda: agruparPorMoneda(items, ['montoSenia']),
+            };
+
+            const consolidar = parseConsolidar(req.query);
+            let consolidado: any = null;
+            let sinCotizacion = false;
+            if (consolidar) {
+                const cot = await getCotizacionParaConsolidar();
+                if (!cot) sinCotizacion = true;
+                else consolidado = {
+                    moneda: consolidar,
+                    valor: cot.valor,
+                    fechaCotizacion: cot.fecha,
+                    cantidad: items.length,
+                    ...consolidarBuckets(resumen.porMoneda, ['montoSenia'], consolidar, cot.valor),
+                };
+            }
+
+            res.json({ ventana: { dias }, resumen, items, consolidado, sinCotizacion });
+        } catch (error) {
+            next(error);
+        }
+    }
 }

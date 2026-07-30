@@ -1,4 +1,4 @@
-import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle } from 'lucide-react';
+import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle, Bookmark } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useDashboardStats, useStockDistribution, useDashboardFinanzas, useDashboardAlertas, useDashboardTendencia, type FinanzaKpi, type AlertaItem } from '../../hooks/useDashboard';
 import type { VentaMensualItem } from '../../api/reportes.api';
@@ -64,6 +64,7 @@ const DashboardPage = () => {
     { key: 'estancados', label: `Estancadas (+${alertas.estancados.umbral} días)`, count: alertas.estancados.count, monto: alertaMonto(alertas.estancados), montoLabel: 'capital inmovilizado', icon: Car, color: 'var(--warning)', to: '/vehiculos' },
     { key: 'porvencer', label: `Cuotas vencen en ${alertas.porVencer.dias} días`, count: alertas.porVencer.count, monto: alertaMonto(alertas.porVencer), montoLabel: 'a cobrar', icon: Clock, color: 'var(--accent)', to: '/reportes?tab=proximos' },
     { key: 'mora', label: 'Cuotas en mora', count: alertas.mora.count, monto: alertaMonto(alertas.mora), montoLabel: 'saldo adeudado', icon: AlertTriangle, color: 'var(--danger, #dc2626)', to: '/reportes?tab=mora' },
+    { key: 'reservas', label: `Reservas vencen en ${alertas.reservas.dias} días`, count: alertas.reservas.count, monto: alertaMonto(alertas.reservas), montoLabel: 'en señas', icon: Bookmark, color: '#8b5cf6', to: '/reservas' },
   ] : [];
 
   // ── Tendencia de ventas ──
@@ -147,7 +148,7 @@ const DashboardPage = () => {
           ) : (
           <div className="stats-grid stagger">
             {alertasLoading
-              ? Array.from({ length: 3 }).map((_, i) => (
+              ? Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="card stat-card">
                   <div className="stat-content">
                     <span className="skeleton skeleton-text" style={{ width: '55%' }} />
