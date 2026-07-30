@@ -168,6 +168,7 @@ export interface DashboardAlertas {
     estancados: AlertaItem & { umbral: number };
     porVencer: AlertaItem & { dias: number };
     mora: AlertaItem;
+    reservas: AlertaItem & { dias: number };
 }
 
 export const useDashboardAlertas = (enabled = true) => {
@@ -179,12 +180,13 @@ export const useDashboardAlertas = (enabled = true) => {
             const DIAS_POR_VENCER = 7;
             // Se pide consolidar en ARS: con cotización cargada da un monto en pesos;
             // si no, cada endpoint devuelve consolidado:null + el desglose por moneda.
-            const [stock, proximos, mora] = await Promise.all([
+            const [stock, proximos, mora, reservas] = await Promise.all([
                 reportesApi.stockAntiguedad({ umbral: 60, consolidar: 'ARS' }),
                 reportesApi.proximosVencimientos({ dias: DIAS_POR_VENCER, consolidar: 'ARS' }),
                 reportesApi.mora({ consolidar: 'ARS' }),
+                reportesApi.reservasPorVencer({ dias: DIAS_POR_VENCER, consolidar: 'ARS' }),
             ]);
-            const cot = stock.consolidado || proximos.consolidado || mora.consolidado || null;
+            const cot = stock.consolidado || proximos.consolidado || mora.consolidado || reservas.consolidado || null;
             return {
                 cotizacion: cot ? { valor: cot.valor, fecha: cot.fechaCotizacion } : null,
                 estancados: {
@@ -203,6 +205,12 @@ export const useDashboardAlertas = (enabled = true) => {
                     count: mora.resumen?.cuotasVencidas ?? 0,
                     montoConsolidado: mora.consolidado ? mora.consolidado.saldo : null,
                     porMoneda: (mora.resumen?.porMoneda ?? []).map((m) => ({ moneda: m.moneda, valor: Number(m.saldo ?? 0) })),
+                },
+                reservas: {
+                    dias: DIAS_POR_VENCER,
+                    count: reservas.resumen?.cantidad ?? 0,
+                    montoConsolidado: reservas.consolidado ? reservas.consolidado.montoSenia : null,
+                    porMoneda: (reservas.resumen?.porMoneda ?? []).map((m) => ({ moneda: m.moneda, valor: Number(m.montoSenia ?? 0) })),
                 },
             };
         },

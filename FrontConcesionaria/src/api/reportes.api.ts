@@ -270,6 +270,31 @@ export interface ReporteVentasMensuales {
     sinCotizacion?: boolean;
 }
 
+export interface ReservaPorVencerItem {
+    reservaId: number;
+    cliente: string;
+    telefono: string;
+    vehiculo: string;
+    dominio: string;
+    venceEl: string;
+    diasParaVencer: number;
+    moneda: string;
+    montoSenia: number;
+}
+
+export interface ConsolidadoReservas extends ConsolidadoBase {
+    cantidad: number;
+    montoSenia: number;
+}
+
+export interface ReporteReservasPorVencer {
+    ventana: { dias: number };
+    resumen: { cantidad: number; porMoneda: TotalPorMoneda[] };
+    items: ReservaPorVencerItem[];
+    consolidado?: ConsolidadoReservas | null;
+    sinCotizacion?: boolean;
+}
+
 export interface RangoFiltro {
     desde?: string;
     hasta?: string;
@@ -311,6 +336,9 @@ export const reportesApi = {
 
     ventasMensuales: (params: { meses?: number; consolidar?: MonedaConsol } = {}) =>
         client.get<ReporteVentasMensuales>('/reportes/ventas-mensuales', { params }),
+
+    reservasPorVencer: (params: { dias?: number; consolidar?: MonedaConsol } = {}) =>
+        client.get<ReporteReservasPorVencer>('/reportes/reservas-por-vencer', { params }),
 
     /**
      * Variante CSV. Devuelve el blob y el nombre de archivo que mandó el

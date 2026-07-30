@@ -139,4 +139,17 @@ router.get('/estado-cuenta', authorize('admin', 'vendedor'), ReporteController.e
  */
 router.get('/ventas-mensuales', authorize('admin', 'vendedor'), ReporteController.ventasMensuales);
 
+/**
+ * @openapi
+ * /reportes/reservas-por-vencer:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Reservas activas por vencer (próximos N días)
+ *     description: Reservas cuya seña vence pronto — hay que cerrar la venta o liberar el vehículo.
+ *     parameters:
+ *       - { in: query, name: dias, schema: { type: integer, default: 7, minimum: 1, maximum: 90 } }
+ *       - { in: query, name: consolidar, schema: { type: string, enum: [ARS, USD] } }
+ */
+router.get('/reservas-por-vencer', authorize('admin', 'vendedor'), ReporteController.reservasPorVencer);
+
 export default router;
