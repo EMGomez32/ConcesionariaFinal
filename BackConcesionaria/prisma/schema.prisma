@@ -34,6 +34,7 @@ model Concesionaria {
   clientes                Cliente[]
   cotizaciones            Cotizacion[]
   metasVenta              MetaVenta[]
+  objetivosVendedor       ObjetivoVendedor[]
   subscription            ConcesionariaSubscription?
   financiaciones          Financiacion[]
   financieras             Financiera[]
@@ -119,6 +120,7 @@ model Usuario {
   sucursal               Sucursal?            @relation(fields: [sucursalId], references: [id])
   vehiculoMovimientos    VehiculoMovimiento[] @relation("MovimientoRegistradoPor")
   ventas                 Venta[]              @relation("VentaVendedor")
+  objetivos              ObjetivoVendedor[]
   refreshTokens          RefreshToken[]
 
   @@unique([concesionariaId, email])
@@ -497,6 +499,32 @@ model MetaVenta {
   @@unique([concesionariaId, anio, mes])
   @@index([concesionariaId, anio, mes])
   @@map("metas_venta")
+}
+
+// Objetivo de ventas mensual POR VENDEDOR. El admin le fija a cada vendedor
+// cuántas unidades y/o cuánto facturado se propone para un mes; el reporte de
+// objetivos muestra el progreso vs sus ventas reales. Complementa MetaVenta (que
+// es a nivel tenant) y el ranking/comisiones. Config: NO soft-delete (se pisa por
+// período). Mismo patrón tenant-scoped que MetaVenta, más el vendedor.
+model ObjetivoVendedor {
+  id               Int           @id @default(autoincrement())
+  concesionariaId  Int           @map("concesionaria_id")
+  vendedorId       Int           @map("vendedor_id")
+  anio             Int
+  mes              Int
+  // Al menos uno de los dos objetivos; el otro puede quedar nulo.
+  unidadesObjetivo Int?          @map("unidades_objetivo")
+  montoObjetivo    Decimal?      @map("monto_objetivo") @db.Decimal(14, 2)
+  moneda           String        @default("ARS")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  concesionaria    Concesionaria @relation(fields: [concesionariaId], references: [id])
+  vendedor         Usuario       @relation(fields: [vendedorId], references: [id])
+
+  // Un objetivo por vendedor, mes y tenant: la carga es un upsert por período.
+  @@unique([concesionariaId, vendedorId, anio, mes])
+  @@index([concesionariaId, anio, mes])
+  @@map("objetivos_vendedor")
 }
 
 model Presupuesto {

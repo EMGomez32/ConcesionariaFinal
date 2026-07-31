@@ -42,6 +42,7 @@ const TENANT_TABLES = [
     'gastos_fijos',
     'cotizaciones',
     'metas_venta',
+    'objetivos_vendedor',
     'presupuestos',
     'presupuesto_items',
     'presupuesto_extras',
