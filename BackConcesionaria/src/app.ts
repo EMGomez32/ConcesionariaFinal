@@ -120,9 +120,21 @@ app.get('/health', async (_req, res) => {
     }
 });
 
-// Archivos subidos (servidos como estáticos)
+// Archivos subidos (servidos como estáticos). Endurecido: aunque el contenido
+// se valida al subir, /uploads es same-origin con la SPA, así que un archivo
+// malicioso servido inline sería un XSS/phishing en el dominio confiable. Estas
+// cabeceras lo neutralizan: `nosniff` evita que un binario mal etiquetado se
+// interprete como HTML, y la CSP `sandbox` (sin tokens) hace que cualquier
+// HTML/SVG servido corra en un origen aislado y sin scripts.
 const uploadsDir = process.env.UPLOADS_DIR || path.resolve(process.cwd(), 'uploads');
-app.use('/uploads', express.static(uploadsDir, { maxAge: '7d', etag: true }));
+app.use('/uploads', express.static(uploadsDir, {
+    maxAge: '7d',
+    etag: true,
+    setHeaders: (res) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox; frame-ancestors 'none'");
+    },
+}));
 
 // Rutas de la API
 app.use('/api', routes);

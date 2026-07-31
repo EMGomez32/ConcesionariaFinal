@@ -24,6 +24,19 @@ import { z } from 'zod';
 //     rechazaría un request válido (viola la regla de oro nº1).
 const textoOpcional = z.string().optional();
 
+// Color de marca: hex `#RRGGBB` o '' (para limpiarlo). Se valida el formato
+// porque el valor termina embebido crudo en el PDF (pdfkit `fillColor`): un
+// string arbitrario lo haría explotar en runtime. El '' de limpieza se acepta
+// y el controller de /me lo convierte a null.
+const colorOpcional = z.string()
+    .regex(/^(#[0-9a-fA-F]{6})?$/, 'El color debe ser un hex tipo #10b981')
+    .optional();
+
+// Pie de página del PDF y sitio web: texto libre con tope de largo para que no
+// desborde el documento. '' se acepta (limpieza).
+const pieOpcional = z.string().max(500, 'El pie no puede superar 500 caracteres').optional();
+const sitioOpcional = z.string().max(200, 'El sitio web es demasiado largo').optional();
+
 export const createConcesionariaSchema = z.object({
     nombre: z.string({ error: 'El nombre es obligatorio' }).min(1, 'El nombre es obligatorio'),
     cuit: textoOpcional,
@@ -42,4 +55,10 @@ export const updateConcesionariaSchema = z.object({
     email: textoOpcional,
     telefono: textoOpcional,
     direccion: textoOpcional,
+    // Marca de los documentos (PDF). El logo NO se setea acá: va por el endpoint
+    // multipart /me/logo. Estos son los campos editables por formulario.
+    colorPrimario: colorOpcional,
+    colorSecundario: colorOpcional,
+    pdfPie: pieOpcional,
+    sitioWeb: sitioOpcional,
 });

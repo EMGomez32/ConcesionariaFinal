@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { ConcesionariaController } from '../controllers/ConcesionariaController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
+import { uploadLogo } from '../middlewares/upload.middleware';
 import { createConcesionariaSchema, updateConcesionariaSchema } from '../validation/concesionaria.schema';
 
 const router = Router();
@@ -36,6 +37,39 @@ const router = Router();
  */
 router.get('/me', ConcesionariaController.getMine);
 router.patch('/me', authorize('admin'), validateBody(updateConcesionariaSchema), ConcesionariaController.updateMine);
+
+/**
+ * @openapi
+ * /concesionarias/me/logo:
+ *   post:
+ *     tags: [Concesionarias]
+ *     summary: Subir el logo de marca de la concesionaria propia
+ *     description: admin del tenant. Multipart (campo `file`, PNG o JPG). Se usa en los PDF.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file]
+ *             properties:
+ *               file: { type: string, format: binary }
+ *     responses:
+ *       200: { description: Logo actualizado, content: { application/json: { schema: { type: object } } } }
+ *       400: { $ref: '#/components/responses/ValidationError' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ *   delete:
+ *     tags: [Concesionarias]
+ *     summary: Quitar el logo de marca (vuelve al default)
+ *     description: admin del tenant.
+ *     responses:
+ *       200: { description: Logo eliminado, content: { application/json: { schema: { type: object } } } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ */
+router.post('/me/logo', authorize('admin'), uploadLogo, ConcesionariaController.uploadLogo);
+router.delete('/me/logo', authorize('admin'), ConcesionariaController.deleteLogo);
 
 // A partir de acá, todo administra los TENANTS y es sólo para super_admin: sin
 // esta guarda, cualquier admin de una concesionaria podía listar, crear o borrar

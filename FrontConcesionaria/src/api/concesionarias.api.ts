@@ -23,6 +23,14 @@ export const concesionariasApi = {
         return client.patch('/concesionarias/me', data);
     },
 
+    // Endpoint multipart para el <FileUploader> del logo (campo `file`).
+    logoUploadEndpoint: '/concesionarias/me/logo',
+
+    // Quita el logo de marca (vuelve al look por defecto). Devuelve la concesionaria.
+    deleteLogo: () => {
+        return client.delete('/concesionarias/me/logo');
+    },
+
     create: (data: CreateConcesionariaDto) => {
         return client.post('/concesionarias', data);
     },

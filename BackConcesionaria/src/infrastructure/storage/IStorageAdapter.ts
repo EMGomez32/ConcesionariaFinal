@@ -15,4 +15,6 @@ export interface UploadInput {
 export interface IStorageAdapter {
     save(file: UploadInput, prefix: string): Promise<SavedFile>;
     delete(storageKey: string): Promise<void>;
+    /** Lee el binario guardado (p. ej. para embeber un logo en un PDF). */
+    read(storageKey: string): Promise<Buffer>;
 }

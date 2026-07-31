@@ -14,6 +14,16 @@ model Concesionaria {
   email                   String?
   telefono                String?
   direccion               String?
+  // Marca de los documentos (PDF) por tenant. Todo opcional: si está en null se
+  // cae al look AUTENZA por defecto (útil para demos). El logo se guarda vía
+  // storage adapter: `logoUrl` es la URL pública (/uploads/...) y
+  // `logoStorageKey` la clave interna para leer el binario y borrarlo.
+  logoUrl                 String?                    @map("logo_url")
+  logoStorageKey          String?                    @map("logo_storage_key")
+  colorPrimario           String?                    @map("color_primario")
+  colorSecundario         String?                    @map("color_secundario")
+  pdfPie                  String?                    @map("pdf_pie")
+  sitioWeb                String?                    @map("sitio_web")
   createdAt               DateTime                   @default(now()) @map("created_at")
   updatedAt               DateTime                   @updatedAt @map("updated_at")
   deletedAt               DateTime?                  @map("deleted_at")

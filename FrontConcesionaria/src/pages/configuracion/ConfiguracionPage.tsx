@@ -1,14 +1,57 @@
 import { useEffect, useState } from 'react';
-import { Building2, User as UserIcon, Lock, Save, RefreshCw } from 'lucide-react';
+import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
 import { concesionariasApi } from '../../api/concesionarias.api';
 import { usuariosApi } from '../../api/usuarios.api';
 import Button from '../../components/ui/Button';
+import { FileUploader } from '../../components/ui/FileUploader';
 import type { Concesionaria } from '../../types/concesionaria.types';
 import { getApiErrorMessage } from '../../utils/error';
 
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
 type Tab = 'concesionaria' | 'perfil' | 'password';
+
+// Selector de color de marca: swatch nativo + hex editable + botón para volver
+// al color por defecto (valor vacío = el PDF usa el color AUTENZA).
+function ColorField({ label, value, onChange, fallback }: {
+    label: string; value: string; onChange: (v: string) => void; fallback: string;
+}) {
+    return (
+        <div className="form-group">
+            <label className="form-label-xs">{label}</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input
+                    type="color"
+                    value={value && HEX_RE.test(value) ? value : fallback}
+                    onChange={e => onChange(e.target.value)}
+                    aria-label={label}
+                    style={{ width: 42, height: 38, padding: 2, border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', cursor: 'pointer', flexShrink: 0 }}
+                />
+                <input
+                    type="text"
+                    className="form-input"
+                    value={value}
+                    placeholder={fallback}
+                    maxLength={7}
+                    onChange={e => onChange(e.target.value)}
+                    style={{ flex: 1 }}
+                />
+                {value && (
+                    <button
+                        type="button"
+                        onClick={() => onChange('')}
+                        title="Usar color por defecto"
+                        style={{ flexShrink: 0, width: 34, height: 34, background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-muted)', cursor: 'pointer' }}
+                    >
+                        ✕
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
 
 const ConfiguracionPage = () => {
     const { user, setUser } = useAuthStore();
@@ -21,8 +64,10 @@ const ConfiguracionPage = () => {
     const [concesionariaLoading, setConcesionariaLoading] = useState(false);
     const [concesionariaForm, setConcesionariaForm] = useState({
         nombre: '', cuit: '', email: '', telefono: '', direccion: '',
+        colorPrimario: '', colorSecundario: '', pdfPie: '', sitioWeb: '',
     });
     const [savingConcesionaria, setSavingConcesionaria] = useState(false);
+    const [deletingLogo, setDeletingLogo] = useState(false);
 
     // Perfil state
     const [perfilForm, setPerfilForm] = useState({
@@ -54,6 +99,10 @@ const ConfiguracionPage = () => {
                         email: data.email || '',
                         telefono: data.telefono || '',
                         direccion: data.direccion || '',
+                        colorPrimario: data.colorPrimario || '',
+                        colorSecundario: data.colorSecundario || '',
+                        pdfPie: data.pdfPie || '',
+                        sitioWeb: data.sitioWeb || '',
                     });
                 }
             })
@@ -70,20 +119,62 @@ const ConfiguracionPage = () => {
             addToast('El nombre es requerido', 'error');
             return;
         }
+        const prim = concesionariaForm.colorPrimario.trim();
+        const sec = concesionariaForm.colorSecundario.trim();
+        if (prim && !HEX_RE.test(prim)) {
+            addToast('El color primario debe ser un hex tipo #10b981', 'error');
+            return;
+        }
+        if (sec && !HEX_RE.test(sec)) {
+            addToast('El color secundario debe ser un hex tipo #06b6d4', 'error');
+            return;
+        }
         setSavingConcesionaria(true);
         try {
-            await concesionariasApi.updateMine({
+            const updated = await concesionariasApi.updateMine({
                 nombre: concesionariaForm.nombre.trim(),
                 cuit: concesionariaForm.cuit.trim(),
                 email: concesionariaForm.email.trim(),
                 telefono: concesionariaForm.telefono.trim(),
                 direccion: concesionariaForm.direccion.trim(),
+                colorPrimario: prim,
+                colorSecundario: sec,
+                pdfPie: concesionariaForm.pdfPie.trim(),
+                sitioWeb: concesionariaForm.sitioWeb.trim(),
             });
+            // El PATCH devuelve la concesionaria ya actualizada: se refleja en el
+            // preview (logo, etc.) sin necesidad de recargar.
+            if (updated && typeof updated === 'object' && 'id' in updated) {
+                setConcesionaria(updated as Concesionaria);
+            }
             addToast('Concesionaria actualizada', 'success');
         } catch (err) {
             addToast(getApiErrorMessage(err, 'Error al actualizar la concesionaria'), 'error');
         } finally {
             setSavingConcesionaria(false);
+        }
+    };
+
+    // El logo se sube/quita por su propio endpoint (multipart), no por el PATCH.
+    const handleLogoUploaded = (result: unknown) => {
+        if (result && typeof result === 'object' && 'id' in result) {
+            setConcesionaria(result as Concesionaria);
+        }
+        addToast('Logo actualizado', 'success');
+    };
+
+    const handleDeleteLogo = async () => {
+        setDeletingLogo(true);
+        try {
+            const updated = await concesionariasApi.deleteLogo();
+            if (updated && typeof updated === 'object' && 'id' in updated) {
+                setConcesionaria(updated as Concesionaria);
+            }
+            addToast('Logo eliminado', 'success');
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'Error al quitar el logo'), 'error');
+        } finally {
+            setDeletingLogo(false);
         }
     };
 
@@ -197,11 +288,74 @@ const ConfiguracionPage = () => {
                                 </div>
                             </div>
                             {isAdmin && (
-                                <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
-                                    <Button variant="primary" onClick={handleSaveConcesionaria} disabled={savingConcesionaria}>
-                                        <Save size={16} /> {savingConcesionaria ? 'Guardando...' : 'Guardar cambios'}
-                                    </Button>
-                                </div>
+                                <>
+                                    {/* ── Marca de los documentos (PDF) ──────────────────────── */}
+                                    <div style={{ marginTop: '1.75rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' }}>
+                                        <h3 style={{ fontSize: '0.98rem', fontWeight: 700, marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <Palette size={16} /> Marca de los documentos (PDF)
+                                        </h3>
+                                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem', lineHeight: 1.5 }}>
+                                            Tu logo, colores y pie aparecen en los comprobantes, recibos y presupuestos que genera el sistema.
+                                            Si no cargás nada, se usa la marca AUTENZA por defecto (pensada para demostraciones).
+                                        </p>
+
+                                        {/* Logo */}
+                                        <div className="form-group">
+                                            <label className="form-label-xs">Logo (PNG o JPG, máx. 3 MB)</label>
+                                            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                                                <div style={{ width: 170, height: 66, borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                                                    {concesionaria.logoUrl
+                                                        ? <img src={concesionaria.logoUrl} alt="Logo de la concesionaria" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                                                        : <ImageIcon size={22} style={{ color: 'var(--text-muted)' }} />}
+                                                </div>
+                                                <div style={{ flex: 1, minWidth: 230 }}>
+                                                    <FileUploader
+                                                        endpoint={concesionariasApi.logoUploadEndpoint}
+                                                        accept="image/png,image/jpeg"
+                                                        maxBytes={3 * 1024 * 1024}
+                                                        label=""
+                                                        onUploaded={handleLogoUploaded}
+                                                    />
+                                                    {concesionaria.logoUrl && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleDeleteLogo}
+                                                            disabled={deletingLogo}
+                                                            style={{ marginTop: '0.5rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '0.3rem 0.6rem', color: 'var(--danger)', cursor: deletingLogo ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}
+                                                        >
+                                                            <Trash2 size={14} /> {deletingLogo ? 'Quitando...' : 'Quitar logo'}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Colores + sitio + pie */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                                            <ColorField label="Color primario" value={concesionariaForm.colorPrimario}
+                                                onChange={v => setConcesionariaForm(f => ({ ...f, colorPrimario: v }))} fallback="#10b981" />
+                                            <ColorField label="Color secundario" value={concesionariaForm.colorSecundario}
+                                                onChange={v => setConcesionariaForm(f => ({ ...f, colorSecundario: v }))} fallback="#06b6d4" />
+                                            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                                <label className="form-label-xs">Sitio web</label>
+                                                <input type="text" className="form-input" value={concesionariaForm.sitioWeb} placeholder="www.miconcesionaria.com" maxLength={200}
+                                                    onChange={e => setConcesionariaForm(f => ({ ...f, sitioWeb: e.target.value }))} />
+                                            </div>
+                                            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                                <label className="form-label-xs">Pie de página de los documentos</label>
+                                                <textarea className="form-input" rows={2} maxLength={500} value={concesionariaForm.pdfPie}
+                                                    placeholder="Datos de contacto, condiciones o leyenda legal al pie del PDF"
+                                                    onChange={e => setConcesionariaForm(f => ({ ...f, pdfPie: e.target.value }))} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+                                        <Button variant="primary" onClick={handleSaveConcesionaria} disabled={savingConcesionaria}>
+                                            <Save size={16} /> {savingConcesionaria ? 'Guardando...' : 'Guardar cambios'}
+                                        </Button>
+                                    </div>
+                                </>
                             )}
                         </>
                     )}

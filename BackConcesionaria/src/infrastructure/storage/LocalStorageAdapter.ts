@@ -39,6 +39,18 @@ export class LocalStorageAdapter implements IStorageAdapter {
             if (err.code !== 'ENOENT') throw err;
         }
     }
+
+    async read(storageKey: string): Promise<Buffer> {
+        // El storageKey se compone acá abajo (nunca viene del cliente), pero por
+        // las dudas se resuelve y se valida que caiga dentro de root: así un key
+        // con '..' no puede leer archivos fuera del directorio de uploads.
+        const fullPath = path.resolve(this.root, storageKey);
+        const rootResolved = path.resolve(this.root);
+        if (fullPath !== rootResolved && !fullPath.startsWith(rootResolved + path.sep)) {
+            throw new Error('storageKey fuera del directorio de storage');
+        }
+        return fs.readFile(fullPath);
+    }
 }
 
 const STORAGE_ROOT = process.env.UPLOADS_DIR || path.resolve(process.cwd(), 'uploads');

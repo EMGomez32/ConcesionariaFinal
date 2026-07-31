@@ -6,6 +6,13 @@ export class Concesionaria {
         public readonly email: string | null,
         public readonly telefono: string | null,
         public readonly direccion: string | null,
+        // Marca de los documentos (PDF). Todo opcional; null = look AUTENZA default.
+        public readonly logoUrl: string | null,
+        public readonly logoStorageKey: string | null,
+        public readonly colorPrimario: string | null,
+        public readonly colorSecundario: string | null,
+        public readonly pdfPie: string | null,
+        public readonly sitioWeb: string | null,
         public readonly createdAt: Date,
         public readonly updatedAt: Date,
         public readonly deletedAt: Date | null,
