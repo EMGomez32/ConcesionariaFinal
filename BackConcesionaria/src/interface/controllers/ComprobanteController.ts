@@ -19,6 +19,14 @@ const money = (n: unknown, moneda = 'ARS') => {
 const fecha = (d: Date | string | null | undefined) =>
     d ? new Date(d).toLocaleDateString('es-AR') : '—';
 
+// Convierte un valor de enum (estado/método) en una etiqueta legible:
+// 'convertida_en_venta' -> 'Convertida en venta', 'transferencia' -> 'Transferencia'.
+const prettyEnum = (s: unknown) => {
+    const t = String(s ?? '').trim();
+    if (!t) return '—';
+    return t.charAt(0).toUpperCase() + t.slice(1).replace(/_/g, ' ');
+};
+
 export class ComprobanteController {
     // GET /api/ventas/:id/comprobante  → PDF descargable del comprobante de venta.
     static async ventaPdf(req: Request, res: Response, next: NextFunction) {
@@ -81,7 +89,7 @@ export class ComprobanteController {
             const bloque = (titulo: string, lineas: string[], x: number) => {
                 doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text(titulo.toUpperCase(), x, y);
                 doc.fillColor('#111827').fontSize(10).font('Helvetica');
-                lineas.forEach((l, i) => doc.text(l, x, y + 15 + i * 14, { width: 230 }));
+                lineas.forEach((l, i) => doc.text(l, x, y + 15 + i * 14, { width: 230, lineBreak: false, ellipsis: true }));
             };
 
             bloque('Cliente', [
@@ -217,7 +225,7 @@ export class ComprobanteController {
             const bloque = (titulo: string, lineas: string[], x: number) => {
                 doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text(titulo.toUpperCase(), x, y);
                 doc.fillColor('#111827').fontSize(10).font('Helvetica');
-                lineas.forEach((l, i) => doc.text(l, x, y + 15 + i * 14, { width: 230 }));
+                lineas.forEach((l, i) => doc.text(l, x, y + 15 + i * 14, { width: 230, lineBreak: false, ellipsis: true }));
             };
 
             bloque('Cliente', [
@@ -341,7 +349,7 @@ export class ComprobanteController {
             const bloque = (titulo: string, lineas: string[], x: number) => {
                 doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text(titulo.toUpperCase(), x, y);
                 doc.fillColor('#111827').fontSize(10).font('Helvetica');
-                lineas.forEach((l, i) => doc.text(l, x, y + 15 + i * 14, { width: 230 }));
+                lineas.forEach((l, i) => doc.text(l, x, y + 15 + i * 14, { width: 230, lineBreak: false, ellipsis: true }));
             };
 
             bloque('Cliente', [
@@ -406,6 +414,120 @@ export class ComprobanteController {
                     50, 760, { align: 'center', width: 495 }
                 );
             doc.text('Documento no válido como factura.', 50, 772, { align: 'center', width: 495 });
+
+            doc.end();
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // GET /api/reservas/:id/comprobante → PDF del comprobante de reserva/seña.
+    static async reservaPdf(req: Request, res: Response, next: NextFunction) {
+        try {
+            const id = Number(req.params.id);
+            const r = await prisma.reserva.findFirst({
+                where: { id },
+                include: {
+                    cliente: true,
+                    vehiculo: true,
+                    sucursal: true,
+                    creadaPor: { select: { nombre: true } },
+                    concesionaria: { select: marcaSelect },
+                },
+            }) as any;
+
+            if (!r) throw new NotFoundException('Reserva');
+
+            const moneda = r.moneda || 'ARS';
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="comprobante-reserva-${r.id}.pdf"`);
+
+            const doc = new PDFDocument({ size: 'A4', margin: 50 });
+            doc.pipe(res);
+
+            // ── Marca (logo/colores del tenant, o AUTENZA por defecto) ────────────
+            const brand = await resolveBranding(r.concesionaria);
+            const accent = brand.accent;
+            const muted = brand.muted;
+
+            // ── Encabezado ────────────────────────────────────────────────────────
+            const infoLineas = [
+                r.concesionaria?.cuit ? `CUIT: ${r.concesionaria.cuit}` : '',
+                r.sucursal?.nombre ? `Sucursal: ${r.sucursal.nombre}` : '',
+                r.concesionaria?.telefono ? `Tel: ${r.concesionaria.telefono}` : '',
+            ].filter(Boolean);
+            drawEncabezado(doc, brand, infoLineas);
+
+            doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold')
+                .text('COMPROBANTE DE RESERVA', 50, 50, { align: 'right' });
+            doc.fillColor(muted).fontSize(10).font('Helvetica')
+                .text(`N° ${String(r.id).padStart(6, '0')}`, { align: 'right' })
+                .text(`Fecha: ${fecha(r.fecha)}`, { align: 'right' });
+            if (r.venceEl) doc.text(`Válida hasta: ${fecha(r.venceEl)}`, { align: 'right' });
+
+            doc.moveTo(50, 130).lineTo(545, 130).strokeColor('#e5e7eb').stroke();
+
+            // ── Cliente y vehículo ────────────────────────────────────────────────
+            let y = 150;
+            const bloque = (titulo: string, lineas: string[], x: number) => {
+                doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text(titulo.toUpperCase(), x, y);
+                doc.fillColor('#111827').fontSize(10).font('Helvetica');
+                lineas.forEach((l, i) => doc.text(l, x, y + 15 + i * 14, { width: 230, lineBreak: false, ellipsis: true }));
+            };
+
+            bloque('Cliente', [
+                r.cliente?.nombre || '—',
+                r.cliente?.dni ? `DNI/CUIT: ${r.cliente.dni}` : '',
+                r.cliente?.telefono ? `Tel: ${r.cliente.telefono}` : '',
+                r.cliente?.email || '',
+            ].filter(Boolean), 50);
+
+            bloque('Vehículo', [
+                `${r.vehiculo?.marca || ''} ${r.vehiculo?.modelo || ''}`.trim(),
+                r.vehiculo?.version || '',
+                r.vehiculo?.dominio ? `Dominio: ${r.vehiculo.dominio}` : '',
+                r.vehiculo?.anio ? `Año: ${r.vehiculo.anio}` : '',
+            ].filter(Boolean), 310);
+
+            y += 90;
+
+            // ── Detalle de la reserva ─────────────────────────────────────────────
+            const fila = (label: string, valor: string, negrita = false) => {
+                doc.fillColor('#111827').fontSize(10).font(negrita ? 'Helvetica-Bold' : 'Helvetica');
+                doc.text(label, 50, y, { width: 380 });
+                doc.text(valor, 430, y, { width: 115, align: 'right' });
+                y += 18;
+            };
+
+            doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text('DETALLE DE LA RESERVA', 50, y);
+            y += 16;
+            doc.moveTo(50, y).lineTo(545, y).strokeColor('#e5e7eb').stroke();
+            y += 8;
+
+            fila('Seña entregada', money(r.montoSenia, moneda), true);
+            if (r.metodo) fila('Método de pago', prettyEnum(r.metodo));
+            if (r.referencia) fila('Referencia', String(r.referencia));
+            fila('Estado', prettyEnum(r.estado));
+
+            // ── Observaciones ─────────────────────────────────────────────────────
+            if (r.observaciones) {
+                y += 14;
+                doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text('OBSERVACIONES', 50, y);
+                y += 16;
+                // Altura acotada + ellipsis: una nota muy larga no invade el pie (y=720).
+                doc.fillColor('#111827').fontSize(9).font('Helvetica')
+                    .text(r.observaciones, 50, y, { width: 495, height: 300, ellipsis: true });
+            }
+
+            // ── Pie (marca del tenant, o AUTENZA por defecto) ─────────────────────
+            drawPie(doc, brand);
+            doc.fillColor(muted).fontSize(8).font('Helvetica')
+                .text(
+                    `Atendido por: ${r.creadaPor?.nombre || '—'}   ·   Generado el ${new Date().toLocaleString('es-AR')}`,
+                    50, 760, { align: 'center', width: 495 }
+                );
+            doc.text('La seña se imputa al precio final. Documento no válido como factura.', 50, 772, { align: 'center', width: 495 });
 
             doc.end();
         } catch (error) {

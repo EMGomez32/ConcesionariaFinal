@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { ReservaController } from '../controllers/ReservaController';
+import { ComprobanteController } from '../controllers/ComprobanteController';
 import { validateBody } from '../middlewares/validate.middleware';
 import { createReservaSchema, updateReservaSchema } from '../validation/reserva.schema';
 
@@ -45,6 +46,22 @@ router.get('/', ReservaController.getAll);
  *       404: { $ref: '#/components/responses/NotFound' }
  */
 router.get('/:id', ReservaController.getById);
+
+/**
+ * @openapi
+ * /reservas/{id}/comprobante:
+ *   get:
+ *     tags: [Reservas]
+ *     summary: Comprobante de reserva/seña en PDF
+ *     description: PDF con los datos de la reserva (cliente, vehículo, seña) y la marca de la concesionaria.
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     responses:
+ *       200: { description: PDF del comprobante, content: { application/pdf: {} } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.get('/:id/comprobante', ComprobanteController.reservaPdf);
 
 /**
  * @openapi

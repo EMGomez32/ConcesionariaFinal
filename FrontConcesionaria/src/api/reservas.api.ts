@@ -59,4 +59,8 @@ export const reservasApi = {
 
     delete: (id: number) =>
         client.delete(`/reservas/${id}`),
+
+    // Comprobante de reserva/seña en PDF (Blob descargable).
+    comprobantePdf: (id: number) =>
+        client.get<Blob>(`/reservas/${id}/comprobante`, { responseType: 'blob' }),
 };
