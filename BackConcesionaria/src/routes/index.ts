@@ -6,6 +6,7 @@ import usuarioRoutes from '../interface/routes/usuario.routes';
 import rolRoutes from '../interface/routes/rol.routes';
 import clienteRoutes from '../interface/routes/cliente.routes';
 import proveedorRoutes from '../interface/routes/proveedor.routes';
+import searchRoutes from '../interface/routes/search.routes';
 import vehiculoRoutes from '../interface/routes/vehiculo.routes';
 import archivoRoutes from '../interface/routes/vehiculo-archivo.routes';
 import movimientoRoutes from '../interface/routes/vehiculo-movimiento.routes';
@@ -66,6 +67,7 @@ router.use('/roles', rolRoutes);
 // CRM
 router.use('/clientes', clienteRoutes);
 router.use('/proveedores', proveedorRoutes);
+router.use('/search', searchRoutes);
 
 // Inventario
 router.use('/vehiculos', vehiculoRoutes);
