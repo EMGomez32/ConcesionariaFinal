@@ -10,10 +10,11 @@ import { postventaApi } from '../../api/postventa.api';
 import { reportesApi, type EstadoCuenta } from '../../api/reportes.api';
 import type { Cliente } from '../../types/cliente.types';
 import Button from '../../components/ui/Button';
+import { useUIStore } from '../../store/uiStore';
 import {
     ArrowLeft, User, Phone, Mail, MapPin, FileText,
     ShoppingCart, FileBarChart, Calendar, DollarSign,
-    CreditCard, RefreshCw, BookmarkCheck, Wrench, Banknote, FileSignature
+    CreditCard, RefreshCw, BookmarkCheck, Wrench, Banknote, FileSignature, FileDown
 } from 'lucide-react';
 
 type Tab = 'info' | 'ventas' | 'presupuestos' | 'reservas' | 'financiaciones' | 'solicitudes' | 'postventa';
@@ -44,8 +45,10 @@ const extractList = <T,>(res: unknown): T[] => {
 const ClienteDetallePage = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const { addToast } = useUIStore();
 
     const [activeTab, setActiveTab] = useState<Tab>('info');
+    const [descargandoEC, setDescargandoEC] = useState(false);
     const [cliente, setCliente] = useState<Cliente | null>(null);
     const [ventas, setVentas] = useState<AnyRow[]>([]);
     const [presupuestos, setPresupuestos] = useState<AnyRow[]>([]);
@@ -93,6 +96,29 @@ const ClienteDetallePage = () => {
         load();
     }, [id]);
 
+    // Descarga el estado de cuenta del cliente (PDF), mismo patrón que el
+    // comprobante de venta y el recibo de cuota.
+    const handleEstadoCuentaPdf = async () => {
+        if (!cliente || !id) return;
+        setDescargandoEC(true);
+        try {
+            const blob = await clientesApi.estadoCuentaPdf(Number(id)) as unknown as Blob;
+            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            const slug = cliente.nombre.trim().replace(/\s+/g, '-').toLowerCase() || `cliente-${id}`;
+            link.setAttribute('download', `estado-cuenta-${slug}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            addToast('Error al generar el estado de cuenta', 'error');
+        } finally {
+            setDescargandoEC(false);
+        }
+    };
+
     if (loading) return (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '0.75rem', color: 'var(--text-secondary)' }}>
             <RefreshCw size={20} className="spin" /> Cargando...
@@ -135,6 +161,14 @@ const ClienteDetallePage = () => {
                         </p>
                     </div>
                 </div>
+                {estadoCuenta && estadoCuenta.financiaciones.length > 0 && (
+                    <div style={{ marginLeft: 'auto' }}>
+                        <Button variant="secondary" onClick={handleEstadoCuentaPdf} disabled={descargandoEC}>
+                            <FileDown size={16} style={{ marginRight: '0.5rem' }} />
+                            {descargandoEC ? 'Generando...' : 'Estado de cuenta (PDF)'}
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <div className="stats-bar">

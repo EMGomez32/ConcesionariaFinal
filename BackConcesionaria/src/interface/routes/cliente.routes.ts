@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { ClienteController } from '../controllers/ClienteController';
+import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authenticate } from '../middlewares/authenticate.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
 
@@ -47,6 +48,23 @@ router.get('/', authenticate, ClienteController.getAll);
  *       404: { $ref: '#/components/responses/NotFound' }
  */
 router.get('/:id', authenticate, ClienteController.getById);
+
+/**
+ * @openapi
+ * /clientes/{id}/estado-cuenta/pdf:
+ *   get:
+ *     tags: [Clientes]
+ *     summary: Estado de cuenta del cliente en PDF
+ *     description: admin/vendedor. Cuenta corriente del cliente (plan de cuotas y saldos) con la marca de la concesionaria.
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     responses:
+ *       200: { description: PDF del estado de cuenta, content: { application/pdf: {} } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.get('/:id/estado-cuenta/pdf', authenticate, authorize('admin', 'vendedor'), ComprobanteController.estadoCuentaPdf);
 
 /**
  * @openapi
