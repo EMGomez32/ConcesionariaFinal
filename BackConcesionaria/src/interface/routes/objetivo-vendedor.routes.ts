@@ -6,9 +6,11 @@ import { upsertObjetivoVendedorSchema } from '../validation/objetivo-vendedor.sc
 
 const router = Router();
 
-// Objetivos por vendedor: performance individual del equipo comercial. Expone las
-// ventas/facturación de cada vendedor, así que —igual que ranking y comisiones—
-// es sólo admin (super_admin pasa por el bypass de authorize).
+// Objetivos por vendedor: performance individual del equipo comercial. La gestión
+// (getAll, upsert, delete) expone las ventas/facturación de TODO el equipo, así que
+// —igual que ranking y comisiones— es sólo admin. La única excepción es GET /mio:
+// self-service, cualquier autenticado ve SÓLO su propio objetivo (no datos de
+// terceros). super_admin pasa por el bypass de authorize en las rutas admin.
 
 /**
  * @openapi
@@ -26,6 +28,22 @@ const router = Router();
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
 router.get('/', authorize('admin'), ObjetivoVendedorController.getAll);
+
+/**
+ * @openapi
+ * /objetivos-vendedor/mio:
+ *   get:
+ *     tags: [Objetivos]
+ *     summary: Mi objetivo del mes, con progreso
+ *     description: El objetivo del propio usuario logueado y su avance. Cualquier autenticado — devuelve sólo lo suyo (no expone datos de terceros). objetivo:null si no le fijaron uno.
+ *     parameters:
+ *       - { name: anio, in: query, schema: { type: integer } }
+ *       - { name: mes, in: query, schema: { type: integer, minimum: 1, maximum: 12 } }
+ *     responses:
+ *       200: { description: Mi objetivo del período con progreso (o null) }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ */
+router.get('/mio', ObjetivoVendedorController.getMio);
 
 /**
  * @openapi

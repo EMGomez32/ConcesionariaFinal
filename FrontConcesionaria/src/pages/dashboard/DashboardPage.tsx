@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle, Bookmark, Target } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useDashboardStats, useStockDistribution, useDashboardFinanzas, useDashboardAlertas, useDashboardTendencia, useDashboardMeta, dashboardKeys, type FinanzaKpi, type AlertaItem } from '../../hooks/useDashboard';
+import { useDashboardStats, useStockDistribution, useDashboardFinanzas, useDashboardAlertas, useDashboardTendencia, useDashboardMeta, useMiObjetivo, dashboardKeys, type FinanzaKpi, type AlertaItem } from '../../hooks/useDashboard';
 import type { VentaMensualItem } from '../../api/reportes.api';
 import { metasApi } from '../../api/metas.api';
 import { useAuditLogs } from '../../hooks/useAuditLogs';
@@ -55,6 +55,9 @@ const DashboardPage = () => {
   // El log de auditoría es admin-only (dato sensible: acciones de todos + IP).
   // El panel "Actividad Reciente" sólo se muestra —y se consulta— para admin.
   const isAdmin = !!(user?.roles?.includes('admin') || user?.roles?.includes('super_admin'));
+  // El vendedor ve su propio objetivo del mes (self-view). El admin ya ve la meta
+  // del tenant más arriba, así que esto apunta al equipo comercial.
+  const esVendedor = !!user?.roles?.includes('vendedor');
 
   const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useDashboardStats();
   const { data: stockData, isLoading: stockLoading, refetch: refetchStock } = useStockDistribution();
@@ -68,6 +71,9 @@ const DashboardPage = () => {
 
   // ── Objetivo del mes (meta de ventas), solo admin ──
   const { data: meta, isLoading: metaLoading } = useDashboardMeta(isAdmin);
+  // ── Mi objetivo del mes (self-view del vendedor) ──
+  const { data: miObjetivoData, isLoading: miObjetivoLoading } = useMiObjetivo(esVendedor);
+  const miObjetivo = miObjetivoData?.objetivo ?? null;
   const queryClient = useQueryClient();
   const { addToast } = useUIStore();
   const hoyDate = new Date();
@@ -199,6 +205,43 @@ const DashboardPage = () => {
           </div>
         ))}
       </div>
+
+      {esVendedor && (
+        <section style={{ marginTop: '1.75rem' }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: '1rem' }}>
+            <Target size={18} className="text-accent" />
+            <h3 style={{ margin: 0 }}>Mi objetivo de {mesActualLabel}</h3>
+          </div>
+          <div className="card" style={{ padding: '1.5rem' }}>
+            {miObjetivoLoading ? (
+              <span className="skeleton" style={{ display: 'block', height: '56px', width: '100%', borderRadius: '0.75rem' }} />
+            ) : !miObjetivo ? (
+              <div style={{ color: 'var(--text-secondary)' }}>Tu administrador todavía no te fijó un objetivo para este mes.</div>
+            ) : miObjetivo.unidadesObjetivo == null && miObjetivo.montoObjetivo == null ? (
+              <div style={{ color: 'var(--text-secondary)' }}>Tu administrador todavía no te fijó un objetivo para este mes.</div>
+            ) : (
+              <div className="flex flex-col gap-5">
+                {miObjetivo.unidadesObjetivo != null && (
+                  <ProgressRow
+                    etiqueta="Unidades vendidas"
+                    actual={String(miObjetivo.unidadesReal)}
+                    objetivo={String(miObjetivo.unidadesObjetivo)}
+                    pct={Math.min(100, miObjetivo.unidadesPct ?? 0)}
+                  />
+                )}
+                {miObjetivo.montoObjetivo != null && (
+                  <ProgressRow
+                    etiqueta={`Facturado (${miObjetivo.moneda})`}
+                    actual={money(miObjetivo.montoReal, miObjetivo.moneda)}
+                    objetivo={money(miObjetivo.montoObjetivo, miObjetivo.moneda)}
+                    pct={Math.min(100, miObjetivo.montoPct ?? 0)}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {isAdmin && (
         <section style={{ marginTop: '1.75rem' }}>

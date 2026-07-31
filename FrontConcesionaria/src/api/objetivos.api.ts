@@ -28,6 +28,21 @@ export interface ReporteObjetivos {
     resumen: { vendedores: number };
 }
 
+/** El objetivo del propio usuario logueado, con su progreso (o null si no le fijaron uno). */
+export interface MiObjetivo {
+    periodo: { anio: number; mes: number };
+    objetivo: {
+        id: number;
+        moneda: string;
+        unidadesObjetivo: number | null;
+        unidadesReal: number;
+        unidadesPct: number | null;
+        montoObjetivo: number | null;
+        montoReal: number;
+        montoPct: number | null;
+    } | null;
+}
+
 export interface UpsertObjetivoInput {
     vendedorId: number;
     anio: number;
@@ -41,6 +56,10 @@ export const objetivosApi = {
     /** Objetivos del período con progreso. Por defecto, el mes actual. */
     getAll: (anio?: number, mes?: number) =>
         client.get<ReporteObjetivos>('/objetivos-vendedor', { params: { anio, mes } }),
+
+    /** Mi objetivo del mes con progreso (o null). Cualquier autenticado ve el suyo. */
+    mio: (anio?: number, mes?: number) =>
+        client.get<MiObjetivo>('/objetivos-vendedor/mio', { params: { anio, mes } }),
 
     /** Fija (o pisa) el objetivo de un vendedor en un mes. Solo admin. */
     upsert: (data: UpsertObjetivoInput) =>
