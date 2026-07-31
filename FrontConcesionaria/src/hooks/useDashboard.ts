@@ -5,6 +5,7 @@ import { clientesApi } from '../api/clientes.api';
 import { reservasApi } from '../api/reservas.api';
 import { reportesApi } from '../api/reportes.api';
 import { metasApi } from '../api/metas.api';
+import { objetivosApi } from '../api/objetivos.api';
 
 export const dashboardKeys = {
     all: ['dashboard'] as const,
@@ -14,6 +15,7 @@ export const dashboardKeys = {
     alertas: () => [...dashboardKeys.all, 'alertas'] as const,
     tendencia: (meses: number) => [...dashboardKeys.all, 'tendencia', meses] as const,
     meta: () => [...dashboardKeys.all, 'meta'] as const,
+    miObjetivo: () => [...dashboardKeys.all, 'miObjetivo'] as const,
 };
 
 export const useDashboardStats = () => {
@@ -244,6 +246,21 @@ export const useDashboardMeta = (enabled = true) => {
         queryFn: () => {
             const n = new Date();
             return metasApi.actual(n.getFullYear(), n.getMonth() + 1);
+        },
+    });
+};
+
+// ── Mi objetivo del mes (self-view del vendedor) ─────────────────────────────
+// El objetivo individual del usuario logueado y su progreso. El mes se calcula en
+// el cliente (mismo criterio que la meta del tenant, arriba).
+export const useMiObjetivo = (enabled = true) => {
+    return useQuery({
+        queryKey: dashboardKeys.miObjetivo(),
+        enabled,
+        staleTime: 1000 * 60 * 5,
+        queryFn: () => {
+            const n = new Date();
+            return objetivosApi.mio(n.getFullYear(), n.getMonth() + 1);
         },
     });
 };

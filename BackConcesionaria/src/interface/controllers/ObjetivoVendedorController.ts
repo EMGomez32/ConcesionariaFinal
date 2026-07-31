@@ -6,6 +6,7 @@ import { UpsertObjetivoVendedor } from '../../application/use-cases/objetivos-ve
 import { DeleteObjetivoVendedor } from '../../application/use-cases/objetivos-vendedor/DeleteObjetivoVendedor';
 import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
+import { context } from '../../infrastructure/security/context';
 import { BaseException } from '../../domain/exceptions/BaseException';
 
 const repository = new PrismaObjetivoVendedorRepository();
@@ -99,6 +100,72 @@ export class ObjetivoVendedorController {
             });
 
             res.json({ periodo: { anio, mes }, items, resumen: { vendedores: items.length } });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * GET /objetivos-vendedor/mio?anio=&mes= — el objetivo del propio usuario
+     * logueado, con su progreso. Devuelve { objetivo: null } si no le fijaron uno.
+     * No es admin-only: cada vendedor ve SÓLO lo suyo (userId del token + la
+     * extensión RLS acota al tenant), así que no expone datos de terceros.
+     */
+    static async getMio(req: Request, res: Response, next: NextFunction) {
+        try {
+            const ahora = new Date();
+            const anio = enteroEnRango(req.query.anio, 2000, 2100, ahora.getFullYear(), 'anio');
+            const mes = enteroEnRango(req.query.mes, 1, 12, ahora.getMonth() + 1, 'mes');
+            const vendedorId = context.getUser()?.userId;
+
+            // Sin usuario en contexto (no debería pasar tras authenticate) o sin
+            // objetivo fijado: 200 con objetivo:null ("todavía no te fijaron una meta").
+            if (!vendedorId) {
+                res.json({ periodo: { anio, mes }, objetivo: null });
+                return;
+            }
+            const objetivo = await repository.findByVendedorPeriodo(vendedorId, anio, mes);
+            if (!objetivo) {
+                res.json({ periodo: { anio, mes }, objetivo: null });
+                return;
+            }
+
+            // Progreso: las ventas del propio vendedor en el mes (fechaVenta @db.Date,
+            // rango en UTC puro). El facturado se compara sólo contra la moneda del
+            // objetivo; las unidades cuentan todas sus ventas del mes.
+            const desdeFecha = new Date(Date.UTC(anio, mes - 1, 1));
+            const hastaFecha = new Date(Date.UTC(anio, mes, 1));
+            const ventas = await prisma.venta.findMany({
+                where: { vendedorId, fechaVenta: { gte: desdeFecha, lt: hastaFecha } },
+                select: {
+                    precioVenta: true,
+                    moneda: true,
+                    extras: { where: { deletedAt: null }, select: { monto: true } },
+                },
+            });
+            let unidadesReal = 0;
+            let montoReal = 0;
+            for (const v of ventas) {
+                unidadesReal += 1;
+                if (v.moneda === objetivo.moneda) {
+                    const extras = v.extras.reduce((s, e) => s + num(e.monto), 0);
+                    montoReal += num(v.precioVenta) + extras;
+                }
+            }
+
+            res.json({
+                periodo: { anio, mes },
+                objetivo: {
+                    id: objetivo.id,
+                    moneda: objetivo.moneda,
+                    unidadesObjetivo: objetivo.unidadesObjetivo,
+                    unidadesReal,
+                    unidadesPct: pct(unidadesReal, objetivo.unidadesObjetivo),
+                    montoObjetivo: objetivo.montoObjetivo,
+                    montoReal,
+                    montoPct: pct(montoReal, objetivo.montoObjetivo),
+                },
+            });
         } catch (error) {
             next(error);
         }

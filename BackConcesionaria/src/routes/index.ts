@@ -112,8 +112,10 @@ router.use('/cotizaciones', cotizacionRoutes);
 // Lectura: cualquier autenticado. Escritura: solo admin (en el router).
 router.use('/metas', metaVentaRoutes);
 
-// Objetivos por vendedor — performance individual del equipo. Todo (lectura y
-// escritura) es solo admin: expone las ventas/facturación de cada vendedor.
+// Objetivos por vendedor — performance individual del equipo. La gestión (getAll,
+// upsert, delete) es solo admin (expone ventas/facturación del equipo); GET /mio es
+// self-service: cualquier autenticado ve SÓLO su propio objetivo. Sin authorize a
+// nivel de montaje: el gating es por-ruta dentro del router (ojo al agregar rutas).
 router.use('/objetivos-vendedor', objetivoVendedorRoutes);
 
 // SaaS Billing — módulo de facturación/suscripción: solo admin.
