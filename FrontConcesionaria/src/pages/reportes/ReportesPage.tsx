@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy, MessageCircle, Coins } from 'lucide-react';
+import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy, MessageCircle, Coins, Target } from 'lucide-react';
 import {
     reportesApi,
     type ReporteVentasItem,
@@ -23,8 +23,10 @@ import DataTable, { type Column } from '../../components/ui/DataTable';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
+import { StatCard } from './StatCard';
+import ObjetivosTab from './ObjetivosTab';
 
-type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos' | 'ranking' | 'comisiones';
+type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos' | 'ranking' | 'comisiones' | 'objetivos';
 type Consolidar = '' | 'ARS' | 'USD';
 
 const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
@@ -34,12 +36,13 @@ const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
     { key: 'proximos', label: 'Por vencer', icon: CalendarClock },
     { key: 'ranking', label: 'Ranking', icon: Trophy },
     { key: 'comisiones', label: 'Comisiones', icon: Coins },
+    { key: 'objetivos', label: 'Objetivos', icon: Target },
     { key: 'rentabilidad', label: 'Rentabilidad', icon: BarChart3 },
 ];
 
 // Tabs con datos sensibles (márgenes, facturación y nómina): solo admin. El backend
 // ya los bloquea con 403; acá se ocultan para no mostrar una pestaña que fallaría.
-const ADMIN_TABS: Tab[] = ['rentabilidad', 'ranking', 'comisiones'];
+const ADMIN_TABS: Tab[] = ['rentabilidad', 'ranking', 'comisiones', 'objetivos'];
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -72,15 +75,6 @@ const sinContarTexto = (r: { moneda: string; sinContar?: Record<string, number> 
         ? `No se puede calcular: la venta es en ${r.moneda} pero hay costos por ${otras}. Consolidá con una cotización para verla.`
         : 'No se puede calcular: hay costos en otra moneda.';
 };
-
-const StatCard = ({ label, value, color }: { label: string; value: string; color?: string }) => (
-    <div className="card stat-card">
-        <div className="stat-content">
-            <span className="text-muted font-bold text-xs uppercase tracking-wider mb-1">{label}</span>
-            <span className="stat-value" style={color ? { color } : undefined}>{value}</span>
-        </div>
-    </div>
-);
 
 /** Error de carga con el mismo lenguaje visual que el de DataTable. */
 const ErrorCard = ({ mensaje, onRetry }: { mensaje: string; onRetry: () => void }) => (
@@ -248,6 +242,9 @@ const ReportesPage = () => {
     });
 
     const handleExport = async () => {
+        // Objetivos no tiene endpoint CSV (el botón se oculta en ese tab); el guard
+        // además estrecha el tipo de `tab` para el exportCsv de abajo.
+        if (tab === 'objetivos') return;
         setExporting(true);
         try {
             const params: Record<string, unknown> =
@@ -468,21 +465,26 @@ const ReportesPage = () => {
                             : <span className="text-muted">Sin cotización</span>}
                         {isAdmin && <Pencil size={12} />}
                     </button>
-                    {/* Consolidar en una sola moneda */}
-                    <select
-                        className="form-input"
-                        value={consolidar}
-                        onChange={(e) => setConsolidar(e.target.value as Consolidar)}
-                        title="Convertir todos los totales a una sola moneda"
-                        style={{ width: 'auto' }}
-                    >
-                        <option value="">Ver ARS y USD por separado</option>
-                        <option value="ARS">Consolidar en ARS</option>
-                        <option value="USD">Consolidar en USD</option>
-                    </select>
-                    <Button variant="secondary" onClick={handleExport} loading={exporting}>
-                        <Download size={16} /> Exportar CSV
-                    </Button>
+                    {/* Consolidar y exportar no aplican al tab de objetivos (tiene su
+                        propio período y no genera CSV): se ocultan ahí. */}
+                    {tab !== 'objetivos' && (
+                        <>
+                            <select
+                                className="form-input"
+                                value={consolidar}
+                                onChange={(e) => setConsolidar(e.target.value as Consolidar)}
+                                title="Convertir todos los totales a una sola moneda"
+                                style={{ width: 'auto' }}
+                            >
+                                <option value="">Ver ARS y USD por separado</option>
+                                <option value="ARS">Consolidar en ARS</option>
+                                <option value="USD">Consolidar en USD</option>
+                            </select>
+                            <Button variant="secondary" onClick={handleExport} loading={exporting}>
+                                <Download size={16} /> Exportar CSV
+                            </Button>
+                        </>
+                    )}
                 </div>
             </header>
 
@@ -759,6 +761,10 @@ const ReportesPage = () => {
                     />
                 </>
             )}
+
+            {/* ── OBJETIVOS POR VENDEDOR ── (componente autocontenido: su propio
+                período, tabla de progreso y modal de carga) */}
+            {tab === 'objetivos' && <ObjetivosTab />}
 
             {/* Modal de carga de cotización (solo admin) */}
             <Modal
