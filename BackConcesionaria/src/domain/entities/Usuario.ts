@@ -11,6 +11,8 @@ export class Usuario {
         public readonly updatedAt: Date,
         public readonly deletedAt: Date | null,
         public readonly roles?: any[],
-        public readonly sucursal?: any
+        public readonly sucursal?: any,
+        // Comisión del vendedor: % sobre el facturado. Null = sin comisión.
+        public readonly comisionPorcentaje?: number | null
     ) { }
 }

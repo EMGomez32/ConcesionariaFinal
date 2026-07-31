@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy, MessageCircle } from 'lucide-react';
+import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy, MessageCircle, Coins } from 'lucide-react';
 import {
     reportesApi,
     type ReporteVentasItem,
@@ -9,6 +9,7 @@ import {
     type ReporteRentabilidadItem,
     type ProximoVencimientoItem,
     type RankingVendedorItem,
+    type ComisionVendedorItem,
     type TotalPorMoneda,
 } from '../../api/reportes.api';
 import { cotizacionesApi } from '../../api/cotizaciones.api';
@@ -23,7 +24,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 
-type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos' | 'ranking';
+type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos' | 'ranking' | 'comisiones';
 type Consolidar = '' | 'ARS' | 'USD';
 
 const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
@@ -32,12 +33,13 @@ const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
     { key: 'mora', label: 'Cartera de mora', icon: AlertTriangle },
     { key: 'proximos', label: 'Por vencer', icon: CalendarClock },
     { key: 'ranking', label: 'Ranking', icon: Trophy },
+    { key: 'comisiones', label: 'Comisiones', icon: Coins },
     { key: 'rentabilidad', label: 'Rentabilidad', icon: BarChart3 },
 ];
 
-// Tabs con datos sensibles (márgenes y facturación): solo admin. El backend ya
-// los bloquea con 403; acá se ocultan para no mostrar una pestaña que fallaría.
-const ADMIN_TABS: Tab[] = ['rentabilidad', 'ranking'];
+// Tabs con datos sensibles (márgenes, facturación y nómina): solo admin. El backend
+// ya los bloquea con 403; acá se ocultan para no mostrar una pestaña que fallaría.
+const ADMIN_TABS: Tab[] = ['rentabilidad', 'ranking', 'comisiones'];
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -239,6 +241,11 @@ const ReportesPage = () => {
         queryFn: () => reportesApi.rankingVendedores({ ...rango, consolidar: consolidarParam }),
         enabled: tab === 'ranking',
     });
+    const comisionesQ = useQuery({
+        queryKey: ['reporte', 'comisiones', { ...rango, consolidar }],
+        queryFn: () => reportesApi.comisiones({ ...rango, consolidar: consolidarParam }),
+        enabled: tab === 'comisiones',
+    });
 
     const handleExport = async () => {
         setExporting(true);
@@ -401,6 +408,31 @@ const ReportesPage = () => {
         return keys.length ? keys.map((k) => money(acc[k], k)).join(' · ') : money(0);
     };
 
+    // ── Comisiones ──
+    const fmtCom = (item: ComisionVendedorItem, campo: 'facturado' | 'comision') => {
+        if (!item.porMoneda.length) return money(0);
+        return item.porMoneda.map((m) => money(m[campo], m.moneda)).join(' · ');
+    };
+
+    const comisionesCols: Column<ComisionVendedorItem & { id: number }>[] = [
+        { header: 'Vendedor', accessor: (r) => <span className="font-bold">{r.vendedor}</span> },
+        { header: 'Comisión %', align: 'center', accessor: (r) => r.porcentaje > 0 ? <Badge variant="info">{r.porcentaje}%</Badge> : <span className="text-muted">0%</span> },
+        { header: 'Unidades', align: 'center', accessor: (r) => <span className="font-bold">{r.unidades}</span> },
+        { header: 'Facturado', align: 'right', accessor: (r) => fmtCom(r, 'facturado') },
+        { header: 'Comisión a pagar', align: 'right', accessor: (r) => <span className="font-bold" style={{ color: 'var(--accent)' }}>{fmtCom(r, 'comision')}</span> },
+    ];
+
+    // Comisión total: consolidada si se pidió, si no la suma por moneda.
+    const comisionTotal = () => {
+        const data = comisionesQ.data;
+        if (!data) return money(0);
+        if (data.consolidado) return money(data.consolidado.comision, data.consolidado.moneda);
+        const acc: Record<string, number> = {};
+        for (const it of data.items) for (const m of it.porMoneda) acc[m.moneda] = (acc[m.moneda] ?? 0) + m.comision;
+        const keys = Object.keys(acc).sort();
+        return keys.length ? keys.map((k) => money(acc[k], k)).join(' · ') : money(0);
+    };
+
     // Banda consolidada / aviso, reutilizada por cada tab.
     const renderConsolidado = (
         data: { consolidado?: unknown; sinCotizacion?: boolean } | undefined,
@@ -469,8 +501,8 @@ const ReportesPage = () => {
                 ))}
             </div>
 
-            {/* Filtros por rango (ventas / rentabilidad / ranking) */}
-            {(tab === 'ventas' || tab === 'rentabilidad' || tab === 'ranking') && (
+            {/* Filtros por rango (ventas / rentabilidad / ranking / comisiones) */}
+            {(tab === 'ventas' || tab === 'rentabilidad' || tab === 'ranking' || tab === 'comisiones') && (
                 <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                     <div className="filter-group">
                         <label className="filter-label">Desde</label>
@@ -700,6 +732,29 @@ const ReportesPage = () => {
                         isError={rankingQ.isError}
                         errorMessage="No se pudo cargar el ranking de vendedores"
                         onRetry={() => rankingQ.refetch()}
+                        emptyMessage="No hay ventas en el período seleccionado"
+                    />
+                </>
+            )}
+
+            {/* ── COMISIONES ── */}
+            {tab === 'comisiones' && (
+                <>
+                    {!comisionesQ.isError && (
+                        <div className="stats-grid stagger" style={{ marginBottom: '1.5rem' }}>
+                            <StatCard label="Vendedores" value={String(comisionesQ.data?.resumen.vendedores ?? 0)} />
+                            <StatCard label="Unidades vendidas" value={String(comisionesQ.data?.resumen.unidades ?? 0)} />
+                            <StatCard label="Comisión total" value={comisionTotal()} color="var(--accent)" />
+                        </div>
+                    )}
+                    {!comisionesQ.isError && renderConsolidado(comisionesQ.data, 'Comisión total', (c) => c.comision)}
+                    <DataTable
+                        columns={comisionesCols}
+                        data={(comisionesQ.data?.items ?? []).map((it, i) => ({ ...it, id: i }))}
+                        isLoading={comisionesQ.isLoading}
+                        isError={comisionesQ.isError}
+                        errorMessage="No se pudo cargar la liquidación de comisiones"
+                        onRetry={() => comisionesQ.refetch()}
                         emptyMessage="No hay ventas en el período seleccionado"
                     />
                 </>

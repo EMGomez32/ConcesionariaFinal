@@ -10,6 +10,8 @@ export interface Usuario {
     nombre: string;
     email: string;
     activo: boolean;
+    /** Comisión del vendedor: % sobre el facturado. null = sin comisión. */
+    comisionPorcentaje?: number | null;
     createdAt: string;
     updatedAt: string;
     deletedAt: string | null;
@@ -44,6 +46,7 @@ export interface CreateUsuarioDto {
     email: string;
     password?: string; // Solo para create
     activo?: boolean;
+    comisionPorcentaje?: number;
     roleIds: number[];
 }
 

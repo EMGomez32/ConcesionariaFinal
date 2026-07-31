@@ -221,6 +221,35 @@ export interface ReporteRanking {
     sinCotizacion?: boolean;
 }
 
+export interface ComisionMoneda {
+    moneda: string;
+    facturado: number;
+    comision: number;
+}
+
+export interface ComisionVendedorItem {
+    vendedorId: number;
+    vendedor: string;
+    /** % de comisión del vendedor (de su perfil). */
+    porcentaje: number;
+    unidades: number;
+    porMoneda: ComisionMoneda[];
+    consolidado: { moneda: string; facturado: number; comision: number } | null;
+}
+
+export interface ConsolidadoComisiones extends ConsolidadoBase {
+    facturado: number;
+    comision: number;
+}
+
+export interface ReporteComisiones {
+    periodo: { desde: string | null; hasta: string | null };
+    items: ComisionVendedorItem[];
+    resumen: { vendedores: number; unidades: number };
+    consolidado?: ConsolidadoComisiones | null;
+    sinCotizacion?: boolean;
+}
+
 export interface EstadoCuentaFinanciacion {
     id: number;
     fechaInicio: string;
@@ -331,6 +360,9 @@ export const reportesApi = {
     rankingVendedores: (params: RangoFiltro = {}) =>
         client.get<ReporteRanking>('/reportes/ranking-vendedores', { params }),
 
+    comisiones: (params: RangoFiltro = {}) =>
+        client.get<ReporteComisiones>('/reportes/comisiones', { params }),
+
     estadoCuenta: (clienteId: number) =>
         client.get<EstadoCuenta>('/reportes/estado-cuenta', { params: { clienteId } }),
 
@@ -347,7 +379,7 @@ export const reportesApi = {
      * pisaba al primero en la carpeta de descargas.
      */
     exportCsv: async (
-        reporte: 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos-vencimientos' | 'ranking-vendedores',
+        reporte: 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos-vencimientos' | 'ranking-vendedores' | 'comisiones',
         params: Record<string, unknown> = {},
     ): Promise<{ blob: Blob; filename?: string }> => {
         const res = await client.getRaw<Blob>(`/reportes/${reporte}`, {

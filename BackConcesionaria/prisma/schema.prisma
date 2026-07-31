@@ -104,6 +104,8 @@ model Usuario {
   email                  String
   passwordHash           String?              @map("password_hash")
   activo                 Boolean              @default(true)
+  // Comisión del vendedor: % sobre el facturado de sus ventas. Null = sin comisión.
+  comisionPorcentaje     Decimal?             @map("comision_porcentaje") @db.Decimal(5, 2)
   createdAt              DateTime             @default(now()) @map("created_at")
   updatedAt              DateTime             @updatedAt @map("updated_at")
   deletedAt              DateTime?            @map("deleted_at")

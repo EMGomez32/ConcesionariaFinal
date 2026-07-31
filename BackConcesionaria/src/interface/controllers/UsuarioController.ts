@@ -12,6 +12,24 @@ import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
 import { BaseException } from '../../domain/exceptions/BaseException';
 
+// Saca de la respuesta lo que un usuario no debería ver:
+//  - passwordHash SIEMPRE (ningún cliente lo necesita; nunca debe salir).
+//  - comisionPorcentaje sólo para admin/super_admin: es dato de nómina, igual que
+//    el reporte /comisiones (que está gateado a admin). Sin esto, cualquier usuario
+//    autenticado podía leer el % de comisión de sus colegas por GET /usuarios.
+function sanitizeUsuario(u: any, isAdmin: boolean) {
+    if (!u || typeof u !== 'object') return u;
+    const { passwordHash, ...rest } = u as any;
+    void passwordHash;
+    if (!isAdmin) delete (rest as any).comisionPorcentaje;
+    return rest;
+}
+
+function actorEsAdmin(): boolean {
+    const roles = context.getUser()?.roles ?? [];
+    return roles.includes('admin') || roles.includes('super_admin');
+}
+
 const repository = new PrismaUsuarioRepository();
 const getUsuariosUC = new GetUsuarios(repository);
 const getUsuarioByIdUC = new GetUsuarioById(repository);
@@ -25,8 +43,9 @@ export class UsuarioController {
     static async getAll(req: Request, res: Response, next: NextFunction) {
         try {
             const { limit, page, sortBy, sortOrder, ...filters } = req.query;
-            const result = await getUsuariosUC.execute(cleanFilters(filters), { limit, page, sortBy, sortOrder } as any);
-            res.json(result);
+            const result: any = await getUsuariosUC.execute(cleanFilters(filters), { limit, page, sortBy, sortOrder } as any);
+            const isAdmin = actorEsAdmin();
+            res.json({ ...result, results: (result.results ?? []).map((u: any) => sanitizeUsuario(u, isAdmin)) });
         } catch (error) {
             next(error);
         }
@@ -36,7 +55,7 @@ export class UsuarioController {
         try {
             const id = parseInt(req.params.id as string, 10);
             const result = await getUsuarioByIdUC.execute(id);
-            res.json(result);
+            res.json(sanitizeUsuario(result, actorEsAdmin()));
         } catch (error) {
             next(error);
         }
@@ -61,7 +80,7 @@ export class UsuarioController {
                 entidadId: (result as any)?.id,
                 detalle: `Usuario ${(result as any)?.nombre ?? (result as any)?.email ?? (result as any)?.id} creado`,
             });
-            res.status(201).json(result);
+            res.status(201).json(sanitizeUsuario(result, actorEsAdmin()));
         } catch (error) {
             next(error);
         }
@@ -98,7 +117,7 @@ export class UsuarioController {
                 entidadId: id,
                 detalle: `Usuario ${(result as any)?.nombre ?? (result as any)?.email ?? id} actualizado`,
             });
-            res.json(result);
+            res.json(sanitizeUsuario(result, actorEsAdmin()));
         } catch (error) {
             next(error);
         }
@@ -160,7 +179,7 @@ export class UsuarioController {
                 entidadId: uid,
                 detalle: 'Actualización de perfil propio',
             });
-            res.json(result);
+            res.json(sanitizeUsuario(result, actorEsAdmin()));
         } catch (error) {
             next(error);
         }
