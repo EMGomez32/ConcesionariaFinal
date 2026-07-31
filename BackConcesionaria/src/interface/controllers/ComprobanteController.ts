@@ -2,6 +2,13 @@ import { Request, Response, NextFunction } from 'express';
 import PDFDocument from 'pdfkit';
 import prisma from '../../infrastructure/database/prisma';
 import { NotFoundException } from '../../domain/exceptions/BaseException';
+import { resolveBranding, drawEncabezado, drawPie } from './pdf/branding';
+
+// Campos de marca que cada PDF necesita de su concesionaria (logo/colores/pie).
+const marcaSelect = {
+    nombre: true, cuit: true, email: true, telefono: true,
+    logoStorageKey: true, colorPrimario: true, colorSecundario: true, pdfPie: true, sitioWeb: true,
+} as const;
 
 const money = (n: unknown, moneda = 'ARS') => {
     const simbolo = moneda === 'USD' ? 'US$' : '$';
@@ -25,7 +32,7 @@ export class ComprobanteController {
                     vehiculo: true,
                     vendedor: { select: { nombre: true, email: true } },
                     sucursal: true,
-                    concesionaria: { select: { nombre: true, cuit: true, email: true } },
+                    concesionaria: { select: marcaSelect },
                     pagos: true,
                     extras: true,
                     canjes: { include: { vehiculo: { select: { marca: true, modelo: true, dominio: true } } } },
@@ -47,37 +54,18 @@ export class ComprobanteController {
             const doc = new PDFDocument({ size: 'A4', margin: 50 });
             doc.pipe(res);
 
-            // ── Paleta AUTENZA ────────────────────────────────────────────────────
-            const accent = '#10b981';      // emerald de marca (antes índigo #4f46e5)
-            const muted = '#6b7280';
-            const brandStops: Array<[number, string]> = [[0, '#10b981'], [0.5, '#06b6d4'], [1, '#8b5cf6']];
-            const W = doc.page.width;
-
-            // Isotipo AUTENZA dibujado como vector (mismos paths que el SVG de marca).
-            const drawIsotipo = (x: number, y: number, size: number, color: string) => {
-                const s = size / 56;
-                doc.save();
-                doc.translate(x, y).scale(s);
-                doc.strokeColor(color).lineJoin('round').lineCap('round');
-                doc.lineWidth(2.6).path('M28 6 L47 17 L47 39 L28 50 L9 39 L9 17 Z').stroke();
-                doc.lineWidth(3.4).path('M19 43 L28 21 L37 43').stroke();
-                doc.lineWidth(3.4).path('M23 34 L33 34').stroke();
-                doc.fillColor(color).circle(28, 6, 3.2).fill();
-                doc.restore();
-            };
-
-            // Franja de gradiente de marca en el borde superior (firma visual AUTENZA).
-            const topBand = doc.linearGradient(0, 0, W, 0);
-            brandStops.forEach(([o, c]) => topBand.stop(o, c));
-            doc.rect(0, 0, W, 6).fill(topBand);
+            // ── Marca (logo/colores del tenant, o AUTENZA por defecto) ────────────
+            const brand = await resolveBranding(venta.concesionaria);
+            const accent = brand.accent;
+            const muted = brand.muted;
 
             // ── Encabezado ────────────────────────────────────────────────────────
-            doc.fillColor(accent).fontSize(20).font('Helvetica-Bold')
-                .text(venta.concesionaria?.nombre || 'Concesionaria', 50, 50);
-            doc.fillColor(muted).fontSize(9).font('Helvetica');
-            if (venta.concesionaria?.cuit) doc.text(`CUIT: ${venta.concesionaria.cuit}`);
-            if (venta.sucursal?.nombre) doc.text(`Sucursal: ${venta.sucursal.nombre}`);
-            if (venta.sucursal?.direccion) doc.text(venta.sucursal.direccion);
+            const infoLineas = [
+                venta.concesionaria?.cuit ? `CUIT: ${venta.concesionaria.cuit}` : '',
+                venta.sucursal?.nombre ? `Sucursal: ${venta.sucursal.nombre}` : '',
+                venta.sucursal?.direccion || '',
+            ].filter(Boolean);
+            drawEncabezado(doc, brand, infoLineas);
 
             doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold')
                 .text('COMPROBANTE DE VENTA', 50, 50, { align: 'right' });
@@ -151,16 +139,8 @@ export class ComprobanteController {
                 }
             }
 
-            // ── Pie con marca de plataforma AUTENZA ───────────────────────────────
-            const footerTop = 720;
-            const ruleGrad = doc.linearGradient(50, 0, 545, 0);
-            brandStops.forEach(([o, c]) => ruleGrad.stop(o, c));
-            doc.rect(50, footerTop, 495, 1.5).fill(ruleGrad);
-
-            drawIsotipo(W / 2 - 6.5, footerTop + 10, 13, accent);
-            doc.fillColor(accent).fontSize(8).font('Helvetica-Bold')
-                .text('AUTENZA', 50, footerTop + 27, { align: 'center', width: W - 100, characterSpacing: 2 });
-
+            // ── Pie (marca del tenant, o AUTENZA por defecto) ─────────────────────
+            drawPie(doc, brand);
             doc.fillColor(muted).fontSize(8).font('Helvetica')
                 .text(
                     `Vendedor: ${venta.vendedor?.nombre || '—'}   ·   Generado el ${new Date().toLocaleString('es-AR')}`,
@@ -185,7 +165,7 @@ export class ComprobanteController {
                     financiacion: {
                         include: {
                             cliente: true,
-                            concesionaria: { select: { nombre: true, cuit: true } },
+                            concesionaria: { select: marcaSelect },
                             sucursal: { select: { nombre: true, direccion: true } },
                             cobrador: { select: { nombre: true } },
                             venta: { include: { vehiculo: { select: { marca: true, modelo: true, dominio: true } } } },
@@ -210,35 +190,18 @@ export class ComprobanteController {
             const doc = new PDFDocument({ size: 'A4', margin: 50 });
             doc.pipe(res);
 
-            // ── Paleta AUTENZA (misma firma visual que el comprobante de venta) ────
-            const accent = '#10b981';
-            const muted = '#6b7280';
-            const brandStops: Array<[number, string]> = [[0, '#10b981'], [0.5, '#06b6d4'], [1, '#8b5cf6']];
-            const W = doc.page.width;
-
-            const drawIsotipo = (x: number, y: number, size: number, color: string) => {
-                const s = size / 56;
-                doc.save();
-                doc.translate(x, y).scale(s);
-                doc.strokeColor(color).lineJoin('round').lineCap('round');
-                doc.lineWidth(2.6).path('M28 6 L47 17 L47 39 L28 50 L9 39 L9 17 Z').stroke();
-                doc.lineWidth(3.4).path('M19 43 L28 21 L37 43').stroke();
-                doc.lineWidth(3.4).path('M23 34 L33 34').stroke();
-                doc.fillColor(color).circle(28, 6, 3.2).fill();
-                doc.restore();
-            };
-
-            const topBand = doc.linearGradient(0, 0, W, 0);
-            brandStops.forEach(([o, c]) => topBand.stop(o, c));
-            doc.rect(0, 0, W, 6).fill(topBand);
+            // ── Marca (logo/colores del tenant, o AUTENZA por defecto) ────────────
+            const brand = await resolveBranding(fin?.concesionaria);
+            const accent = brand.accent;
+            const muted = brand.muted;
 
             // ── Encabezado ────────────────────────────────────────────────────────
-            doc.fillColor(accent).fontSize(20).font('Helvetica-Bold')
-                .text(fin?.concesionaria?.nombre || 'Concesionaria', 50, 50);
-            doc.fillColor(muted).fontSize(9).font('Helvetica');
-            if (fin?.concesionaria?.cuit) doc.text(`CUIT: ${fin.concesionaria.cuit}`);
-            if (fin?.sucursal?.nombre) doc.text(`Sucursal: ${fin.sucursal.nombre}`);
-            if (fin?.sucursal?.direccion) doc.text(fin.sucursal.direccion);
+            const infoLineas = [
+                fin?.concesionaria?.cuit ? `CUIT: ${fin.concesionaria.cuit}` : '',
+                fin?.sucursal?.nombre ? `Sucursal: ${fin.sucursal.nombre}` : '',
+                fin?.sucursal?.direccion || '',
+            ].filter(Boolean);
+            drawEncabezado(doc, brand, infoLineas);
 
             doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold')
                 .text('RECIBO DE PAGO', 50, 50, { align: 'right' });
@@ -302,16 +265,8 @@ export class ComprobanteController {
                 }
             }
 
-            // ── Pie con marca de plataforma AUTENZA ───────────────────────────────
-            const footerTop = 720;
-            const ruleGrad = doc.linearGradient(50, 0, 545, 0);
-            brandStops.forEach(([o, c]) => ruleGrad.stop(o, c));
-            doc.rect(50, footerTop, 495, 1.5).fill(ruleGrad);
-
-            drawIsotipo(W / 2 - 6.5, footerTop + 10, 13, accent);
-            doc.fillColor(accent).fontSize(8).font('Helvetica-Bold')
-                .text('AUTENZA', 50, footerTop + 27, { align: 'center', width: W - 100, characterSpacing: 2 });
-
+            // ── Pie (marca del tenant, o AUTENZA por defecto) ─────────────────────
+            drawPie(doc, brand);
             doc.fillColor(muted).fontSize(8).font('Helvetica')
                 .text(
                     `Cobrador: ${fin?.cobrador?.nombre || '—'}   ·   Generado el ${new Date().toLocaleString('es-AR')}`,
@@ -335,7 +290,7 @@ export class ComprobanteController {
                     cliente: true,
                     vendedor: { select: { nombre: true, email: true } },
                     sucursal: true,
-                    concesionaria: { select: { nombre: true, cuit: true, email: true, telefono: true } },
+                    concesionaria: { select: marcaSelect },
                     // Mismos filtros de borrados que PrismaPresupuestoRepository: sin
                     // ellos, un extra anulado inflaría el total del PDF.
                     items: { where: { deletedAt: null }, include: { vehiculo: true } },
@@ -358,35 +313,18 @@ export class ComprobanteController {
             const doc = new PDFDocument({ size: 'A4', margin: 50 });
             doc.pipe(res);
 
-            // ── Paleta AUTENZA (misma firma visual que el comprobante de venta) ────
-            const accent = '#10b981';
-            const muted = '#6b7280';
-            const brandStops: Array<[number, string]> = [[0, '#10b981'], [0.5, '#06b6d4'], [1, '#8b5cf6']];
-            const W = doc.page.width;
-
-            const drawIsotipo = (x: number, y: number, size: number, color: string) => {
-                const s = size / 56;
-                doc.save();
-                doc.translate(x, y).scale(s);
-                doc.strokeColor(color).lineJoin('round').lineCap('round');
-                doc.lineWidth(2.6).path('M28 6 L47 17 L47 39 L28 50 L9 39 L9 17 Z').stroke();
-                doc.lineWidth(3.4).path('M19 43 L28 21 L37 43').stroke();
-                doc.lineWidth(3.4).path('M23 34 L33 34').stroke();
-                doc.fillColor(color).circle(28, 6, 3.2).fill();
-                doc.restore();
-            };
-
-            const topBand = doc.linearGradient(0, 0, W, 0);
-            brandStops.forEach(([o, c]) => topBand.stop(o, c));
-            doc.rect(0, 0, W, 6).fill(topBand);
+            // ── Marca (logo/colores del tenant, o AUTENZA por defecto) ────────────
+            const brand = await resolveBranding(p.concesionaria);
+            const accent = brand.accent;
+            const muted = brand.muted;
 
             // ── Encabezado ────────────────────────────────────────────────────────
-            doc.fillColor(accent).fontSize(20).font('Helvetica-Bold')
-                .text(p.concesionaria?.nombre || 'Concesionaria', 50, 50);
-            doc.fillColor(muted).fontSize(9).font('Helvetica');
-            if (p.concesionaria?.cuit) doc.text(`CUIT: ${p.concesionaria.cuit}`);
-            if (p.sucursal?.nombre) doc.text(`Sucursal: ${p.sucursal.nombre}`);
-            if (p.concesionaria?.telefono) doc.text(`Tel: ${p.concesionaria.telefono}`);
+            const infoLineas = [
+                p.concesionaria?.cuit ? `CUIT: ${p.concesionaria.cuit}` : '',
+                p.sucursal?.nombre ? `Sucursal: ${p.sucursal.nombre}` : '',
+                p.concesionaria?.telefono ? `Tel: ${p.concesionaria.telefono}` : '',
+            ].filter(Boolean);
+            drawEncabezado(doc, brand, infoLineas);
 
             doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold')
                 .text('PRESUPUESTO', 50, 50, { align: 'right' });
@@ -459,16 +397,8 @@ export class ComprobanteController {
                     .text(p.observaciones, 50, y, { width: 495 });
             }
 
-            // ── Pie con marca de plataforma AUTENZA ───────────────────────────────
-            const footerTop = 720;
-            const ruleGrad = doc.linearGradient(50, 0, 545, 0);
-            brandStops.forEach(([o, c]) => ruleGrad.stop(o, c));
-            doc.rect(50, footerTop, 495, 1.5).fill(ruleGrad);
-
-            drawIsotipo(W / 2 - 6.5, footerTop + 10, 13, accent);
-            doc.fillColor(accent).fontSize(8).font('Helvetica-Bold')
-                .text('AUTENZA', 50, footerTop + 27, { align: 'center', width: W - 100, characterSpacing: 2 });
-
+            // ── Pie (marca del tenant, o AUTENZA por defecto) ─────────────────────
+            drawPie(doc, brand);
             doc.fillColor(muted).fontSize(8).font('Helvetica')
                 .text(
                     `Presupuesto sujeto a disponibilidad de las unidades.   ·   Generado el ${new Date().toLocaleString('es-AR')}`,
