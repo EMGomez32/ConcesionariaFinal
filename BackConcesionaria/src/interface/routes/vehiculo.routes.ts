@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { VehiculoController } from '../controllers/VehiculoController';
+import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authenticate } from '../middlewares/authenticate.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
 
@@ -47,6 +48,22 @@ router.get('/', authenticate, VehiculoController.getAll);
  *       404: { $ref: '#/components/responses/NotFound' }
  */
 router.get('/:id', authenticate, VehiculoController.getById);
+
+/**
+ * @openapi
+ * /vehiculos/{id}/ficha:
+ *   get:
+ *     tags: [Vehículos]
+ *     summary: Ficha del vehículo en PDF (de cara al cliente)
+ *     description: Una página con la marca de la concesionaria, foto principal, ficha técnica y precio de lista. No incluye datos internos (compra/gastos).
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     responses:
+ *       200: { description: PDF de la ficha, content: { application/pdf: {} } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.get('/:id/ficha', authenticate, ComprobanteController.vehiculoFichaPdf);
 
 /**
  * @openapi

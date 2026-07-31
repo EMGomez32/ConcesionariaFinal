@@ -38,4 +38,8 @@ export const vehiculosApi = {
     delete: (id: number) => {
         return client.delete<void>(`/vehiculos/${id}`);
     },
+
+    // Ficha del vehículo en PDF (de cara al cliente), con la marca del tenant.
+    fichaPdf: (id: number) =>
+        client.get<Blob>(`/vehiculos/${id}/ficha`, { responseType: 'blob' }),
 };
