@@ -25,4 +25,8 @@ export const clientesApi = {
     delete: (id: number) => {
         return client.delete<void>(`/clientes/${id}`);
     },
+
+    // Estado de cuenta del cliente en PDF (Blob descargable). admin/vendedor.
+    estadoCuentaPdf: (id: number) =>
+        client.get<Blob>(`/clientes/${id}/estado-cuenta/pdf`, { responseType: 'blob' }),
 };

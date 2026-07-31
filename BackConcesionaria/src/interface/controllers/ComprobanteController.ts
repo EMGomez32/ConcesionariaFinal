@@ -3,6 +3,7 @@ import PDFDocument from 'pdfkit';
 import prisma from '../../infrastructure/database/prisma';
 import { NotFoundException } from '../../domain/exceptions/BaseException';
 import { resolveBranding, drawEncabezado, drawPie } from './pdf/branding';
+import { renderEstadoCuenta, EstadoCuentaData, FinanciacionLinea } from './pdf/estadoCuenta';
 
 // Campos de marca que cada PDF necesita de su concesionaria (logo/colores/pie).
 const marcaSelect = {
@@ -406,6 +407,123 @@ export class ComprobanteController {
                 );
             doc.text('Documento no válido como factura.', 50, 772, { align: 'center', width: 495 });
 
+            doc.end();
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // GET /api/clientes/:id/estado-cuenta/pdf → PDF con la cuenta corriente del
+    // cliente: por cada financiación, el plan de cuotas (pagado/saldo) y los
+    // totales. Mismo criterio de "vencido" que el reporte de estado de cuenta
+    // (vencimiento < hoy a medianoche UTC).
+    static async estadoCuentaPdf(req: Request, res: Response, next: NextFunction) {
+        try {
+            const id = Number(req.params.id);
+            const cliente = await prisma.cliente.findFirst({
+                where: { id },
+                include: { concesionaria: { select: marcaSelect } },
+            }) as any;
+            if (!cliente) throw new NotFoundException('Cliente');
+
+            const financiaciones = await prisma.financiacion.findMany({
+                where: { clienteId: id },
+                orderBy: { fechaInicio: 'desc' },
+                include: {
+                    // El filtro de borrados de la extensión no alcanza al include.
+                    cuotasPlan: { where: { deletedAt: null }, orderBy: { nroCuota: 'asc' } },
+                    venta: { select: { vehiculo: { select: { marca: true, modelo: true, dominio: true } } } },
+                },
+            }) as any[];
+
+            const ahora = new Date();
+            const inicioHoy = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
+            const nn = (v: unknown) => Number(v ?? 0);
+
+            // Resumen por moneda (saldo pendiente + vencido) y próxima cuota global.
+            const porMoneda = new Map<string, { pendiente: number; vencido: number }>();
+            const futurasGlobal: Array<{ vencimiento: Date; monto: number; moneda: string }> = [];
+            let cuotasVencidasTot = 0;
+
+            const lineas: FinanciacionLinea[] = financiaciones.map((f) => {
+                const acc = porMoneda.get(f.moneda) ?? { pendiente: 0, vencido: 0 };
+                let saldoPendiente = 0;
+                let cuotasVencidas = 0;
+
+                const cuotas = (f.cuotasPlan as any[]).map((c) => {
+                    const monto = nn(c.montoCuota);
+                    const saldo = nn(c.saldoCuota);
+                    // Refinanciada: el saldo se movió a otro contrato (saldoCuota
+                    // quedó en 0), NO se pagó. No mostrar el monto como "pagado".
+                    const pagado = c.estado === 'refinanciada' ? 0 : Math.max(0, monto - saldo);
+                    // "Viva": ni pagada ni refinanciada y con saldo (igual que el reporte).
+                    const viva = c.estado !== 'pagada' && c.estado !== 'refinanciada' && saldo > 0;
+                    const vencida = viva && c.vencimiento < inicioHoy;
+                    if (viva) {
+                        saldoPendiente += saldo;
+                        acc.pendiente += saldo;
+                        if (vencida) { cuotasVencidas += 1; acc.vencido += saldo; }
+                        else futurasGlobal.push({ vencimiento: c.vencimiento, monto: saldo, moneda: f.moneda });
+                    }
+                    const estadoLabel = c.estado === 'pagada' ? 'Pagada'
+                        : c.estado === 'refinanciada' ? 'Refinanc.'
+                            : saldo <= 0 ? 'Pagada'
+                                : vencida ? 'Vencida'
+                                    : pagado > 0 ? 'Parcial'
+                                        : 'Pendiente';
+                    return { nro: c.nroCuota, vencimiento: c.vencimiento, monto, pagado, saldo, estadoLabel, vencida };
+                });
+
+                porMoneda.set(f.moneda, acc);
+                cuotasVencidasTot += cuotasVencidas;
+                const veh = f.venta?.vehiculo;
+                return {
+                    id: f.id,
+                    vehiculo: veh ? `${veh.marca ?? ''} ${veh.modelo ?? ''}`.trim() : '',
+                    dominio: veh?.dominio ?? '',
+                    fechaInicio: f.fechaInicio,
+                    moneda: f.moneda,
+                    montoFinanciado: nn(f.montoFinanciado),
+                    estado: String(f.estado),
+                    cuotasTotal: (f.cuotasPlan as any[]).length,
+                    cuotasPagadas: (f.cuotasPlan as any[]).filter((c) => c.estado === 'pagada').length,
+                    saldoPendiente,
+                    cuotasVencidas,
+                    cuotas,
+                };
+            });
+
+            futurasGlobal.sort((a, b) => a.vencimiento.getTime() - b.vencimiento.getTime());
+
+            const data: EstadoCuentaData = {
+                cliente: {
+                    nombre: cliente.nombre,
+                    dni: cliente.dni ?? null,
+                    telefono: cliente.telefono ?? null,
+                    email: cliente.email ?? null,
+                    concesionaria: cliente.concesionaria ?? null,
+                },
+                hoy: ahora,
+                generadoEl: ahora.toLocaleString('es-AR'),
+                financiaciones: lineas,
+                resumen: {
+                    saldoPorMoneda: Array.from(porMoneda.entries())
+                        .map(([moneda, v]) => ({ moneda, pendiente: v.pendiente, vencido: v.vencido }))
+                        .sort((a, b) => a.moneda.localeCompare(b.moneda)),
+                    cuotasVencidas: cuotasVencidasTot,
+                    proxima: futurasGlobal[0] ?? null,
+                },
+            };
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="estado-cuenta-cliente-${id}.pdf"`);
+            // bufferPages: el estado de cuenta puede ocupar varias páginas y el pie
+            // se estampa en TODAS al final (renderEstadoCuenta recorre el rango).
+            const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
+            doc.pipe(res);
+
+            const brand = await resolveBranding(cliente.concesionaria);
+            renderEstadoCuenta(doc, brand, data);
             doc.end();
         } catch (error) {
             next(error);
