@@ -147,7 +147,8 @@ export class PrismaUsuarioRepository implements IUsuarioRepository {
             u.updatedAt,
             u.deletedAt,
             u.roles,
-            u.sucursal
+            u.sucursal,
+            u.comisionPorcentaje != null ? Number(u.comisionPorcentaje) : null
         );
     }
 }

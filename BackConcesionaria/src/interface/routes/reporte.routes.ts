@@ -112,6 +112,22 @@ router.get('/ranking-vendedores', authorize('admin'), ReporteController.rankingV
 
 /**
  * @openapi
+ * /reportes/comisiones:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Liquidación de comisiones por vendedor
+ *     description: Por vendedor, su % (de su perfil), unidades, facturado y comisión, por moneda. Datos de nómina, solo admin. Usar ?format=csv para descargar.
+ *     parameters:
+ *       - { in: query, name: desde, schema: { type: string, format: date } }
+ *       - { in: query, name: hasta, schema: { type: string, format: date } }
+ *       - { in: query, name: sucursalId, schema: { type: integer } }
+ *       - { in: query, name: consolidar, schema: { type: string, enum: [ARS, USD] } }
+ *       - { in: query, name: format, schema: { type: string, enum: [csv] } }
+ */
+router.get('/comisiones', authorize('admin'), ReporteController.comisiones);
+
+/**
+ * @openapi
  * /reportes/estado-cuenta:
  *   get:
  *     tags: [Reportes]

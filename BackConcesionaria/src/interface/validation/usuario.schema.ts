@@ -27,6 +27,14 @@ const optionalFk = z.preprocess(
 // Elemento de roleIds: el front manda number[], el coerce es red de seguridad.
 const roleId = z.coerce.number().int().positive('Rol inválido');
 
+// Comisión del vendedor: % sobre el facturado (0..100). '' / null => undefined
+// (el form manda '' cuando queda vacío): no cambia el valor en update, y en create
+// queda null (sin comisión). Un 0 explícito sí se persiste (comisión cero).
+const comisionPorcentaje = z.preprocess(
+    (v) => (v === '' || v === null ? undefined : v),
+    z.coerce.number().min(0, 'La comisión no puede ser negativa').max(100, 'La comisión no puede superar 100%').optional(),
+);
+
 export const createUsuarioSchema = z.object({
     nombre: z.string({ error: 'El nombre es obligatorio' }).min(1, 'El nombre es obligatorio'),
     email: z.string({ error: 'El email es obligatorio' }).trim().min(1, 'El email es obligatorio').email('Email inválido'),
@@ -38,6 +46,7 @@ export const createUsuarioSchema = z.object({
     sucursalId: optionalFk,
     // El form actual no lo manda (Prisma default true), pero el DTO lo permite.
     activo: z.boolean().optional(),
+    comisionPorcentaje,
     // .default([]) obligatorio: el repo hace roleIds.map(...) en create; sin array
     // reventaría con un 500. El form siempre lo manda (aunque sea []), esto sólo
     // blinda el caso de que llegue ausente.
@@ -61,6 +70,7 @@ export const updateUsuarioSchema = z.object({
     concesionariaId: optionalFk,
     sucursalId: optionalFk,
     activo: z.boolean().optional(),
+    comisionPorcentaje,
     // SIN .default([]): el repo hace `if (roleIds) { deleteMany + create }`. Un []
     // es truthy y BORRARÍA todos los roles del usuario. Debe quedar undefined si no
     // viene, para que el repo no toque los roles.

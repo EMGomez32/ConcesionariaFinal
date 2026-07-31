@@ -1028,6 +1028,132 @@ export class ReporteController {
         }
     }
 
+    // ── 7b. Liquidación de comisiones ────────────────────────────────────────
+    // GET /api/reportes/comisiones?desde=&hasta=&sucursalId=&consolidar=&format=csv
+    // Por vendedor: su % (de su perfil), unidades, facturado (precio de venta +
+    // extras) y comisión = facturado × %/100, por moneda. Sólo admin (nómina).
+    static async comisiones(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { desde, hasta } = parseRango(req.query);
+            const where: any = { ...filtroFecha('fechaVenta', desde, hasta) };
+            const sucursalId = idOpcional(req.query.sucursalId, 'sucursalId');
+            if (sucursalId) where.sucursalId = sucursalId;
+
+            const ventas = await prisma.venta.findMany({
+                where,
+                include: {
+                    vendedor: { select: { id: true, nombre: true, comisionPorcentaje: true } },
+                    // Los extras anulados no suman al facturado (el filtro de borrados
+                    // de la extensión no alcanza a los include).
+                    extras: { where: { deletedAt: null }, select: { monto: true } },
+                },
+            });
+
+            const consolidar = parseConsolidar(req.query);
+            const cot = consolidar ? await getCotizacionParaConsolidar() : null;
+            const sinCotizacion = !!consolidar && !cot;
+
+            // vendedorId -> acumulado
+            const map = new Map<number, any>();
+            for (const v of ventas) {
+                const vend = v.vendedor;
+                const vendId = v.vendedorId ?? vend?.id ?? 0;
+                if (!map.has(vendId)) {
+                    map.set(vendId, {
+                        vendedorId: vendId,
+                        vendedor: vend?.nombre ?? 'Sin asignar',
+                        // El % es del vendedor (mismo para todas sus ventas del período).
+                        porcentaje: vend?.comisionPorcentaje != null ? num(vend.comisionPorcentaje) : 0,
+                        unidades: 0,
+                        _pm: new Map<string, any>(),
+                        _consFacturado: 0,
+                        _consComision: 0,
+                    });
+                }
+                const acc = map.get(vendId);
+                acc.unidades += 1;
+
+                const moneda = v.moneda;
+                const extras = v.extras.reduce((s, e) => s + num(e.monto), 0);
+                const facturado = num(v.precioVenta) + extras;
+                const comision = facturado * (acc.porcentaje / 100);
+
+                if (!acc._pm.has(moneda)) acc._pm.set(moneda, { moneda, facturado: 0, comision: 0 });
+                const pmb = acc._pm.get(moneda);
+                pmb.facturado += facturado;
+                pmb.comision += comision;
+
+                if (consolidar && cot) {
+                    const facturadoConv = convertir(facturado, moneda, consolidar, cot.valor);
+                    acc._consFacturado += facturadoConv;
+                    acc._consComision += facturadoConv * (acc.porcentaje / 100);
+                }
+            }
+
+            const items = Array.from(map.values()).map((a) => ({
+                vendedorId: a.vendedorId,
+                vendedor: a.vendedor,
+                porcentaje: a.porcentaje,
+                unidades: a.unidades,
+                porMoneda: Array.from(a._pm.values()).sort((x: any, y: any) => String(x.moneda).localeCompare(y.moneda)),
+                consolidado: (consolidar && cot) ? { moneda: consolidar, facturado: a._consFacturado, comision: a._consComision } : null,
+            }));
+
+            // Orden: por comisión consolidada si se pidió; si no, por unidades.
+            items.sort((a, b) => {
+                if (a.consolidado && b.consolidado) return b.consolidado.comision - a.consolidado.comision;
+                return b.unidades - a.unidades;
+            });
+
+            if (req.query.format === 'csv') {
+                // Una fila por vendedor y moneda (el CSV no consolida).
+                const filas = items.flatMap((i) => i.porMoneda.map((pm: any) => ({
+                    vendedor: i.vendedor,
+                    porcentaje: i.porcentaje,
+                    unidades: i.unidades,
+                    moneda: pm.moneda,
+                    facturado: pm.facturado,
+                    comision: pm.comision,
+                })));
+                return sendCsv(res, 'reporte-comisiones', [
+                    { key: 'vendedor', header: 'Vendedor' },
+                    { key: 'porcentaje', header: 'Comisión %' },
+                    { key: 'unidades', header: 'Unidades' },
+                    { key: 'moneda', header: 'Moneda' },
+                    { key: 'facturado', header: 'Facturado' },
+                    { key: 'comision', header: 'Comisión' },
+                ], filas);
+            }
+
+            let consolidado: any = null;
+            if (consolidar && cot) {
+                consolidado = {
+                    moneda: consolidar,
+                    valor: cot.valor,
+                    fechaCotizacion: cot.fecha,
+                    facturado: items.reduce((s, i) => s + (i.consolidado?.facturado ?? 0), 0),
+                    comision: items.reduce((s, i) => s + (i.consolidado?.comision ?? 0), 0),
+                };
+            }
+
+            res.json({
+                periodo: {
+                    desde: desde ? desde.toISOString().slice(0, 10) : null,
+                    hasta: hasta ? hasta.toISOString().slice(0, 10) : null,
+                },
+                items,
+                resumen: {
+                    vendedores: items.length,
+                    unidades: items.reduce((s, i) => s + i.unidades, 0),
+                },
+                consolidado,
+                sinCotizacion,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
     // ── 8. Estado de cuenta de un cliente ────────────────────────────────────
     // GET /api/reportes/estado-cuenta?clienteId=
     // Foto de la deuda del cliente: por cada financiación, progreso de pago y

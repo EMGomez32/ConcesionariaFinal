@@ -8,7 +8,7 @@ import { concesionariasApi } from '../../api/concesionarias.api';
 import { useAuthStore } from '../../store/authStore';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
-import { User, Mail, Lock, Building2, MapPin, ShieldCheck } from 'lucide-react';
+import { User, Mail, Lock, Building2, MapPin, ShieldCheck, Percent } from 'lucide-react';
 
 interface UsuarioFormProps {
     usuario?: Usuario;
@@ -26,6 +26,7 @@ const UsuarioForm: React.FC<UsuarioFormProps> = ({ usuario, onSave, onCancel, lo
         email: usuario?.email || '',
         password: '',
         sucursalId: usuario?.sucursalId || 0,
+        comisionPorcentaje: usuario?.comisionPorcentaje != null ? String(usuario.comisionPorcentaje) : '',
         roleIds: usuario?.roles?.map(r => r.rolId) || [] as number[],
     });
 
@@ -98,11 +99,14 @@ const UsuarioForm: React.FC<UsuarioFormProps> = ({ usuario, onSave, onCancel, lo
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        const comision = Number(formData.comisionPorcentaje);
         const payload = {
             ...formData,
             // sucursalId 0 = "no seleccionada": se manda undefined para no violar
             // la FK (no existe sucursal 0). La columna es nullable.
             sucursalId: formData.sucursalId || undefined,
+            // Comisión: '' o inválido => 0 (sin comisión). El backend valida 0..100.
+            comisionPorcentaje: Number.isFinite(comision) ? comision : 0,
             // Sólo super_admin elige el tenant; para un admin lo pone el backend
             // desde el token (y el body se ignora), así que no hace falta mandarlo.
             ...(isSuperAdmin ? { concesionariaId: selectedConcesionariaId } : {}),
@@ -197,6 +201,19 @@ const UsuarioForm: React.FC<UsuarioFormProps> = ({ usuario, onSave, onCancel, lo
                         </select>
                     </div>
                 </div>
+
+                <Input
+                    label="Comisión (%)"
+                    type="number"
+                    name="comisionPorcentaje"
+                    value={formData.comisionPorcentaje}
+                    onChange={handleChange}
+                    placeholder="Ej: 3.5 (sobre el facturado)"
+                    icon={<Percent size={18} />}
+                    min={0}
+                    max={100}
+                    step={0.01}
+                />
 
                 <div className="full-width">
                     <div className="input-group">
