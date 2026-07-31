@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Search, ArrowUpDown, CornerDownLeft, X } from 'lucide-react';
+import { Search, ArrowUpDown, CornerDownLeft, X, Car, User, Truck, Loader2 } from 'lucide-react';
 import { NAV_SECTIONS, type NavItem } from '../../config/nav';
 import { useAuthStore } from '../../store/authStore';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
+import { searchApi, type GlobalSearchResult } from '../../api/search.api';
 
 const norm = (s: string) =>
     s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -13,6 +14,19 @@ interface ScoredItem {
     item: NavItem;
     section: string;
     score: number;
+}
+
+type IconType = typeof Search;
+
+// Fila unificada del palette: sirve tanto para resultados de datos (vehículo,
+// cliente, proveedor) como para navegación a páginas. Todo se navega igual.
+interface Row {
+    key: string;
+    group: string;
+    icon: IconType;
+    label: string;
+    sublabel?: string;
+    path: string;
 }
 
 function scoreItem(item: NavItem, section: string, query: string): ScoredItem | null {
@@ -42,9 +56,13 @@ const CommandPalette = () => {
 
     const [query, setQuery] = useState('');
     const [activeIdx, setActiveIdx] = useState(0);
+    const [data, setData] = useState<GlobalSearchResult | null>(null);
+    const [loadingData, setLoadingData] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
+    const reqIdRef = useRef(0);
 
+    // Navegación por páginas (scoring sobre el nav), como antes.
     const candidates = useMemo<ScoredItem[]>(() => {
         const flat: ScoredItem[] = [];
         for (const sec of NAV_SECTIONS) {
@@ -58,10 +76,25 @@ const CommandPalette = () => {
         return flat.sort((a, b) => b.score - a.score);
     }, [query, isSuper, isAdmin]);
 
+    // Filas unificadas: primero los resultados de datos (lo que el usuario suele
+    // buscar), después las páginas del nav. Todo navega con ↑↓ + Enter.
+    const rows = useMemo<Row[]>(() => {
+        const out: Row[] = [];
+        if (data) {
+            for (const v of data.vehiculos) out.push({ key: `v-${v.id}`, group: 'Vehículos', icon: Car, label: v.titulo, sublabel: v.subtitulo, path: `/vehiculos/${v.id}` });
+            for (const c of data.clientes) out.push({ key: `c-${c.id}`, group: 'Clientes', icon: User, label: c.titulo, sublabel: c.subtitulo, path: `/clientes/${c.id}` });
+            for (const p of data.proveedores) out.push({ key: `p-${p.id}`, group: 'Proveedores', icon: Truck, label: p.titulo, sublabel: p.subtitulo, path: `/proveedores/${p.id}` });
+        }
+        for (const c of candidates) out.push({ key: `nav-${c.item.path}`, group: c.section, icon: c.item.icon, label: c.item.label, sublabel: c.item.path, path: c.item.path });
+        return out;
+    }, [data, candidates]);
+
+    // Reset al abrir.
     useEffect(() => {
         if (!isOpen) return;
         setQuery('');
         setActiveIdx(0);
+        setData(null);
         const t = setTimeout(() => inputRef.current?.focus(), 50);
         return () => clearTimeout(t);
     }, [isOpen]);
@@ -69,6 +102,30 @@ const CommandPalette = () => {
     useEffect(() => {
         setActiveIdx(0);
     }, [query]);
+
+    // Búsqueda de datos con debounce. Se descarta la respuesta si ya salió una
+    // query más nueva (evita parpadeos por respuestas fuera de orden).
+    useEffect(() => {
+        if (!isOpen) return;
+        const q = query.trim();
+        // Se incrementa SIEMPRE (antes del guard) para invalidar cualquier request
+        // en vuelo: si el usuario baja de 2 chars o cierra/reabre, la respuesta
+        // vieja ya no matchea el id vigente y se descarta.
+        const myId = ++reqIdRef.current;
+        if (q.length < 2) { setData(null); setLoadingData(false); return; }
+        setLoadingData(true);
+        const t = setTimeout(async () => {
+            try {
+                const res = await searchApi.global(q);
+                if (reqIdRef.current === myId) { setData(res); setActiveIdx(0); }
+            } catch {
+                if (reqIdRef.current === myId) setData(null);
+            } finally {
+                if (reqIdRef.current === myId) setLoadingData(false);
+            }
+        }, 250);
+        return () => clearTimeout(t);
+    }, [query, isOpen]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -81,15 +138,15 @@ const CommandPalette = () => {
             }
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                setActiveIdx((i) => Math.min(i + 1, candidates.length - 1));
+                setActiveIdx((i) => Math.min(i + 1, rows.length - 1));
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 setActiveIdx((i) => Math.max(i - 1, 0));
             } else if (e.key === 'Enter') {
                 e.preventDefault();
-                const target = candidates[activeIdx];
+                const target = rows[activeIdx];
                 if (target) {
-                    navigate(target.item.path);
+                    navigate(target.path);
                     close();
                 }
             }
@@ -97,7 +154,7 @@ const CommandPalette = () => {
 
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [isOpen, candidates, activeIdx, navigate, close]);
+    }, [isOpen, rows, activeIdx, navigate, close]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -107,13 +164,12 @@ const CommandPalette = () => {
 
     if (!isOpen) return null;
 
-    // Mapea cada candidato a su índice "lineal" (después del agrupamiento)
-    // para que ↑↓ navegue en el orden visible y onClick navegue al item correcto.
+    // Índice lineal por fila (orden visible) para que ↑↓ y click coincidan.
     const flatIndex = new Map<string, number>();
-    candidates.forEach((c, i) => flatIndex.set(c.item.path, i));
+    rows.forEach((r, i) => flatIndex.set(r.key, i));
 
-    const grouped = candidates.reduce<Record<string, ScoredItem[]>>((acc, c) => {
-        (acc[c.section] ||= []).push(c);
+    const grouped = rows.reduce<Record<string, Row[]>>((acc, r) => {
+        (acc[r.group] ||= []).push(r);
         return acc;
     }, {});
 
@@ -135,12 +191,13 @@ const CommandPalette = () => {
                     <input
                         ref={inputRef}
                         className="cmdk-input"
-                        placeholder="Buscar páginas, módulos…"
+                        placeholder="Buscar vehículos, clientes, proveedores, páginas…"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         autoComplete="off"
                         spellCheck={false}
                     />
+                    {loadingData && <Loader2 size={16} className="cmdk-spin" aria-hidden="true" />}
                     <button
                         type="button"
                         className="cmdk-close"
@@ -152,32 +209,34 @@ const CommandPalette = () => {
                 </div>
 
                 <div className="cmdk-list" ref={listRef}>
-                    {candidates.length === 0 ? (
-                        <div className="cmdk-empty">Sin resultados para “{query}”</div>
+                    {rows.length === 0 ? (
+                        <div className="cmdk-empty">
+                            {loadingData ? 'Buscando…' : `Sin resultados para “${query}”`}
+                        </div>
                     ) : (
                         Object.entries(grouped).map(([section, items]) => (
                             <div key={section} className="cmdk-group">
                                 <div className="cmdk-group-title">{section}</div>
-                                {items.map((c) => {
-                                    const idx = flatIndex.get(c.item.path) ?? 0;
-                                    const Icon = c.item.icon;
+                                {items.map((r) => {
+                                    const idx = flatIndex.get(r.key) ?? 0;
+                                    const Icon = r.icon;
                                     return (
                                         <button
-                                            key={c.item.path}
+                                            key={r.key}
                                             type="button"
                                             data-idx={idx}
                                             className={`cmdk-item ${idx === activeIdx ? 'is-active' : ''}`}
                                             onMouseEnter={() => setActiveIdx(idx)}
                                             onClick={() => {
-                                                navigate(c.item.path);
+                                                navigate(r.path);
                                                 close();
                                             }}
                                         >
                                             <span className="cmdk-item-icon">
                                                 <Icon size={16} />
                                             </span>
-                                            <span className="cmdk-item-label">{c.item.label}</span>
-                                            <span className="cmdk-item-path">{c.item.path}</span>
+                                            <span className="cmdk-item-label">{r.label}</span>
+                                            {r.sublabel && <span className="cmdk-item-path">{r.sublabel}</span>}
                                         </button>
                                     );
                                 })}
@@ -333,7 +392,18 @@ const CommandPalette = () => {
                     font-family: var(--font-mono);
                     font-size: 0.7rem;
                     color: var(--text-muted);
+                    max-width: 45%;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
                 }
+
+                .cmdk-spin {
+                    color: var(--text-muted);
+                    flex-shrink: 0;
+                    animation: cmdk-spin 0.8s linear infinite;
+                }
+                @keyframes cmdk-spin { to { transform: rotate(360deg); } }
 
                 .cmdk-empty {
                     padding: 3rem 1rem;
