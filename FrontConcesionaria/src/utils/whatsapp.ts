@@ -17,3 +17,12 @@ export const waLink = (telefono: string | undefined | null, mensaje: string): st
     const num = d.startsWith('54') ? d : `54${d}`;
     return `https://wa.me/${num}?text=${encodeURIComponent(mensaje)}`;
 };
+
+/**
+ * Link de WhatsApp SIN destinatario: abre WhatsApp con el mensaje ya redactado y
+ * deja que el usuario elija a qué contacto mandarlo. Útil para "compartir" algo
+ * (una ficha de vehículo, una promo) cuando todavía no hay un cliente asociado.
+ * Igual que waLink, no envía nada: es un borrador que el usuario revisa y manda.
+ */
+export const waShareLink = (mensaje: string): string =>
+    `https://wa.me/?text=${encodeURIComponent(mensaje)}`;

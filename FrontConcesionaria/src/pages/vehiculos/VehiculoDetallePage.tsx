@@ -12,11 +12,12 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { FileUploader } from '../../components/ui/FileUploader';
 import { useUIStore } from '../../store/uiStore';
+import { waShareLink } from '../../utils/whatsapp';
 import {
     ArrowLeft, Car, Calendar, DollarSign, MapPin,
     FileImage, Wrench, ArrowLeftRight, FileText,
     ShoppingCart, Bookmark, RefreshCw, Hash,
-    Plus, Trash2, ExternalLink, Upload, X, Image, FileText as FileIcon, Edit
+    Plus, Trash2, ExternalLink, Upload, X, Image, FileText as FileIcon, Edit, MessageCircle
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { PaginatedResponse, ApiError } from '../../types/api.types';
@@ -60,6 +61,7 @@ const VehiculoDetallePage = () => {
     const [vehiculo, setVehiculo] = useState<VehiculoFull | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [descargandoFicha, setDescargandoFicha] = useState(false);
 
     // Archivos state
     const [archivos, setArchivos] = useState<VehiculoArchivo[]>([]);
@@ -95,6 +97,49 @@ const VehiculoDetallePage = () => {
             .catch(() => setError('No se pudo cargar el vehículo.'))
             .finally(() => setLoading(false));
     }, [id]);
+
+    // Descarga la ficha del vehículo en PDF (de cara al cliente, con la marca del
+    // tenant). Mismo patrón de descarga de blob que los comprobantes.
+    const handleFicha = async () => {
+        if (!vehiculo) return;
+        setDescargandoFicha(true);
+        try {
+            const blob = await vehiculosApi.fichaPdf(vehiculo.id) as unknown as Blob;
+            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `ficha-${vehiculo.marca}-${vehiculo.modelo}-${vehiculo.id}.pdf`.replace(/\s+/g, '-'));
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            addToast('Error al generar la ficha', 'error');
+        } finally {
+            setDescargandoFicha(false);
+        }
+    };
+
+    // Comparte un resumen del vehículo por WhatsApp. Sin destinatario: abre WhatsApp
+    // con el borrador y el vendedor elige el contacto (no se envía nada solo).
+    const handleCompartir = () => {
+        if (!vehiculo) return;
+        const v = vehiculo;
+        const titulo = `${v.marca} ${v.modelo}${v.version ? ' ' + v.version : ''}${v.anio ? ` (${v.anio})` : ''}`.trim();
+        // precioLista 0 (o ausente) => "Consultar precio", igual que el resto de la
+        // página (líneas 500/563 tratan el 0 como sin precio). Chequeo truthy.
+        const precio = v.precioLista
+            ? `${v.moneda === 'USD' ? 'US$' : '$'}${Number(v.precioLista).toLocaleString('es-AR')}`
+            : 'Consultar precio';
+        const lineas = [
+            `Te comparto este vehículo: ${titulo}`,
+            `Precio: ${precio}`,
+            v.kmIngreso != null ? `Kilómetros: ${Number(v.kmIngreso).toLocaleString('es-AR')} km` : '',
+            v.color ? `Color: ${v.color}` : '',
+            'Escribime para más info o para coordinar una visita. ¡Gracias!',
+        ].filter(Boolean);
+        window.open(waShareLink(lineas.join('\n')), '_blank', 'noopener');
+    };
 
     const loadArchivos = useCallback(async () => {
         if (!id) return;
@@ -436,7 +481,13 @@ const VehiculoDetallePage = () => {
                         </div>
                     </div>
                 </div>
-                <div style={{ marginLeft: 'auto' }}>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <Button variant="secondary" size="sm" onClick={handleCompartir}>
+                        <MessageCircle size={16} /> Compartir
+                    </Button>
+                    <Button variant="secondary" size="sm" onClick={handleFicha} loading={descargandoFicha}>
+                        <FileText size={16} /> Ficha PDF
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => navigate(`/vehiculos/${id}/editar`)}>
                         Editar vehículo
                     </Button>

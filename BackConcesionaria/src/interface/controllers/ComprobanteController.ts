@@ -4,6 +4,8 @@ import prisma from '../../infrastructure/database/prisma';
 import { NotFoundException } from '../../domain/exceptions/BaseException';
 import { resolveBranding, drawEncabezado, drawPie } from './pdf/branding';
 import { renderEstadoCuenta, EstadoCuentaData, FinanciacionLinea } from './pdf/estadoCuenta';
+import { storage } from '../../infrastructure/storage/LocalStorageAdapter';
+import { sniffImageType } from '../middlewares/upload.middleware';
 
 // Campos de marca que cada PDF necesita de su concesionaria (logo/colores/pie).
 const marcaSelect = {
@@ -28,6 +30,157 @@ const prettyEnum = (s: unknown) => {
 };
 
 export class ComprobanteController {
+    // GET /api/vehiculos/:id/ficha → ficha del vehículo en PDF (de cara al cliente).
+    // Una página con la marca del tenant, foto principal, specs y precio de lista.
+    // NO muestra datos internos (precio de compra, gastos, proveedor).
+    static async vehiculoFichaPdf(req: Request, res: Response, next: NextFunction) {
+        try {
+            const id = Number(req.params.id);
+            const v = await prisma.vehiculo.findFirst({
+                where: { id },
+                include: {
+                    sucursal: { select: { nombre: true } },
+                    concesionaria: { select: marcaSelect },
+                    // Sólo las fotos (no documentos/comprobantes), más viejas primero:
+                    // la primera legible es la "principal" (no hay flag de principal).
+                    archivos: {
+                        where: { deletedAt: null, tipo: 'foto' },
+                        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+                        select: { storageKey: true },
+                    },
+                },
+            }) as any;
+
+            if (!v) throw new NotFoundException('Vehículo');
+
+            const moneda = v.moneda || 'ARS';
+
+            // Foto principal: la primera 'foto' que sea PNG/JPEG legible. pdfkit no
+            // embebe webp/gif/heic, así que se sniffean los magic bytes y se descarta
+            // lo que no sirva (mejor sin foto que romper el PDF).
+            let fotoBuf: Buffer | null = null;
+            for (const a of (v.archivos ?? [])) {
+                if (!a.storageKey) continue;
+                try {
+                    const buf = await storage.read(a.storageKey);
+                    if (sniffImageType(buf)) { fotoBuf = buf; break; }
+                } catch { /* archivo ilegible: se prueba con la próxima foto */ }
+            }
+
+            // Nombre de archivo seguro (sin acentos ni espacios).
+            const slug = `${v.marca || ''}-${v.modelo || ''}`
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'vehiculo';
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="ficha-${slug}-${v.id}.pdf"`);
+
+            const doc = new PDFDocument({ size: 'A4', margin: 50 });
+            doc.pipe(res);
+
+            // ── Marca (logo/colores del tenant, o AUTENZA por defecto) ────────────
+            const brand = await resolveBranding(v.concesionaria);
+            const accent = brand.accent;
+            const muted = brand.muted;
+
+            const infoLineas = [
+                v.concesionaria?.cuit ? `CUIT: ${v.concesionaria.cuit}` : '',
+                v.sucursal?.nombre ? `Sucursal: ${v.sucursal.nombre}` : '',
+                v.concesionaria?.telefono ? `Tel: ${v.concesionaria.telefono}` : '',
+            ].filter(Boolean);
+            drawEncabezado(doc, brand, infoLineas);
+
+            doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold')
+                .text('FICHA DEL VEHÍCULO', 50, 50, { align: 'right' });
+            doc.fillColor(muted).fontSize(10).font('Helvetica')
+                .text(fecha(new Date()), { align: 'right' });
+
+            doc.moveTo(50, 130).lineTo(545, 130).strokeColor('#e5e7eb').stroke();
+
+            // ── Título del vehículo ───────────────────────────────────────────────
+            // Los textos de una sola línea llevan `height` además de lineBreak:false:
+            // el ellipsis de pdfkit sólo trunca de verdad cuando hay height (si no,
+            // un texto largo envuelve en varias líneas y pisa la foto / el bloque de
+            // abajo, que están en Y fijo). Mismo criterio que el nombre del encabezado.
+            let y = 150;
+            const titulo = `${v.marca || ''} ${v.modelo || ''}`.trim() || 'Vehículo';
+            doc.fillColor('#111827').fontSize(20).font('Helvetica-Bold')
+                .text(titulo, 50, y, { width: 495, height: 24, lineBreak: false, ellipsis: true });
+            y += 28;
+            const subtitulo = [v.version, v.anio ? String(v.anio) : ''].filter(Boolean).join('  ·  ');
+            if (subtitulo) {
+                doc.fillColor(muted).fontSize(12).font('Helvetica')
+                    .text(subtitulo, 50, y, { width: 495, height: 16, lineBreak: false, ellipsis: true });
+                y += 20;
+            }
+            y += 8;
+
+            // ── Foto principal (o placeholder) ────────────────────────────────────
+            const boxX = 50, boxW = 495, boxH = 215;
+            if (fotoBuf) {
+                try {
+                    doc.image(fotoBuf, boxX, y, { fit: [boxW, boxH], align: 'center', valign: 'center' });
+                } catch {
+                    // Buffer válido para sniff pero no para pdfkit (raro): placeholder.
+                    doc.save().rect(boxX, y, boxW, boxH).fill('#f3f4f6').restore();
+                }
+            } else {
+                doc.save().rect(boxX, y, boxW, boxH).fill('#f3f4f6').restore();
+                doc.fillColor(muted).fontSize(11).font('Helvetica')
+                    .text('Sin foto disponible', boxX, y + boxH / 2 - 6, { width: boxW, align: 'center' });
+            }
+            y += boxH + 18;
+
+            // ── Ficha técnica (2 columnas) ────────────────────────────────────────
+            const specs: Array<[string, string]> = [
+                ['Tipo', v.tipo === 'CERO_KM' ? '0 km' : 'Usado'],
+                ['Año', v.anio ? String(v.anio) : '—'],
+                ['Kilómetros', v.kmIngreso != null ? `${Number(v.kmIngreso).toLocaleString('es-AR')} km` : '—'],
+                ['Color', v.color || '—'],
+                ['Dominio', v.dominio || '—'],
+            ];
+            const colX = [50, 310];
+            const rowH = 30;
+            const specStartY = y;
+            specs.forEach((s, i) => {
+                const sx = colX[i % 2];
+                const sy = specStartY + Math.floor(i / 2) * rowH;
+                doc.fillColor(muted).fontSize(8.5).font('Helvetica-Bold').text(s[0].toUpperCase(), sx, sy, { width: 235 });
+                doc.fillColor('#111827').fontSize(12).font('Helvetica')
+                    .text(s[1], sx, sy + 11, { width: 235, height: 15, lineBreak: false, ellipsis: true });
+            });
+            y = specStartY + Math.ceil(specs.length / 2) * rowH + 8;
+
+            // ── Precio destacado ──────────────────────────────────────────────────
+            doc.moveTo(50, y).lineTo(545, y).strokeColor('#e5e7eb').stroke();
+            y += 14;
+            doc.fillColor(muted).fontSize(9).font('Helvetica-Bold').text('PRECIO', 50, y);
+            // precioLista 0 (o ausente) => "Consultar": un auto no se lista en $0, y
+            // el resto de la UI ya trata el 0 como "sin precio". Chequeo truthy.
+            doc.fillColor(accent).fontSize(20).font('Helvetica-Bold')
+                .text(v.precioLista ? money(v.precioLista, moneda) : 'Consultar', 50, y + 12, { width: 495, lineBreak: false });
+            y += 46;
+
+            // NOTA: a propósito NO se imprime `observaciones`. Es un campo de notas
+            // genérico (sin input en el form; se puebla por API/migración) que puede
+            // arrastrar apuntes internos —margen de negociación, desperfectos, datos
+            // del titular anterior— y esta ficha va DE CARA AL CLIENTE. Si en el
+            // futuro se quiere una descripción comercial, agregar un campo público
+            // dedicado (p.ej. descripcionPublica) en vez de reusar observaciones.
+
+            // ── Pie (marca del tenant, o AUTENZA por defecto) ─────────────────────
+            drawPie(doc, brand);
+            doc.fillColor(muted).fontSize(8).font('Helvetica')
+                .text(`Ficha generada el ${new Date().toLocaleString('es-AR')}`, 50, 760, { align: 'center', width: 495 });
+            doc.text('Datos informativos, no constituyen oferta contractual. Precio y disponibilidad sujetos a cambios sin previo aviso.',
+                50, 772, { align: 'center', width: 495 });
+
+            doc.end();
+        } catch (error) {
+            next(error);
+        }
+    }
+
     // GET /api/ventas/:id/comprobante  → PDF descargable del comprobante de venta.
     static async ventaPdf(req: Request, res: Response, next: NextFunction) {
         try {
