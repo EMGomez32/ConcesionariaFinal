@@ -11,7 +11,7 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import {
     ArrowLeft, Bookmark, Calendar, DollarSign,
     Car, Users, MapPin, RefreshCw, XCircle,
-    CheckCircle, Clock, User, ShoppingBag
+    CheckCircle, Clock, User, ShoppingBag, FileDown
 } from 'lucide-react';
 import type { FormaPagoVenta } from '../../types/venta.types';
 
@@ -78,6 +78,7 @@ const ReservaDetallePage = () => {
     const [showVencidaModal, setShowVencidaModal] = useState(false);
     const [showConvertirModal, setShowConvertirModal] = useState(false);
     const [actionLoading, setActionLoading] = useState(false);
+    const [descargando, setDescargando] = useState(false);
 
     // Convertir form state
     const [convertirForm, setConvertirForm] = useState({
@@ -167,6 +168,27 @@ const ReservaDetallePage = () => {
         }
     };
 
+    // Descarga el comprobante de reserva (PDF), mismo patrón que los otros comprobantes.
+    const handleComprobante = async () => {
+        if (!reserva) return;
+        setDescargando(true);
+        try {
+            const blob = await reservasApi.comprobantePdf(reserva.id) as unknown as Blob;
+            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `comprobante-reserva-${reserva.id}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            addToast('Error al generar el comprobante', 'error');
+        } finally {
+            setDescargando(false);
+        }
+    };
+
     if (loading) return (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '0.75rem', color: 'var(--text-secondary)' }}>
             <RefreshCw size={20} className="spin" /> Cargando...
@@ -213,8 +235,12 @@ const ReservaDetallePage = () => {
                         </div>
                     </div>
                 </div>
-                {reserva.estado === 'activa' && (
-                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <Button variant="secondary" size="sm" onClick={handleComprobante} disabled={descargando}>
+                        <FileDown size={14} style={{ marginRight: '0.4rem' }} /> {descargando ? 'Generando…' : 'Comprobante (PDF)'}
+                    </Button>
+                    {reserva.estado === 'activa' && (
+                        <>
                         {vencida && (
                             <Button variant="outline" size="sm" onClick={() => setShowVencidaModal(true)}>
                                 <Clock size={14} style={{ marginRight: '0.4rem' }} /> Marcar vencida
@@ -235,8 +261,9 @@ const ReservaDetallePage = () => {
                         <Button variant="danger" size="sm" onClick={() => setShowCancelModal(true)}>
                             <XCircle size={14} style={{ marginRight: '0.4rem' }} /> Cancelar reserva
                         </Button>
-                    </div>
-                )}
+                        </>
+                    )}
+                </div>
             </div>
 
             {/* Main cards */}
