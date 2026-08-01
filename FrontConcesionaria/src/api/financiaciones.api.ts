@@ -14,6 +14,42 @@ export interface CreateFinanciacionDto {
     observaciones?: string;
 }
 
+// Simulador: calcula el plan sin persistir. Sólo requiere monto + cuotas; el resto
+// es opcional (fecha/día sólo cambian las fechas de vencimiento, no los montos).
+export interface SimularFinanciacionDto {
+    montoFinanciado: number;
+    cuotas: number;
+    tasaMensual?: number;
+    moneda?: 'ARS' | 'USD';
+    fechaInicio?: string;
+    diaVencimiento?: number;
+}
+
+export interface CuotaSimulada {
+    nroCuota: number;
+    montoCuota: number;
+    saldoCuota: number;
+    vencimiento: string;
+    estado: string;
+}
+
+export interface SimulacionResult {
+    resumen: {
+        montoFinanciado: number;
+        cuotas: number;
+        tasaMensual: number;
+        moneda: string;
+        /** Valor de la primera cuota (las demás pueden diferir en 1 centavo). */
+        valorCuota: number;
+        totalAPagar: number;
+        /** Interés total = totalAPagar − montoFinanciado. */
+        costoFinanciero: number;
+        fechaInicio: string;
+        diaVencimiento: number;
+    };
+    cuotas: CuotaSimulada[];
+}
+
 export interface PagarCuotaDto {
     monto: number;
     metodo: 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
@@ -31,6 +67,10 @@ export const financiacionesApi = {
 
     create: (data: CreateFinanciacionDto) =>
         client.post('/financiaciones', data),
+
+    /** Simula el plan de cuotas (no persiste). Misma amortización que el alta real. */
+    simular: (data: SimularFinanciacionDto) =>
+        client.post<SimulacionResult>('/financiaciones/simular', data),
 
     /**
      * Refinancia el saldo pendiente en un contrato nuevo.

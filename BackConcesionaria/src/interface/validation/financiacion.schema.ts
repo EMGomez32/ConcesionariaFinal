@@ -51,10 +51,16 @@ const optionalDiaVencimiento = z.preprocess(
         .optional(),
 );
 
-// Cantidad de cuotas: entero >= 1 (el use-case/repositorio hace parseInt).
+// Cantidad de cuotas: entero entre 1 y 600 (el use-case/repositorio hace parseInt).
+// El tope NO es cosmético: `planDeCuotas` corre un loop síncrono de n iteraciones
+// (crea n objetos + n cálculos de fecha) y lo comparten create/refinanciar/simular.
+// Sin cota, un `cuotas: 1e8` cuelga el event loop / tumba el proceso por OOM (peor
+// en la Raspberry Pi de prod). 600 = 50 años de cuotas mensuales, muy por encima de
+// cualquier financiación real (el front ofrece hasta 60).
 const cuotasField = z.coerce.number({ error: 'La cantidad de cuotas es obligatoria' })
     .int('La cantidad de cuotas debe ser un número entero')
-    .min(1, 'La cantidad de cuotas debe ser al menos 1');
+    .min(1, 'La cantidad de cuotas debe ser al menos 1')
+    .max(600, 'La cantidad de cuotas no puede superar 600');
 
 const monedaEnum = z.enum(['ARS', 'USD']);
 const estadoFinanciacionEnum = z.enum(['activa', 'cancelada', 'en_mora', 'refinanciada']);
@@ -78,6 +84,19 @@ export const createFinanciacionSchema = z.object({
     // Lo resuelve el controller; declarado para que el super_admin pueda elegir
     // tenant por body sin que el strip de Zod lo borre (ver cabecera TENANT).
     concesionariaId: optionalFk,
+});
+
+// POST /financiaciones/simular — calcula el plan de cuotas SIN persistir (herramienta
+// de venta). Sólo los inputs de la matemática: monto y cuotas obligatorios; tasa,
+// moneda, fecha y día opcionales (fecha/día sólo afectan las FECHAS de vencimiento,
+// no los montos, así que se defaultan en el controller para simular rápido).
+export const simularFinanciacionSchema = z.object({
+    montoFinanciado: montoField('El monto a financiar'),
+    cuotas: cuotasField,
+    tasaMensual: optionalTasa,
+    moneda: monedaEnum.optional(),
+    fechaInicio: z.string().optional(),
+    diaVencimiento: optionalDiaVencimiento,
 });
 
 // POST /financiaciones/:id/refinanciar — el monto NO se recibe: el backend lo
