@@ -12,8 +12,10 @@ import {
     Plus, Search, Eye, Trash2, RefreshCw,
     CreditCard, DollarSign, ChevronLeft,
     ChevronRight, Calendar, User, ShoppingBag,
-    AlertCircle, CheckCircle2, Car, TrendingUp, Receipt, Calculator
+    AlertCircle, CheckCircle2, Car, TrendingUp, Receipt, Calculator, MessageCircle
 } from 'lucide-react';
+import { waShareLink } from '../../utils/whatsapp';
+import { formatFecha } from '../../utils/fecha';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type EstadoFinanciacion = 'activa' | 'cancelada' | 'en_mora' | 'refinanciada';
@@ -461,6 +463,43 @@ const FinanciacionesPage = () => {
     const simFmt = (n: number) =>
         `${(simResult?.resumen.moneda ?? simForm.moneda) === 'USD' ? 'US$' : '$'}${Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
 
+    // Comparte la simulación por WhatsApp SIN destinatario: abre el borrador y el
+    // vendedor elige el contacto (no se envía nada solo, patrón waShareLink).
+    const handleCompartirSim = () => {
+        if (!simResult) return;
+        const r = simResult.resumen;
+        const lineas = [
+            'Te comparto la simulación de tu plan de financiación:',
+            `Monto a financiar: ${simFmt(r.montoFinanciado)}`,
+            `${r.cuotas} ${r.cuotas === 1 ? 'cuota' : 'cuotas'} de ${simFmt(r.valorCuota)}`,
+            r.tasaMensual > 0 ? `Interés: ${r.tasaMensual}% mensual` : 'Sin interés',
+            `Total a pagar: ${simFmt(r.totalAPagar)}`,
+            // formatFecha (no toLocaleDateString): el vencimiento es medianoche UTC
+            // y en UTC-3 se mostraría el día ANTERIOR en un texto que va al cliente.
+            simResult.cuotas[0] ? `Primera cuota: ${formatFecha(simResult.cuotas[0].vencimiento)}` : '',
+            'Es una simulación informativa. Escribime para avanzar. ¡Gracias!',
+        ].filter(Boolean);
+        window.open(waShareLink(lineas.join('\n')), '_blank', 'noopener');
+    };
+
+    // Pasa los valores simulados al alta real: abre "Instrumentar Nuevo Plan" con
+    // monto/moneda/cuotas/tasa/fecha/día precargados (queda elegir venta y cliente).
+    const handleUsarEnPlan = () => {
+        if (!simResult) return;
+        const r = simResult.resumen;
+        setForm({
+            ...emptyForm(),
+            montoFinanciado: r.montoFinanciado,
+            moneda: r.moneda === 'USD' ? 'USD' : 'ARS',
+            cuotas: r.cuotas,
+            diaVencimiento: r.diaVencimiento,
+            fechaInicio: r.fechaInicio,
+            tasaMensual: r.tasaMensual ? String(r.tasaMensual) : '',
+        });
+        setSimOpen(false);
+        setCreateOpen(true);
+    };
+
     return (
         <div className="page-container animate-fade-in">
             {/* Header */}
@@ -890,12 +929,20 @@ const FinanciacionesPage = () => {
                                         {simResult.cuotas.map(c => (
                                             <tr key={c.nroCuota}>
                                                 <td className="font-black text-white"># {c.nroCuota}</td>
-                                                <td className="font-mono text-xs text-slate-400">{new Date(c.vencimiento).toLocaleDateString('es-AR')}</td>
+                                                <td className="font-mono text-xs text-slate-400">{formatFecha(c.vencimiento)}</td>
                                                 <td className="font-bold text-white" style={{ textAlign: 'right' }}>{simFmt(c.montoCuota)}</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className="flex gap-3 justify-end flex-wrap">
+                                <Button variant="secondary" onClick={handleCompartirSim} title="Abre WhatsApp con el resumen del plan (elegís el contacto; no se envía solo)">
+                                    <MessageCircle size={16} /> Compartir por WhatsApp
+                                </Button>
+                                <Button variant="secondary" onClick={handleUsarEnPlan} title="Pasa estos valores al alta de un plan real (queda elegir venta y cliente)">
+                                    <Plus size={16} /> Usar en nuevo plan
+                                </Button>
                             </div>
                             <p className="text-xs text-muted text-center">
                                 Simulación informativa. Los montos coinciden con los de una financiación real; las fechas usan el inicio y el día de cobro elegidos.
@@ -1059,7 +1106,7 @@ const FinanciacionesPage = () => {
                                         {detail.cuotasPlan?.map((c: Cuota) => (
                                             <tr key={c.id}>
                                                 <td className="font-black text-white"># {c.nroCuota}</td>
-                                                <td className="font-mono text-xs text-slate-400">{new Date(c.vencimiento).toLocaleDateString('es-AR')}</td>
+                                                <td className="font-mono text-xs text-slate-400">{formatFecha(c.vencimiento)}</td>
                                                 <td className="font-bold text-white">${Number(c.montoCuota).toLocaleString('es-AR')}</td>
                                                 <td className="font-black text-accent-light">${Number(c.saldoCuota).toLocaleString('es-AR')}</td>
                                                 <td>
@@ -1113,7 +1160,7 @@ const FinanciacionesPage = () => {
                         <div className="p-6 bg-slate-900/60 rounded-3xl border border-accent/20 flex justify-between items-center shadow-glow-sm">
                             <div>
                                 <span className="text-[10px] font-black text-muted block mb-1">CONCILIACIÓN CUOTA #{pagarCuota.nroCuota}</span>
-                                <p className="text-xs text-accent-light font-bold">FECHA LÍMITE: {new Date(pagarCuota.vencimiento).toLocaleDateString()}</p>
+                                <p className="text-xs text-accent-light font-bold">FECHA LÍMITE: {formatFecha(pagarCuota.vencimiento)}</p>
                             </div>
                             <div className="text-right">
                                 <span className="text-[10px] font-black text-muted block mb-1">EXIGIBILIDAD</span>
