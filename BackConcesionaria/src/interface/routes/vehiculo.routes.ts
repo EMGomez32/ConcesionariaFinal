@@ -36,6 +36,24 @@ router.get('/', authenticate, VehiculoController.getAll);
 
 /**
  * @openapi
+ * /vehiculos/catalogo/pdf:
+ *   get:
+ *     tags: [Vehículos]
+ *     summary: Catálogo de vehículos en PDF (grilla, de cara al cliente)
+ *     description: PDF con la marca de la concesionaria y una grilla de vehículos (foto principal, specs y precio). Acepta los mismos filtros que el listado (search, estado, tipo, sucursalId). Tope de 60 unidades.
+ *     parameters:
+ *       - { in: query, name: search, schema: { type: string } }
+ *       - { in: query, name: estado, schema: { type: string } }
+ *       - { in: query, name: tipo, schema: { type: string } }
+ *       - { in: query, name: sucursalId, schema: { type: integer } }
+ *     responses:
+ *       200: { description: PDF del catálogo, content: { application/pdf: {} } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ */
+router.get('/catalogo/pdf', authenticate, ComprobanteController.catalogoPdf);
+
+/**
+ * @openapi
  * /vehiculos/{id}:
  *   get:
  *     tags: [Vehículos]

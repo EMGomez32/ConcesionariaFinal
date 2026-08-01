@@ -6,6 +6,8 @@ import { resolveBranding, drawEncabezado, drawPie } from './pdf/branding';
 import { renderEstadoCuenta, EstadoCuentaData, FinanciacionLinea } from './pdf/estadoCuenta';
 import { storage } from '../../infrastructure/storage/LocalStorageAdapter';
 import { sniffImageType } from '../middlewares/upload.middleware';
+import { drawTopBand } from './pdf/branding';
+import { context } from '../../infrastructure/security/context';
 
 // Campos de marca que cada PDF necesita de su concesionaria (logo/colores/pie).
 const marcaSelect = {
@@ -30,6 +32,173 @@ const prettyEnum = (s: unknown) => {
 };
 
 export class ComprobanteController {
+    // GET /api/vehiculos/catalogo/pdf → catálogo de vehículos en PDF (grilla).
+    // De cara al cliente: marca del tenant, foto principal, specs y precio de cada
+    // unidad. Acepta los MISMOS filtros que el listado (search/estado/tipo/sucursal)
+    // para exportar "lo que se está viendo". No muestra datos internos.
+    static async catalogoPdf(req: Request, res: Response, next: NextFunction) {
+        try {
+            // ── WHERE: misma semántica que VehiculoController.getAll ───────────────
+            const { search, marca, modelo, dominio, estado, tipo, sucursalId, sortBy, sortOrder } = req.query;
+            const where: any = {};
+            const term = (search ?? marca) as string | undefined;
+            if (term) {
+                where.OR = [
+                    { marca: { contains: String(term), mode: 'insensitive' } },
+                    { modelo: { contains: String(term), mode: 'insensitive' } },
+                    { dominio: { contains: String(term), mode: 'insensitive' } },
+                ];
+            }
+            if (modelo) where.modelo = { contains: String(modelo), mode: 'insensitive' };
+            if (dominio) where.dominio = { contains: String(dominio), mode: 'insensitive' };
+            if (estado) {
+                const estados = String(estado).split(',').map((e) => e.trim()).filter(Boolean);
+                where.estado = estados.length > 1 ? { in: estados } : estados[0];
+            }
+            if (tipo) where.tipo = tipo;
+            if (sucursalId) where.sucursalId = Number(sucursalId);
+
+            const SORTABLE = ['createdAt', 'fechaIngreso', 'precioLista', 'anio', 'kmIngreso', 'marca', 'modelo'];
+            const orderKey = SORTABLE.includes(String(sortBy)) ? String(sortBy) : 'createdAt';
+            const orderDir = sortOrder === 'asc' ? 'asc' : 'desc';
+
+            // Tope defensivo: un catálogo gigante no tiene sentido y evita leer miles
+            // de fotos. Se muestran las primeras CAP según el orden pedido.
+            const CAP = 60;
+            const total = await prisma.vehiculo.count({ where });
+            const vehiculos = await prisma.vehiculo.findMany({
+                where,
+                orderBy: [{ [orderKey]: orderDir }, { id: 'asc' }],
+                take: CAP,
+                include: {
+                    concesionaria: { select: marcaSelect },
+                    archivos: {
+                        where: { deletedAt: null, tipo: 'foto' },
+                        orderBy: [{ esPrincipal: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+                        // La ficha (1 vehículo) lee TODAS las fotos hasta la primera
+                        // legible; el catálogo lo aproxima con un tope generoso: acota
+                        // las lecturas a lo largo de hasta 60 unidades sin caer en el
+                        // caso raro de mostrar "Sin foto" por 4 fotos no-embebibles
+                        // (webp/heic) al inicio teniendo un JPEG más atrás.
+                        take: 12,
+                        select: { storageKey: true },
+                    },
+                },
+            }) as any[];
+
+            // Foto principal legible (PNG/JPEG) por vehículo, pre-leída antes de dibujar.
+            const fotos = new Map<number, Buffer>();
+            for (const v of vehiculos) {
+                for (const a of (v.archivos ?? [])) {
+                    if (!a.storageKey) continue;
+                    try {
+                        const buf = await storage.read(a.storageKey);
+                        if (sniffImageType(buf)) { fotos.set(v.id, buf); break; }
+                    } catch { /* ilegible: probar la siguiente */ }
+                }
+            }
+
+            // Marca: la del primer vehículo (todos son del mismo tenant salvo super_admin);
+            // si no hay vehículos, la del tenant del actor; si tampoco, AUTENZA.
+            const tenantId = context.getUser()?.concesionariaId ?? null;
+            const conc = vehiculos[0]?.concesionaria
+                ?? (tenantId ? await prisma.concesionaria.findFirst({ where: { id: tenantId }, select: marcaSelect }) : null);
+            const brand = await resolveBranding(conc);
+            const accent = brand.accent;
+            const muted = brand.muted;
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'attachment; filename="catalogo-vehiculos.pdf"');
+            const doc = new PDFDocument({ size: 'A4', margin: 40 });
+            doc.pipe(res);
+
+            const hoyStr = new Date().toLocaleDateString('es-AR');
+            const totalPages = Math.max(1, Math.ceil(vehiculos.length / 6));
+
+            // Encabezado compacto (todas las páginas): banda + logo/nombre + título.
+            const drawHeader = () => {
+                drawTopBand(doc, brand);
+                if (brand.logo) {
+                    try { doc.image(brand.logo, 40, 20, { fit: [130, 30] }); } catch { /* buffer inválido */ }
+                } else {
+                    doc.fillColor(accent).fontSize(15).font('Helvetica-Bold')
+                        .text(brand.nombre, 40, 24, { width: 300, height: 20, lineBreak: false, ellipsis: true });
+                }
+                doc.fillColor('#111827').fontSize(13).font('Helvetica-Bold')
+                    .text('CATÁLOGO DE VEHÍCULOS', 255, 26, { width: 300, align: 'right' });
+                doc.moveTo(40, 58).lineTo(555, 58).strokeColor('#e5e7eb').stroke();
+            };
+
+            // Pie compacto (todas las páginas): tenant · resumen · página x/y.
+            // OJO con la Y: el borde inferior imprimible es 841.89 - margin(40) = 801.89.
+            // Un texto por debajo de eso dispara un salto de página automático en pdfkit
+            // (cada línea del pie caería en su propia página fantasma). Por eso va en 782/788.
+            const drawFooter = (page: number) => {
+                doc.moveTo(40, 782).lineTo(555, 782).strokeColor('#e5e7eb').stroke();
+                doc.fillColor(muted).fontSize(8).font('Helvetica');
+                // `height` en las tres: sin él, un nombre de tenant largo envuelve a 2
+                // líneas (lineBreak:false no alcanza para el ellipsis) y la 2ª línea
+                // cruza el margen → página fantasma. Con height quedan en una sola línea.
+                doc.text(brand.branded ? brand.nombre : 'AUTENZA', 40, 788, { width: 200, height: 10, lineBreak: false, ellipsis: true });
+                const resumen = total > CAP ? `${vehiculos.length} de ${total} unidades · ${hoyStr}` : `${total} ${total === 1 ? 'unidad' : 'unidades'} · ${hoyStr}`;
+                doc.text(resumen, 197, 788, { width: 200, height: 10, align: 'center', lineBreak: false });
+                doc.text(`Página ${page} de ${totalPages}`, 355, 788, { width: 200, height: 10, align: 'right', lineBreak: false });
+            };
+
+            // Una tarjeta de vehículo en (cx, cy). Ancho 250, alto visual 210.
+            const drawCard = (v: any, foto: Buffer | null, cx: number, cy: number) => {
+                doc.roundedRect(cx, cy, 250, 210, 6).lineWidth(0.8).strokeColor('#e5e7eb').stroke();
+                // Foto (o placeholder).
+                const px = cx + 10, py = cy + 10, pw = 230, ph = 125;
+                if (foto) {
+                    try { doc.image(foto, px, py, { fit: [pw, ph], align: 'center', valign: 'center' }); }
+                    catch { doc.save().rect(px, py, pw, ph).fill('#f3f4f6').restore(); }
+                } else {
+                    doc.save().rect(px, py, pw, ph).fill('#f3f4f6').restore();
+                    doc.fillColor(muted).fontSize(9).font('Helvetica').text('Sin foto', px, py + ph / 2 - 5, { width: pw, align: 'center' });
+                }
+                const tx = cx + 12, tw = 226;
+                const titulo = `${v.marca || ''} ${v.modelo || ''}`.trim() || 'Vehículo';
+                doc.fillColor('#111827').fontSize(12).font('Helvetica-Bold')
+                    .text(titulo, tx, cy + 144, { width: tw, height: 15, lineBreak: false, ellipsis: true });
+                const sub = [v.version, v.anio ? String(v.anio) : ''].filter(Boolean).join('  ·  ');
+                doc.fillColor(muted).fontSize(8.5).font('Helvetica')
+                    .text(sub || (v.tipo === 'CERO_KM' ? '0 km' : 'Usado'), tx, cy + 161, { width: tw, height: 12, lineBreak: false, ellipsis: true });
+                const specs = [
+                    v.kmIngreso != null ? `${Number(v.kmIngreso).toLocaleString('es-AR')} km` : null,
+                    v.color || null,
+                ].filter(Boolean).join('  ·  ');
+                if (specs) {
+                    doc.fillColor(muted).fontSize(8).font('Helvetica')
+                        .text(specs, tx, cy + 176, { width: tw, height: 11, lineBreak: false, ellipsis: true });
+                }
+                doc.fillColor(accent).fontSize(13).font('Helvetica-Bold')
+                    .text(v.precioLista ? money(v.precioLista, v.moneda || 'ARS') : 'Consultar', tx, cy + 190, { width: tw, height: 16, lineBreak: false, ellipsis: true });
+            };
+
+            drawHeader();
+            if (vehiculos.length === 0) {
+                doc.fillColor(muted).fontSize(12).font('Helvetica')
+                    .text('No hay vehículos que coincidan con los filtros seleccionados.', 40, 120, { width: 515, align: 'center' });
+            }
+            const colX = [40, 305];
+            for (let i = 0; i < vehiculos.length; i++) {
+                if (i > 0 && i % 6 === 0) {
+                    drawFooter(i / 6);
+                    doc.addPage();
+                    drawHeader();
+                }
+                const pos = i % 6;
+                drawCard(vehiculos[i], fotos.get(vehiculos[i].id) ?? null, colX[pos % 2], 72 + Math.floor(pos / 2) * 220);
+            }
+            drawFooter(totalPages);
+
+            doc.end();
+        } catch (error) {
+            next(error);
+        }
+    }
+
     // GET /api/vehiculos/:id/ficha → ficha del vehículo en PDF (de cara al cliente).
     // Una página con la marca del tenant, foto principal, specs y precio de lista.
     // NO muestra datos internos (precio de compra, gastos, proveedor).

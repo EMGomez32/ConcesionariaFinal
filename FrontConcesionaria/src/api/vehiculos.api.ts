@@ -42,4 +42,13 @@ export const vehiculosApi = {
     // Ficha del vehículo en PDF (de cara al cliente), con la marca del tenant.
     fichaPdf: (id: number) =>
         client.get<Blob>(`/vehiculos/${id}/ficha`, { responseType: 'blob' }),
+
+    // Catálogo de vehículos en PDF (grilla), con los MISMOS filtros que el listado.
+    // Mismo criterio que getAll para `estado`: se serializa separado por coma.
+    catalogoPdf: (filters: VehiculoFilter = {}, options: PaginationOptions = {}) => {
+        const { estado, ...resto } = filters;
+        const params: Record<string, unknown> = { ...resto, ...options };
+        if (estado) params.estado = Array.isArray(estado) ? estado.join(',') : estado;
+        return client.get<Blob>('/vehiculos/catalogo/pdf', { params, responseType: 'blob' });
+    },
 };

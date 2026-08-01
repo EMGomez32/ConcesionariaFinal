@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVehiculos, useChangeVehiculoEstado, useDeleteVehiculo } from '../../hooks/useVehiculos';
+import { vehiculosApi } from '../../api/vehiculos.api';
 import { useSucursales } from '../../hooks/useSucursales';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -10,7 +11,7 @@ import Button from '../../components/ui/Button';
 import { useUIStore } from '../../store/uiStore';
 import {
     Plus, Search, Edit, Trash2,
-    RefreshCw, Car, ChevronDown, Calendar, Database, MapPin, DollarSign
+    RefreshCw, Car, ChevronDown, Calendar, Database, MapPin, DollarSign, FileText
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
 import DataTable, { type Column } from '../../components/ui/DataTable';
@@ -60,6 +61,7 @@ const VehiculosPage: React.FC = () => {
     const [filterSucursal, setFilterSucursal] = useState('');
     const [orden, setOrden] = useState<'recientes' | 'antiguedad'>('recientes');
     const [page, setPage] = useState(1);
+    const [catalogando, setCatalogando] = useState(false);
 
     // Cualquier cambio de filtro/búsqueda/orden vuelve a la página 1: si el nuevo
     // resultado tiene menos páginas, quedarse en la página actual dejaba una
@@ -92,6 +94,34 @@ const VehiculosPage: React.FC = () => {
 
     const changeEstadoMutation = useChangeVehiculoEstado();
     const deleteMutation = useDeleteVehiculo();
+
+    // Descarga el catálogo PDF con los MISMOS filtros/orden que la lista visible
+    // ("exportar lo que se está viendo"). Mismo patrón de descarga de blob que la ficha.
+    const handleCatalogo = async () => {
+        setCatalogando(true);
+        try {
+            const blob = await vehiculosApi.catalogoPdf({
+                search: debouncedSearch || undefined,
+                estado: filterEstado ? (filterEstado as EstadoVehiculo) : undefined,
+                tipo: filterTipo ? (filterTipo as TipoVehiculo) : undefined,
+                sucursalId: filterSucursal ? Number(filterSucursal) : undefined,
+            }, orden === 'antiguedad'
+                ? { sortBy: 'fechaIngreso', sortOrder: 'asc' }
+                : { sortBy: 'createdAt', sortOrder: 'desc' }) as unknown as Blob;
+            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'catalogo-vehiculos.pdf');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            addToast('Error al generar el catálogo', 'error');
+        } finally {
+            setCatalogando(false);
+        }
+    };
 
     const [estadoModal, setEstadoModal] = useState<{ vehiculo: Vehiculo } | null>(null);
     const [nuevoEstado, setNuevoEstado] = useState<EstadoVehiculo | ''>('');
@@ -231,6 +261,11 @@ const VehiculosPage: React.FC = () => {
                 <div className="flex gap-3">
                     <Button variant="secondary" onClick={() => refetch()} disabled={loading}>
                         <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                    </Button>
+                    {/* Catálogo PDF del filtro actual (exporta "lo que se está viendo"). */}
+                    <Button variant="secondary" onClick={handleCatalogo} loading={catalogando} title="Catálogo PDF de los vehículos del filtro actual">
+                        <FileText size={18} />
+                        Catálogo PDF
                     </Button>
                     <Button variant="primary" onClick={() => navigate('/vehiculos/nuevo')}>
                         <Plus size={18} />
