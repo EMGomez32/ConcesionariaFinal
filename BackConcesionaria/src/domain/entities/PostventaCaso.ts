@@ -19,6 +19,10 @@ export class PostventaCaso {
         public readonly descripcion: string,
         public readonly estado: string,
         public readonly fechaCierre: Date | null,
+        /** Turno de taller: cuándo se espera la unidad (o null si no se coordinó). */
+        public readonly fechaTurno: Date | null,
+        /** Hora del turno como "HH:MM" (o null). */
+        public readonly horaTurno: string | null,
         public readonly createdAt: Date,
         public readonly updatedAt: Date,
         public readonly deletedAt: Date | null,

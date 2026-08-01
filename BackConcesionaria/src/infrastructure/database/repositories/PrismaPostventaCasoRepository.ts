@@ -6,7 +6,7 @@ import { QueryOptions, PaginatedResponse } from '../../../types/common';
 
 // Sólo se puede ordenar por columnas reales: `sortBy` viene de la query y
 // pasarlo crudo a Prisma permite un 500 con cualquier valor inventado.
-const SORTABLE = ['createdAt', 'updatedAt', 'fechaReclamo', 'fechaCierre', 'estado'];
+const SORTABLE = ['createdAt', 'updatedAt', 'fechaReclamo', 'fechaCierre', 'fechaTurno', 'estado'];
 
 // Campos que el cliente puede escribir. express-validator valida pero NO recorta:
 // sin esta whitelist el resto del body llega crudo a Prisma. En update era un
@@ -15,12 +15,12 @@ const SORTABLE = ['createdAt', 'updatedAt', 'fechaReclamo', 'fechaCierre', 'esta
 // `concesionariaId` lo inyecta la extensión RLS desde el token: nunca del body.
 // `tipo` (texto libre) ya no se escribe: el tipo entra por `tipoId` contra el
 // catálogo TipoPostventa. La columna vieja queda sólo como histórico.
-const EDITABLE_CREATE = ['clienteId', 'vehiculoId', 'sucursalId', 'ventaId', 'fechaReclamo', 'tipoId', 'descripcion'] as const;
+const EDITABLE_CREATE = ['clienteId', 'vehiculoId', 'sucursalId', 'ventaId', 'fechaReclamo', 'tipoId', 'descripcion', 'fechaTurno', 'horaTurno'] as const;
 // `estado` sólo entra por acá: lo valida la máquina de estados en UpdateCaso.
-const EDITABLE_UPDATE = ['estado', 'tipoId', 'descripcion', 'fechaReclamo', 'fechaCierre'] as const;
+const EDITABLE_UPDATE = ['estado', 'tipoId', 'descripcion', 'fechaReclamo', 'fechaCierre', 'fechaTurno', 'horaTurno'] as const;
 
 // @db.Date: el <input type="date"> manda 'YYYY-MM-DD' y Prisma espera DateTime.
-const DATE_KEYS = ['fechaReclamo', 'fechaCierre'];
+const DATE_KEYS = ['fechaReclamo', 'fechaCierre', 'fechaTurno'];
 
 function pickEditable(data: any = {}, editable: readonly string[]): Record<string, any> {
     const out: Record<string, any> = {};
@@ -94,10 +94,12 @@ export class PrismaPostventaCasoRepository implements IPostventaCasoRepository {
     }
 
     async update(id: number, data: any): Promise<PostventaCaso> {
-        const c = await prisma.postventaCaso.update({
-            where: { id },
-            data: pickEditable(data, EDITABLE_UPDATE),
-        });
+        const payload = pickEditable(data, EDITABLE_UPDATE);
+        // La hora no vive sin fecha: al desagendar (fechaTurno explícito null) se
+        // limpia también la hora, para no dejar una hora colgada sin turno. (El
+        // front ya lo previene; esto cubre el llamado directo a la API.)
+        if ('fechaTurno' in payload && payload.fechaTurno === null) payload.horaTurno = null;
+        const c = await prisma.postventaCaso.update({ where: { id }, data: payload });
         return this.mapToEntity(c);
     }
 
@@ -121,6 +123,8 @@ export class PrismaPostventaCasoRepository implements IPostventaCasoRepository {
             c.descripcion,
             c.estado,
             c.fechaCierre ?? null,
+            c.fechaTurno ?? null,
+            c.horaTurno ?? null,
             c.createdAt,
             c.updatedAt,
             c.deletedAt ?? null,
