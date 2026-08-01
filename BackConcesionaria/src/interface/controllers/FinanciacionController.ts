@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaFinanciacionRepository } from '../../infrastructure/database/repositories/PrismaFinanciacionRepository';
+import { PrismaFinanciacionRepository, planDeCuotas } from '../../infrastructure/database/repositories/PrismaFinanciacionRepository';
 import { GetFinanciaciones } from '../../application/use-cases/financiaciones/GetFinanciaciones';
 import { GetFinanciacionById } from '../../application/use-cases/financiaciones/GetFinanciacionById';
 import { CreateFinanciacion } from '../../application/use-cases/financiaciones/CreateFinanciacion';
@@ -35,6 +35,46 @@ export class FinanciacionController {
             const id = parseInt(req.params.id as string, 10);
             const result = await getFinanciacionByIdUC.execute(id);
             res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * POST /financiaciones/simular — devuelve el plan de cuotas SIN persistir nada.
+     * Reutiliza la MISMA función pura `planDeCuotas` que usa el create/refinanciar
+     * (con las mismas coerciones parseFloat/parseInt), así los números del simulador
+     * coinciden exactamente con los de una financiación real.
+     */
+    static async simular(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { montoFinanciado, cuotas, tasaMensual, moneda, fechaInicio, diaVencimiento } = req.body;
+            const total = parseFloat(montoFinanciado);
+            const n = parseInt(cuotas, 10);
+            // fecha/día sólo cambian las fechas de vencimiento, no los montos: se
+            // defaultan (hoy / día 10) para poder simular con sólo monto + cuotas.
+            const inicio = fechaInicio || new Date().toISOString().slice(0, 10);
+            const dia = diaVencimiento != null ? Number(diaVencimiento) : 10;
+
+            const cuotasPlan = planDeCuotas(total, n, tasaMensual, inicio, dia);
+            const totalAPagar = Math.round(cuotasPlan.reduce((s, c) => s + c.montoCuota, 0) * 100) / 100;
+
+            res.json({
+                resumen: {
+                    montoFinanciado: total,
+                    cuotas: n,
+                    tasaMensual: tasaMensual != null && tasaMensual !== '' ? Number(tasaMensual) : 0,
+                    moneda: moneda || 'ARS',
+                    // La 1ª cuota puede ser 1 centavo mayor por el reparto del resto;
+                    // el detalle exacto va en el array `cuotas`.
+                    valorCuota: cuotasPlan[0]?.montoCuota ?? 0,
+                    totalAPagar,
+                    costoFinanciero: Math.round((totalAPagar - total) * 100) / 100,
+                    fechaInicio: inicio,
+                    diaVencimiento: dia,
+                },
+                cuotas: cuotasPlan,
+            });
         } catch (error) {
             next(error);
         }

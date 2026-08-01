@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, type MouseEvent } from 'react';
-import { financiacionesApi, type CreateFinanciacionDto, type PagarCuotaDto } from '../../api/financiaciones.api';
+import { financiacionesApi, type CreateFinanciacionDto, type PagarCuotaDto, type SimulacionResult } from '../../api/financiaciones.api';
 import { clientesApi } from '../../api/clientes.api';
 import { usuariosApi } from '../../api/usuarios.api';
 import { ventasApi } from '../../api/ventas.api';
@@ -12,7 +12,7 @@ import {
     Plus, Search, Eye, Trash2, RefreshCw,
     CreditCard, DollarSign, ChevronLeft,
     ChevronRight, Calendar, User, ShoppingBag,
-    AlertCircle, CheckCircle2, Car, TrendingUp, Receipt
+    AlertCircle, CheckCircle2, Car, TrendingUp, Receipt, Calculator
 } from 'lucide-react';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -424,6 +424,43 @@ const FinanciacionesPage = () => {
         })
         : financiaciones;
 
+    // ── Simulador de cuotas (no persiste; misma amortización que el alta real) ──
+    const [simOpen, setSimOpen] = useState(false);
+    const [simForm, setSimForm] = useState({ montoFinanciado: 0, moneda: 'ARS' as 'ARS' | 'USD', cuotas: 12, tasaMensual: '', fechaInicio: '', diaVencimiento: 10 });
+    const [simResult, setSimResult] = useState<SimulacionResult | null>(null);
+    const [simLoading, setSimLoading] = useState(false);
+    const [simError, setSimError] = useState('');
+    const openSimulador = () => {
+        setSimForm({ montoFinanciado: 0, moneda: 'ARS', cuotas: 12, tasaMensual: '', fechaInicio: '', diaVencimiento: 10 });
+        setSimResult(null);
+        setSimError('');
+        setSimOpen(true);
+    };
+    const handleSimular = async () => {
+        if (!simForm.montoFinanciado || simForm.montoFinanciado <= 0) { setSimError('Ingresá un monto a financiar mayor a 0.'); return; }
+        if (!simForm.cuotas) { setSimError('Elegí la cantidad de cuotas.'); return; }
+        setSimError('');
+        setSimLoading(true);
+        try {
+            const res = await financiacionesApi.simular({
+                montoFinanciado: simForm.montoFinanciado,
+                cuotas: simForm.cuotas,
+                tasaMensual: simForm.tasaMensual ? parseFloat(simForm.tasaMensual) : undefined,
+                moneda: simForm.moneda,
+                fechaInicio: simForm.fechaInicio || undefined,
+                diaVencimiento: simForm.diaVencimiento,
+            }) as unknown as SimulacionResult;
+            setSimResult(res);
+        } catch (e) {
+            setSimError((e as { message?: string })?.message ?? 'No se pudo calcular la simulación.');
+        } finally {
+            setSimLoading(false);
+        }
+    };
+    // Formatea con la moneda del resultado (o del form mientras no hay resultado).
+    const simFmt = (n: number) =>
+        `${(simResult?.resumen.moneda ?? simForm.moneda) === 'USD' ? 'US$' : '$'}${Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
+
     return (
         <div className="page-container animate-fade-in">
             {/* Header */}
@@ -440,6 +477,9 @@ const FinanciacionesPage = () => {
                 <div className="flex gap-3">
                     <Button variant="secondary" onClick={() => loadList(page)}>
                         <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                    </Button>
+                    <Button variant="secondary" onClick={openSimulador} title="Simular un plan de cuotas para mostrarle al cliente (no crea nada)">
+                        <Calculator size={18} /> Simular cuotas
                     </Button>
                     <Button variant="primary" onClick={() => { setForm(emptyForm()); setCreateOpen(true); }}>
                         <Plus size={18} /> Instrumentar Nuevo Plan
@@ -747,6 +787,120 @@ const FinanciacionesPage = () => {
                                 <p className="text-xl font-bold text-white/50">${Number(form.montoFinanciado).toLocaleString('es-AR')}</p>
                             </div>
                         </div>
+                    )}
+                </div>
+            </Modal>
+
+            {/* MODAL SIMULADOR DE CUOTAS (no persiste nada) */}
+            <Modal
+                isOpen={simOpen}
+                onClose={() => setSimOpen(false)}
+                title="Simulador de cuotas"
+                subtitle="Calculá el plan para mostrarle al cliente. No crea ninguna financiación."
+                maxWidth="820px"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setSimOpen(false)}>Cerrar</Button>
+                        <Button variant="primary" onClick={handleSimular} loading={simLoading}>
+                            <Calculator size={16} /> Calcular plan
+                        </Button>
+                    </>
+                }
+            >
+                <div className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="form-group">
+                            <label className="form-label">Monto a financiar *</label>
+                            <div className="relative">
+                                <DollarSign size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-accent" />
+                                <input type="number" className="form-input pl-10 font-bold" value={simForm.montoFinanciado || ''}
+                                    onChange={e => setSimForm(f => ({ ...f, montoFinanciado: +e.target.value }))} placeholder="0.00" />
+                            </div>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Moneda</label>
+                            <select className="form-input" value={simForm.moneda} onChange={e => setSimForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
+                                <option value="ARS">Pesos (ARS)</option>
+                                <option value="USD">Dólares (USD)</option>
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Cantidad de cuotas *</label>
+                            <select className="form-input" value={simForm.cuotas} onChange={e => setSimForm(f => ({ ...f, cuotas: +e.target.value }))}>
+                                {[1, 3, 6, 12, 18, 24, 36, 48, 60].map(n => <option key={n} value={n}>{n} cuotas</option>)}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Interés mensual (%)</label>
+                            <div className="relative">
+                                <TrendingUp size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500" />
+                                <input type="number" step="0.1" min="0" className="form-input pl-10" value={simForm.tasaMensual}
+                                    onChange={e => setSimForm(f => ({ ...f, tasaMensual: e.target.value }))} placeholder="0.0 (sin interés)" />
+                            </div>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Fecha de inicio</label>
+                            <input type="date" className="form-input" value={simForm.fechaInicio} onChange={e => setSimForm(f => ({ ...f, fechaInicio: e.target.value }))} />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Día de cobro</label>
+                            <select className="form-input" value={simForm.diaVencimiento} onChange={e => setSimForm(f => ({ ...f, diaVencimiento: +e.target.value }))}>
+                                {[...Array(28)].map((_, i) => <option key={i + 1} value={i + 1}>Día {i + 1}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    {simError && (
+                        <div className="uploader-alert uploader-alert-error">
+                            <AlertCircle size={14} />
+                            <span>{simError}</span>
+                        </div>
+                    )}
+
+                    {simResult && (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-accent/5 border border-accent/20 rounded-3xl p-5">
+                                    <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-1">Valor de cuota</p>
+                                    <p className="text-2xl font-black text-white">{simFmt(simResult.resumen.valorCuota)}</p>
+                                    <p className="text-xs text-muted mt-1">{simResult.resumen.cuotas} cuotas mensuales</p>
+                                </div>
+                                <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-5">
+                                    <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1">Total a pagar</p>
+                                    <p className="text-2xl font-black text-white">{simFmt(simResult.resumen.totalAPagar)}</p>
+                                    <p className="text-xs text-muted mt-1">sobre {simFmt(simResult.resumen.montoFinanciado)} financiados</p>
+                                </div>
+                                <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-5">
+                                    <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1">Costo financiero</p>
+                                    <p className="text-2xl font-black text-blue-400">{simFmt(simResult.resumen.costoFinanciero)}</p>
+                                    <p className="text-xs text-muted mt-1">interés total ({simResult.resumen.tasaMensual}% mensual)</p>
+                                </div>
+                            </div>
+
+                            <div className="table-container border-white/5 overflow-hidden">
+                                <table className="data-table">
+                                    <thead className="bg-slate-900/60">
+                                        <tr>
+                                            <th>Cuota</th>
+                                            <th>Vencimiento</th>
+                                            <th style={{ textAlign: 'right' }}>Monto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {simResult.cuotas.map(c => (
+                                            <tr key={c.nroCuota}>
+                                                <td className="font-black text-white"># {c.nroCuota}</td>
+                                                <td className="font-mono text-xs text-slate-400">{new Date(c.vencimiento).toLocaleDateString('es-AR')}</td>
+                                                <td className="font-bold text-white" style={{ textAlign: 'right' }}>{simFmt(c.montoCuota)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p className="text-xs text-muted text-center">
+                                Simulación informativa. Los montos coinciden con los de una financiación real; las fechas usan el inicio y el día de cobro elegidos.
+                            </p>
+                        </>
                     )}
                 </div>
             </Modal>

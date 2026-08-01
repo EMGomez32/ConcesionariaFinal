@@ -3,7 +3,7 @@ import { FinanciacionController } from '../controllers/FinanciacionController';
 import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
-import { createFinanciacionSchema, refinanciarFinanciacionSchema, updateFinanciacionSchema, pagarCuotaSchema } from '../validation/financiacion.schema';
+import { createFinanciacionSchema, simularFinanciacionSchema, refinanciarFinanciacionSchema, updateFinanciacionSchema, pagarCuotaSchema } from '../validation/financiacion.schema';
 
 const router = Router();
 
@@ -74,6 +74,34 @@ router.get('/:id', FinanciacionController.getById);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
+/**
+ * @openapi
+ * /financiaciones/simular:
+ *   post:
+ *     tags: [Financiación]
+ *     summary: Simular un plan de cuotas (sin persistir)
+ *     description: Calcula el plan de cuotas para mostrarle al cliente antes de instrumentar el crédito. Usa la misma amortización que el alta real. No crea nada.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [montoFinanciado, cuotas]
+ *             properties:
+ *               montoFinanciado: { type: number }
+ *               cuotas: { type: integer }
+ *               tasaMensual: { type: number }
+ *               moneda: { type: string, enum: [ARS, USD] }
+ *               fechaInicio: { type: string, format: date }
+ *               diaVencimiento: { type: integer, minimum: 1, maximum: 31 }
+ *     responses:
+ *       200: { description: Plan simulado (resumen + cuotas), content: { application/json: { schema: { type: object } } } }
+ *       400: { $ref: '#/components/responses/ValidationError' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ */
+router.post('/simular', validateBody(simularFinanciacionSchema), FinanciacionController.simular);
+
 router.post('/', validateBody(createFinanciacionSchema), FinanciacionController.create);
 
 /**
