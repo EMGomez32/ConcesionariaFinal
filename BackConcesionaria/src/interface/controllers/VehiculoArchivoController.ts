@@ -3,6 +3,7 @@ import { PrismaVehiculoArchivoRepository } from '../../infrastructure/database/r
 import { GetArchivosByVehiculo } from '../../application/use-cases/vehiculo-archivos/GetArchivosByVehiculo';
 import { CreateVehiculoArchivo } from '../../application/use-cases/vehiculo-archivos/CreateVehiculoArchivo';
 import { DeleteVehiculoArchivo } from '../../application/use-cases/vehiculo-archivos/DeleteVehiculoArchivo';
+import { SetPrincipalVehiculoArchivo } from '../../application/use-cases/vehiculo-archivos/SetPrincipalVehiculoArchivo';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
 import { storage } from '../../infrastructure/storage/LocalStorageAdapter';
@@ -12,6 +13,7 @@ const repository = new PrismaVehiculoArchivoRepository();
 const getByVehiculoUC = new GetArchivosByVehiculo(repository);
 const createUC = new CreateVehiculoArchivo(repository);
 const deleteUC = new DeleteVehiculoArchivo(repository);
+const setPrincipalUC = new SetPrincipalVehiculoArchivo(repository);
 
 export class VehiculoArchivoController {
     static async getByVehiculo(req: Request, res: Response, next: NextFunction) {
@@ -76,6 +78,23 @@ export class VehiculoArchivoController {
             });
 
             res.status(201).json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /** Marca este archivo como la foto principal del vehículo (desmarca las otras). */
+    static async setPrincipal(req: Request, res: Response, next: NextFunction) {
+        try {
+            const id = parseInt(req.params.id as string, 10);
+            const result = await setPrincipalUC.execute(id);
+            await audit({
+                entidad: 'VehiculoArchivo',
+                accion: 'update',
+                entidadId: id,
+                detalle: `VehiculoArchivo ${id} marcado como foto principal`,
+            });
+            res.json(result);
         } catch (error) {
             next(error);
         }

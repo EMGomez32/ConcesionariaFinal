@@ -74,6 +74,22 @@ router.get('/vehiculo/:vehiculoId', VehiculoArchivoController.getByVehiculo);
 
 /**
  * @openapi
+ * /vehiculo-archivos/{id}/principal:
+ *   patch:
+ *     tags: [Vehículos]
+ *     summary: Marcar un archivo como foto principal del vehículo
+ *     description: Marca esta foto como la principal (la que usa la ficha PDF y los listados) y desmarca las demás del mismo vehículo.
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     responses:
+ *       200: { description: Archivo actualizado, content: { application/json: { schema: { type: object } } } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.patch('/:id/principal', VehiculoArchivoController.setPrincipal);
+
+/**
+ * @openapi
  * /vehiculo-archivos/{id}:
  *   delete:
  *     tags: [Vehículos]

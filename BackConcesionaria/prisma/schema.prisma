@@ -258,6 +258,9 @@ model VehiculoArchivo {
   sizeBytes    Int?      @map("size_bytes")
   storageKey   String?   @map("storage_key")
   uploadedById Int?      @map("uploaded_by_id")
+  // Foto principal del vehículo: la que usa la ficha PDF y los listados. Sólo una
+  // por vehículo (se mantiene con un desmarcado de hermanos al setearla).
+  esPrincipal  Boolean   @default(false) @map("es_principal")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   deletedAt    DateTime? @map("deleted_at")
@@ -265,6 +268,7 @@ model VehiculoArchivo {
 
   @@index([concesionariaId])
   @@index([vehiculoId])
+  @@index([vehiculoId, esPrincipal])
   @@map("vehiculo_archivos")
 }
 

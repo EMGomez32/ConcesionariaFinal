@@ -41,11 +41,12 @@ export class ComprobanteController {
                 include: {
                     sucursal: { select: { nombre: true } },
                     concesionaria: { select: marcaSelect },
-                    // Sólo las fotos (no documentos/comprobantes), más viejas primero:
-                    // la primera legible es la "principal" (no hay flag de principal).
+                    // Sólo las fotos (no documentos/comprobantes). La marcada como
+                    // principal primero; si no hay ninguna, la más vieja. El loop de
+                    // abajo toma la primera legible (PNG/JPEG) de ese orden.
                     archivos: {
                         where: { deletedAt: null, tipo: 'foto' },
-                        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+                        orderBy: [{ esPrincipal: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
                         select: { storageKey: true },
                     },
                 },

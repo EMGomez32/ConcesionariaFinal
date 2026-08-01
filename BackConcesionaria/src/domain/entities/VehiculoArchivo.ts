@@ -10,6 +10,7 @@ export class VehiculoArchivo {
         public readonly sizeBytes: number | null,
         public readonly storageKey: string | null,
         public readonly uploadedById: number | null,
+        public readonly esPrincipal: boolean,
         public readonly createdAt: Date,
         public readonly updatedAt: Date,
         public readonly deletedAt: Date | null
