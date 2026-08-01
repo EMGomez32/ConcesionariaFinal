@@ -39,6 +39,17 @@ const nullableInt = (msg?: string) => {
 const nullableFecha = () =>
     z.preprocess((v) => (v === '' ? undefined : v), z.string().nullable().optional());
 
+// Hora del turno como "HH:MM" (24 h). Nullable para poder desagendar (el repo
+// persiste null); '' se colapsa a undefined (campo no tocado).
+const nullableHora = () =>
+    z.preprocess(
+        (v) => (v === '' ? undefined : v),
+        z.string()
+            .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'La hora del turno debe tener formato HH:MM')
+            .nullable()
+            .optional(),
+    );
+
 // concesionariaId: lo resuelve el controller (resolveConcesionariaId) y el
 // super_admin lo elige por body → debe SOBREVIVIR al strip de validate.middleware,
 // si no el CreateCaso llega sin tenant (500). Ver cabecera de gasto-fijo.schema.ts.
@@ -60,7 +71,14 @@ export const createCasoSchema = z.object({
     descripcion: z.string({ error: 'La descripción es obligatoria' }).min(1, 'La descripción es obligatoria'),
     // Opcional: el tipo (catálogo TipoPostventa) puede no saberse al abrir el caso.
     tipoId: nullableInt('tipoId inválido'),
+    // Turno de taller: opcional al abrir el caso (se suele coordinar después).
+    fechaTurno: nullableFecha(),
+    horaTurno: nullableHora(),
     concesionariaId: optionalFk,
+}).refine((d) => !(d.horaTurno && !d.fechaTurno), {
+    // La hora no tiene sentido sin la fecha del turno (evita una hora colgada).
+    message: 'La hora del turno requiere una fecha de turno',
+    path: ['horaTurno'],
 });
 
 // PATCH parcial. No se declara concesionariaId: el controller.update no lo
@@ -71,4 +89,7 @@ export const updateCasoSchema = z.object({
     descripcion: z.string().min(1, 'La descripción no puede quedar vacía').optional(),
     fechaReclamo: z.string().optional(),
     fechaCierre: nullableFecha(),
+    // Turno: agendar/reprogramar (fecha+hora) o desagendar (null).
+    fechaTurno: nullableFecha(),
+    horaTurno: nullableHora(),
 });

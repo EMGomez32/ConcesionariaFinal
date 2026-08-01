@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
     Plus, Search, X, ChevronLeft, ChevronRight,
-    Eye, Trash2, Edit, ArrowRight, CheckCircle, Package, Wrench, Clock, RefreshCw, Tags
+    Eye, Trash2, Edit, ArrowRight, CheckCircle, Package, Wrench, Clock, RefreshCw, Tags,
+    Calendar, MessageCircle
 } from 'lucide-react';
+import { waLink } from '../../utils/whatsapp';
 import Button from '../../components/ui/Button';
 import { postventaApi } from '../../api/postventa.api';
 import type { PostventaCaso, PostventaItem, CreateCasoDto, CreateItemDto, EstadoPostventa, TipoPostventa } from '../../api/postventa.api';
@@ -50,6 +52,11 @@ const fmtDate = formatFecha;
 
 const today = () => new Date().toISOString().split('T')[0];
 
+// Fecha local YYYY-MM-DD (no toISOString, que pasa a UTC y de noche en UTC-3 ya
+// es "mañana"): se usa para clasificar los turnos en Hoy / Mañana / Vencido.
+const localISO = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function PostventaPage() {
     const addToast = useUIStore((s) => s.addToast);
@@ -65,8 +72,12 @@ export default function PostventaPage() {
     const [filterSucursal, setFilterSucursal] = useState('');
     const [filterTipo, setFilterTipo] = useState('');
 
-    // ─ Pestañas: casos | ABM de tipos ─
-    const [tab, setTab] = useState<'casos' | 'tipos'>('casos');
+    // ─ Pestañas: casos | agenda de taller | ABM de tipos ─
+    const [tab, setTab] = useState<'casos' | 'agenda' | 'tipos'>('casos');
+
+    // ─ Agenda de taller (casos con turno, no resueltos) ─
+    const [agenda, setAgenda] = useState<PostventaCaso[]>([]);
+    const [loadingAgenda, setLoadingAgenda] = useState(false);
 
     // ─ Catálogo de tipos (ABM) ─
     const [tipos, setTipos] = useState<TipoPostventa[]>([]);
@@ -96,7 +107,11 @@ export default function PostventaPage() {
     const [casoForm, setCasoForm] = useState<CreateCasoDto & { sucursalId: number; ventaId: number }>({
         clienteId: 0, vehiculoId: 0, sucursalId: 0, ventaId: 0,
         fechaReclamo: today(), tipoId: undefined, descripcion: '',
+        fechaTurno: '', horaTurno: '',
     });
+
+    // ─ Turno del caso en detalle (agendar / reprogramar / desagendar) ─
+    const [turnoForm, setTurnoForm] = useState({ fechaTurno: '', horaTurno: '' });
 
     // ─ Create Item form ─
     const [itemForm, setItemForm] = useState<CreateItemDto>({
@@ -151,6 +166,33 @@ export default function PostventaPage() {
     useEffect(() => {
         loadStats();
     }, [loadStats]);
+
+    // Agenda: casos con turno y SIN resolver, ordenados por fecha de turno.
+    // Se filtra `estado` en el SERVER (una llamada por estado abierto) en vez de
+    // traer todo y filtrar en el cliente: los casos resueltos conservan su
+    // fechaTurno para siempre y, con orden asc, sus turnos viejos coparían el cap
+    // dejando fuera los turnos futuros. Excluyéndolos en el server, el cupo queda
+    // sólo para casos abiertos (muy por debajo de 200 en una concesionaria). Sin
+    // piso de fecha a propósito: un turno abierto vencido debe verse como "Vencido".
+    const loadAgenda = useCallback(async () => {
+        setLoadingAgenda(true);
+        try {
+            const [pend, curso] = await Promise.all([
+                postventaApi.getCasos({ estado: 'pendiente', limit: 200, sortBy: 'fechaTurno', sortOrder: 'asc' }) as Promise<{ results?: PostventaCaso[] }>,
+                postventaApi.getCasos({ estado: 'en_curso', limit: 200, sortBy: 'fechaTurno', sortOrder: 'asc' }) as Promise<{ results?: PostventaCaso[] }>,
+            ]);
+            const merged = [...(pend?.results ?? []), ...(curso?.results ?? [])]
+                .filter(c => c.fechaTurno)
+                .sort((a, b) => String(a.fechaTurno).localeCompare(String(b.fechaTurno)));
+            setAgenda(merged);
+        } catch {
+            addToast('Error al cargar la agenda', 'error');
+        } finally {
+            setLoadingAgenda(false);
+        }
+    }, [addToast]);
+
+    useEffect(() => { if (tab === 'agenda') loadAgenda(); }, [tab, loadAgenda]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // TIPOS DE CASO (catálogo)
@@ -276,13 +318,17 @@ export default function PostventaPage() {
                 fechaReclamo: casoForm.fechaReclamo,
                 tipoId: casoForm.tipoId || undefined,
                 descripcion: casoForm.descripcion,
+                // El turno es opcional al abrir el caso ('' = sin turno todavía).
+                fechaTurno: casoForm.fechaTurno || undefined,
+                horaTurno: (casoForm.fechaTurno && casoForm.horaTurno) || undefined,
             };
             await postventaApi.createCaso(payload);
             addToast('Caso creado', 'success');
             setShowCreateModal(false);
-            setCasoForm({ clienteId: 0, vehiculoId: 0, sucursalId: 0, ventaId: 0, fechaReclamo: today(), tipoId: undefined, descripcion: '' });
+            setCasoForm({ clienteId: 0, vehiculoId: 0, sucursalId: 0, ventaId: 0, fechaReclamo: today(), tipoId: undefined, descripcion: '', fechaTurno: '', horaTurno: '' });
             setPage(1);
             loadCasos();
+            if (tab === 'agenda') loadAgenda();
         } catch {
             addToast('Error al crear caso', 'error');
         } finally {
@@ -383,9 +429,60 @@ export default function PostventaPage() {
         try {
             const res = await postventaApi.getCasoById(caso.id);
             setDetailCaso(res as PostventaCaso);
+            syncTurnoForm(res as PostventaCaso);
         } catch {
             setDetailCaso(caso);
+            syncTurnoForm(caso);
         }
+    };
+
+    // Precarga el editor de turno del detalle con lo agendado (o vacío).
+    const syncTurnoForm = (c: PostventaCaso) => {
+        setTurnoForm({
+            fechaTurno: c.fechaTurno ? String(c.fechaTurno).slice(0, 10) : '',
+            horaTurno: c.horaTurno ?? '',
+        });
+    };
+
+    // Agenda / reprograma / desagenda el turno del caso en detalle.
+    const handleGuardarTurno = async () => {
+        if (!detailCaso) return;
+        setSubmitting(true);
+        try {
+            await postventaApi.updateCaso(detailCaso.id, {
+                // '' => null: desagendar (el backend persiste null y limpia ambos).
+                fechaTurno: turnoForm.fechaTurno || null,
+                horaTurno: (turnoForm.fechaTurno && turnoForm.horaTurno) || null,
+            });
+            addToast(turnoForm.fechaTurno ? 'Turno agendado' : 'Turno desagendado', 'success');
+            const res = await postventaApi.getCasoById(detailCaso.id);
+            setDetailCaso(res as PostventaCaso);
+            syncTurnoForm(res as PostventaCaso);
+            loadCasos();
+            if (tab === 'agenda') loadAgenda();
+        } catch (e) {
+            addToast(getErrorMessage(e, 'Error al guardar el turno'), 'error');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    // Badge relativo del turno para la agenda (Vencido / Hoy / Mañana / fecha).
+    const turnoBadge = (fechaISO: string) => {
+        const hoy = localISO(new Date());
+        const man = new Date(); man.setDate(man.getDate() + 1);
+        const f = String(fechaISO).slice(0, 10);
+        if (f < hoy) return { label: 'Vencido', color: '#ef4444' };
+        if (f === hoy) return { label: 'Hoy', color: '#f59e0b' };
+        if (f === localISO(man)) return { label: 'Mañana', color: '#60a5fa' };
+        return { label: fmtDate(f), color: '#22c55e' };
+    };
+
+    // Borrador de recordatorio de turno por WhatsApp (el usuario revisa y manda).
+    const turnoWaHref = (c: PostventaCaso) => {
+        const veh = c.vehiculo ? `${c.vehiculo.marca} ${c.vehiculo.modelo}` : 'tu vehículo';
+        const msg = `Hola ${c.cliente?.nombre ?? ''}, te recordamos el turno de taller de ${veh} el ${fmtDate(c.fechaTurno)}${c.horaTurno ? ` a las ${c.horaTurno} hs` : ''}. ¡Te esperamos!`;
+        return waLink(c.cliente?.telefono, msg);
     };
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -426,11 +523,11 @@ export default function PostventaPage() {
                     <p>Reclamos y garantías sobre unidades ya entregadas, y el costo de resolverlos.</p>
                 </div>
                 <div className="flex gap-3">
-                    <Button variant="secondary" onClick={() => tab === 'casos' ? loadCasos() : loadTipos()}>
-                        <RefreshCw size={18} className={(tab === 'casos' ? loading : loadingTipos) ? 'animate-spin' : ''} />
+                    <Button variant="secondary" onClick={() => tab === 'casos' ? loadCasos() : tab === 'agenda' ? loadAgenda() : loadTipos()}>
+                        <RefreshCw size={18} className={(tab === 'casos' ? loading : tab === 'agenda' ? loadingAgenda : loadingTipos) ? 'animate-spin' : ''} />
                     </Button>
-                    <Button variant="primary" onClick={tab === 'casos' ? () => setShowCreateModal(true) : openCreateTipo}>
-                        <Plus size={18} /> {tab === 'casos' ? 'Nuevo Caso' : 'Nuevo Tipo'}
+                    <Button variant="primary" onClick={tab === 'tipos' ? openCreateTipo : () => setShowCreateModal(true)}>
+                        <Plus size={18} /> {tab === 'tipos' ? 'Nuevo Tipo' : 'Nuevo Caso'}
                     </Button>
                 </div>
             </header>
@@ -476,6 +573,14 @@ export default function PostventaPage() {
                     </button>
                     <button
                         role="tab"
+                        aria-selected={tab === 'agenda'}
+                        onClick={() => setTab('agenda')}
+                        className={`segmented-btn ${tab === 'agenda' ? 'is-active' : ''}`}
+                    >
+                        <Calendar size={14} /> Agenda de Taller
+                    </button>
+                    <button
+                        role="tab"
                         aria-selected={tab === 'tipos'}
                         onClick={() => setTab('tipos')}
                         className={`segmented-btn ${tab === 'tipos' ? 'is-active' : ''}`}
@@ -492,6 +597,81 @@ export default function PostventaPage() {
                     onEdit={openEditTipo}
                     onDelete={setDeletingTipo}
                 />
+            ) : tab === 'agenda' ? (
+                /* ─── Agenda de taller: casos con turno, sin resolver ─── */
+                <div className="glass" style={{ borderRadius: '0.75rem', overflow: 'hidden' }}>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                    {['Turno', 'Hora', 'Cliente', 'Vehículo', 'Tipo', 'Estado', 'Acciones'].map(h => (
+                                        <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loadingAgenda ? (
+                                    <tr><td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Cargando...</td></tr>
+                                ) : agenda.length === 0 ? (
+                                    <tr><td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                        No hay turnos agendados. Agendá uno desde el detalle de un caso (o al crearlo).
+                                    </td></tr>
+                                ) : agenda.map(caso => {
+                                    const badge = turnoBadge(caso.fechaTurno!);
+                                    const wa = turnoWaHref(caso);
+                                    return (
+                                        <tr key={caso.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
+                                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                                            onMouseLeave={e => (e.currentTarget.style.background = '')}
+                                        >
+                                            <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
+                                                <span style={{
+                                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 700,
+                                                    background: `${badge.color}22`, color: badge.color,
+                                                }}>
+                                                    {badge.label}
+                                                </span>
+                                                {(badge.label === 'Hoy' || badge.label === 'Mañana' || badge.label === 'Vencido') && (
+                                                    <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{fmtDate(caso.fechaTurno)}</span>
+                                                )}
+                                            </td>
+                                            <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: '0.85rem' }}>{caso.horaTurno ? `${caso.horaTurno} hs` : '—'}</td>
+                                            <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{caso.cliente?.nombre ?? '-'}</td>
+                                            <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
+                                                {caso.vehiculo ? `${caso.vehiculo.marca} ${caso.vehiculo.modelo}${caso.vehiculo.dominio ? ` (${caso.vehiculo.dominio})` : ''}` : '-'}
+                                            </td>
+                                            <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem' }}>{caso.tipo || '-'}</td>
+                                            <td style={{ padding: '0.75rem 1rem' }}>
+                                                <span style={{
+                                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 600,
+                                                    background: `${ESTADO_COLORS[caso.estado]}22`, color: ESTADO_COLORS[caso.estado],
+                                                }}>
+                                                    {ESTADO_LABELS[caso.estado]}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '0.75rem 1rem' }}>
+                                                <div style={{ display: 'flex', gap: '0.35rem' }}>
+                                                    {wa ? (
+                                                        <a href={wa} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar turno por WhatsApp (revisá antes de enviar)">
+                                                            <MessageCircle size={15} />
+                                                        </a>
+                                                    ) : (
+                                                        <span className="icon-btn" title="El cliente no tiene teléfono válido" style={{ opacity: 0.35, cursor: 'default' }}>
+                                                            <MessageCircle size={15} />
+                                                        </span>
+                                                    )}
+                                                    <button className="icon-btn" title="Ver detalle" onClick={() => handleViewDetail(caso)}>
+                                                        <Eye size={15} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             ) : (
             <>
             {/* Filters */}
@@ -657,6 +837,14 @@ export default function PostventaPage() {
                                 </select>
                             </FormField>
                         </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <FormField label="Turno de taller (opcional)">
+                                <input className="form-input" type="date" value={casoForm.fechaTurno ?? ''} onChange={e => setCasoForm(p => ({ ...p, fechaTurno: e.target.value, horaTurno: e.target.value ? p.horaTurno : '' }))} />
+                            </FormField>
+                            <FormField label="Hora del turno">
+                                <input className="form-input" type="time" value={casoForm.horaTurno ?? ''} onChange={e => setCasoForm(p => ({ ...p, horaTurno: e.target.value }))} disabled={!casoForm.fechaTurno} />
+                            </FormField>
+                        </div>
                         <FormField label="Descripción *">
                             <textarea className="form-input" rows={3} placeholder="Describa el problema o reclamo..." value={casoForm.descripcion} onChange={e => setCasoForm(p => ({ ...p, descripcion: e.target.value }))} style={{ resize: 'vertical' }} />
                         </FormField>
@@ -706,10 +894,38 @@ export default function PostventaPage() {
                         </InfoBlock>
                         <InfoBlock title="Fechas">
                             <InfoRow label="Reclamo" value={fmtDate(detailCaso.fechaReclamo)} />
+                            <InfoRow label="Turno" value={detailCaso.fechaTurno ? `${fmtDate(detailCaso.fechaTurno)}${detailCaso.horaTurno ? ` · ${detailCaso.horaTurno} hs` : ''}` : 'Sin turno'} />
                             <InfoRow label="Cierre" value={fmtDate(detailCaso.fechaCierre)} />
                             <InfoRow label="Creado" value={fmtDate(detailCaso.createdAt)} />
                         </InfoBlock>
                     </div>
+
+                    {/* Turno de taller: agendar / reprogramar / desagendar (no aplica a resueltos) */}
+                    {detailCaso.estado !== 'resuelto' && (
+                        <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.04)', borderRadius: '0.5rem' }}>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <Calendar size={13} /> Turno de taller
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                                <div style={{ flex: '1 1 160px' }}>
+                                    {/* Al vaciar la fecha se limpia la hora: si no, quedaba una hora
+                                        colgada en un input deshabilitado y no se podía desagendar. */}
+                                    <input className="form-input" type="date" value={turnoForm.fechaTurno} onChange={e => setTurnoForm(p => ({ ...p, fechaTurno: e.target.value, horaTurno: e.target.value ? p.horaTurno : '' }))} />
+                                </div>
+                                <div style={{ flex: '0 1 120px' }}>
+                                    <input className="form-input" type="time" value={turnoForm.horaTurno} onChange={e => setTurnoForm(p => ({ ...p, horaTurno: e.target.value }))} disabled={!turnoForm.fechaTurno} />
+                                </div>
+                                <Button variant="secondary" size="sm" onClick={handleGuardarTurno} disabled={submitting} loading={submitting}>
+                                    {detailCaso.fechaTurno ? (turnoForm.fechaTurno ? 'Reprogramar' : 'Desagendar') : 'Agendar'}
+                                </Button>
+                                {detailCaso.fechaTurno && turnoWaHref(detailCaso) && (
+                                    <a href={turnoWaHref(detailCaso)!} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar turno por WhatsApp (revisá antes de enviar)">
+                                        <MessageCircle size={16} />
+                                    </a>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Descripción */}
                     <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.04)', borderRadius: '0.5rem', fontSize: '0.9rem' }}>

@@ -30,10 +30,14 @@ export interface PostventaCaso {
     descripcion: string;
     estado: EstadoPostventa;
     fechaCierre?: string;
+    /** Turno de taller: cuándo se espera la unidad (o null si no se coordinó). */
+    fechaTurno?: string | null;
+    /** Hora del turno como "HH:MM" (o null). */
+    horaTurno?: string | null;
     createdAt: string;
     updatedAt: string;
     deletedAt?: string;
-    cliente?: { id: number; nombre: string };
+    cliente?: { id: number; nombre: string; telefono?: string | null };
     vehiculo?: { id: number; marca: string; modelo: string; dominio?: string };
     sucursal?: { id: number; nombre: string };
     items?: PostventaItem[];
@@ -59,6 +63,9 @@ export interface CreateCasoDto {
     fechaReclamo: string;
     tipoId?: number;
     descripcion: string;
+    /** Turno de taller (opcional al abrir el caso). */
+    fechaTurno?: string;
+    horaTurno?: string;
 }
 
 export interface UpdateCasoDto {
@@ -67,6 +74,9 @@ export interface UpdateCasoDto {
     descripcion?: string;
     fechaReclamo?: string;
     fechaCierre?: string;
+    /** Turno: agendar/reprogramar, o null para desagendar. */
+    fechaTurno?: string | null;
+    horaTurno?: string | null;
 }
 
 export interface CreateItemDto {
