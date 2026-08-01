@@ -11,6 +11,8 @@ export interface VehiculoArchivo {
     sizeBytes?: number | null;
     storageKey?: string | null;
     uploadedById?: number | null;
+    /** Foto principal del vehículo (la que usa la ficha PDF y los listados). */
+    esPrincipal?: boolean;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -32,6 +34,10 @@ export const vehiculoArchivosApi = {
 
     delete: (id: number) =>
         client.delete(`/vehiculo-archivos/${id}`),
+
+    /** Marca una foto como la principal del vehículo (desmarca las otras). */
+    setPrincipal: (id: number) =>
+        client.patch<VehiculoArchivo>(`/vehiculo-archivos/${id}/principal`),
 
     /** Endpoint multipart usado por el componente <FileUploader>. */
     uploadEndpoint: '/vehiculo-archivos/upload',

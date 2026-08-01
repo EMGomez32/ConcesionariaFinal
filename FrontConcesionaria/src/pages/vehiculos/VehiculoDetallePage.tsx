@@ -17,7 +17,7 @@ import {
     ArrowLeft, Car, Calendar, DollarSign, MapPin,
     FileImage, Wrench, ArrowLeftRight, FileText,
     ShoppingCart, Bookmark, RefreshCw, Hash,
-    Plus, Trash2, ExternalLink, Upload, X, Image, FileText as FileIcon, Edit, MessageCircle
+    Plus, Trash2, ExternalLink, Upload, X, Image, FileText as FileIcon, Edit, MessageCircle, Star
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { PaginatedResponse, ApiError } from '../../types/api.types';
@@ -139,6 +139,19 @@ const VehiculoDetallePage = () => {
             'Escribime para más info o para coordinar una visita. ¡Gracias!',
         ].filter(Boolean);
         window.open(waShareLink(lineas.join('\n')), '_blank', 'noopener');
+    };
+
+    // Marca una foto como principal (la que usa la ficha PDF). El backend desmarca
+    // las demás; acá se refleja optimista: sólo la elegida queda como principal.
+    const handleSetPrincipal = async (archivo: VehiculoArchivo) => {
+        try {
+            await vehiculoArchivosApi.setPrincipal(archivo.id);
+            addToast('Foto principal actualizada', 'success');
+            setArchivos(prev => prev.map(a => ({ ...a, esPrincipal: a.id === archivo.id })));
+        } catch (err: unknown) {
+            const apiError = err as ApiError;
+            addToast(apiError?.message || 'Error al marcar la foto principal', 'error');
+        }
     };
 
     const loadArchivos = useCallback(async () => {
@@ -666,7 +679,12 @@ const VehiculoDetallePage = () => {
                                                                     <IconComp size={28} />
                                                                 </div>
                                                                 <div className="archivo-info">
-                                                                    <span className="archivo-nombre">{a.originalName ?? a.descripcion ?? `Archivo ${a.id}`}</span>
+                                                                    <span className="archivo-nombre">
+                                                                        {a.originalName ?? a.descripcion ?? `Archivo ${a.id}`}
+                                                                        {grupo === 'foto' && a.esPrincipal && (
+                                                                            <span style={{ marginLeft: '0.4rem' }}><Badge variant="warning">Principal</Badge></span>
+                                                                        )}
+                                                                    </span>
                                                                     {a.descripcion && a.originalName && <span className="archivo-desc">{a.descripcion}</span>}
                                                                     <span className="archivo-fecha">
                                                                         {a.createdAt ? new Date(a.createdAt).toLocaleDateString('es-AR') : ''}
@@ -674,6 +692,18 @@ const VehiculoDetallePage = () => {
                                                                     </span>
                                                                 </div>
                                                                 <div className="archivo-actions">
+                                                                    {/* Sólo las fotos pueden ser la principal del vehículo. */}
+                                                                    {grupo === 'foto' && (
+                                                                        a.esPrincipal ? (
+                                                                            <span className="icon-btn" title="Foto principal" style={{ color: 'var(--warning, #f59e0b)', cursor: 'default' }}>
+                                                                                <Star size={15} fill="currentColor" />
+                                                                            </span>
+                                                                        ) : (
+                                                                            <button className="icon-btn" title="Marcar como foto principal" onClick={() => handleSetPrincipal(a)}>
+                                                                                <Star size={15} />
+                                                                            </button>
+                                                                        )
+                                                                    )}
                                                                     <a href={a.url} target="_blank" rel="noreferrer" className="icon-btn" title="Ver archivo">
                                                                         <ExternalLink size={15} />
                                                                     </a>

@@ -2,12 +2,14 @@ import { IVehiculoArchivoRepository } from '../../../domain/repositories/IVehicu
 import { VehiculoArchivo } from '../../../domain/entities/VehiculoArchivo';
 import prisma from '../prisma';
 import { assertMismoTenant } from '../../security/tenantGuard';
+import { NotFoundException } from '../../../domain/exceptions/BaseException';
 
 export class PrismaVehiculoArchivoRepository implements IVehiculoArchivoRepository {
     async findByVehiculo(vehiculoId: number): Promise<VehiculoArchivo[]> {
         const results = await prisma.vehiculoArchivo.findMany({
             where: { vehiculoId },
-            orderBy: { createdAt: 'desc' },
+            // La principal primero (para que la UI la muestre arriba), luego por fecha.
+            orderBy: [{ esPrincipal: 'desc' }, { createdAt: 'desc' }],
         });
         return results.map(this.mapToEntity);
     }
@@ -29,6 +31,28 @@ export class PrismaVehiculoArchivoRepository implements IVehiculoArchivoReposito
         return this.mapToEntity(a);
     }
 
+    async setPrincipal(id: number): Promise<VehiculoArchivo> {
+        // Se lee el archivo (acotado por la extensión/RLS al tenant del actor) para
+        // conocer su vehículo. Luego, dos operaciones a través del cliente extendido
+        // (cada una scopeada por tenant): desmarcar los hermanos y marcar este.
+        // A propósito NO se usa una transacción: la extensión RLS abre su propia
+        // transacción por operación (setea app.tenant_id), y anidarlas complica el
+        // scoping. La ventana entre ambas es inocua: si justo se lee, la ficha cae a
+        // la primera foto (mismo fallback que cuando no hay principal).
+        const archivo = await prisma.vehiculoArchivo.findFirst({ where: { id } });
+        if (!archivo) throw new NotFoundException('Archivo');
+
+        await prisma.vehiculoArchivo.updateMany({
+            where: { vehiculoId: archivo.vehiculoId, esPrincipal: true },
+            data: { esPrincipal: false },
+        });
+        const updated = await prisma.vehiculoArchivo.update({
+            where: { id },
+            data: { esPrincipal: true },
+        });
+        return this.mapToEntity(updated);
+    }
+
     async delete(id: number): Promise<void> {
         await prisma.vehiculoArchivo.delete({ where: { id } });
     }
@@ -45,6 +69,7 @@ export class PrismaVehiculoArchivoRepository implements IVehiculoArchivoReposito
             a.sizeBytes ?? null,
             a.storageKey ?? null,
             a.uploadedById ?? null,
+            a.esPrincipal ?? false,
             a.createdAt,
             a.updatedAt,
             a.deletedAt ?? null
