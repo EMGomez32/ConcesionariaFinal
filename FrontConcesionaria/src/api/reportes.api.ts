@@ -324,6 +324,24 @@ export interface ReporteReservasPorVencer {
     sinCotizacion?: boolean;
 }
 
+export interface TurnoTallerItem {
+    casoId: number;
+    cliente: string;
+    telefono: string;
+    vehiculo: string;
+    dominio: string;
+    tipo: string;
+    estado: string;
+    fechaTurno: string;
+    horaTurno: string;
+}
+
+export interface ReporteTurnosTaller {
+    ventana: { dias: number; desde: string; hasta: string };
+    resumen: { cantidad: number; hoy: number };
+    items: TurnoTallerItem[];
+}
+
 export interface RangoFiltro {
     desde?: string;
     hasta?: string;
@@ -371,6 +389,9 @@ export const reportesApi = {
 
     reservasPorVencer: (params: { dias?: number; consolidar?: MonedaConsol } = {}) =>
         client.get<ReporteReservasPorVencer>('/reportes/reservas-por-vencer', { params }),
+
+    turnosTaller: (params: { dias?: number } = {}) =>
+        client.get<ReporteTurnosTaller>('/reportes/turnos-taller', { params }),
 
     /**
      * Variante CSV. Devuelve el blob y el nombre de archivo que mandó el
