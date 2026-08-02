@@ -156,9 +156,9 @@ export const useDashboardFinanzas = (enabled = true) => {
 };
 
 // ── Acciones del día (centro de alertas) ─────────────────────────────────────
-// Junta las 3 señales accionables de la home: unidades estancadas, cuotas por
-// vencer esta semana y cuotas en mora. Cada una linkea al lugar donde se actúa.
-// Sólo admin (stock-antiguedad expone precio de compra).
+// Junta las señales accionables de la home: unidades estancadas, cuotas por vencer,
+// cuotas en mora, reservas por vencer y turnos de taller de la semana. Cada una
+// linkea al lugar donde se actúa. Sólo admin (stock-antiguedad expone precio de compra).
 
 /** Una alerta accionable: un conteo + su monto (consolidado o por moneda). */
 export interface AlertaItem {
@@ -173,6 +173,8 @@ export interface DashboardAlertas {
     porVencer: AlertaItem & { dias: number };
     mora: AlertaItem;
     reservas: AlertaItem & { dias: number };
+    /** Turnos de taller (postventa): no llevan monto, sí un subconteo de "hoy". */
+    turnos: { count: number; hoy: number; dias: number };
 }
 
 export const useDashboardAlertas = (enabled = true) => {
@@ -184,11 +186,12 @@ export const useDashboardAlertas = (enabled = true) => {
             const DIAS_POR_VENCER = 7;
             // Se pide consolidar en ARS: con cotización cargada da un monto en pesos;
             // si no, cada endpoint devuelve consolidado:null + el desglose por moneda.
-            const [stock, proximos, mora, reservas] = await Promise.all([
+            const [stock, proximos, mora, reservas, turnos] = await Promise.all([
                 reportesApi.stockAntiguedad({ umbral: 60, consolidar: 'ARS' }),
                 reportesApi.proximosVencimientos({ dias: DIAS_POR_VENCER, consolidar: 'ARS' }),
                 reportesApi.mora({ consolidar: 'ARS' }),
                 reportesApi.reservasPorVencer({ dias: DIAS_POR_VENCER, consolidar: 'ARS' }),
+                reportesApi.turnosTaller({ dias: DIAS_POR_VENCER }),
             ]);
             const cot = stock.consolidado || proximos.consolidado || mora.consolidado || reservas.consolidado || null;
             return {
@@ -215,6 +218,11 @@ export const useDashboardAlertas = (enabled = true) => {
                     count: reservas.resumen?.cantidad ?? 0,
                     montoConsolidado: reservas.consolidado ? reservas.consolidado.montoSenia : null,
                     porMoneda: (reservas.resumen?.porMoneda ?? []).map((m) => ({ moneda: m.moneda, valor: Number(m.montoSenia ?? 0) })),
+                },
+                turnos: {
+                    dias: DIAS_POR_VENCER,
+                    count: turnos.resumen?.cantidad ?? 0,
+                    hoy: turnos.resumen?.hoy ?? 0,
                 },
             };
         },

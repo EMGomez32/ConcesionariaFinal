@@ -168,4 +168,16 @@ router.get('/ventas-mensuales', authorize('admin', 'vendedor'), ReporteControlle
  */
 router.get('/reservas-por-vencer', authorize('admin', 'vendedor'), ReporteController.reservasPorVencer);
 
+/**
+ * @openapi
+ * /reportes/turnos-taller:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Turnos de taller por venir (postventa, próximos N días)
+ *     description: Casos de postventa no resueltos con turno agendado dentro de la ventana, para el centro de alertas del Dashboard.
+ *     parameters:
+ *       - { in: query, name: dias, schema: { type: integer, default: 7, minimum: 1, maximum: 90 } }
+ */
+router.get('/turnos-taller', authorize('admin', 'vendedor', 'postventa'), ReporteController.turnosTaller);
+
 export default router;

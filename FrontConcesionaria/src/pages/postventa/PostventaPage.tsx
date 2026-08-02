@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
     Plus, Search, X, ChevronLeft, ChevronRight,
     Eye, Trash2, Edit, ArrowRight, CheckCircle, Package, Wrench, Clock, RefreshCw, Tags,
@@ -73,7 +74,12 @@ export default function PostventaPage() {
     const [filterTipo, setFilterTipo] = useState('');
 
     // ─ Pestañas: casos | agenda de taller | ABM de tipos ─
-    const [tab, setTab] = useState<'casos' | 'agenda' | 'tipos'>('casos');
+    // Deep-link ?tab=agenda: lo usa la tarjeta "Turnos de taller" del Dashboard.
+    const [searchParams] = useSearchParams();
+    const paramTab = searchParams.get('tab');
+    const [tab, setTab] = useState<'casos' | 'agenda' | 'tipos'>(
+        paramTab === 'agenda' || paramTab === 'tipos' ? paramTab : 'casos',
+    );
 
     // ─ Agenda de taller (casos con turno, no resueltos) ─
     const [agenda, setAgenda] = useState<PostventaCaso[]>([]);
