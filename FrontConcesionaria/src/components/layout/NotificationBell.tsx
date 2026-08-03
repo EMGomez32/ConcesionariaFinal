@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, AlertTriangle, Clock, Bookmark, Wrench, Car, X } from 'lucide-react';
+import { Bell, AlertTriangle, Clock, Bookmark, Wrench, Car, CalendarClock, X } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { reportesApi } from '../../api/reportes.api';
 import { dashboardKeys } from '../../hooks/useDashboard';
@@ -47,6 +47,7 @@ const NotificationBell = () => {
         { key: 'proximos', label: `Cuotas vencen en ${data.dias} días`, count: data.proximos, icon: Clock, color: 'var(--accent)', to: '/reportes?tab=proximos' },
         { key: 'reservas', label: `Reservas vencen en ${data.dias} días`, count: data.reservas, icon: Bookmark, color: '#8b5cf6', to: '/reservas' },
         { key: 'turnos', label: `Turnos de taller (${data.dias} días)`, count: data.turnos, icon: Wrench, color: 'var(--info)', to: '/postventa?tab=agenda' },
+        { key: 'seguimientos', label: `Seguimientos CRM (${data.dias} días)`, count: data.seguimientos, icon: CalendarClock, color: '#0ea5e9', to: '/seguimientos' },
         { key: 'estancados', label: `Unidades estancadas (+${data.umbral} días)`, count: data.estancados, icon: Car, color: 'var(--warning)', to: '/vehiculos' },
     ].filter(i => i.count > 0) : [];
     const total = data?.total ?? 0;

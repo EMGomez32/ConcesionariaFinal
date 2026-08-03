@@ -1462,21 +1462,91 @@ export class ReporteController {
             // el conteo puro replica el "díasEnStock > umbral" del reporte sin traer filas.
             const cutoffStock = new Date(inicioHoy);
             cutoffStock.setUTCDate(cutoffStock.getUTCDate() - UMBRAL);
+            // Seguimientos del CRM: ventana simétrica [hoy−DIAS, hoy+DIAS), igual que
+            // el reporte de próximos-seguimientos (vencidos recientes + hoy + próximos).
+            const desdeSeg = new Date(inicioHoy);
+            desdeSeg.setUTCDate(desdeSeg.getUTCDate() - DIAS);
 
-            const [mora, proximos, reservas, estancados, turnos, turnosHoy] = await Promise.all([
+            const [mora, proximos, reservas, estancados, turnos, turnosHoy, seguimientos] = await Promise.all([
                 prisma.cuota.count({ where: { vencimiento: { lt: inicioHoy }, saldoCuota: { gt: 0 }, estado: { not: 'pagada' }, financiacion: { deletedAt: null } } }),
                 prisma.cuota.count({ where: { vencimiento: { gte: inicioHoy, lt: finVentana }, saldoCuota: { gt: 0 }, estado: { notIn: ['pagada', 'refinanciada'] }, financiacion: { deletedAt: null } } }),
                 prisma.reserva.count({ where: { estado: 'activa', venceEl: { gte: inicioHoy, lt: finVentana } } }),
                 prisma.vehiculo.count({ where: { estado: { in: ['preparacion', 'publicado', 'reservado'] }, fechaIngreso: { lt: cutoffStock } } }),
                 prisma.postventaCaso.count({ where: { fechaTurno: { gte: inicioHoy, lt: finVentana }, estado: { not: 'resuelto' } } }),
                 prisma.postventaCaso.count({ where: { fechaTurno: inicioHoy, estado: { not: 'resuelto' } } }),
+                prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desdeSeg, lt: finVentana } } }),
             ]);
 
             res.json({
                 dias: DIAS,
                 umbral: UMBRAL,
-                mora, proximos, reservas, estancados, turnos, turnosHoy,
-                total: mora + proximos + reservas + estancados + turnos,
+                mora, proximos, reservas, estancados, turnos, turnosHoy, seguimientos,
+                total: mora + proximos + reservas + estancados + turnos + seguimientos,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // ── 13. Próximos seguimientos del CRM ────────────────────────────────────
+    // GET /api/reportes/proximos-seguimientos?dias=
+    // Contactos de la bitácora con `proximoContacto` agendado en una ventana
+    // SIMÉTRICA [hoy−dias, hoy+dias): vencidos recientes (para no perderlos) + hoy
+    // + próximos. Un solo knob `dias` controla ambos lados. `proximoContacto` es
+    // @db.Date → se compara en UTC puro, igual que turnos/mora. Acotado con `take`
+    // para no traer listas enormes; `resumen.cantidad` es el total real (si supera
+    // los mostrados, el front lo indica). Puede haber más de un contacto por
+    // cliente (cada fila es un próximo-contacto agendado, no un cliente).
+    static async proximosSeguimientos(req: Request, res: Response, next: NextFunction) {
+        try {
+            const dias = enteroEnRango(req.query.dias, 1, 90, 7, 'dias');
+            const TOPE = 200;
+            const ahora = new Date();
+            const inicioHoy = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
+            const desde = new Date(inicioHoy);
+            desde.setUTCDate(desde.getUTCDate() - dias);
+            const finVentana = new Date(inicioHoy);
+            finVentana.setUTCDate(finVentana.getUTCDate() + dias);
+            const enVentana = { proximoContacto: { gte: desde, lt: finVentana } };
+
+            const [seguimientos, cantidad, vencidos, hoy] = await Promise.all([
+                prisma.clienteSeguimiento.findMany({
+                    where: enVentana,
+                    orderBy: [{ proximoContacto: 'asc' }, { id: 'asc' }],
+                    take: TOPE,
+                    include: {
+                        cliente: { select: { id: true, nombre: true, telefono: true } },
+                        usuario: { select: { nombre: true } },
+                    },
+                }),
+                prisma.clienteSeguimiento.count({ where: enVentana }),
+                prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desde, lt: inicioHoy } } }),
+                prisma.clienteSeguimiento.count({ where: { proximoContacto: inicioHoy } }),
+            ]);
+
+            const hoyStr = inicioHoy.toISOString().slice(0, 10);
+            const items = seguimientos.map((s) => {
+                const fecha = s.proximoContacto ? s.proximoContacto.toISOString().slice(0, 10) : '';
+                return {
+                    seguimientoId: s.id,
+                    clienteId: s.clienteId,
+                    cliente: s.cliente?.nombre ?? '',
+                    telefono: s.cliente?.telefono ?? '',
+                    tipo: s.tipo,
+                    vendedor: s.usuario?.nombre ?? '',
+                    proximoContacto: fecha,
+                    vencido: fecha !== '' && fecha < hoyStr,
+                    nota: s.nota,
+                };
+            });
+
+            const ultimoDia = new Date(finVentana);
+            ultimoDia.setUTCDate(ultimoDia.getUTCDate() - 1);
+
+            res.json({
+                ventana: { dias, desde: desde.toISOString().slice(0, 10), hasta: ultimoDia.toISOString().slice(0, 10) },
+                resumen: { cantidad, mostrados: items.length, vencidos, hoy },
+                items,
             });
         } catch (error) {
             next(error);

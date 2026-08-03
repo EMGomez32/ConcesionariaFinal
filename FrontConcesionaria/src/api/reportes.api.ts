@@ -342,6 +342,27 @@ export interface ReporteTurnosTaller {
     items: TurnoTallerItem[];
 }
 
+/** Un próximo-contacto agendado en la bitácora del CRM (agenda de seguimientos). */
+export interface ProximoSeguimientoItem {
+    seguimientoId: number;
+    clienteId: number;
+    cliente: string;
+    telefono: string;
+    tipo: string;
+    vendedor: string;
+    proximoContacto: string;
+    /** true si el próximo contacto ya venció (proximoContacto < hoy). */
+    vencido: boolean;
+    nota: string;
+}
+
+export interface ReporteProximosSeguimientos {
+    ventana: { dias: number; desde: string; hasta: string };
+    /** cantidad = total real en la ventana; mostrados = filas devueltas (tope). */
+    resumen: { cantidad: number; mostrados: number; vencidos: number; hoy: number };
+    items: ProximoSeguimientoItem[];
+}
+
 /** Conteos livianos para la campanita de notificaciones (un solo request). */
 export interface AlertasResumen {
     dias: number;
@@ -352,6 +373,8 @@ export interface AlertasResumen {
     estancados: number;
     turnos: number;
     turnosHoy: number;
+    /** Próximos seguimientos del CRM en la ventana ±dias. */
+    seguimientos: number;
     total: number;
 }
 
@@ -405,6 +428,10 @@ export const reportesApi = {
 
     turnosTaller: (params: { dias?: number } = {}) =>
         client.get<ReporteTurnosTaller>('/reportes/turnos-taller', { params }),
+
+    /** Agenda de próximos seguimientos del CRM (ventana ±dias). */
+    proximosSeguimientos: (params: { dias?: number } = {}) =>
+        client.get<ReporteProximosSeguimientos>('/reportes/proximos-seguimientos', { params }),
 
     /** Conteos de alertas en una sola llamada (campanita de notificaciones). */
     alertasResumen: () =>

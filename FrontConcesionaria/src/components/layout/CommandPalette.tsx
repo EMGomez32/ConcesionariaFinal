@@ -69,12 +69,15 @@ const CommandPalette = () => {
             for (const item of sec.items) {
                 if (item.superAdminOnly && !isSuper) continue;
                 if (item.adminOnly && !isAdmin) continue;
+                // Misma regla que el Sidebar: ítems con `roles` sólo para esos roles.
+                // Si no, el palette sobre-exponía el label y el click caía en /403.
+                if (item.roles && !item.roles.some((r) => user?.roles?.includes(r))) continue;
                 const s = scoreItem(item, sec.title, query);
                 if (s) flat.push(s);
             }
         }
         return flat.sort((a, b) => b.score - a.score);
-    }, [query, isSuper, isAdmin]);
+    }, [query, isSuper, isAdmin, user]);
 
     // Filas unificadas: primero los resultados de datos (lo que el usuario suele
     // buscar), después las páginas del nav. Todo navega con ↑↓ + Enter.

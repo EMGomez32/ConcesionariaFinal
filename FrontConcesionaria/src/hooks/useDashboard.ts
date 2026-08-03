@@ -176,6 +176,8 @@ export interface DashboardAlertas {
     reservas: AlertaItem & { dias: number };
     /** Turnos de taller (postventa): no llevan monto, sí un subconteo de "hoy". */
     turnos: { count: number; hoy: number; dias: number };
+    /** Próximos seguimientos del CRM: sin monto, con subconteo de "vencidos". */
+    seguimientos: { count: number; vencidos: number; hoy: number; dias: number };
 }
 
 export const useDashboardAlertas = (enabled = true) => {
@@ -187,12 +189,13 @@ export const useDashboardAlertas = (enabled = true) => {
             const DIAS_POR_VENCER = 7;
             // Se pide consolidar en ARS: con cotización cargada da un monto en pesos;
             // si no, cada endpoint devuelve consolidado:null + el desglose por moneda.
-            const [stock, proximos, mora, reservas, turnos] = await Promise.all([
+            const [stock, proximos, mora, reservas, turnos, seguimientos] = await Promise.all([
                 reportesApi.stockAntiguedad({ umbral: 60, consolidar: 'ARS' }),
                 reportesApi.proximosVencimientos({ dias: DIAS_POR_VENCER, consolidar: 'ARS' }),
                 reportesApi.mora({ consolidar: 'ARS' }),
                 reportesApi.reservasPorVencer({ dias: DIAS_POR_VENCER, consolidar: 'ARS' }),
                 reportesApi.turnosTaller({ dias: DIAS_POR_VENCER }),
+                reportesApi.proximosSeguimientos({ dias: DIAS_POR_VENCER }),
             ]);
             const cot = stock.consolidado || proximos.consolidado || mora.consolidado || reservas.consolidado || null;
             return {
@@ -224,6 +227,12 @@ export const useDashboardAlertas = (enabled = true) => {
                     dias: DIAS_POR_VENCER,
                     count: turnos.resumen?.cantidad ?? 0,
                     hoy: turnos.resumen?.hoy ?? 0,
+                },
+                seguimientos: {
+                    dias: DIAS_POR_VENCER,
+                    count: seguimientos.resumen?.cantidad ?? 0,
+                    vencidos: seguimientos.resumen?.vencidos ?? 0,
+                    hoy: seguimientos.resumen?.hoy ?? 0,
                 },
             };
         },
