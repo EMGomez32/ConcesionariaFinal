@@ -36,7 +36,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
       <nav className="sidebar-nav" aria-label="Navegación principal">
         {NAV_SECTIONS.map((section) => {
-          const visibleItems = section.items.filter((it) => (!it.superAdminOnly || isSuperAdmin) && (!it.adminOnly || isAdmin));
+          const visibleItems = section.items.filter((it) =>
+            (!it.superAdminOnly || isSuperAdmin) &&
+            (!it.adminOnly || isAdmin) &&
+            (!it.roles || it.roles.some((r) => user?.roles.includes(r))),
+          );
           if (visibleItems.length === 0) return null;
           return (
             <div key={section.title} className="nav-section">

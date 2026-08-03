@@ -17,6 +17,7 @@ import {
     DollarSign,
     CreditCard,
     ClipboardList,
+    CalendarClock,
     // BadgeCheck, // Billing deshabilitado temporalmente (ver ítem comentado abajo)
     BarChart3,
 } from 'lucide-react';
@@ -30,6 +31,12 @@ export interface NavItem {
     superAdminOnly?: boolean;
     /** Visible sólo para admin/super_admin (gestión administrativa del tenant). */
     adminOnly?: boolean;
+    /**
+     * Visible sólo si el usuario tiene ALGUNO de estos roles. Para ítems que no
+     * son admin-only pero tampoco para todos (p.ej. la agenda de seguimientos:
+     * admin y vendedor, no postventa). super_admin se incluye explícito acá.
+     */
+    roles?: string[];
 }
 
 export interface NavSection {
@@ -59,6 +66,7 @@ export const NAV_SECTIONS: NavSection[] = [
         title: 'Operaciones',
         items: [
             { label: 'Clientes', path: '/clientes', icon: Users, keywords: ['compradores', 'leads'] },
+            { label: 'Seguimientos', path: '/seguimientos', icon: CalendarClock, keywords: ['crm', 'contactos', 'agenda', 'próximo contacto', 'llamar'], roles: ['admin', 'super_admin', 'vendedor'] },
             { label: 'Proveedores', path: '/proveedores', icon: Truck, keywords: ['suppliers'] },
             { label: 'Presupuestos', path: '/presupuestos', icon: FileText, keywords: ['cotización', 'quote'] },
             { label: 'Ventas', path: '/ventas', icon: BadgeDollarSign, keywords: ['vender'] },

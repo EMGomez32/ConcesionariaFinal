@@ -194,4 +194,20 @@ router.get('/turnos-taller', authorize('admin', 'vendedor', 'postventa'), Report
  */
 router.get('/alertas-resumen', authorize('admin'), ReporteController.alertasResumen);
 
+/**
+ * @openapi
+ * /reportes/proximos-seguimientos:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Próximos seguimientos del CRM (agenda de contactos, ventana ±N días)
+ *     description: Contactos de la bitácora con proximoContacto agendado entre hoy−N y hoy+N días (vencidos recientes + hoy + próximos), para la agenda de seguimiento. Solo admin/vendedor.
+ *     parameters:
+ *       - { in: query, name: dias, schema: { type: integer, default: 7, minimum: 1, maximum: 90 } }
+ *     responses:
+ *       200: { description: Agenda de próximos seguimientos }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ */
+router.get('/proximos-seguimientos', authorize('admin', 'vendedor'), ReporteController.proximosSeguimientos);
+
 export default router;
