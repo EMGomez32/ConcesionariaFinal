@@ -12,6 +12,8 @@ export interface Seguimiento {
     nota: string;
     /** Fecha del próximo contacto a coordinar (o null). */
     proximoContacto?: string | null;
+    /** El próximo contacto ya se realizó (sale de la agenda). */
+    proximoContactoHecho: boolean;
     createdAt: string;
     usuario?: { id: number; nombre: string };
 }
@@ -35,4 +37,8 @@ export const seguimientosApi = {
 
     delete: (id: number) =>
         client.delete(`/cliente-seguimientos/${id}`),
+
+    /** Marca (o reabre) el próximo contacto: sin `hecho` marca como realizado. */
+    marcarProximo: (id: number, hecho = true) =>
+        client.patch<Seguimiento>(`/cliente-seguimientos/${id}/proximo-hecho`, { hecho }),
 };

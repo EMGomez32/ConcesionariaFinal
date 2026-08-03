@@ -186,6 +186,8 @@ model ClienteSeguimiento {
   fecha           DateTime        @db.Date
   nota            String
   proximoContacto DateTime?       @map("proximo_contacto") @db.Date
+  /// El próximo contacto ya se realizó: sale de la agenda de seguimientos.
+  proximoContactoHecho Boolean    @default(false) @map("proximo_contacto_hecho")
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
   deletedAt       DateTime?       @map("deleted_at")

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { ClienteSeguimientoController } from '../controllers/ClienteSeguimientoController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
-import { createSeguimientoSchema } from '../validation/cliente-seguimiento.schema';
+import { createSeguimientoSchema, marcarProximoSchema } from '../validation/cliente-seguimiento.schema';
 
 const router = Router();
 
@@ -63,5 +63,30 @@ router.post('/', authorize('admin', 'vendedor'), validateBody(createSeguimientoS
  *       404: { $ref: '#/components/responses/NotFound' }
  */
 router.delete('/:id', authorize('admin', 'vendedor'), ClienteSeguimientoController.delete);
+
+/**
+ * @openapi
+ * /cliente-seguimientos/{id}/proximo-hecho:
+ *   patch:
+ *     tags: [CRM]
+ *     summary: Marcar el próximo contacto como realizado (sale de la agenda)
+ *     description: Sin body marca como realizado; { hecho:false } reabre. Solo admin/vendedor.
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               hecho: { type: boolean, default: true }
+ *     responses:
+ *       200: { description: Seguimiento actualizado }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.patch('/:id/proximo-hecho', authorize('admin', 'vendedor'), validateBody(marcarProximoSchema), ClienteSeguimientoController.marcarProximo);
 
 export default router;

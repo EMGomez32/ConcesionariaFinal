@@ -9,6 +9,8 @@ export class ClienteSeguimiento {
         public readonly nota: string,
         /** Fecha del próximo contacto a coordinar (o null). */
         public readonly proximoContacto: Date | null,
+        /** El próximo contacto ya se realizó (sale de la agenda). */
+        public readonly proximoContactoHecho: boolean,
         public readonly createdAt: Date,
         public readonly updatedAt: Date,
         public readonly deletedAt: Date | null,

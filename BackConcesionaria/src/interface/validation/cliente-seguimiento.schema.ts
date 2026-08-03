@@ -31,3 +31,12 @@ export const createSeguimientoSchema = z.object({
     proximoContacto: nullableFecha(),
     concesionariaId: optionalFk,
 });
+
+// Marcar el próximo contacto como realizado. `hecho` opcional (default true en el
+// controller): PATCH sin body ⇒ marcar hecho; { hecho:false } ⇒ reabrir. El
+// preprocess colapsa un body ausente (undefined/null; Express 5 ya no lo defaultea
+// a {}) a {} para que el atajo "sin body" no reviente con un 400.
+export const marcarProximoSchema = z.preprocess(
+    (v) => (v == null ? {} : v),
+    z.object({ hecho: z.boolean().optional() }),
+);

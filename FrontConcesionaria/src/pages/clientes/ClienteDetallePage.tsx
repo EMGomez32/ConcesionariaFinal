@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
+import { dashboardKeys } from '../../hooks/useDashboard';
 import { clientesApi } from '../../api/clientes.api';
 import { ventasApi } from '../../api/ventas.api';
 import { presupuestosApi } from '../../api/presupuestos.api';
@@ -19,7 +21,7 @@ import {
     ArrowLeft, User, Phone, Mail, MapPin, FileText,
     ShoppingCart, FileBarChart, Calendar, DollarSign,
     CreditCard, RefreshCw, BookmarkCheck, Wrench, Banknote, FileSignature, FileDown,
-    Clock, Plus, Trash2, MessageCircle, type LucideIcon
+    Clock, Plus, Trash2, MessageCircle, Check, CheckCircle2, type LucideIcon
 } from 'lucide-react';
 
 type Tab = 'info' | 'ventas' | 'presupuestos' | 'reservas' | 'financiaciones' | 'solicitudes' | 'postventa' | 'seguimiento';
@@ -68,6 +70,7 @@ const extractList = <T,>(res: unknown): T[] => {
 const ClienteDetallePage = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const { addToast } = useUIStore();
     const user = useAuthStore((s) => s.user);
     // Admin/vendedor pueden registrar y borrar contactos (mismo criterio que el backend).
@@ -196,6 +199,23 @@ const ClienteDetallePage = () => {
             setSeguimientos((prev) => prev.filter((x) => x.id !== s.id));
         } catch (e) {
             addToast(getErrorMessage(e, 'Error al eliminar el contacto'), 'error');
+        }
+    };
+
+    // Marca / reabre el próximo contacto (lo saca o lo devuelve a la agenda global).
+    const handleToggleProximo = async (s: Seguimiento) => {
+        const hecho = !s.proximoContactoHecho;
+        try {
+            await seguimientosApi.marcarProximo(s.id, hecho);
+            setSeguimientos((prev) => prev.map((x) => (x.id === s.id ? { ...x, proximoContactoHecho: hecho } : x)));
+            addToast(hecho ? 'Próximo contacto marcado como realizado' : 'Próximo contacto reabierto', 'success');
+            // Mismas invalidaciones que la agenda: que /seguimientos, la card del
+            // Dashboard y la campanita reflejen el cambio (si no, quedan viejos ~2-5 min).
+            queryClient.invalidateQueries({ queryKey: ['seguimientos', 'proximos'] });
+            queryClient.invalidateQueries({ queryKey: dashboardKeys.alertas() });
+            queryClient.invalidateQueries({ queryKey: dashboardKeys.alertasResumen() });
+        } catch (e) {
+            addToast(getErrorMessage(e, 'No se pudo actualizar el contacto'), 'error');
         }
     };
 
@@ -599,7 +619,23 @@ const ClienteDetallePage = () => {
                                                 <div className="seg-item-head">
                                                     <span className="seg-tipo" style={{ color: t.color }}>{t.label}</span>
                                                     <span className="flex-cell"><Calendar size={13} />{fmtDate(s.fecha)}</span>
-                                                    {s.proximoContacto && <span className="seg-next"><Clock size={13} /> Próximo: {fmtDate(s.proximoContacto)}</span>}
+                                                    {s.proximoContacto && (
+                                                        s.proximoContactoHecho ? (
+                                                            <span className="seg-next seg-next-done"><CheckCircle2 size={13} /> Contactado: {fmtDate(s.proximoContacto)}</span>
+                                                        ) : (
+                                                            <span className="seg-next"><Clock size={13} /> Próximo: {fmtDate(s.proximoContacto)}</span>
+                                                        )
+                                                    )}
+                                                    {s.proximoContacto && puedeEditar && (
+                                                        <button
+                                                            type="button"
+                                                            className="seg-toggle"
+                                                            onClick={() => handleToggleProximo(s)}
+                                                            title={s.proximoContactoHecho ? 'Reabrir: vuelve a la agenda' : 'Marcar el próximo contacto como realizado'}
+                                                        >
+                                                            {s.proximoContactoHecho ? 'Reabrir' : <><Check size={12} /> Marcar hecho</>}
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 <p className="seg-nota">{s.nota}</p>
                                                 <span className="seg-user">por {s.usuario?.nombre ?? '—'}</span>
@@ -671,6 +707,9 @@ const ClienteDetallePage = () => {
                 .seg-item-head { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
                 .seg-tipo { font-weight: 800; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
                 .seg-next { display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--warning, #f59e0b); font-weight: 600; }
+                .seg-next-done { color: var(--success, #16a34a); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--success, #16a34a) 45%, transparent); }
+                .seg-toggle { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; font-weight: 700; color: var(--accent); background: transparent; border: 1px solid var(--border); border-radius: 999px; padding: 0.12rem 0.55rem; cursor: pointer; transition: background 0.15s, color 0.15s; }
+                .seg-toggle:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
                 .seg-nota { color: var(--text-primary); font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
                 .seg-user { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem; display: inline-block; }
                 .seg-del { color: var(--text-muted); padding: 0.35rem; border-radius: 0.5rem; flex-shrink: 0; transition: all 0.15s; }
