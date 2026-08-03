@@ -32,6 +32,7 @@ model Concesionaria {
   categoriasGastoVehiculo CategoriaGastoVehiculo[]
   tiposPostventa          TipoPostventa[]
   clientes                Cliente[]
+  clienteSeguimientos     ClienteSeguimiento[]
   cotizaciones            Cotizacion[]
   metasVenta              MetaVenta[]
   objetivosVendedor       ObjetivoVendedor[]
@@ -121,6 +122,7 @@ model Usuario {
   vehiculoMovimientos    VehiculoMovimiento[] @relation("MovimientoRegistradoPor")
   ventas                 Venta[]              @relation("VentaVendedor")
   objetivos              ObjetivoVendedor[]
+  seguimientos           ClienteSeguimiento[]
   refreshTokens          RefreshToken[]
 
   @@unique([concesionariaId, email])
@@ -161,6 +163,7 @@ model Cliente {
   postventaCasos          PostventaCaso[]
   presupuestos            Presupuesto[]
   reservas                Reserva[]
+  seguimientos            ClienteSeguimiento[]
   solicitudesFinanciacion SolicitudFinanciacion[]
   ventas                  Venta[]
 
@@ -168,6 +171,32 @@ model Cliente {
   @@index([dni])
   @@index([telefono])
   @@map("clientes")
+}
+
+/// Bitácora de seguimiento comercial del cliente (CRM): cada contacto (llamada,
+/// WhatsApp, email, visita) con su nota y, opcional, la fecha del próximo contacto.
+/// Tenant-scoped y soft-delete, como el resto de lo operativo.
+model ClienteSeguimiento {
+  id              Int             @id @default(autoincrement())
+  concesionariaId Int             @map("concesionaria_id")
+  clienteId       Int             @map("cliente_id")
+  // Quién registró el contacto: se estampa del usuario logueado (no del body).
+  usuarioId       Int             @map("usuario_id")
+  tipo            TipoSeguimiento @default(otro)
+  fecha           DateTime        @db.Date
+  nota            String
+  proximoContacto DateTime?       @map("proximo_contacto") @db.Date
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  deletedAt       DateTime?       @map("deleted_at")
+  cliente         Cliente         @relation(fields: [clienteId], references: [id])
+  usuario         Usuario         @relation(fields: [usuarioId], references: [id])
+  concesionaria   Concesionaria   @relation(fields: [concesionariaId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([clienteId])
+  @@index([usuarioId])
+  @@map("cliente_seguimientos")
 }
 
 model Proveedor {
@@ -1217,6 +1246,14 @@ enum EstadoPostventa {
   pendiente
   en_curso
   resuelto
+}
+
+enum TipoSeguimiento {
+  llamada
+  whatsapp
+  email
+  visita
+  otro
 }
 
 enum TipoMovimientoVehiculo {
