@@ -27,6 +27,7 @@ const SOFT_DELETE_MODELS = [
     'Sucursal',
     'Usuario',
     'Cliente',
+    'ClienteSeguimiento',
     'Proveedor',
     'Vehiculo',
     'VehiculoArchivo',

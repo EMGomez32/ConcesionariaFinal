@@ -8,16 +8,37 @@ import { financiacionesApi } from '../../api/financiaciones.api';
 import solicitudesFinanciacionApi from '../../api/solicitudesFinanciacion.api';
 import { postventaApi } from '../../api/postventa.api';
 import { reportesApi, type EstadoCuenta } from '../../api/reportes.api';
+import { seguimientosApi, type Seguimiento, type TipoSeguimiento } from '../../api/seguimientos.api';
 import type { Cliente } from '../../types/cliente.types';
 import Button from '../../components/ui/Button';
 import { useUIStore } from '../../store/uiStore';
+import { useAuthStore } from '../../store/authStore';
+import { getErrorMessage } from '../../utils/getErrorMessage';
+import { formatFecha } from '../../utils/fecha';
 import {
     ArrowLeft, User, Phone, Mail, MapPin, FileText,
     ShoppingCart, FileBarChart, Calendar, DollarSign,
-    CreditCard, RefreshCw, BookmarkCheck, Wrench, Banknote, FileSignature, FileDown
+    CreditCard, RefreshCw, BookmarkCheck, Wrench, Banknote, FileSignature, FileDown,
+    Clock, Plus, Trash2, MessageCircle, type LucideIcon
 } from 'lucide-react';
 
-type Tab = 'info' | 'ventas' | 'presupuestos' | 'reservas' | 'financiaciones' | 'solicitudes' | 'postventa';
+type Tab = 'info' | 'ventas' | 'presupuestos' | 'reservas' | 'financiaciones' | 'solicitudes' | 'postventa' | 'seguimiento';
+
+// Fecha local YYYY-MM-DD (no toISOString, que pasa a UTC y de noche en UTC-3 ya
+// es "mañana"): así el default del form de alta no se adelanta un día.
+const today = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// Etiqueta e ícono por tipo de contacto (bitácora de seguimiento).
+const TIPO_SEG: Record<TipoSeguimiento, { label: string; icon: LucideIcon; color: string }> = {
+    llamada: { label: 'Llamada', icon: Phone, color: '#10b981' },
+    whatsapp: { label: 'WhatsApp', icon: MessageCircle, color: '#22c55e' },
+    email: { label: 'Email', icon: Mail, color: '#60a5fa' },
+    visita: { label: 'Visita', icon: MapPin, color: '#8b5cf6' },
+    otro: { label: 'Otro', icon: FileText, color: '#94a3b8' },
+};
 
 type AnyRow = Record<string, unknown>;
 
@@ -33,8 +54,10 @@ const porMonedaStr = (arr: { moneda: string;[k: string]: unknown }[] | undefined
     return list.length ? list.map((m) => money(Number(m[campo] ?? 0), String(m.moneda))).join(' · ') : money(0);
 };
 
-const fmtDate = (v: unknown) =>
-    v ? new Date(String(v)).toLocaleDateString('es-AR') : '-';
+// formatFecha (no new Date().toLocaleDateString): las columnas @db.Date llegan a
+// medianoche UTC y en UTC-3 se mostrarían el día ANTERIOR. formatFecha parsea el
+// ISO como texto. Corrige de paso las fechas de todas las pestañas.
+const fmtDate = (v: unknown) => (v ? formatFecha(String(v)) : '-');
 
 const extractList = <T,>(res: unknown): T[] => {
     if (Array.isArray(res)) return res as T[];
@@ -46,6 +69,9 @@ const ClienteDetallePage = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { addToast } = useUIStore();
+    const user = useAuthStore((s) => s.user);
+    // Admin/vendedor pueden registrar y borrar contactos (mismo criterio que el backend).
+    const puedeEditar = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin' || r === 'vendedor');
 
     const [activeTab, setActiveTab] = useState<Tab>('info');
     const [descargandoEC, setDescargandoEC] = useState(false);
@@ -56,9 +82,16 @@ const ClienteDetallePage = () => {
     const [financiaciones, setFinanciaciones] = useState<AnyRow[]>([]);
     const [solicitudes, setSolicitudes] = useState<AnyRow[]>([]);
     const [postventaCasos, setPostventaCasos] = useState<AnyRow[]>([]);
+    const [seguimientos, setSeguimientos] = useState<Seguimiento[]>([]);
     const [estadoCuenta, setEstadoCuenta] = useState<EstadoCuenta | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // ─ Alta de contacto (bitácora de seguimiento) ─
+    const [segForm, setSegForm] = useState<{ tipo: TipoSeguimiento; fecha: string; nota: string; proximoContacto: string }>({
+        tipo: 'llamada', fecha: today(), nota: '', proximoContacto: '',
+    });
+    const [savingSeg, setSavingSeg] = useState(false);
 
     useEffect(() => {
         const load = async () => {
@@ -67,7 +100,7 @@ const ClienteDetallePage = () => {
             setLoading(true);
             setError(null);
             try {
-                const [clienteRes, ventasRes, presupuestosRes, reservasRes, financiacionesRes, solicitudesRes, postventaRes, estadoCuentaRes] = await Promise.all([
+                const [clienteRes, ventasRes, presupuestosRes, reservasRes, financiacionesRes, solicitudesRes, postventaRes, estadoCuentaRes, seguimientosRes] = await Promise.all([
                     clientesApi.getById(cid),
                     ventasApi.getAll({ clienteId: cid }),
                     presupuestosApi.getAll({ clienteId: cid }),
@@ -78,6 +111,7 @@ const ClienteDetallePage = () => {
                     // El estado de cuenta es admin/vendedor: si el rol no tiene acceso
                     // (o falla), se degrada a null y la sección simplemente no aparece.
                     reportesApi.estadoCuenta(cid).catch(() => null),
+                    seguimientosApi.getByCliente(cid),
                 ]);
                 setCliente(clienteRes);
                 setVentas(extractList(ventasRes));
@@ -87,6 +121,7 @@ const ClienteDetallePage = () => {
                 setSolicitudes(extractList(solicitudesRes));
                 setPostventaCasos(extractList(postventaRes));
                 setEstadoCuenta(estadoCuentaRes);
+                setSeguimientos(extractList(seguimientosRes));
             } catch {
                 setError('No se pudo cargar el cliente.');
             } finally {
@@ -119,6 +154,51 @@ const ClienteDetallePage = () => {
         }
     };
 
+    // ─ Bitácora de seguimiento: alta y baja de contactos ─
+    const handleAddSeguimiento = async () => {
+        if (!id) return;
+        if (!segForm.nota.trim()) { addToast('La nota del contacto es obligatoria', 'error'); return; }
+        if (!segForm.fecha) { addToast('La fecha es obligatoria', 'error'); return; }
+        setSavingSeg(true);
+        // `creado` separa dos fallos distintos: si el POST ya devolvió y falla el
+        // refetch de abajo, el contacto SÍ quedó guardado — no mostramos "error al
+        // registrar" (sería un toast falso), sólo avisamos que la lista quedó vieja.
+        let creado = false;
+        try {
+            await seguimientosApi.create({
+                clienteId: Number(id),
+                tipo: segForm.tipo,
+                fecha: segForm.fecha,
+                nota: segForm.nota.trim(),
+                proximoContacto: segForm.proximoContacto || undefined,
+            });
+            creado = true;
+            addToast('Contacto registrado', 'success');
+            setSegForm({ tipo: 'llamada', fecha: today(), nota: '', proximoContacto: '' });
+            setSeguimientos(extractList(await seguimientosApi.getByCliente(Number(id))));
+        } catch (e) {
+            addToast(
+                creado
+                    ? 'Contacto guardado. Recargá para ver la lista actualizada.'
+                    : getErrorMessage(e, 'Error al registrar el contacto'),
+                creado ? 'info' : 'error',
+            );
+        } finally {
+            setSavingSeg(false);
+        }
+    };
+
+    const handleDeleteSeguimiento = async (s: Seguimiento) => {
+        if (!window.confirm('¿Eliminar este contacto de la bitácora?')) return;
+        try {
+            await seguimientosApi.delete(s.id);
+            addToast('Contacto eliminado', 'success');
+            setSeguimientos((prev) => prev.filter((x) => x.id !== s.id));
+        } catch (e) {
+            addToast(getErrorMessage(e, 'Error al eliminar el contacto'), 'error');
+        }
+    };
+
     if (loading) return (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '0.75rem', color: 'var(--text-secondary)' }}>
             <RefreshCw size={20} className="spin" /> Cargando...
@@ -142,6 +222,7 @@ const ClienteDetallePage = () => {
         { key: 'financiaciones', label: 'Financiaciones', icon: Banknote, count: financiaciones.length },
         { key: 'solicitudes', label: 'Solicitudes', icon: FileSignature, count: solicitudes.length },
         { key: 'postventa', label: 'Postventa', icon: Wrench, count: postventaCasos.length },
+        { key: 'seguimiento', label: 'Seguimiento', icon: Clock, count: seguimientos.length },
     ];
 
     return (
@@ -474,6 +555,67 @@ const ClienteDetallePage = () => {
                         )}
                     </div>
                 )}
+
+                {activeTab === 'seguimiento' && (
+                    <div>
+                        {/* Alta de contacto (sólo admin/vendedor; el backend igual lo exige) */}
+                        {puedeEditar && (
+                            <div className="seg-form">
+                                <div className="seg-form-grid">
+                                    <div>
+                                        <label className="seg-lbl">Tipo</label>
+                                        <select className="seg-input" value={segForm.tipo} onChange={(e) => setSegForm((p) => ({ ...p, tipo: e.target.value as TipoSeguimiento }))}>
+                                            {(Object.keys(TIPO_SEG) as TipoSeguimiento[]).map((t) => <option key={t} value={t}>{TIPO_SEG[t].label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="seg-lbl">Fecha del contacto</label>
+                                        <input className="seg-input" type="date" value={segForm.fecha} onChange={(e) => setSegForm((p) => ({ ...p, fecha: e.target.value }))} />
+                                    </div>
+                                    <div>
+                                        <label className="seg-lbl">Próximo contacto (opcional)</label>
+                                        <input className="seg-input" type="date" value={segForm.proximoContacto} onChange={(e) => setSegForm((p) => ({ ...p, proximoContacto: e.target.value }))} />
+                                    </div>
+                                </div>
+                                <textarea className="seg-input" rows={2} placeholder="¿Qué se habló con el cliente?" value={segForm.nota} onChange={(e) => setSegForm((p) => ({ ...p, nota: e.target.value }))} style={{ resize: 'vertical', marginTop: '0.75rem' }} />
+                                <div style={{ textAlign: 'right', marginTop: '0.75rem' }}>
+                                    <Button variant="primary" size="sm" onClick={handleAddSeguimiento} loading={savingSeg} disabled={savingSeg}>
+                                        <Plus size={14} style={{ marginRight: '0.35rem' }} /> Registrar contacto
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        {seguimientos.length === 0 ? (
+                            <div className="empty-state"><Clock size={48} style={{ opacity: 0.2 }} /><p>Sin contactos registrados todavía.</p></div>
+                        ) : (
+                            <div className="seg-list">
+                                {seguimientos.map((s) => {
+                                    const t = TIPO_SEG[s.tipo] ?? TIPO_SEG.otro;
+                                    return (
+                                        <div key={s.id} className="seg-item">
+                                            <span className="seg-item-icon" style={{ background: `color-mix(in srgb, ${t.color} 14%, transparent)`, color: t.color }}><t.icon size={16} /></span>
+                                            <div className="seg-item-body">
+                                                <div className="seg-item-head">
+                                                    <span className="seg-tipo" style={{ color: t.color }}>{t.label}</span>
+                                                    <span className="flex-cell"><Calendar size={13} />{fmtDate(s.fecha)}</span>
+                                                    {s.proximoContacto && <span className="seg-next"><Clock size={13} /> Próximo: {fmtDate(s.proximoContacto)}</span>}
+                                                </div>
+                                                <p className="seg-nota">{s.nota}</p>
+                                                <span className="seg-user">por {s.usuario?.nombre ?? '—'}</span>
+                                            </div>
+                                            {puedeEditar && (
+                                                <button className="seg-del" title="Eliminar contacto" onClick={() => handleDeleteSeguimiento(s)}>
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <style>{`
@@ -518,6 +660,21 @@ const ClienteDetallePage = () => {
                 .text-muted-sm { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
                 .flex-cell { display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; }
                 .empty-state { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 3rem; color: var(--text-muted); text-align: center; }
+                .seg-form { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 0.9rem; padding: 1.25rem; margin-bottom: 1.5rem; }
+                .seg-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.9rem; }
+                .seg-lbl { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); font-weight: 700; margin-bottom: 0.35rem; }
+                .seg-input { width: 100%; padding: 0.55rem 0.7rem; border-radius: 0.6rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-size: 0.875rem; }
+                .seg-list { display: flex; flex-direction: column; gap: 0.75rem; }
+                .seg-item { display: flex; gap: 0.9rem; align-items: flex-start; padding: 1rem; border: 1px solid var(--border); border-radius: 0.9rem; background: var(--bg-card); }
+                .seg-item-icon { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+                .seg-item-body { flex: 1; min-width: 0; }
+                .seg-item-head { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
+                .seg-tipo { font-weight: 800; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+                .seg-next { display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--warning, #f59e0b); font-weight: 600; }
+                .seg-nota { color: var(--text-primary); font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+                .seg-user { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem; display: inline-block; }
+                .seg-del { color: var(--text-muted); padding: 0.35rem; border-radius: 0.5rem; flex-shrink: 0; transition: all 0.15s; }
+                .seg-del:hover { color: var(--danger, #ef4444); background: rgba(239,68,68,0.1); }
                 .spin { animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
