@@ -1442,4 +1442,44 @@ export class ReporteController {
             next(error);
         }
     }
+
+    // ── 12. Resumen de alertas (sólo conteos) para la campanita ──────────────
+    // GET /api/reportes/alertas-resumen
+    // Versión liviana del centro de alertas: una sola llamada con SÓLO los
+    // conteos (sin items ni montos), para que la campanita del TopBar la consuma
+    // desde cualquier pantalla sin disparar las 5 consultas completas. Cada conteo
+    // usa la MISMA ventana/criterio que su reporte (mora, próximos vencimientos,
+    // reservas por vencer, stock estancado, turnos de taller).
+    static async alertasResumen(req: Request, res: Response, next: NextFunction) {
+        try {
+            const DIAS = 7;
+            const UMBRAL = 60;
+            const ahora = new Date();
+            const inicioHoy = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
+            const finVentana = new Date(inicioHoy);
+            finVentana.setUTCDate(finVentana.getUTCDate() + DIAS);
+            // Estancado ⇔ fechaIngreso < hoy − umbral (fechaIngreso es @db.Date), así
+            // el conteo puro replica el "díasEnStock > umbral" del reporte sin traer filas.
+            const cutoffStock = new Date(inicioHoy);
+            cutoffStock.setUTCDate(cutoffStock.getUTCDate() - UMBRAL);
+
+            const [mora, proximos, reservas, estancados, turnos, turnosHoy] = await Promise.all([
+                prisma.cuota.count({ where: { vencimiento: { lt: inicioHoy }, saldoCuota: { gt: 0 }, estado: { not: 'pagada' }, financiacion: { deletedAt: null } } }),
+                prisma.cuota.count({ where: { vencimiento: { gte: inicioHoy, lt: finVentana }, saldoCuota: { gt: 0 }, estado: { notIn: ['pagada', 'refinanciada'] }, financiacion: { deletedAt: null } } }),
+                prisma.reserva.count({ where: { estado: 'activa', venceEl: { gte: inicioHoy, lt: finVentana } } }),
+                prisma.vehiculo.count({ where: { estado: { in: ['preparacion', 'publicado', 'reservado'] }, fechaIngreso: { lt: cutoffStock } } }),
+                prisma.postventaCaso.count({ where: { fechaTurno: { gte: inicioHoy, lt: finVentana }, estado: { not: 'resuelto' } } }),
+                prisma.postventaCaso.count({ where: { fechaTurno: inicioHoy, estado: { not: 'resuelto' } } }),
+            ]);
+
+            res.json({
+                dias: DIAS,
+                umbral: UMBRAL,
+                mora, proximos, reservas, estancados, turnos, turnosHoy,
+                total: mora + proximos + reservas + estancados + turnos,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }

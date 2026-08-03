@@ -16,6 +16,7 @@ export const dashboardKeys = {
     tendencia: (meses: number) => [...dashboardKeys.all, 'tendencia', meses] as const,
     meta: () => [...dashboardKeys.all, 'meta'] as const,
     miObjetivo: () => [...dashboardKeys.all, 'miObjetivo'] as const,
+    alertasResumen: () => [...dashboardKeys.all, 'alertasResumen'] as const,
 };
 
 export const useDashboardStats = () => {
