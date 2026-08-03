@@ -858,6 +858,153 @@ export class ComprobanteController {
         }
     }
 
+    // GET /api/postventa-casos/:id/orden → orden de servicio del caso en PDF, con
+    // la marca del tenant: datos del cliente/vehículo, el reclamo, el turno y la
+    // tabla de trabajos/repuestos con su total. Documento para el taller y el cliente.
+    static async postventaOrdenPdf(req: Request, res: Response, next: NextFunction) {
+        try {
+            const id = Number(req.params.id);
+            const c = await prisma.postventaCaso.findFirst({
+                where: { id },
+                include: {
+                    cliente: true,
+                    vehiculo: true,
+                    sucursal: true,
+                    tipoRef: { select: { nombre: true } },
+                    // El filtro de borrados no alcanza al include: se pone explícito.
+                    items: {
+                        where: { deletedAt: null },
+                        orderBy: [{ fecha: 'asc' }, { id: 'asc' }],
+                        include: { proveedor: { select: { nombre: true } } },
+                    },
+                    concesionaria: { select: marcaSelect },
+                },
+            }) as any;
+
+            if (!c) throw new NotFoundException('Caso de postventa');
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="orden-servicio-${c.id}.pdf"`);
+
+            const doc = new PDFDocument({ size: 'A4', margin: 50 });
+            doc.pipe(res);
+
+            const brand = await resolveBranding(c.concesionaria);
+            const accent = brand.accent;
+            const muted = brand.muted;
+
+            const infoLineas = [
+                c.concesionaria?.cuit ? `CUIT: ${c.concesionaria.cuit}` : '',
+                c.sucursal?.nombre ? `Sucursal: ${c.sucursal.nombre}` : '',
+                c.concesionaria?.telefono ? `Tel: ${c.concesionaria.telefono}` : '',
+            ].filter(Boolean);
+            drawEncabezado(doc, brand, infoLineas);
+
+            doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold')
+                .text('ORDEN DE SERVICIO', 50, 50, { align: 'right' });
+            doc.fillColor(muted).fontSize(10).font('Helvetica')
+                .text(`N° ${String(c.id).padStart(6, '0')}`, { align: 'right' })
+                .text(`Reclamo: ${fecha(c.fechaReclamo)}`, { align: 'right' })
+                .text(`Estado: ${prettyEnum(c.estado)}`, { align: 'right' });
+
+            doc.moveTo(50, 130).lineTo(545, 130).strokeColor('#e5e7eb').stroke();
+
+            // ── Cliente y vehículo ────────────────────────────────────────────────
+            let y = 150;
+            const bloque = (titulo: string, lineas: string[], x: number) => {
+                doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text(titulo.toUpperCase(), x, y);
+                doc.fillColor('#111827').fontSize(10).font('Helvetica');
+                lineas.forEach((l, i) => doc.text(l, x, y + 15 + i * 14, { width: 230, lineBreak: false, ellipsis: true }));
+            };
+            bloque('Cliente', [
+                c.cliente?.nombre || '—',
+                c.cliente?.dni ? `DNI/CUIT: ${c.cliente.dni}` : '',
+                c.cliente?.telefono ? `Tel: ${c.cliente.telefono}` : '',
+            ].filter(Boolean), 50);
+            bloque('Vehículo', [
+                `${c.vehiculo?.marca || ''} ${c.vehiculo?.modelo || ''}`.trim(),
+                c.vehiculo?.version || '',
+                c.vehiculo?.dominio ? `Dominio: ${c.vehiculo.dominio}` : '',
+                c.vehiculo?.anio ? `Año: ${c.vehiculo.anio}` : '',
+            ].filter(Boolean), 310);
+            y += 90;
+
+            // ── Tipo + turno ──────────────────────────────────────────────────────
+            const metaLinea = [
+                (c.tipoRef?.nombre || c.tipo) ? `Tipo: ${c.tipoRef?.nombre || c.tipo}` : '',
+                c.fechaTurno ? `Turno: ${fecha(c.fechaTurno)}${c.horaTurno ? ` · ${c.horaTurno} hs` : ''}` : '',
+            ].filter(Boolean).join('        ·        ');
+            if (metaLinea) {
+                doc.fillColor(muted).fontSize(9).font('Helvetica').text(metaLinea, 50, y, { width: 495, lineBreak: false, ellipsis: true });
+                y += 20;
+            }
+
+            // ── Descripción del reclamo ───────────────────────────────────────────
+            doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text('DESCRIPCIÓN DEL RECLAMO', 50, y);
+            y += 15;
+            doc.fillColor('#111827').fontSize(10).font('Helvetica')
+                .text(c.descripcion || '—', 50, y, { width: 495, height: 60, ellipsis: true });
+            y += 72;
+
+            // ── Trabajos / repuestos (tabla con paginación) ───────────────────────
+            doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text('TRABAJOS / REPUESTOS', 50, y);
+            y += 16;
+            const drawItemsHeader = () => {
+                doc.fillColor(muted).fontSize(8.5).font('Helvetica-Bold');
+                doc.text('FECHA', 50, y);
+                doc.text('DESCRIPCIÓN', 120, y);
+                doc.text('PROVEEDOR', 340, y);
+                doc.text('MONTO', 470, y, { width: 75, align: 'right' });
+                y += 13;
+                doc.moveTo(50, y).lineTo(545, y).strokeColor('#e5e7eb').stroke();
+                y += 6;
+            };
+            drawItemsHeader();
+
+            const PAGE_BOTTOM = 690;
+            let total = 0;
+            const items = c.items ?? [];
+            if (items.length === 0) {
+                doc.fillColor(muted).fontSize(9).font('Helvetica').text('Sin trabajos ni repuestos registrados.', 50, y);
+                y += 16;
+            } else {
+                for (const it of items) {
+                    if (y > PAGE_BOTTOM) {
+                        doc.addPage();
+                        drawTopBand(doc, brand);
+                        y = 60;
+                        drawItemsHeader();
+                    }
+                    total += Number(it.monto ?? 0);
+                    doc.fillColor('#111827').fontSize(9).font('Helvetica');
+                    doc.text(fecha(it.fecha), 50, y, { width: 65 });
+                    doc.text(it.descripcion || '—', 120, y, { width: 215, height: 11, lineBreak: false, ellipsis: true });
+                    doc.text(it.proveedor?.nombre || '—', 340, y, { width: 125, height: 11, lineBreak: false, ellipsis: true });
+                    doc.text(money(it.monto), 470, y, { width: 75, align: 'right' });
+                    y += 16;
+                }
+            }
+
+            // ── Total (con guarda para no pisar el pie) ───────────────────────────
+            if (y > 680) { doc.addPage(); drawTopBand(doc, brand); y = 60; }
+            y += 4;
+            doc.moveTo(50, y).lineTo(545, y).strokeColor('#e5e7eb').stroke();
+            y += 8;
+            doc.fillColor('#111827').fontSize(11).font('Helvetica-Bold').text('TOTAL', 340, y, { width: 120 });
+            doc.fillColor(accent).fontSize(11).font('Helvetica-Bold').text(money(total), 470, y, { width: 75, align: 'right' });
+
+            // ── Pie (marca del tenant, o AUTENZA por defecto) ─────────────────────
+            drawPie(doc, brand);
+            doc.fillColor(muted).fontSize(8).font('Helvetica')
+                .text(`Generado el ${new Date().toLocaleString('es-AR')}`, 50, 760, { align: 'center', width: 495 });
+            doc.text('Orden de trabajo interna. Los importes son informativos; no válida como factura.', 50, 772, { align: 'center', width: 495 });
+
+            doc.end();
+        } catch (error) {
+            next(error);
+        }
+    }
+
     // GET /api/clientes/:id/estado-cuenta/pdf → PDF con la cuenta corriente del
     // cliente: por cada financiación, el plan de cuotas (pagado/saldo) y los
     // totales. Mismo criterio de "vencido" que el reporte de estado de cuenta

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PostventaCasoController } from '../controllers/PostventaCasoController';
+import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authorize } from '../middlewares/authorize.middleware';
 
 import { validateBody } from '../middlewares/validate.middleware';
@@ -70,6 +71,22 @@ router.get('/:id', PostventaCasoController.getById);
  *       404: { $ref: '#/components/responses/NotFound' }
  */
 router.get('/:id/total', PostventaCasoController.total);
+
+/**
+ * @openapi
+ * /postventa-casos/{id}/orden:
+ *   get:
+ *     tags: [Postventa]
+ *     summary: Orden de servicio del caso en PDF
+ *     description: PDF con la marca de la concesionaria, datos del cliente/vehículo, el reclamo, el turno y la tabla de trabajos/repuestos con su total.
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     responses:
+ *       200: { description: PDF de la orden, content: { application/pdf: {} } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.get('/:id/orden', ComprobanteController.postventaOrdenPdf);
 
 /**
  * @openapi

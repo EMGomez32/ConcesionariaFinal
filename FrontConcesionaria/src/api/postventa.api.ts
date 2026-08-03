@@ -127,4 +127,8 @@ export const postventaApi = {
 
     deleteTipo: (id: number) =>
         apiClient.delete(`/postventa-tipos/${id}`),
+
+    /** Orden de servicio del caso en PDF (blob descargable), con la marca del tenant. */
+    ordenPdf: (id: number) =>
+        apiClient.get<Blob>(`/postventa-casos/${id}/orden`, { responseType: 'blob' }),
 };

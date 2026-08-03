@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
     Plus, Search, X, ChevronLeft, ChevronRight,
     Eye, Trash2, Edit, ArrowRight, CheckCircle, Package, Wrench, Clock, RefreshCw, Tags,
-    Calendar, MessageCircle
+    Calendar, MessageCircle, FileText
 } from 'lucide-react';
 import { waLink } from '../../utils/whatsapp';
 import Button from '../../components/ui/Button';
@@ -118,6 +118,7 @@ export default function PostventaPage() {
 
     // ─ Turno del caso en detalle (agendar / reprogramar / desagendar) ─
     const [turnoForm, setTurnoForm] = useState({ fechaTurno: '', horaTurno: '' });
+    const [descargandoOrden, setDescargandoOrden] = useState(false);
 
     // ─ Create Item form ─
     const [itemForm, setItemForm] = useState<CreateItemDto>({
@@ -439,6 +440,27 @@ export default function PostventaPage() {
         } catch {
             setDetailCaso(caso);
             syncTurnoForm(caso);
+        }
+    };
+
+    // Descarga la orden de servicio del caso en PDF (mismo patrón de blob que los
+    // otros comprobantes: la respuesta ya viene desenvuelta por el interceptor).
+    const handleOrden = async (caso: PostventaCaso) => {
+        setDescargandoOrden(true);
+        try {
+            const blob = await postventaApi.ordenPdf(caso.id) as unknown as Blob;
+            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `orden-servicio-${caso.id}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            addToast('Error al generar la orden de servicio', 'error');
+        } finally {
+            setDescargandoOrden(false);
         }
     };
 
@@ -887,7 +909,12 @@ export default function PostventaPage() {
                                 )}
                             </div>
                         </div>
-                        <button onClick={() => setDetailCaso(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={20} /></button>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <Button variant="secondary" size="sm" onClick={() => handleOrden(detailCaso)} loading={descargandoOrden}>
+                                <FileText size={14} /> Orden PDF
+                            </Button>
+                            <button onClick={() => setDetailCaso(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={20} /></button>
+                        </div>
                     </div>
 
                     {/* Info grid */}
