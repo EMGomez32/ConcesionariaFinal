@@ -6,4 +6,6 @@ export interface IClienteSeguimientoRepository {
     findById(id: number): Promise<ClienteSeguimiento | null>;
     create(data: any): Promise<ClienteSeguimiento>;
     delete(id: number): Promise<void>;
+    /** Marca (o desmarca) el próximo contacto como realizado. */
+    setProximoHecho(id: number, hecho: boolean): Promise<ClienteSeguimiento>;
 }

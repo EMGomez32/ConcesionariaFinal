@@ -1474,7 +1474,7 @@ export class ReporteController {
                 prisma.vehiculo.count({ where: { estado: { in: ['preparacion', 'publicado', 'reservado'] }, fechaIngreso: { lt: cutoffStock } } }),
                 prisma.postventaCaso.count({ where: { fechaTurno: { gte: inicioHoy, lt: finVentana }, estado: { not: 'resuelto' } } }),
                 prisma.postventaCaso.count({ where: { fechaTurno: inicioHoy, estado: { not: 'resuelto' } } }),
-                prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desdeSeg, lt: finVentana } } }),
+                prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desdeSeg, lt: finVentana }, proximoContactoHecho: false } }),
             ]);
 
             res.json({
@@ -1507,7 +1507,8 @@ export class ReporteController {
             desde.setUTCDate(desde.getUTCDate() - dias);
             const finVentana = new Date(inicioHoy);
             finVentana.setUTCDate(finVentana.getUTCDate() + dias);
-            const enVentana = { proximoContacto: { gte: desde, lt: finVentana } };
+            // proximoContactoHecho:false ⇒ los ya realizados salen de la agenda.
+            const enVentana = { proximoContacto: { gte: desde, lt: finVentana }, proximoContactoHecho: false };
 
             const [seguimientos, cantidad, vencidos, hoy] = await Promise.all([
                 prisma.clienteSeguimiento.findMany({
@@ -1520,8 +1521,8 @@ export class ReporteController {
                     },
                 }),
                 prisma.clienteSeguimiento.count({ where: enVentana }),
-                prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desde, lt: inicioHoy } } }),
-                prisma.clienteSeguimiento.count({ where: { proximoContacto: inicioHoy } }),
+                prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desde, lt: inicioHoy }, proximoContactoHecho: false } }),
+                prisma.clienteSeguimiento.count({ where: { proximoContacto: inicioHoy, proximoContactoHecho: false } }),
             ]);
 
             const hoyStr = inicioHoy.toISOString().slice(0, 10);

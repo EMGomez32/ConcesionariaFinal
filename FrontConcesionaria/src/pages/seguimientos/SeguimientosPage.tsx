@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, Phone, MessageCircle, Mail, MapPin, User, ChevronRight, RefreshCw } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { CalendarClock, Phone, MessageCircle, Mail, MapPin, User, ChevronRight, RefreshCw, Check } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { reportesApi, type ProximoSeguimientoItem } from '../../api/reportes.api';
+import { seguimientosApi } from '../../api/seguimientos.api';
+import { dashboardKeys } from '../../hooks/useDashboard';
+import { useUIStore } from '../../store/uiStore';
+import { getErrorMessage } from '../../utils/getErrorMessage';
 import { formatFecha } from '../../utils/fecha';
 import { waLink } from '../../utils/whatsapp';
 import PageTitle from '../../components/ui/PageTitle';
@@ -30,11 +34,31 @@ const OPCIONES_DIAS = [7, 15, 30];
 
 const SeguimientosPage = () => {
     const [dias, setDias] = useState(7);
+    // Ids con un "marcar hecho" en vuelo: el disabled es POR FILA (un solo useMutation
+    // comparte marcar.variables con la última llamada, así que no sirve para eso).
+    const [marcando, setMarcando] = useState<Set<number>>(new Set());
+    const qc = useQueryClient();
+    const { addToast } = useUIStore();
 
     const { data, isLoading, isError, refetch, isFetching } = useQuery({
         queryKey: ['seguimientos', 'proximos', dias],
         queryFn: () => reportesApi.proximosSeguimientos({ dias }),
         staleTime: 1000 * 60 * 2,
+    });
+
+    // Marcar el próximo contacto como realizado: sale de la agenda y baja los
+    // conteos del Dashboard y la campanita (por eso también se invalidan).
+    const marcar = useMutation({
+        mutationFn: (id: number) => seguimientosApi.marcarProximo(id, true),
+        onMutate: (id) => setMarcando((s) => new Set(s).add(id)),
+        onSuccess: () => {
+            addToast('Contacto marcado como realizado', 'success');
+            qc.invalidateQueries({ queryKey: ['seguimientos', 'proximos'] });
+            qc.invalidateQueries({ queryKey: dashboardKeys.alertas() });
+            qc.invalidateQueries({ queryKey: dashboardKeys.alertasResumen() });
+        },
+        onError: (e) => addToast(getErrorMessage(e, 'No se pudo marcar el contacto'), 'error'),
+        onSettled: (_d, _e, id) => setMarcando((s) => { const n = new Set(s); n.delete(id); return n; }),
     });
 
     const items = data?.items ?? [];
@@ -154,6 +178,15 @@ const SeguimientosPage = () => {
                                         {s.vendedor && <span className="seg-vendedor">Agendado por {s.vendedor}</span>}
                                     </div>
                                     <div className="seg-item-actions">
+                                        <button
+                                            className="btn btn-primary btn-sm"
+                                            type="button"
+                                            onClick={() => marcar.mutate(s.seguimientoId)}
+                                            disabled={marcando.has(s.seguimientoId)}
+                                            title="Marcar el próximo contacto como realizado"
+                                        >
+                                            <Check size={15} /> Hecho
+                                        </button>
                                         {wa ? (
                                             <a className="btn btn-secondary btn-sm" href={wa} target="_blank" rel="noopener noreferrer">
                                                 <MessageCircle size={15} /> WhatsApp

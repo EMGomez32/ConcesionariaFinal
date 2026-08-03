@@ -3,6 +3,7 @@ import { PrismaClienteSeguimientoRepository } from '../../infrastructure/databas
 import { GetSeguimientosByCliente } from '../../application/use-cases/cliente-seguimientos/GetSeguimientosByCliente';
 import { CreateClienteSeguimiento } from '../../application/use-cases/cliente-seguimientos/CreateClienteSeguimiento';
 import { DeleteClienteSeguimiento } from '../../application/use-cases/cliente-seguimientos/DeleteClienteSeguimiento';
+import { MarcarProximoContacto } from '../../application/use-cases/cliente-seguimientos/MarcarProximoContacto';
 import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 
@@ -10,6 +11,7 @@ const repository = new PrismaClienteSeguimientoRepository();
 const getByClienteUC = new GetSeguimientosByCliente(repository);
 const createUC = new CreateClienteSeguimiento(repository);
 const deleteUC = new DeleteClienteSeguimiento(repository);
+const marcarUC = new MarcarProximoContacto(repository);
 
 export class ClienteSeguimientoController {
     static async getByCliente(req: Request, res: Response, next: NextFunction) {
@@ -49,6 +51,24 @@ export class ClienteSeguimientoController {
                 detalle: `Seguimiento ${id} eliminado`,
             });
             res.status(204).send();
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    static async marcarProximo(req: Request, res: Response, next: NextFunction) {
+        try {
+            const id = parseInt(req.params.id as string, 10);
+            // Sin body ⇒ marcar hecho; { hecho:false } ⇒ reabrir.
+            const hecho = req.body?.hecho ?? true;
+            const result = await marcarUC.execute(id, hecho);
+            await audit({
+                entidad: 'ClienteSeguimiento',
+                accion: 'update',
+                entidadId: id,
+                detalle: `Próximo contacto del seguimiento ${id} marcado ${hecho ? 'realizado' : 'pendiente'}`,
+            });
+            res.json(result);
         } catch (error) {
             next(error);
         }

@@ -54,6 +54,19 @@ export class PrismaClienteSeguimientoRepository implements IClienteSeguimientoRe
         await prisma.clienteSeguimiento.delete({ where: { id } });
     }
 
+    async setProximoHecho(id: number, hecho: boolean): Promise<ClienteSeguimiento> {
+        // La extensión inyecta el tenant (concesionariaId) al where del update, pero
+        // NO el soft-delete (deletedAt:null sólo se aplica a lecturas). Por eso va
+        // explícito acá: así un seguimiento ya borrado no es mutable ni aunque
+        // alguien saque el findById previo del use-case (defensa en profundidad).
+        const s = await prisma.clienteSeguimiento.update({
+            where: { id, deletedAt: null },
+            data: { proximoContactoHecho: hecho },
+            include: { usuario: { select: { id: true, nombre: true } } },
+        });
+        return this.mapToEntity(s);
+    }
+
     private mapToEntity(s: any): ClienteSeguimiento {
         return new ClienteSeguimiento(
             s.id,
@@ -64,6 +77,7 @@ export class PrismaClienteSeguimientoRepository implements IClienteSeguimientoRe
             s.fecha,
             s.nota,
             s.proximoContacto ?? null,
+            s.proximoContactoHecho ?? false,
             s.createdAt,
             s.updatedAt,
             s.deletedAt ?? null,
