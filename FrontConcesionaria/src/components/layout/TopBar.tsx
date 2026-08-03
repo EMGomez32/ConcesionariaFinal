@@ -1,7 +1,8 @@
 import { useAuthStore } from '../../store/authStore';
-import { LogOut, Sun, Moon, User, Bell, Menu, Search } from 'lucide-react';
+import { LogOut, Sun, Moon, User, Menu, Search } from 'lucide-react';
 import { useState } from 'react';
 import Breadcrumbs from './Breadcrumbs';
+import NotificationBell from './NotificationBell';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 
 const TopBar = ({ onMenuClick }: { onMenuClick?: () => void }) => {
@@ -52,10 +53,7 @@ const TopBar = ({ onMenuClick }: { onMenuClick?: () => void }) => {
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
-          <button className="icon-button" title="Notificaciones" aria-label="Notificaciones">
-            <Bell size={18} />
-            <span className="notification-dot"></span>
-          </button>
+          <NotificationBell />
         </div>
 
         <div className="user-profile">
@@ -172,18 +170,6 @@ const TopBar = ({ onMenuClick }: { onMenuClick?: () => void }) => {
           background: var(--bg-secondary);
           border-color: var(--border);
           color: var(--accent);
-        }
-
-        .notification-dot {
-          position: absolute;
-          top: 9px;
-          right: 9px;
-          width: 7px;
-          height: 7px;
-          background: var(--accent-2);
-          border-radius: 50%;
-          border: 2px solid var(--bg-card);
-          box-shadow: 0 0 8px rgba(var(--accent-2-rgb), 0.65);
         }
 
         .user-profile {

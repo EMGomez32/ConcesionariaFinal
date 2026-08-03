@@ -342,6 +342,19 @@ export interface ReporteTurnosTaller {
     items: TurnoTallerItem[];
 }
 
+/** Conteos livianos para la campanita de notificaciones (un solo request). */
+export interface AlertasResumen {
+    dias: number;
+    umbral: number;
+    mora: number;
+    proximos: number;
+    reservas: number;
+    estancados: number;
+    turnos: number;
+    turnosHoy: number;
+    total: number;
+}
+
 export interface RangoFiltro {
     desde?: string;
     hasta?: string;
@@ -392,6 +405,10 @@ export const reportesApi = {
 
     turnosTaller: (params: { dias?: number } = {}) =>
         client.get<ReporteTurnosTaller>('/reportes/turnos-taller', { params }),
+
+    /** Conteos de alertas en una sola llamada (campanita de notificaciones). */
+    alertasResumen: () =>
+        client.get<AlertasResumen>('/reportes/alertas-resumen'),
 
     /**
      * Variante CSV. Devuelve el blob y el nombre de archivo que mandó el

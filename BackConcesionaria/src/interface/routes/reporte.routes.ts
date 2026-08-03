@@ -180,4 +180,18 @@ router.get('/reservas-por-vencer', authorize('admin', 'vendedor'), ReporteContro
  */
 router.get('/turnos-taller', authorize('admin', 'vendedor', 'postventa'), ReporteController.turnosTaller);
 
+/**
+ * @openapi
+ * /reportes/alertas-resumen:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Resumen de alertas (sólo conteos) para la campanita de notificaciones
+ *     description: Una sola llamada con los conteos de mora, cuotas y reservas por vencer, stock estancado y turnos de taller. Solo admin (incluye stock, que expone capital).
+ *     responses:
+ *       200: { description: Conteos de alertas }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ */
+router.get('/alertas-resumen', authorize('admin'), ReporteController.alertasResumen);
+
 export default router;
