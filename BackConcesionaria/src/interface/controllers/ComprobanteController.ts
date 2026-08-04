@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import PDFDocument from 'pdfkit';
 import prisma from '../../infrastructure/database/prisma';
-import { NotFoundException } from '../../domain/exceptions/BaseException';
+import { NotFoundException, BaseException } from '../../domain/exceptions/BaseException';
 import { resolveBranding, drawEncabezado, drawPie } from './pdf/branding';
 import { renderEstadoCuenta, EstadoCuentaData, FinanciacionLinea } from './pdf/estadoCuenta';
+import { renderLiquidacionComisiones, LiquidacionData, LiquidacionLinea, LiquidacionTotal } from './pdf/liquidacionComisiones';
 import { storage } from '../../infrastructure/storage/LocalStorageAdapter';
 import { sniffImageType } from '../middlewares/upload.middleware';
 import { drawTopBand } from './pdf/branding';
@@ -1116,6 +1117,129 @@ export class ComprobanteController {
 
             const brand = await resolveBranding(cliente.concesionaria);
             renderEstadoCuenta(doc, brand, data);
+            doc.end();
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // GET /api/reportes/comisiones/pdf?vendedorId=&desde=&hasta= → liquidación de
+    // comisiones de UN vendedor: detalle de sus ventas del período (facturado =
+    // precio + extras) y su comisión (facturado × % del perfil), por moneda. Es un
+    // documento interno de nómina → sólo admin (la ruta lo gatea).
+    static async comisionesLiquidacionPdf(req: Request, res: Response, next: NextFunction) {
+        try {
+            const vendedorId = Number(req.query.vendedorId);
+            if (!Number.isInteger(vendedorId) || vendedorId < 1) {
+                throw new BaseException(400, 'vendedorId es obligatorio', 'VALIDATION_ERROR');
+            }
+            // Rango sobre fechaVenta (@db.Date): se compara en UTC puro (T00:00Z),
+            // igual que el reporte de comisiones (parseRango/filtroFecha).
+            const parseDia = (v: unknown): Date | undefined => {
+                if (!v) return undefined;
+                const d = new Date(`${v}T00:00:00.000Z`);
+                return isNaN(d.getTime()) ? undefined : d;
+            };
+            const desde = parseDia(req.query.desde);
+            const hasta = parseDia(req.query.hasta);
+            // sucursalId: MISMO filtro que el reporte de comisiones. Sin esto, la
+            // liquidación sumaba TODAS las sucursales aunque el admin estuviera viendo
+            // una sola en la grilla → el PDF de nómina no coincidía con la pantalla.
+            let sucursalId: number | undefined;
+            if (req.query.sucursalId !== undefined && req.query.sucursalId !== '') {
+                const n = Number(req.query.sucursalId);
+                if (!Number.isInteger(n) || n < 1) throw new BaseException(400, 'sucursalId inválido', 'VALIDATION_ERROR');
+                sucursalId = n;
+            }
+
+            const where: any = { vendedorId };
+            if (desde || hasta) {
+                where.fechaVenta = {};
+                if (desde) where.fechaVenta.gte = desde;
+                if (hasta) where.fechaVenta.lte = hasta;
+            }
+            if (sucursalId) where.sucursalId = sucursalId;
+
+            const ventas = await prisma.venta.findMany({
+                where,
+                orderBy: { fechaVenta: 'asc' },
+                include: {
+                    vehiculo: { select: { marca: true, modelo: true, dominio: true } },
+                    cliente: { select: { nombre: true } },
+                    // Los extras anulados no suman (el filtro de borrados no alcanza al include).
+                    extras: { where: { deletedAt: null }, select: { monto: true } },
+                    // Vendedor + concesionaria SALEN del include (como el reporte): la
+                    // extensión no filtra deletedAt en relaciones to-one, así que un
+                    // vendedor dado de baja con ventas en el período sigue siendo
+                    // liquidable, coincidiendo con la fila del reporte que ofreció el botón.
+                    vendedor: { select: { nombre: true, comisionPorcentaje: true } },
+                    concesionaria: { select: marcaSelect },
+                },
+            }) as any[];
+
+            // Cabecera: del vendedor de las ventas; si no tuvo ventas en el período,
+            // se busca el usuario (scoped por tenant → 404 si no existe en el tenant).
+            let nombre: string;
+            let porcentajeRaw: unknown;
+            let concesionaria: any;
+            if (ventas.length) {
+                nombre = ventas[0].vendedor?.nombre ?? 'Vendedor';
+                porcentajeRaw = ventas[0].vendedor?.comisionPorcentaje;
+                concesionaria = ventas[0].concesionaria ?? null;
+            } else {
+                const u = await prisma.usuario.findFirst({
+                    where: { id: vendedorId },
+                    select: { nombre: true, comisionPorcentaje: true, concesionaria: { select: marcaSelect } },
+                }) as any;
+                if (!u) throw new NotFoundException('Vendedor');
+                nombre = u.nombre;
+                porcentajeRaw = u.comisionPorcentaje;
+                concesionaria = u.concesionaria ?? null;
+            }
+            const porcentaje = porcentajeRaw != null ? Number(porcentajeRaw) : 0;
+            const nn = (v: unknown) => Number(v ?? 0);
+            const totalesMap = new Map<string, LiquidacionTotal>();
+            const lineas: LiquidacionLinea[] = ventas.map((v) => {
+                const extras = (v.extras as any[]).reduce((s, e) => s + nn(e.monto), 0);
+                const facturado = nn(v.precioVenta) + extras;
+                const comision = facturado * (porcentaje / 100);
+                const veh = v.vehiculo;
+                const t = totalesMap.get(v.moneda) ?? { moneda: v.moneda, unidades: 0, facturado: 0, comision: 0 };
+                t.unidades += 1; t.facturado += facturado; t.comision += comision;
+                totalesMap.set(v.moneda, t);
+                return {
+                    fecha: v.fechaVenta,
+                    vehiculo: veh ? `${veh.marca ?? ''} ${veh.modelo ?? ''}`.trim() : '',
+                    dominio: veh?.dominio ?? '',
+                    cliente: v.cliente?.nombre ?? '',
+                    moneda: v.moneda,
+                    facturado,
+                    comision,
+                };
+            });
+
+            const ahora = new Date();
+            const data: LiquidacionData = {
+                vendedor: nombre,
+                porcentaje,
+                concesionaria: concesionaria,
+                periodo: {
+                    desde: desde ? desde.toISOString().slice(0, 10) : null,
+                    hasta: hasta ? hasta.toISOString().slice(0, 10) : null,
+                },
+                generadoEl: ahora.toLocaleString('es-AR'),
+                lineas,
+                totales: Array.from(totalesMap.values()).sort((a, b) => a.moneda.localeCompare(b.moneda)),
+                totalUnidades: lineas.length,
+            };
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="liquidacion-comisiones-vendedor-${vendedorId}.pdf"`);
+            const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
+            doc.pipe(res);
+
+            const brand = await resolveBranding(concesionaria);
+            renderLiquidacionComisiones(doc, brand, data);
             doc.end();
         } catch (error) {
             next(error);

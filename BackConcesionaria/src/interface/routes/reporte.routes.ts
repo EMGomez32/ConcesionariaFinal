@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { ReporteController } from '../controllers/ReporteController';
+import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authorize } from '../middlewares/authorize.middleware';
 
 const router = Router();
@@ -223,5 +224,25 @@ router.get('/proximos-seguimientos', authorize('admin', 'vendedor'), ReporteCont
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
 router.get('/leads-resumen', authorize('admin', 'vendedor'), ReporteController.leadsResumen);
+
+/**
+ * @openapi
+ * /reportes/comisiones/pdf:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Liquidación de comisiones de un vendedor en PDF (nómina, branded)
+ *     description: Detalle de las ventas del vendedor en el período y su comisión por moneda. Solo admin.
+ *     parameters:
+ *       - { in: query, name: vendedorId, required: true, schema: { type: integer } }
+ *       - { in: query, name: desde, schema: { type: string, format: date } }
+ *       - { in: query, name: hasta, schema: { type: string, format: date } }
+ *     responses:
+ *       200: { description: PDF de la liquidación, content: { application/pdf: {} } }
+ *       400: { $ref: '#/components/responses/ValidationError' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.get('/comisiones/pdf', authorize('admin'), ComprobanteController.comisionesLiquidacionPdf);
 
 export default router;

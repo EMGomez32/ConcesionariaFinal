@@ -427,6 +427,10 @@ export const reportesApi = {
     comisiones: (params: RangoFiltro = {}) =>
         client.get<ReporteComisiones>('/reportes/comisiones', { params }),
 
+    /** Liquidación de comisiones de UN vendedor en PDF (blob). */
+    comisionesLiquidacionPdf: (params: { vendedorId: number; desde?: string; hasta?: string; sucursalId?: number }) =>
+        client.get<Blob>('/reportes/comisiones/pdf', { params, responseType: 'blob' }),
+
     estadoCuenta: (clienteId: number) =>
         client.get<EstadoCuenta>('/reportes/estado-cuenta', { params: { clienteId } }),
 
