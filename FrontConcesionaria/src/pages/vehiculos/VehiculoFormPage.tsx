@@ -46,6 +46,8 @@ const VehiculoFormPage = () => {
                 // Formatear fechas para el input type="date"
                 if (data.fechaIngreso) data.fechaIngreso = data.fechaIngreso.split('T')[0];
                 if (data.fechaCompra) data.fechaCompra = data.fechaCompra.split('T')[0];
+                if (data.vencimientoVtv) data.vencimientoVtv = data.vencimientoVtv.split('T')[0];
+                if (data.vencimientoSeguro) data.vencimientoSeguro = data.vencimientoSeguro.split('T')[0];
                 reset(data);
             });
         }
@@ -146,6 +148,14 @@ const VehiculoFormPage = () => {
                         />
                         <Input label="Precio Lista (Venta)" type="number" step="0.01" {...register('precioLista', { valueAsNumber: true })} />
                         <Input label="Precio Compra" type="number" step="0.01" {...register('precioCompra', { valueAsNumber: true })} />
+                    </div>
+                </div>
+
+                <div className="form-section">
+                    <h3>Documentación</h3>
+                    <div className="form-grid">
+                        <Input label="Vencimiento VTV" type="date" {...register('vencimientoVtv')} />
+                        <Input label="Vencimiento Seguro" type="date" {...register('vencimientoSeguro')} />
                     </div>
                 </div>
 

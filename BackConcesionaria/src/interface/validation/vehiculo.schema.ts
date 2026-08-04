@@ -82,6 +82,10 @@ export const createVehiculoSchema = z.object({
     kmIngreso: optionalInt,
     color: optionalStr,
     fechaCompra: optionalStr,
+    // Documentación del vehículo (VTV / seguro). Laxo (string) como las otras fechas;
+    // el use-case hace new Date().
+    vencimientoVtv: optionalStr,
+    vencimientoSeguro: optionalStr,
     moneda: monedaEnum.optional(),
     precioLista: optionalDecimal,
     precioCompra: optionalDecimal,
@@ -124,6 +128,8 @@ export const updateVehiculoSchema = z.object({
     color: optionalStr,
     fechaIngreso: optionalStr,
     fechaCompra: optionalStr,
+    vencimientoVtv: optionalStr,
+    vencimientoSeguro: optionalStr,
     moneda: monedaEnum.optional(),
     precioLista: optionalDecimal,
     precioCompra: optionalDecimal,

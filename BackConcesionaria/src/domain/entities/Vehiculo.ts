@@ -19,7 +19,10 @@ export class Vehiculo {
         public readonly deletedAt: Date | null,
         public readonly sucursal?: any,
         public readonly archivos?: any[],
-        public readonly moneda: string = 'ARS'
+        public readonly moneda: string = 'ARS',
+        /** Vencimiento de la VTV y del seguro (documentación del vehículo). */
+        public readonly vencimientoVtv: Date | null = null,
+        public readonly vencimientoSeguro: Date | null = null
     ) { }
 
     public isAvailable(): boolean {

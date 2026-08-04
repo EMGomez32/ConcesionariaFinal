@@ -1466,8 +1466,15 @@ export class ReporteController {
             // el reporte de próximos-seguimientos (vencidos recientes + hoy + próximos).
             const desdeSeg = new Date(inicioHoy);
             desdeSeg.setUTCDate(desdeSeg.getUTCDate() - DIAS);
+            // Documentación (VTV/seguro): ventana más larga (30d) que el resto, igual que
+            // el default del reporte de vencimientos, para que campanita y card coincidan.
+            const DIAS_DOC = 30;
+            const finVentanaDoc = new Date(inicioHoy);
+            finVentanaDoc.setUTCDate(finVentanaDoc.getUTCDate() + DIAS_DOC);
 
-            const [mora, proximos, reservas, estancados, turnos, turnosHoy, seguimientos] = await Promise.all([
+            // Documentación: vehículos EN STOCK con VTV o seguro ya vencido o por vencer
+            // dentro de la ventana (misma ventana DIAS que el resto de la campanita).
+            const [mora, proximos, reservas, estancados, turnos, turnosHoy, seguimientos, documentacion] = await Promise.all([
                 prisma.cuota.count({ where: { vencimiento: { lt: inicioHoy }, saldoCuota: { gt: 0 }, estado: { not: 'pagada' }, financiacion: { deletedAt: null } } }),
                 prisma.cuota.count({ where: { vencimiento: { gte: inicioHoy, lt: finVentana }, saldoCuota: { gt: 0 }, estado: { notIn: ['pagada', 'refinanciada'] }, financiacion: { deletedAt: null } } }),
                 prisma.reserva.count({ where: { estado: 'activa', venceEl: { gte: inicioHoy, lt: finVentana } } }),
@@ -1475,13 +1482,14 @@ export class ReporteController {
                 prisma.postventaCaso.count({ where: { fechaTurno: { gte: inicioHoy, lt: finVentana }, estado: { not: 'resuelto' } } }),
                 prisma.postventaCaso.count({ where: { fechaTurno: inicioHoy, estado: { not: 'resuelto' } } }),
                 prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desdeSeg, lt: finVentana }, proximoContactoHecho: false } }),
+                prisma.vehiculo.count({ where: { estado: { in: ['preparacion', 'publicado', 'reservado'] }, OR: [{ vencimientoVtv: { lt: finVentanaDoc } }, { vencimientoSeguro: { lt: finVentanaDoc } }] } }),
             ]);
 
             res.json({
                 dias: DIAS,
                 umbral: UMBRAL,
-                mora, proximos, reservas, estancados, turnos, turnosHoy, seguimientos,
-                total: mora + proximos + reservas + estancados + turnos + seguimientos,
+                mora, proximos, reservas, estancados, turnos, turnosHoy, seguimientos, documentacion,
+                total: mora + proximos + reservas + estancados + turnos + seguimientos + documentacion,
             });
         } catch (error) {
             next(error);
@@ -1671,6 +1679,76 @@ export class ReporteController {
                 resumen: { total, resueltos, pendientes: total - resueltos, tiempoPromedioDias, costoTotal },
                 porEstado,
                 porTipo: Array.from(tipoMap.values()).sort((a, b) => b.cantidad - a.cantidad),
+                items,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // ── 16. Vencimientos de documentación del vehículo (VTV / seguro) ─────────
+    // GET /api/reportes/vencimientos-documentacion?dias=
+    // Vehículos EN STOCK cuya VTV o seguro ya venció o vence dentro de los próximos
+    // N días. La fecha nula NO cuenta (Prisma no la matchea en el `lt`). Mismo
+    // criterio UTC que turnos/mora. Para el centro de alertas del Dashboard.
+    static async vencimientosDocumentacion(req: Request, res: Response, next: NextFunction) {
+        try {
+            const dias = enteroEnRango(req.query.dias, 1, 90, 30, 'dias');
+            const ahora = new Date();
+            const inicioHoy = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
+            const finVentana = new Date(inicioHoy);
+            finVentana.setUTCDate(finVentana.getUTCDate() + dias);
+
+            const vehiculos = await prisma.vehiculo.findMany({
+                where: {
+                    estado: { in: ['preparacion', 'publicado', 'reservado'] },
+                    OR: [{ vencimientoVtv: { lt: finVentana } }, { vencimientoSeguro: { lt: finVentana } }],
+                },
+                select: { id: true, marca: true, modelo: true, dominio: true, estado: true, vencimientoVtv: true, vencimientoSeguro: true },
+            });
+
+            const hoyStr = inicioHoy.toISOString().slice(0, 10);
+            const finStr = finVentana.toISOString().slice(0, 10);
+            const dd = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+            // Estado de un documento: vencido (< hoy), por_vencer (< finVentana), vigente
+            // (con fecha futura fuera de ventana) o null (sin dato cargado).
+            const estadoDoc = (iso: string | null): string | null => {
+                if (!iso) return null;
+                if (iso < hoyStr) return 'vencido';
+                if (iso < finStr) return 'por_vencer';
+                return 'vigente';
+            };
+
+            const items = vehiculos.map((v) => {
+                const vtv = dd(v.vencimientoVtv);
+                const seguro = dd(v.vencimientoSeguro);
+                return {
+                    vehiculoId: v.id,
+                    vehiculo: `${v.marca ?? ''} ${v.modelo ?? ''}`.trim(),
+                    dominio: v.dominio ?? '',
+                    estado: v.estado,
+                    vencimientoVtv: vtv,
+                    vencimientoSeguro: seguro,
+                    vtvEstado: estadoDoc(vtv),
+                    seguroEstado: estadoDoc(seguro),
+                };
+            });
+
+            // Orden: por la fecha de vencimiento más próxima (los ya vencidos primero).
+            const clave = (i: { vencimientoVtv: string | null; vencimientoSeguro: string | null }) => {
+                const a = i.vencimientoVtv ?? '9999-12-31';
+                const b = i.vencimientoSeguro ?? '9999-12-31';
+                return a < b ? a : b;
+            };
+            items.sort((a, b) => clave(a).localeCompare(clave(b)));
+
+            const vencidos = items.filter((i) => i.vtvEstado === 'vencido' || i.seguroEstado === 'vencido').length;
+            const ultimoDia = new Date(finVentana);
+            ultimoDia.setUTCDate(ultimoDia.getUTCDate() - 1);
+
+            res.json({
+                ventana: { dias, desde: hoyStr, hasta: ultimoDia.toISOString().slice(0, 10) },
+                resumen: { cantidad: items.length, vencidos },
                 items,
             });
         } catch (error) {

@@ -28,6 +28,11 @@ export class CreateVehiculo {
         // Prisma 7 exige Date/ISO para @db.Date y number para las FK.
         if (vehiculoData.fechaIngreso) vehiculoData.fechaIngreso = new Date(vehiculoData.fechaIngreso);
         if (vehiculoData.fechaCompra) vehiculoData.fechaCompra = new Date(vehiculoData.fechaCompra);
+        // Fechas opcionales: el <input type="date"> vacío manda '' (no undefined) y
+        // Prisma rechaza '' en un @db.Date con un 500 → '' se mapea a null (igual que
+        // venceEl en CreateReserva). El if(x) simple dejaba el '' y reventaba el alta.
+        vehiculoData.vencimientoVtv = vehiculoData.vencimientoVtv ? new Date(vehiculoData.vencimientoVtv) : null;
+        vehiculoData.vencimientoSeguro = vehiculoData.vencimientoSeguro ? new Date(vehiculoData.vencimientoSeguro) : null;
         vehiculoData.proveedorCompraId = vehiculoData.proveedorCompraId ? Number(vehiculoData.proveedorCompraId) : null;
 
         const vehiculo: any = await this.vehiculoRepository.create(vehiculoData);

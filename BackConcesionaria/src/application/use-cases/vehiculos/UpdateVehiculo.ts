@@ -29,6 +29,14 @@ export class UpdateVehiculo {
         // Los inputs type="date" mandan "YYYY-MM-DD" y los selects strings.
         if (vehiculoData.fechaIngreso) vehiculoData.fechaIngreso = new Date(vehiculoData.fechaIngreso);
         if (vehiculoData.fechaCompra) vehiculoData.fechaCompra = new Date(vehiculoData.fechaCompra);
+        // Fechas opcionales: presente (incluido '') ⇒ coerce, '' ⇒ null (borra la fecha
+        // sin reventar Prisma); ausente ⇒ no se toca (un PATCH parcial no la borra).
+        if (vehiculoData.vencimientoVtv !== undefined) {
+            vehiculoData.vencimientoVtv = vehiculoData.vencimientoVtv ? new Date(vehiculoData.vencimientoVtv) : null;
+        }
+        if (vehiculoData.vencimientoSeguro !== undefined) {
+            vehiculoData.vencimientoSeguro = vehiculoData.vencimientoSeguro ? new Date(vehiculoData.vencimientoSeguro) : null;
+        }
         if (vehiculoData.proveedorCompraId !== undefined) {
             vehiculoData.proveedorCompraId = vehiculoData.proveedorCompraId ? Number(vehiculoData.proveedorCompraId) : null;
         }
