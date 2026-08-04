@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy, MessageCircle, Coins, Target, Wrench } from 'lucide-react';
+import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy, MessageCircle, Coins, Target, Wrench, ShieldCheck } from 'lucide-react';
 import {
     reportesApi,
     type ReporteVentasItem,
@@ -11,6 +11,7 @@ import {
     type RankingVendedorItem,
     type ComisionVendedorItem,
     type PostventaCasoReporteItem,
+    type VencimientoDocItem,
     type TotalPorMoneda,
 } from '../../api/reportes.api';
 import { cotizacionesApi } from '../../api/cotizaciones.api';
@@ -27,13 +28,19 @@ import Modal from '../../components/ui/Modal';
 import { StatCard } from './StatCard';
 import ObjetivosTab from './ObjetivosTab';
 
-type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos' | 'ranking' | 'comisiones' | 'postventa' | 'objetivos';
+type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos' | 'ranking' | 'comisiones' | 'postventa' | 'documentacion' | 'objetivos';
 
 // Etapa del caso de postventa → etiqueta + variante de Badge.
 const ESTADO_POSTVENTA: Record<string, { label: string; variant: 'warning' | 'info' | 'success' }> = {
     pendiente: { label: 'Pendiente', variant: 'warning' },
     en_curso: { label: 'En curso', variant: 'info' },
     resuelto: { label: 'Resuelto', variant: 'success' },
+};
+// Estado de un documento (VTV/seguro) → etiqueta + variante de Badge.
+const ESTADO_DOC: Record<string, { label: string; variant: 'danger' | 'warning' | 'success' }> = {
+    vencido: { label: 'Vencido', variant: 'danger' },
+    por_vencer: { label: 'Por vencer', variant: 'warning' },
+    vigente: { label: 'Vigente', variant: 'success' },
 };
 type Consolidar = '' | 'ARS' | 'USD';
 
@@ -45,6 +52,7 @@ const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
     { key: 'ranking', label: 'Ranking', icon: Trophy },
     { key: 'comisiones', label: 'Comisiones', icon: Coins },
     { key: 'postventa', label: 'Postventa', icon: Wrench },
+    { key: 'documentacion', label: 'Documentación', icon: ShieldCheck },
     { key: 'objetivos', label: 'Objetivos', icon: Target },
     { key: 'rentabilidad', label: 'Rentabilidad', icon: BarChart3 },
 ];
@@ -62,6 +70,7 @@ const TAB_ROLES: Record<Tab, string[]> = {
     ranking: ['admin', 'super_admin'],
     comisiones: ['admin', 'super_admin'],
     postventa: ['admin', 'super_admin', 'vendedor', 'postventa'],
+    documentacion: ['admin', 'super_admin', 'vendedor'],
     objetivos: ['admin', 'super_admin'],
     rentabilidad: ['admin', 'super_admin'],
 };
@@ -274,11 +283,16 @@ const ReportesPage = () => {
         queryFn: () => reportesApi.postventa({ ...rango }),
         enabled: tab === 'postventa',
     });
+    const documentacionQ = useQuery({
+        queryKey: ['reporte', 'documentacion'],
+        queryFn: () => reportesApi.vencimientosDocumentacion({ dias: 30 }),
+        enabled: tab === 'documentacion',
+    });
 
     const handleExport = async () => {
         // Objetivos no tiene endpoint CSV (el botón se oculta en ese tab); el guard
         // además estrecha el tipo de `tab` para el exportCsv de abajo.
-        if (tab === 'objetivos') return;
+        if (tab === 'objetivos' || tab === 'documentacion') return;
         setExporting(true);
         try {
             const params: Record<string, unknown> =
@@ -509,6 +523,20 @@ const ReportesPage = () => {
         { header: 'Costo', align: 'right', accessor: (r) => money(r.costo) },
     ];
 
+    // ── Documentación (VTV / seguro) ──
+    const docBadge = (e: string | null) => {
+        const m = e ? ESTADO_DOC[e] : null;
+        return m ? <Badge variant={m.variant}>{m.label}</Badge> : <span className="text-muted">—</span>;
+    };
+    const documentacionCols: Column<VencimientoDocItem>[] = [
+        { header: 'Vehículo', accessor: (r) => <span className="font-bold">{r.vehiculo || '—'}</span> },
+        { header: 'Dominio', accessor: (r) => r.dominio || '—' },
+        { header: 'VTV', accessor: (r) => (r.vencimientoVtv ? formatFecha(r.vencimientoVtv) : <span className="text-muted">—</span>) },
+        { header: 'Estado VTV', align: 'center', accessor: (r) => docBadge(r.vtvEstado) },
+        { header: 'Seguro', accessor: (r) => (r.vencimientoSeguro ? formatFecha(r.vencimientoSeguro) : <span className="text-muted">—</span>) },
+        { header: 'Estado seguro', align: 'center', accessor: (r) => docBadge(r.seguroEstado) },
+    ];
+
     // Comisión total: consolidada si se pidió, si no la suma por moneda.
     const comisionTotal = () => {
         const data = comisionesQ.data;
@@ -574,7 +602,7 @@ const ReportesPage = () => {
                         propio período y no genera CSV): se ocultan ahí. */}
                     {/* Consolidar no aplica a objetivos (su propio período) ni a postventa
                         (es monomoneda: Σ de costos): ahí el selector sería inerte. */}
-                    {tab !== 'objetivos' && tab !== 'postventa' && (
+                    {tab !== 'objetivos' && tab !== 'postventa' && tab !== 'documentacion' && (
                         <select
                             className="form-input"
                             value={consolidar}
@@ -587,8 +615,8 @@ const ReportesPage = () => {
                             <option value="USD">Consolidar en USD</option>
                         </select>
                     )}
-                    {/* Exportar CSV: todos los tabs menos objetivos (no genera CSV). */}
-                    {tab !== 'objetivos' && (
+                    {/* Exportar CSV: todos los tabs menos objetivos y documentación (no generan CSV). */}
+                    {tab !== 'objetivos' && tab !== 'documentacion' && (
                         <Button variant="secondary" onClick={handleExport} loading={exporting}>
                             <Download size={16} /> Exportar CSV
                         </Button>
@@ -902,6 +930,27 @@ const ReportesPage = () => {
                         errorMessage="No se pudo cargar la analítica de postventa"
                         onRetry={() => postventaQ.refetch()}
                         emptyMessage="No hay casos de postventa en el período seleccionado"
+                    />
+                </>
+            )}
+
+            {/* ── DOCUMENTACIÓN (VTV / seguro por vencer) ── */}
+            {tab === 'documentacion' && (
+                <>
+                    {!documentacionQ.isError && (
+                        <div className="stats-grid stagger" style={{ marginBottom: '1.25rem' }}>
+                            <StatCard label="Vehículos con vencimientos" value={String(documentacionQ.data?.resumen.cantidad ?? 0)} />
+                            <StatCard label="Con documentación vencida" value={String(documentacionQ.data?.resumen.vencidos ?? 0)} color="var(--danger, #dc2626)" />
+                        </div>
+                    )}
+                    <DataTable
+                        columns={documentacionCols}
+                        data={(documentacionQ.data?.items ?? []).map((it) => ({ ...it, id: it.vehiculoId }))}
+                        isLoading={documentacionQ.isLoading}
+                        isError={documentacionQ.isError}
+                        errorMessage="No se pudo cargar la documentación por vencer"
+                        onRetry={() => documentacionQ.refetch()}
+                        emptyMessage="No hay vehículos en stock con documentación vencida o por vencer"
                     />
                 </>
             )}

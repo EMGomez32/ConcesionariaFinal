@@ -409,7 +409,27 @@ export interface AlertasResumen {
     turnosHoy: number;
     /** Próximos seguimientos del CRM en la ventana ±dias. */
     seguimientos: number;
+    /** Vehículos en stock con VTV/seguro vencido o por vencer. */
+    documentacion: number;
     total: number;
+}
+
+/** Un vehículo con documentación (VTV/seguro) vencida o por vencer. */
+export interface VencimientoDocItem {
+    vehiculoId: number;
+    vehiculo: string;
+    dominio: string;
+    estado: string;
+    vencimientoVtv: string | null;
+    vencimientoSeguro: string | null;
+    vtvEstado: 'vencido' | 'por_vencer' | 'vigente' | null;
+    seguroEstado: 'vencido' | 'por_vencer' | 'vigente' | null;
+}
+
+export interface ReporteVencimientosDoc {
+    ventana: { dias: number; desde: string; hasta: string };
+    resumen: { cantidad: number; vencidos: number };
+    items: VencimientoDocItem[];
 }
 
 export interface RangoFiltro {
@@ -478,6 +498,10 @@ export const reportesApi = {
     /** Conteos de alertas en una sola llamada (campanita de notificaciones). */
     alertasResumen: () =>
         client.get<AlertasResumen>('/reportes/alertas-resumen'),
+
+    /** Vehículos en stock con VTV/seguro vencido o por vencer. */
+    vencimientosDocumentacion: (params: { dias?: number } = {}) =>
+        client.get<ReporteVencimientosDoc>('/reportes/vencimientos-documentacion', { params }),
 
     /** Embudo de leads: cantidad de clientes por etapa del pipeline. */
     leadsResumen: () =>

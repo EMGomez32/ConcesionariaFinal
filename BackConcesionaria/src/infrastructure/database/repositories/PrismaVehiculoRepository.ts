@@ -110,7 +110,9 @@ export class PrismaVehiculoRepository implements IVehiculoRepository {
             v.deletedAt,
             v.sucursal,
             v.archivos,
-            v.moneda ?? 'ARS'
+            v.moneda ?? 'ARS',
+            v.vencimientoVtv ?? null,
+            v.vencimientoSeguro ?? null
         );
     }
 }

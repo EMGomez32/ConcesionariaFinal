@@ -247,6 +247,9 @@ model Vehiculo {
   estado                   EstadoVehiculo       @default(preparacion)
   fechaIngreso             DateTime             @map("fecha_ingreso") @db.Date
   fechaCompra              DateTime?            @map("fecha_compra") @db.Date
+  /// Vencimiento de la VTV y del seguro (documentación del vehículo en stock).
+  vencimientoVtv           DateTime?            @map("vencimiento_vtv") @db.Date
+  vencimientoSeguro        DateTime?            @map("vencimiento_seguro") @db.Date
   precioCompra             Decimal?             @map("precio_compra") @db.Decimal(12, 2)
   precioLista              Decimal?             @map("precio_lista") @db.Decimal(12, 2)
   moneda                   String               @default("ARS")

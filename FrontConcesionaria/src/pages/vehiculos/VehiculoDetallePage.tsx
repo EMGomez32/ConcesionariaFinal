@@ -32,6 +32,22 @@ const STATUS_MAP: Record<EstadoVehiculo, { label: string; variant: 'warning' | '
     devuelto: { label: 'Devuelto', variant: 'danger' },
 };
 
+// Fecha @db.Date → DD/MM/YYYY sin pasar por new Date() (evita el corrimiento de día
+// en UTC-3 que arrastran las otras filas de fecha de esta ficha).
+const fmtDia = (s?: string) => (s ? s.split('T')[0].split('-').reverse().join('/') : undefined);
+
+// Estado de la documentación (VTV/seguro) para el badge de la ficha: vencida (alguna
+// ya pasó) tiene prioridad sobre por vencer (alguna dentro de 30 días).
+const docStatus = (vtv?: string, seguro?: string): { label: string; variant: 'danger' | 'warning' } | null => {
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const en30 = new Date(hoy); en30.setDate(en30.getDate() + 30);
+    const parse = (s?: string) => (s ? new Date(`${s.split('T')[0]}T00:00:00`) : null);
+    const fechas = [parse(vtv), parse(seguro)].filter((d): d is Date => d !== null);
+    if (fechas.some((d) => d < hoy)) return { label: 'Documentación vencida', variant: 'danger' };
+    if (fechas.some((d) => d <= en30)) return { label: 'Documentación por vencer', variant: 'warning' };
+    return null;
+};
+
 interface VehiculoFull extends Vehiculo {
     archivos?: VehiculoArchivo[];
     gastos?: GastoVehiculo[];
@@ -489,6 +505,10 @@ const VehiculoDetallePage = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.4rem' }}>
                             <span className="dominio-tag">{vehiculo.dominio || 'S/D'}</span>
                             <Badge variant={STATUS_MAP[vehiculo.estado].variant}>{STATUS_MAP[vehiculo.estado].label}</Badge>
+                            {(() => {
+                                const d = docStatus(vehiculo.vencimientoVtv, vehiculo.vencimientoSeguro);
+                                return d ? <Badge variant={d.variant}>{d.label}</Badge> : null;
+                            })()}
                             <span className="tipo-chip">{vehiculo.tipo === 'CERO_KM' ? '0 km' : 'Usado'}</span>
                             <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{vehiculo.sucursal?.nombre}</span>
                         </div>
@@ -577,6 +597,10 @@ const VehiculoDetallePage = () => {
                             { icon: DollarSign, label: 'Precio compra', value: vehiculo.precioCompra ? `$${Number(vehiculo.precioCompra).toLocaleString('es-AR')}` : undefined },
                             { icon: DollarSign, label: 'Precio lista', value: vehiculo.precioLista ? `$${Number(vehiculo.precioLista).toLocaleString('es-AR')}` : undefined },
                             { icon: Car, label: 'Proveedor', value: vehiculo.proveedorCompra?.nombre },
+                        ]} />
+                        <InfoSection title="Documentación" rows={[
+                            { icon: Calendar, label: 'Vencimiento VTV', value: fmtDia(vehiculo.vencimientoVtv) },
+                            { icon: Calendar, label: 'Vencimiento seguro', value: fmtDia(vehiculo.vencimientoSeguro) },
                         ]} />
                         {vehiculo.observaciones && (
                             <div className="info-section full-width">

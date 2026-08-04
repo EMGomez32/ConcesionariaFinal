@@ -19,6 +19,9 @@ export interface Vehiculo {
     estado: EstadoVehiculo;
     fechaIngreso: string;
     fechaCompra?: string;
+    /** Vencimiento de la VTV y del seguro (documentación del vehículo). */
+    vencimientoVtv?: string;
+    vencimientoSeguro?: string;
     precioCompra?: number;
     precioLista?: number;
     moneda?: 'ARS' | 'USD';

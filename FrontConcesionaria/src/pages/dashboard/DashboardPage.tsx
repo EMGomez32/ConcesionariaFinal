@@ -139,6 +139,7 @@ const DashboardPage = () => {
     { key: 'reservas', label: `Reservas vencen en ${alertas.reservas.dias} días`, count: alertas.reservas.count, monto: alertaMonto(alertas.reservas), montoLabel: 'en señas', icon: Bookmark, color: '#8b5cf6', to: '/reservas' },
     { key: 'turnos', label: `Turnos de taller (${alertas.turnos.dias} días)`, count: alertas.turnos.count, monto: String(alertas.turnos.hoy), montoLabel: alertas.turnos.hoy === 1 ? 'turno hoy' : 'turnos hoy', icon: Wrench, color: 'var(--info)', to: '/postventa?tab=agenda' },
     { key: 'seguimientos', label: `Seguimientos CRM (${alertas.seguimientos.dias} días)`, count: alertas.seguimientos.count, monto: String(alertas.seguimientos.vencidos), montoLabel: alertas.seguimientos.vencidos === 1 ? 'vencido' : 'vencidos', icon: CalendarClock, color: '#0ea5e9', to: '/seguimientos' },
+    { key: 'documentacion', label: `Documentación (${alertas.documentacion.dias} días)`, count: alertas.documentacion.count, monto: String(alertas.documentacion.vencidos), montoLabel: alertas.documentacion.vencidos === 1 ? 'vencida' : 'vencidas', icon: ShieldCheck, color: '#ea580c', to: '/reportes?tab=documentacion' },
   ] : [];
 
   // ── Tendencia de ventas ──
@@ -295,7 +296,7 @@ const DashboardPage = () => {
           ) : (
           <div className="stats-grid stagger">
             {alertasLoading
-              ? Array.from({ length: 6 }).map((_, i) => (
+              ? Array.from({ length: 7 }).map((_, i) => (
                 <div key={i} className="card stat-card">
                   <div className="stat-content">
                     <span className="skeleton skeleton-text" style={{ width: '55%' }} />

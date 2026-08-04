@@ -246,6 +246,22 @@ router.get('/postventa', authorize('admin', 'vendedor', 'postventa'), ReporteCon
 
 /**
  * @openapi
+ * /reportes/vencimientos-documentacion:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Vehículos en stock con VTV / seguro vencido o por vencer
+ *     description: Documentación del vehículo por vencer dentro de N días, para el centro de alertas. Admin y vendedor.
+ *     parameters:
+ *       - { in: query, name: dias, schema: { type: integer, default: 30, minimum: 1, maximum: 90 } }
+ *     responses:
+ *       200: { description: Vehículos con documentación por vencer }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ */
+router.get('/vencimientos-documentacion', authorize('admin', 'vendedor'), ReporteController.vencimientosDocumentacion);
+
+/**
+ * @openapi
  * /reportes/comisiones/pdf:
  *   get:
  *     tags: [Reportes]
