@@ -250,6 +250,30 @@ export interface ReporteComisiones {
     sinCotizacion?: boolean;
 }
 
+/** Un caso de postventa en el tablero de analítica. */
+export interface PostventaCasoReporteItem {
+    id: number;
+    fechaReclamo: string;
+    cliente: string;
+    vehiculo: string;
+    dominio: string;
+    tipo: string;
+    estado: 'pendiente' | 'en_curso' | 'resuelto';
+    fechaCierre: string | null;
+    /** Días entre reclamo y cierre (sólo resueltos con cierre), o null. */
+    diasResolucion: number | null;
+    /** Costo de los items del caso (gasto a proveedores). */
+    costo: number;
+}
+
+export interface ReportePostventa {
+    periodo: { desde: string | null; hasta: string | null };
+    resumen: { total: number; resueltos: number; pendientes: number; tiempoPromedioDias: number | null; costoTotal: number };
+    porEstado: { pendiente: number; en_curso: number; resuelto: number };
+    porTipo: { tipoId: number | null; tipo: string; cantidad: number }[];
+    items: PostventaCasoReporteItem[];
+}
+
 export interface EstadoCuentaFinanciacion {
     id: number;
     fechaInicio: string;
@@ -431,6 +455,10 @@ export const reportesApi = {
     comisionesLiquidacionPdf: (params: { vendedorId: number; desde?: string; hasta?: string; sucursalId?: number }) =>
         client.get<Blob>('/reportes/comisiones/pdf', { params, responseType: 'blob' }),
 
+    /** Analítica de postventa (casos por estado/tipo, tiempo de resolución, costo). */
+    postventa: (params: RangoFiltro = {}) =>
+        client.get<ReportePostventa>('/reportes/postventa', { params }),
+
     estadoCuenta: (clienteId: number) =>
         client.get<EstadoCuenta>('/reportes/estado-cuenta', { params: { clienteId } }),
 
@@ -462,7 +490,7 @@ export const reportesApi = {
      * pisaba al primero en la carpeta de descargas.
      */
     exportCsv: async (
-        reporte: 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos-vencimientos' | 'ranking-vendedores' | 'comisiones',
+        reporte: 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos-vencimientos' | 'ranking-vendedores' | 'comisiones' | 'postventa',
         params: Record<string, unknown> = {},
     ): Promise<{ blob: Blob; filename?: string }> => {
         const res = await client.getRaw<Blob>(`/reportes/${reporte}`, {

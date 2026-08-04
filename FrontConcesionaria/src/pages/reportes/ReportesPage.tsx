@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy, MessageCircle, Coins, Target } from 'lucide-react';
+import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy, MessageCircle, Coins, Target, Wrench } from 'lucide-react';
 import {
     reportesApi,
     type ReporteVentasItem,
@@ -10,6 +10,7 @@ import {
     type ProximoVencimientoItem,
     type RankingVendedorItem,
     type ComisionVendedorItem,
+    type PostventaCasoReporteItem,
     type TotalPorMoneda,
 } from '../../api/reportes.api';
 import { cotizacionesApi } from '../../api/cotizaciones.api';
@@ -26,7 +27,14 @@ import Modal from '../../components/ui/Modal';
 import { StatCard } from './StatCard';
 import ObjetivosTab from './ObjetivosTab';
 
-type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos' | 'ranking' | 'comisiones' | 'objetivos';
+type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos' | 'ranking' | 'comisiones' | 'postventa' | 'objetivos';
+
+// Etapa del caso de postventa → etiqueta + variante de Badge.
+const ESTADO_POSTVENTA: Record<string, { label: string; variant: 'warning' | 'info' | 'success' }> = {
+    pendiente: { label: 'Pendiente', variant: 'warning' },
+    en_curso: { label: 'En curso', variant: 'info' },
+    resuelto: { label: 'Resuelto', variant: 'success' },
+};
 type Consolidar = '' | 'ARS' | 'USD';
 
 const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
@@ -36,13 +44,27 @@ const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
     { key: 'proximos', label: 'Por vencer', icon: CalendarClock },
     { key: 'ranking', label: 'Ranking', icon: Trophy },
     { key: 'comisiones', label: 'Comisiones', icon: Coins },
+    { key: 'postventa', label: 'Postventa', icon: Wrench },
     { key: 'objetivos', label: 'Objetivos', icon: Target },
     { key: 'rentabilidad', label: 'Rentabilidad', icon: BarChart3 },
 ];
 
-// Tabs con datos sensibles (márgenes, facturación y nómina): solo admin. El backend
-// ya los bloquea con 403; acá se ocultan para no mostrar una pestaña que fallaría.
-const ADMIN_TABS: Tab[] = ['rentabilidad', 'ranking', 'comisiones', 'objetivos'];
+// Roles que pueden VER/consultar cada tab (espejo del authorize de cada endpoint en
+// reporte.routes.ts; super_admin entra por el bypass del authorize). Reemplaza el
+// viejo gate binario admin/no-admin, que dejaba a un rol 'postventa' aterrizando en
+// un tab (ventas) que su endpoint rechaza con 403, y a 'lectura' viendo tabs que no
+// puede consultar. Cada rol ve SÓLO los tabs que su endpoint le permite.
+const TAB_ROLES: Record<Tab, string[]> = {
+    ventas: ['admin', 'super_admin', 'vendedor'],
+    caja: ['admin', 'super_admin', 'vendedor'],
+    mora: ['admin', 'super_admin', 'vendedor'],
+    proximos: ['admin', 'super_admin', 'vendedor'],
+    ranking: ['admin', 'super_admin'],
+    comisiones: ['admin', 'super_admin'],
+    postventa: ['admin', 'super_admin', 'vendedor', 'postventa'],
+    objetivos: ['admin', 'super_admin'],
+    rentabilidad: ['admin', 'super_admin'],
+};
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -134,14 +156,18 @@ const ReportesPage = () => {
     const { addToast } = useUIStore();
     const queryClient = useQueryClient();
     const isAdmin = useAuthStore((s) => !!s.user?.roles.some((r) => r === 'admin' || r === 'super_admin'));
+    const userRoles = useAuthStore((s) => s.user?.roles) ?? [];
     // Pestaña inicial por deep-link (?tab=mora, ?tab=proximos…). Lo usan las
     // alertas del Dashboard para aterrizar directo en el reporte relevante.
     const [searchParams] = useSearchParams();
     const paramTab = searchParams.get('tab');
-    const puedeVerTab = (k: string | null): k is Tab => TABS.some((t) => t.key === k) && (isAdmin || !ADMIN_TABS.includes(k as Tab));
-    const [tab, setTab] = useState<Tab>(puedeVerTab(paramTab) ? paramTab : 'ventas');
-    // Pestañas visibles según rol (las admin-only se ocultan al resto).
-    const visibleTabs = TABS.filter((t) => isAdmin || !ADMIN_TABS.includes(t.key));
+    // Pestañas visibles según rol (espejo del authorize del backend).
+    const visibleTabs = TABS.filter((t) => TAB_ROLES[t.key].some((r) => userRoles.includes(r)));
+    const puedeVerTab = (k: string | null): k is Tab =>
+        TABS.some((t) => t.key === k) && (TAB_ROLES[k as Tab]?.some((r) => userRoles.includes(r)) ?? false);
+    // Arranca en el tab del deep-link si es accesible; si no, el primero visible (así un
+    // rol 'postventa' no aterriza en 'ventas', que su endpoint le rechaza con 403).
+    const [tab, setTab] = useState<Tab>(puedeVerTab(paramTab) ? paramTab : (visibleTabs[0]?.key ?? 'ventas'));
     const [exporting, setExporting] = useState(false);
 
     // Filtros compartidos por rango (ventas / rentabilidad).
@@ -242,6 +268,11 @@ const ReportesPage = () => {
         queryKey: ['reporte', 'comisiones', { ...rango, consolidar }],
         queryFn: () => reportesApi.comisiones({ ...rango, consolidar: consolidarParam }),
         enabled: tab === 'comisiones',
+    });
+    const postventaQ = useQuery({
+        queryKey: ['reporte', 'postventa', { ...rango }],
+        queryFn: () => reportesApi.postventa({ ...rango }),
+        enabled: tab === 'postventa',
     });
 
     const handleExport = async () => {
@@ -461,6 +492,23 @@ const ReportesPage = () => {
         },
     ];
 
+    // ── Postventa ──
+    const postventaCols: Column<PostventaCasoReporteItem>[] = [
+        { header: 'Reclamo', accessor: (r) => formatFecha(r.fechaReclamo) },
+        { header: 'Cliente', accessor: (r) => <span className="font-bold">{r.cliente || '—'}</span> },
+        { header: 'Vehículo', accessor: (r) => (r.vehiculo ? `${r.vehiculo}${r.dominio ? ` · ${r.dominio}` : ''}` : '—') },
+        { header: 'Tipo', accessor: (r) => r.tipo },
+        {
+            header: 'Estado', align: 'center', accessor: (r) => {
+                const e = ESTADO_POSTVENTA[r.estado] ?? { label: r.estado, variant: 'info' as const };
+                return <Badge variant={e.variant}>{e.label}</Badge>;
+            }
+        },
+        { header: 'Cierre', accessor: (r) => (r.fechaCierre ? formatFecha(r.fechaCierre) : <span className="text-muted">—</span>) },
+        { header: 'Días', align: 'center', accessor: (r) => (r.diasResolucion != null ? String(r.diasResolucion) : <span className="text-muted">—</span>) },
+        { header: 'Costo', align: 'right', accessor: (r) => money(r.costo) },
+    ];
+
     // Comisión total: consolidada si se pidió, si no la suma por moneda.
     const comisionTotal = () => {
         const data = comisionesQ.data;
@@ -484,6 +532,21 @@ const ReportesPage = () => {
         if (!c) return null;
         return <ConsolidadoCard etiqueta={etiqueta} valor={getValor(c)} cot={c} />;
     };
+
+    // Rol sin ningún reporte accesible (p.ej. 'lectura'): no mostramos tabs que sólo
+    // fallarían con 403; un mensaje claro en su lugar.
+    if (visibleTabs.length === 0) {
+        return (
+            <div className="page-container">
+                <header className="page-header">
+                    <div className="header-title"><h1>Reportes</h1></div>
+                </header>
+                <div className="card glass" style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No tenés permisos para ver reportes.
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="page-container">
@@ -509,23 +572,26 @@ const ReportesPage = () => {
                     </button>
                     {/* Consolidar y exportar no aplican al tab de objetivos (tiene su
                         propio período y no genera CSV): se ocultan ahí. */}
+                    {/* Consolidar no aplica a objetivos (su propio período) ni a postventa
+                        (es monomoneda: Σ de costos): ahí el selector sería inerte. */}
+                    {tab !== 'objetivos' && tab !== 'postventa' && (
+                        <select
+                            className="form-input"
+                            value={consolidar}
+                            onChange={(e) => setConsolidar(e.target.value as Consolidar)}
+                            title="Convertir todos los totales a una sola moneda"
+                            style={{ width: 'auto' }}
+                        >
+                            <option value="">Ver ARS y USD por separado</option>
+                            <option value="ARS">Consolidar en ARS</option>
+                            <option value="USD">Consolidar en USD</option>
+                        </select>
+                    )}
+                    {/* Exportar CSV: todos los tabs menos objetivos (no genera CSV). */}
                     {tab !== 'objetivos' && (
-                        <>
-                            <select
-                                className="form-input"
-                                value={consolidar}
-                                onChange={(e) => setConsolidar(e.target.value as Consolidar)}
-                                title="Convertir todos los totales a una sola moneda"
-                                style={{ width: 'auto' }}
-                            >
-                                <option value="">Ver ARS y USD por separado</option>
-                                <option value="ARS">Consolidar en ARS</option>
-                                <option value="USD">Consolidar en USD</option>
-                            </select>
-                            <Button variant="secondary" onClick={handleExport} loading={exporting}>
-                                <Download size={16} /> Exportar CSV
-                            </Button>
-                        </>
+                        <Button variant="secondary" onClick={handleExport} loading={exporting}>
+                            <Download size={16} /> Exportar CSV
+                        </Button>
                     )}
                 </div>
             </header>
@@ -545,8 +611,8 @@ const ReportesPage = () => {
                 ))}
             </div>
 
-            {/* Filtros por rango (ventas / rentabilidad / ranking / comisiones) */}
-            {(tab === 'ventas' || tab === 'rentabilidad' || tab === 'ranking' || tab === 'comisiones') && (
+            {/* Filtros por rango (ventas / rentabilidad / ranking / comisiones / postventa) */}
+            {(tab === 'ventas' || tab === 'rentabilidad' || tab === 'ranking' || tab === 'comisiones' || tab === 'postventa') && (
                 <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                     <div className="filter-group">
                         <label className="filter-label">Desde</label>
@@ -800,6 +866,42 @@ const ReportesPage = () => {
                         errorMessage="No se pudo cargar la liquidación de comisiones"
                         onRetry={() => comisionesQ.refetch()}
                         emptyMessage="No hay ventas en el período seleccionado"
+                    />
+                </>
+            )}
+
+            {/* ── POSTVENTA (taller / service) ── */}
+            {tab === 'postventa' && (
+                <>
+                    {!postventaQ.isError && (
+                        <div className="stats-grid stagger" style={{ marginBottom: '1.25rem' }}>
+                            <StatCard label="Casos" value={String(postventaQ.data?.resumen.total ?? 0)} />
+                            <StatCard label="Pendientes" value={String(postventaQ.data?.porEstado.pendiente ?? 0)} color="var(--warning, #f59e0b)" />
+                            <StatCard label="En curso" value={String(postventaQ.data?.porEstado.en_curso ?? 0)} color="var(--info, #0ea5e9)" />
+                            <StatCard label="Resueltos" value={String(postventaQ.data?.porEstado.resuelto ?? 0)} color="var(--success, #16a34a)" />
+                            <StatCard
+                                label="Tiempo prom. resolución"
+                                value={postventaQ.data?.resumen.tiempoPromedioDias != null ? `${postventaQ.data.resumen.tiempoPromedioDias} días` : '—'}
+                            />
+                            <StatCard label="Costo de postventa" value={money(postventaQ.data?.resumen.costoTotal ?? 0)} color="var(--accent)" />
+                        </div>
+                    )}
+                    {!!postventaQ.data?.porTipo.length && (
+                        <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: '1.25rem' }}>
+                            <span className="text-muted font-bold text-xs uppercase tracking-wider">Casos por tipo:</span>
+                            {postventaQ.data.porTipo.map((t) => (
+                                <span key={t.tipoId ?? `txt-${t.tipo}`} className="badge badge-navy">{t.tipo}: <strong>{t.cantidad}</strong></span>
+                            ))}
+                        </div>
+                    )}
+                    <DataTable
+                        columns={postventaCols}
+                        data={postventaQ.data?.items ?? []}
+                        isLoading={postventaQ.isLoading}
+                        isError={postventaQ.isError}
+                        errorMessage="No se pudo cargar la analítica de postventa"
+                        onRetry={() => postventaQ.refetch()}
+                        emptyMessage="No hay casos de postventa en el período seleccionado"
                     />
                 </>
             )}

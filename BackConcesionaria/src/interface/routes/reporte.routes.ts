@@ -227,6 +227,25 @@ router.get('/leads-resumen', authorize('admin', 'vendedor'), ReporteController.l
 
 /**
  * @openapi
+ * /reportes/postventa:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Analítica de postventa (casos por estado/tipo, tiempo de resolución, costo)
+ *     description: Casos reclamados en el período con métricas del taller. Admin, vendedor y postventa.
+ *     parameters:
+ *       - { in: query, name: desde, schema: { type: string, format: date } }
+ *       - { in: query, name: hasta, schema: { type: string, format: date } }
+ *       - { in: query, name: sucursalId, schema: { type: integer } }
+ *       - { in: query, name: format, schema: { type: string, enum: [csv] } }
+ *     responses:
+ *       200: { description: Métricas de postventa }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ */
+router.get('/postventa', authorize('admin', 'vendedor', 'postventa'), ReporteController.postventa);
+
+/**
+ * @openapi
  * /reportes/comisiones/pdf:
  *   get:
  *     tags: [Reportes]

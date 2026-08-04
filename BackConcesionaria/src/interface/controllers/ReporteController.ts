@@ -1577,4 +1577,104 @@ export class ReporteController {
             next(error);
         }
     }
+
+    // ── 15. Analítica de postventa (taller / service) ────────────────────────
+    // GET /api/reportes/postventa?desde=&hasta=&sucursalId=&format=csv
+    // Cohorte = casos RECLAMADOS en el período (fechaReclamo). Métricas: por estado,
+    // por tipo, resueltos vs pendientes, tiempo promedio de resolución (fechaCierre −
+    // fechaReclamo, sólo resueltos con cierre; granularidad de día porque son @db.Date)
+    // y COSTO de postventa (Σ de los items = gasto a proveedores, no facturación).
+    static async postventa(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { desde, hasta } = parseRango(req.query);
+            const sucursalId = idOpcional(req.query.sucursalId, 'sucursalId');
+            const where: any = { ...filtroFecha('fechaReclamo', desde, hasta) };
+            if (sucursalId) where.sucursalId = sucursalId;
+
+            const casos = await prisma.postventaCaso.findMany({
+                where,
+                orderBy: { fechaReclamo: 'desc' },
+                include: {
+                    cliente: { select: { nombre: true } },
+                    vehiculo: { select: { marca: true, modelo: true, dominio: true } },
+                    tipoRef: { select: { nombre: true } },
+                    // El filtro de borrados de la extensión no alcanza al include.
+                    items: { where: { deletedAt: null }, select: { monto: true } },
+                },
+            });
+
+            const porEstado: Record<string, number> = { pendiente: 0, en_curso: 0, resuelto: 0 };
+            const tipoMap = new Map<string, { tipoId: number | null; tipo: string; cantidad: number }>();
+            let costoTotal = 0;
+            let sumDias = 0;
+            let resueltosConCierre = 0;
+            const MS_DIA = 86400000;
+
+            const items = casos.map((c) => {
+                if (c.estado in porEstado) porEstado[c.estado] += 1;
+                const costo = c.items.reduce((s, it) => s + num(it.monto), 0);
+                costoTotal += costo;
+
+                const tipo = c.tipoRef?.nombre ?? c.tipo ?? 'Sin tipo';
+                const key = c.tipoId != null ? `id:${c.tipoId}` : `txt:${tipo}`;
+                const tm = tipoMap.get(key) ?? { tipoId: c.tipoId ?? null, tipo, cantidad: 0 };
+                tm.cantidad += 1;
+                tipoMap.set(key, tm);
+
+                let diasResolucion: number | null = null;
+                if (c.estado === 'resuelto' && c.fechaCierre) {
+                    diasResolucion = Math.max(0, Math.round((c.fechaCierre.getTime() - c.fechaReclamo.getTime()) / MS_DIA));
+                    sumDias += diasResolucion;
+                    resueltosConCierre += 1;
+                }
+
+                const veh = c.vehiculo;
+                return {
+                    id: c.id,
+                    fechaReclamo: c.fechaReclamo.toISOString().slice(0, 10),
+                    cliente: c.cliente?.nombre ?? '',
+                    vehiculo: veh ? `${veh.marca ?? ''} ${veh.modelo ?? ''}`.trim() : '',
+                    dominio: veh?.dominio ?? '',
+                    tipo,
+                    estado: c.estado,
+                    fechaCierre: c.fechaCierre ? c.fechaCierre.toISOString().slice(0, 10) : null,
+                    diasResolucion,
+                    costo,
+                };
+            });
+
+            const total = casos.length;
+            const resueltos = porEstado.resuelto;
+            const tiempoPromedioDias = resueltosConCierre > 0
+                ? Math.round((sumDias / resueltosConCierre) * 10) / 10
+                : null;
+
+            if (req.query.format === 'csv') {
+                return sendCsv(res, 'reporte-postventa', [
+                    { key: 'fechaReclamo', header: 'Fecha reclamo' },
+                    { key: 'cliente', header: 'Cliente' },
+                    { key: 'vehiculo', header: 'Vehículo' },
+                    { key: 'dominio', header: 'Dominio' },
+                    { key: 'tipo', header: 'Tipo' },
+                    { key: 'estado', header: 'Estado' },
+                    { key: 'fechaCierre', header: 'Fecha cierre' },
+                    { key: 'diasResolucion', header: 'Días resolución' },
+                    { key: 'costo', header: 'Costo' },
+                ], items);
+            }
+
+            res.json({
+                periodo: {
+                    desde: desde ? desde.toISOString().slice(0, 10) : null,
+                    hasta: hasta ? hasta.toISOString().slice(0, 10) : null,
+                },
+                resumen: { total, resueltos, pendientes: total - resueltos, tiempoPromedioDias, costoTotal },
+                porEstado,
+                porTipo: Array.from(tipoMap.values()).sort((a, b) => b.cantidad - a.cantidad),
+                items,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
