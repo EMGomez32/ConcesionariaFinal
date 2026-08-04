@@ -147,6 +147,9 @@ const ReportesPage = () => {
     // Filtros compartidos por rango (ventas / rentabilidad).
     const [desde, setDesde] = useState(primerDiaMes);
     const [hasta, setHasta] = useState(hoyStr);
+    // Vendedores cuya liquidación PDF se está generando (disabled POR FILA: un solo
+    // valor re-habilitaría la fila anterior al clickear otra).
+    const [pdfEnCurso, setPdfEnCurso] = useState<Set<number>>(new Set());
     const [sucursalId, setSucursalId] = useState('');
     const [vendedorId, setVendedorId] = useState('');
     // Filtros de caja.
@@ -275,6 +278,28 @@ const ReportesPage = () => {
             addToast('Error al exportar el reporte', 'error');
         } finally {
             setExporting(false);
+        }
+    };
+
+    // Liquidación de comisiones de un vendedor en PDF. Usa el MISMO rango+sucursal que
+    // la grilla de comisiones (rango), para que el PDF de nómina coincida con la fila.
+    const handleLiquidacionPdf = async (vendedorId: number, vendedorNombre: string) => {
+        setPdfEnCurso((s) => new Set(s).add(vendedorId));
+        try {
+            const blob = await reportesApi.comisionesLiquidacionPdf({ vendedorId, desde, hasta, sucursalId: rango.sucursalId }) as unknown as Blob;
+            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            const slug = vendedorNombre.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || String(vendedorId);
+            link.setAttribute('download', `liquidacion-comisiones-${slug}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            addToast('No se pudo generar la liquidación', 'error');
+        } finally {
+            setPdfEnCurso((s) => { const n = new Set(s); n.delete(vendedorId); return n; });
         }
     };
 
@@ -417,6 +442,23 @@ const ReportesPage = () => {
         { header: 'Unidades', align: 'center', accessor: (r) => <span className="font-bold">{r.unidades}</span> },
         { header: 'Facturado', align: 'right', accessor: (r) => fmtCom(r, 'facturado') },
         { header: 'Comisión a pagar', align: 'right', accessor: (r) => <span className="font-bold" style={{ color: 'var(--accent)' }}>{fmtCom(r, 'comision')}</span> },
+        {
+            header: 'Liquidación', align: 'right', accessor: (r) => (
+                // 'Sin asignar' agrupa ventas sin vendedor (vendedorId 0): no hay a quién
+                // liquidar, así que no se ofrece el botón (el endpoint lo rechazaría).
+                r.vendedorId < 1 ? <span className="text-muted">—</span> : (
+                    <button
+                        className="btn btn-secondary btn-sm"
+                        type="button"
+                        disabled={pdfEnCurso.has(r.vendedorId)}
+                        onClick={() => handleLiquidacionPdf(r.vendedorId, r.vendedor)}
+                        title="Descargar la liquidación de comisiones de este vendedor (PDF, período y sucursal actuales)"
+                    >
+                        <Download size={14} /> {pdfEnCurso.has(r.vendedorId) ? 'Generando…' : 'PDF'}
+                    </button>
+                )
+            )
+        },
     ];
 
     // Comisión total: consolidada si se pidió, si no la suma por moneda.
