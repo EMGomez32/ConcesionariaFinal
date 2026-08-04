@@ -955,6 +955,9 @@ model PostventaCaso {
   tipo            String?
   descripcion     String
   estado          EstadoPostventa @default(pendiente)
+  /// Monto facturado al cliente por el trabajo (revenue). El margen = facturado −
+  /// costo de los items (gasto a proveedores). Null hasta que se factura.
+  montoFacturado  Decimal?        @map("monto_facturado") @db.Decimal(12, 2)
   fechaCierre     DateTime?       @map("fecha_cierre") @db.Date
   // Turno de taller: cuándo se espera la unidad. Opcional (el turno se coordina
   // después de abrir el caso). La hora va aparte como texto "HH:MM" para no

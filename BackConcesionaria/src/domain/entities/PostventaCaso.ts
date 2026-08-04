@@ -31,6 +31,8 @@ export class PostventaCaso {
         public readonly sucursal?: any,
         public readonly items?: any[],
         /** El tipo del catálogo completo (id, nombre, activo). */
-        public readonly tipoRef?: any
+        public readonly tipoRef?: any,
+        /** Monto facturado al cliente por el trabajo (o null si aún no se facturó). */
+        public readonly montoFacturado: number | null = null
     ) { }
 }
