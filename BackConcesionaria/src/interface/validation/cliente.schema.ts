@@ -30,6 +30,12 @@ const emailOpcional = z.preprocess(
     z.string().email('Email inválido').optional(),
 );
 
+// Etapa del embudo comercial (espejo del enum EstadoLead de Prisma). Opcional: en
+// create el default de la DB es `nuevo`; en update sólo viene cuando se cambia.
+const estadoLeadEnum = z.enum(['nuevo', 'contactado', 'negociando', 'ganado', 'perdido'], {
+    error: 'Estado inválido. Válidos: nuevo, contactado, negociando, ganado, perdido',
+}).optional();
+
 export const createClienteSchema = z.object({
     // Lo inyecta el controller (resolveConcesionariaId) para un admin desde el
     // token; el super_admin lo elige por body y DEBE sobrevivir al strip de Zod,
@@ -44,6 +50,7 @@ export const createClienteSchema = z.object({
     email: emailOpcional,
     direccion: z.string().optional(),
     observaciones: z.string().optional(),
+    estadoLead: estadoLeadEnum,
 });
 
 export const updateClienteSchema = z.object({
@@ -54,6 +61,7 @@ export const updateClienteSchema = z.object({
     email: emailOpcional,
     direccion: z.string().optional(),
     observaciones: z.string().optional(),
+    estadoLead: estadoLeadEnum,
     // Sin concesionariaId: el repo (pickEditable) no lo persiste en update, no hay
     // reasignación de tenant para clientes. Si viniera, Zod lo descarta => igual
     // que hoy (el repo lo recortaba).

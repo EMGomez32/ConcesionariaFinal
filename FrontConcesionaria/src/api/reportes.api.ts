@@ -363,6 +363,16 @@ export interface ReporteProximosSeguimientos {
     items: ProximoSeguimientoItem[];
 }
 
+/** Embudo de leads: cantidad de clientes por etapa del pipeline + total. */
+export interface LeadsResumen {
+    nuevo: number;
+    contactado: number;
+    negociando: number;
+    ganado: number;
+    perdido: number;
+    total: number;
+}
+
 /** Conteos livianos para la campanita de notificaciones (un solo request). */
 export interface AlertasResumen {
     dias: number;
@@ -436,6 +446,10 @@ export const reportesApi = {
     /** Conteos de alertas en una sola llamada (campanita de notificaciones). */
     alertasResumen: () =>
         client.get<AlertasResumen>('/reportes/alertas-resumen'),
+
+    /** Embudo de leads: cantidad de clientes por etapa del pipeline. */
+    leadsResumen: () =>
+        client.get<LeadsResumen>('/reportes/leads-resumen'),
 
     /**
      * Variante CSV. Devuelve el blob y el nombre de archivo que mandó el

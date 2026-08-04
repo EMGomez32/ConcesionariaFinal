@@ -11,7 +11,9 @@ import solicitudesFinanciacionApi from '../../api/solicitudesFinanciacion.api';
 import { postventaApi } from '../../api/postventa.api';
 import { reportesApi, type EstadoCuenta } from '../../api/reportes.api';
 import { seguimientosApi, type Seguimiento, type TipoSeguimiento } from '../../api/seguimientos.api';
-import type { Cliente } from '../../types/cliente.types';
+import { ESTADO_LEAD_MAP, ESTADOS_LEAD } from '../../types/cliente.types';
+import type { Cliente, EstadoLead } from '../../types/cliente.types';
+import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { useUIStore } from '../../store/uiStore';
 import { useAuthStore } from '../../store/authStore';
@@ -89,6 +91,7 @@ const ClienteDetallePage = () => {
     const [estadoCuenta, setEstadoCuenta] = useState<EstadoCuenta | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [savingEstado, setSavingEstado] = useState(false);
 
     // ─ Alta de contacto (bitácora de seguimiento) ─
     const [segForm, setSegForm] = useState<{ tipo: TipoSeguimiento; fecha: string; nota: string; proximoContacto: string }>({
@@ -202,6 +205,23 @@ const ClienteDetallePage = () => {
         }
     };
 
+    // Cambia la etapa del lead (embudo). Reusa el PATCH /clientes/:id genérico e
+    // invalida el listado + el embudo para que los conteos y el badge se refresquen.
+    const handleChangeEstadoLead = async (nuevo: EstadoLead) => {
+        if (!id || !cliente || nuevo === (cliente.estadoLead ?? 'nuevo')) return;
+        setSavingEstado(true);
+        try {
+            await clientesApi.update(Number(id), { estadoLead: nuevo });
+            setCliente((prev) => (prev ? { ...prev, estadoLead: nuevo } : prev));
+            addToast(`Etapa actualizada a "${ESTADO_LEAD_MAP[nuevo].label}"`, 'success');
+            queryClient.invalidateQueries({ queryKey: ['clientes'] });
+        } catch (e) {
+            addToast(getErrorMessage(e, 'No se pudo actualizar la etapa'), 'error');
+        } finally {
+            setSavingEstado(false);
+        }
+    };
+
     // Marca / reabre el próximo contacto (lo saca o lo devuelve a la agenda global).
     const handleToggleProximo = async (s: Seguimiento) => {
         const hecho = !s.proximoContactoHecho;
@@ -260,6 +280,22 @@ const ClienteDetallePage = () => {
                         <p className="text-muted">
                             {[cliente.dni && `CUIT/CUIL: ${cliente.dni}`, cliente.email, cliente.telefono].filter(Boolean).join(' · ')}
                         </p>
+                        <div className="lead-stage-row">
+                            <Badge variant={ESTADO_LEAD_MAP[cliente.estadoLead ?? 'nuevo'].variant}>
+                                {ESTADO_LEAD_MAP[cliente.estadoLead ?? 'nuevo'].label}
+                            </Badge>
+                            {puedeEditar && (
+                                <select
+                                    className="lead-stage-select"
+                                    value={cliente.estadoLead ?? 'nuevo'}
+                                    disabled={savingEstado}
+                                    onChange={(e) => handleChangeEstadoLead(e.target.value as EstadoLead)}
+                                    aria-label="Cambiar etapa del lead"
+                                >
+                                    {ESTADOS_LEAD.map((k) => <option key={k} value={k}>{ESTADO_LEAD_MAP[k].label}</option>)}
+                                </select>
+                            )}
+                        </div>
                     </div>
                 </div>
                 {estadoCuenta && estadoCuenta.financiaciones.length > 0 && (
@@ -706,6 +742,9 @@ const ClienteDetallePage = () => {
                 .seg-item-body { flex: 1; min-width: 0; }
                 .seg-item-head { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
                 .seg-tipo { font-weight: 800; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+                .lead-stage-row { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.6rem; flex-wrap: wrap; }
+                .lead-stage-select { padding: 0.3rem 0.55rem; border-radius: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-size: 0.8rem; cursor: pointer; }
+                .lead-stage-select:disabled { opacity: 0.6; cursor: default; }
                 .seg-next { display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--warning, #f59e0b); font-weight: 600; }
                 .seg-next-done { color: var(--success, #16a34a); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--success, #16a34a) 45%, transparent); }
                 .seg-toggle { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; font-weight: 700; color: var(--accent); background: transparent; border: 1px solid var(--border); border-radius: 999px; padding: 0.12rem 0.55rem; cursor: pointer; transition: background 0.15s, color 0.15s; }
