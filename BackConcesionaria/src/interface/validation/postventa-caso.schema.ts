@@ -58,6 +58,14 @@ const optionalFk = z.preprocess(
     z.coerce.number().int().positive().optional(),
 );
 
+// Monto facturado al cliente: nullable (se puede vaciar). '' → undefined (no tocado);
+// null borra el valor. Mismo patrón que nullableInt pero decimal ≥ 0.
+const nullableMonto = () =>
+    z.preprocess(
+        (v) => (v === '' ? undefined : v),
+        z.coerce.number({ error: 'El monto facturado debe ser un número' }).min(0, 'El monto facturado no puede ser negativo').nullable().optional(),
+    );
+
 export const createCasoSchema = z.object({
     clienteId: requiredId('clienteId es obligatorio'),
     vehiculoId: requiredId('vehiculoId es obligatorio'),
@@ -74,6 +82,8 @@ export const createCasoSchema = z.object({
     // Turno de taller: opcional al abrir el caso (se suele coordinar después).
     fechaTurno: nullableFecha(),
     horaTurno: nullableHora(),
+    // Facturación al cliente: opcional al abrir (se suele cargar al cerrar el caso).
+    montoFacturado: nullableMonto(),
     concesionariaId: optionalFk,
 }).refine((d) => !(d.horaTurno && !d.fechaTurno), {
     // La hora no tiene sentido sin la fecha del turno (evita una hora colgada).
@@ -92,4 +102,6 @@ export const updateCasoSchema = z.object({
     // Turno: agendar/reprogramar (fecha+hora) o desagendar (null).
     fechaTurno: nullableFecha(),
     horaTurno: nullableHora(),
+    // Facturación al cliente (lo típico: se carga en la edición, al cerrar el caso).
+    montoFacturado: nullableMonto(),
 });

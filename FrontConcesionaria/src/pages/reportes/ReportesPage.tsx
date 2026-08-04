@@ -521,6 +521,8 @@ const ReportesPage = () => {
         { header: 'Cierre', accessor: (r) => (r.fechaCierre ? formatFecha(r.fechaCierre) : <span className="text-muted">—</span>) },
         { header: 'Días', align: 'center', accessor: (r) => (r.diasResolucion != null ? String(r.diasResolucion) : <span className="text-muted">—</span>) },
         { header: 'Costo', align: 'right', accessor: (r) => money(r.costo) },
+        { header: 'Facturado', align: 'right', accessor: (r) => (r.facturado != null ? money(r.facturado) : <span className="text-muted">—</span>) },
+        { header: 'Margen', align: 'right', accessor: (r) => (r.margen != null ? <span style={{ color: r.margen < 0 ? 'var(--danger, #dc2626)' : 'var(--success, #16a34a)' }}>{money(r.margen)}</span> : <span className="text-muted">—</span>) },
     ];
 
     // ── Documentación (VTV / seguro) ──
@@ -911,7 +913,9 @@ const ReportesPage = () => {
                                 label="Tiempo prom. resolución"
                                 value={postventaQ.data?.resumen.tiempoPromedioDias != null ? `${postventaQ.data.resumen.tiempoPromedioDias} días` : '—'}
                             />
-                            <StatCard label="Costo de postventa" value={money(postventaQ.data?.resumen.costoTotal ?? 0)} color="var(--accent)" />
+                            <StatCard label="Costo de postventa" value={money(postventaQ.data?.resumen.costoTotal ?? 0)} color="var(--warning, #f59e0b)" />
+                            <StatCard label="Facturado" value={money(postventaQ.data?.resumen.facturadoTotal ?? 0)} color="var(--accent)" />
+                            <StatCard label="Margen (facturados)" value={money(postventaQ.data?.resumen.margenTotal ?? 0)} color={(postventaQ.data?.resumen.margenTotal ?? 0) < 0 ? 'var(--danger, #dc2626)' : 'var(--success, #16a34a)'} />
                         </div>
                     )}
                     {!!postventaQ.data?.porTipo.length && (

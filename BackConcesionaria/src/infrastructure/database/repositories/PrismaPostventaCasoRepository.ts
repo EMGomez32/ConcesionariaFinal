@@ -15,9 +15,9 @@ const SORTABLE = ['createdAt', 'updatedAt', 'fechaReclamo', 'fechaCierre', 'fech
 // `concesionariaId` lo inyecta la extensión RLS desde el token: nunca del body.
 // `tipo` (texto libre) ya no se escribe: el tipo entra por `tipoId` contra el
 // catálogo TipoPostventa. La columna vieja queda sólo como histórico.
-const EDITABLE_CREATE = ['clienteId', 'vehiculoId', 'sucursalId', 'ventaId', 'fechaReclamo', 'tipoId', 'descripcion', 'fechaTurno', 'horaTurno'] as const;
+const EDITABLE_CREATE = ['clienteId', 'vehiculoId', 'sucursalId', 'ventaId', 'fechaReclamo', 'tipoId', 'descripcion', 'fechaTurno', 'horaTurno', 'montoFacturado'] as const;
 // `estado` sólo entra por acá: lo valida la máquina de estados en UpdateCaso.
-const EDITABLE_UPDATE = ['estado', 'tipoId', 'descripcion', 'fechaReclamo', 'fechaCierre', 'fechaTurno', 'horaTurno'] as const;
+const EDITABLE_UPDATE = ['estado', 'tipoId', 'descripcion', 'fechaReclamo', 'fechaCierre', 'fechaTurno', 'horaTurno', 'montoFacturado'] as const;
 
 // @db.Date: el <input type="date"> manda 'YYYY-MM-DD' y Prisma espera DateTime.
 const DATE_KEYS = ['fechaReclamo', 'fechaCierre', 'fechaTurno'];
@@ -132,7 +132,8 @@ export class PrismaPostventaCasoRepository implements IPostventaCasoRepository {
             c.vehiculo,
             c.sucursal,
             c.items,
-            c.tipoRef
+            c.tipoRef,
+            c.montoFacturado == null ? null : Number(c.montoFacturado)
         );
     }
 }

@@ -118,6 +118,11 @@ export default function PostventaPage() {
 
     // ─ Turno del caso en detalle (agendar / reprogramar / desagendar) ─
     const [turnoForm, setTurnoForm] = useState({ fechaTurno: '', horaTurno: '' });
+    // ─ Facturación al cliente del caso en detalle (monto que se cobra) ─
+    const [facturaForm, setFacturaForm] = useState('');
+    // Flag propio: el modal de detalle muestra turno y facturación a la vez, así que
+    // guardar la facturación no debe poner en loading el botón del turno.
+    const [savingFactura, setSavingFactura] = useState(false);
     const [descargandoOrden, setDescargandoOrden] = useState(false);
 
     // ─ Create Item form ─
@@ -437,9 +442,11 @@ export default function PostventaPage() {
             const res = await postventaApi.getCasoById(caso.id);
             setDetailCaso(res as PostventaCaso);
             syncTurnoForm(res as PostventaCaso);
+            syncFacturaForm(res as PostventaCaso);
         } catch {
             setDetailCaso(caso);
             syncTurnoForm(caso);
+            syncFacturaForm(caso);
         }
     };
 
@@ -464,12 +471,43 @@ export default function PostventaPage() {
         }
     };
 
-    // Precarga el editor de turno del detalle con lo agendado (o vacío).
+    // Precarga el editor de turno del detalle con lo agendado (o vacío). Sólo toca
+    // turnoForm: re-sincronizar acá el form de facturación pisaría lo que el usuario
+    // esté tipeando en el OTRO control (ambos conviven en el modal de detalle).
     const syncTurnoForm = (c: PostventaCaso) => {
         setTurnoForm({
             fechaTurno: c.fechaTurno ? String(c.fechaTurno).slice(0, 10) : '',
             horaTurno: c.horaTurno ?? '',
         });
+    };
+
+    // Precarga el editor de facturación del detalle (sólo facturaForm, ver arriba).
+    const syncFacturaForm = (c: PostventaCaso) => {
+        setFacturaForm(c.montoFacturado != null ? String(c.montoFacturado) : '');
+    };
+
+    // Guarda el monto facturado al cliente ('' ⇒ null: sin facturar).
+    const handleGuardarFacturacion = async () => {
+        if (!detailCaso) return;
+        const raw = facturaForm.trim();
+        const monto = raw === '' ? null : Number(raw);
+        if (monto !== null && (!Number.isFinite(monto) || monto < 0)) {
+            addToast('El monto facturado debe ser un número mayor o igual a 0', 'error');
+            return;
+        }
+        setSavingFactura(true);
+        try {
+            await postventaApi.updateCaso(detailCaso.id, { montoFacturado: monto });
+            addToast('Facturación guardada', 'success');
+            const res = await postventaApi.getCasoById(detailCaso.id);
+            setDetailCaso(res as PostventaCaso);
+            syncFacturaForm(res as PostventaCaso);
+            loadCasos();
+        } catch (e) {
+            addToast(getErrorMessage(e, 'Error al guardar la facturación'), 'error');
+        } finally {
+            setSavingFactura(false);
+        }
     };
 
     // Agenda / reprograma / desagenda el turno del caso en detalle.
@@ -1024,6 +1062,26 @@ export default function PostventaPage() {
                                     <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Total costos:</span>
                                     <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#818cf8' }}>${fmt(totalItems)}</span>
                                 </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Facturación al cliente + margen (facturado − costo de los items) */}
+                    <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.04)', borderRadius: '0.5rem' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
+                            Facturación al cliente
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                            <div style={{ flex: '1 1 160px' }}>
+                                <input className="form-input" type="number" step="0.01" min="0" placeholder="Monto facturado" value={facturaForm} onChange={e => setFacturaForm(e.target.value)} />
+                            </div>
+                            <Button variant="secondary" size="sm" onClick={handleGuardarFacturacion} disabled={savingFactura} loading={savingFactura}>Guardar</Button>
+                        </div>
+                        {detailCaso.montoFacturado != null && (
+                            <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.75rem', flexWrap: 'wrap', fontSize: '0.9rem' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Facturado: <strong style={{ color: 'var(--text-primary)' }}>${fmt(detailCaso.montoFacturado)}</strong></span>
+                                <span style={{ color: 'var(--text-secondary)' }}>Costo: <strong style={{ color: 'var(--text-primary)' }}>${fmt(totalItems)}</strong></span>
+                                <span style={{ color: 'var(--text-secondary)' }}>Margen: <strong style={{ color: (Number(detailCaso.montoFacturado) - totalItems) < 0 ? '#ef4444' : '#22c55e' }}>${fmt(Number(detailCaso.montoFacturado) - totalItems)}</strong></span>
                             </div>
                         )}
                     </div>

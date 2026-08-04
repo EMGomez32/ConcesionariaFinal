@@ -29,6 +29,8 @@ export interface PostventaCaso {
     tipoRef?: { id: number; nombre: string; activo: boolean } | null;
     descripcion: string;
     estado: EstadoPostventa;
+    /** Monto facturado al cliente por el trabajo (o null si aún no se facturó). */
+    montoFacturado?: number | null;
     fechaCierre?: string;
     /** Turno de taller: cuándo se espera la unidad (o null si no se coordinó). */
     fechaTurno?: string | null;
@@ -66,6 +68,8 @@ export interface CreateCasoDto {
     /** Turno de taller (opcional al abrir el caso). */
     fechaTurno?: string;
     horaTurno?: string;
+    /** Facturación al cliente (opcional al abrir). */
+    montoFacturado?: number | null;
 }
 
 export interface UpdateCasoDto {
@@ -77,6 +81,8 @@ export interface UpdateCasoDto {
     /** Turno: agendar/reprogramar, o null para desagendar. */
     fechaTurno?: string | null;
     horaTurno?: string | null;
+    /** Facturación al cliente (o null para vaciar). */
+    montoFacturado?: number | null;
 }
 
 export interface CreateItemDto {

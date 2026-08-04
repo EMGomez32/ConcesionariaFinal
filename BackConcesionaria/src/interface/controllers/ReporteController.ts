@@ -1614,6 +1614,8 @@ export class ReporteController {
             const porEstado: Record<string, number> = { pendiente: 0, en_curso: 0, resuelto: 0 };
             const tipoMap = new Map<string, { tipoId: number | null; tipo: string; cantidad: number }>();
             let costoTotal = 0;
+            let facturadoTotal = 0;
+            let margenTotal = 0;
             let sumDias = 0;
             let resueltosConCierre = 0;
             const MS_DIA = 86400000;
@@ -1621,7 +1623,17 @@ export class ReporteController {
             const items = casos.map((c) => {
                 if (c.estado in porEstado) porEstado[c.estado] += 1;
                 const costo = c.items.reduce((s, it) => s + num(it.monto), 0);
+                // Sin facturar (montoFacturado null) = SIN DATO, no revenue 0: si no, un
+                // caso abierto daría margen −costo (rojo espurio) y ensuciaría el total.
+                // Sólo los casos facturados suman a facturadoTotal/margenTotal (igual
+                // criterio que el modal de detalle, que oculta el margen sin facturar).
+                const facturado: number | null = c.montoFacturado == null ? null : num(c.montoFacturado);
+                const margen: number | null = facturado == null ? null : facturado - costo;
                 costoTotal += costo;
+                if (facturado != null) {
+                    facturadoTotal += facturado;
+                    margenTotal += (margen as number);
+                }
 
                 const tipo = c.tipoRef?.nombre ?? c.tipo ?? 'Sin tipo';
                 const key = c.tipoId != null ? `id:${c.tipoId}` : `txt:${tipo}`;
@@ -1648,6 +1660,8 @@ export class ReporteController {
                     fechaCierre: c.fechaCierre ? c.fechaCierre.toISOString().slice(0, 10) : null,
                     diasResolucion,
                     costo,
+                    facturado,
+                    margen,
                 };
             });
 
@@ -1668,6 +1682,8 @@ export class ReporteController {
                     { key: 'fechaCierre', header: 'Fecha cierre' },
                     { key: 'diasResolucion', header: 'Días resolución' },
                     { key: 'costo', header: 'Costo' },
+                    { key: 'facturado', header: 'Facturado' },
+                    { key: 'margen', header: 'Margen' },
                 ], items);
             }
 
@@ -1676,7 +1692,7 @@ export class ReporteController {
                     desde: desde ? desde.toISOString().slice(0, 10) : null,
                     hasta: hasta ? hasta.toISOString().slice(0, 10) : null,
                 },
-                resumen: { total, resueltos, pendientes: total - resueltos, tiempoPromedioDias, costoTotal },
+                resumen: { total, resueltos, pendientes: total - resueltos, tiempoPromedioDias, costoTotal, facturadoTotal, margenTotal },
                 porEstado,
                 porTipo: Array.from(tipoMap.values()).sort((a, b) => b.cantidad - a.cantidad),
                 items,

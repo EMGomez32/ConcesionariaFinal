@@ -264,11 +264,15 @@ export interface PostventaCasoReporteItem {
     diasResolucion: number | null;
     /** Costo de los items del caso (gasto a proveedores). */
     costo: number;
+    /** Monto facturado al cliente, o null si aún no se facturó. */
+    facturado: number | null;
+    /** Margen del caso = facturado − costo, o null si aún no se facturó. */
+    margen: number | null;
 }
 
 export interface ReportePostventa {
     periodo: { desde: string | null; hasta: string | null };
-    resumen: { total: number; resueltos: number; pendientes: number; tiempoPromedioDias: number | null; costoTotal: number };
+    resumen: { total: number; resueltos: number; pendientes: number; tiempoPromedioDias: number | null; costoTotal: number; facturadoTotal: number; margenTotal: number };
     porEstado: { pendiente: number; en_curso: number; resuelto: number };
     porTipo: { tipoId: number | null; tipo: string; cantidad: number }[];
     items: PostventaCasoReporteItem[];
