@@ -39,6 +39,15 @@ export class PrismaClienteRepository implements IClienteRepository {
         if (filter.concesionariaId !== undefined) {
             whereClause.concesionariaId = filter.concesionariaId;
         }
+        // Filtro por etapa del embudo (pipeline de leads). Se whitelistea contra el
+        // enum: un ?estadoLead arbitrario (o repetido, que Express vuelve array)
+        // reventaría Prisma con un PrismaClientValidationError → 500 (no es P-code, el
+        // error.middleware no lo mapea). Valor inválido ⇒ se ignora el filtro (mismo
+        // criterio defensivo que los query params de Reportes).
+        const ESTADOS_LEAD = ['nuevo', 'contactado', 'negociando', 'ganado', 'perdido'];
+        if (filter.estadoLead && ESTADOS_LEAD.includes(String(filter.estadoLead))) {
+            whereClause.estadoLead = filter.estadoLead;
+        }
 
         const results = await prisma.cliente.findMany({
             where: whereClause,
@@ -87,7 +96,7 @@ export class PrismaClienteRepository implements IClienteRepository {
      * podrían pisar columnas internas (deletedAt, createdAt, concesionariaId).
      */
     private pickEditable(data: any): Record<string, any> {
-        const CAMPOS = ['nombre', 'dni', 'telefono', 'email', 'direccion', 'observaciones'];
+        const CAMPOS = ['nombre', 'dni', 'telefono', 'email', 'direccion', 'observaciones', 'estadoLead'];
         const payload: Record<string, any> = {};
         for (const campo of CAMPOS) {
             if (data[campo] !== undefined) {
@@ -140,6 +149,7 @@ export class PrismaClienteRepository implements IClienteRepository {
             c.email,
             c.direccion,
             c.observaciones,
+            c.estadoLead,
             c.createdAt,
             c.updatedAt,
             c.deletedAt,

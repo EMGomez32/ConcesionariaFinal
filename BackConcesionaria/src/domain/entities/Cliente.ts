@@ -8,6 +8,8 @@ export class Cliente {
         public readonly email: string | null,
         public readonly direccion: string | null,
         public readonly observaciones: string | null,
+        /** Etapa en el embudo comercial: nuevo|contactado|negociando|ganado|perdido. */
+        public readonly estadoLead: string,
         public readonly createdAt: Date,
         public readonly updatedAt: Date,
         public readonly deletedAt: Date | null,

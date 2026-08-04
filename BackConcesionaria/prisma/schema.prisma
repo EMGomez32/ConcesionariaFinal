@@ -154,6 +154,8 @@ model Cliente {
   email                   String?
   direccion               String?
   observaciones           String?
+  /// Etapa del cliente en el embudo comercial (pipeline de leads).
+  estadoLead              EstadoLead              @default(nuevo) @map("estado_lead")
   createdAt               DateTime                @default(now()) @map("created_at")
   updatedAt               DateTime                @updatedAt @map("updated_at")
   deletedAt               DateTime?               @map("deleted_at")
@@ -168,6 +170,7 @@ model Cliente {
   ventas                  Venta[]
 
   @@index([concesionariaId])
+  @@index([concesionariaId, estadoLead])
   @@index([dni])
   @@index([telefono])
   @@map("clientes")
@@ -1256,6 +1259,15 @@ enum TipoSeguimiento {
   email
   visita
   otro
+}
+
+// Etapa del cliente en el embudo comercial (pipeline de leads).
+enum EstadoLead {
+  nuevo
+  contactado
+  negociando
+  ganado
+  perdido
 }
 
 enum TipoMovimientoVehiculo {

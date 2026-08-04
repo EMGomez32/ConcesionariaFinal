@@ -2,10 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { clientesApi } from '../../api/clientes.api';
-import type { Cliente, ClienteFilter } from '../../types/cliente.types';
+import { reportesApi } from '../../api/reportes.api';
+import { ESTADO_LEAD_MAP, ESTADOS_LEAD } from '../../types/cliente.types';
+import type { Cliente, ClienteFilter, EstadoLead } from '../../types/cliente.types';
+import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import ClienteForm from '../../components/forms/ClienteForm';
 import { useUIStore } from '../../store/uiStore';
+import { useAuthStore } from '../../store/authStore';
 import { useDebounce } from '../../hooks/useDebounce';
 import {
     Plus,
@@ -33,25 +37,40 @@ const ClientesPage: React.FC = () => {
     const { addToast } = useUIStore();
     const confirm = useConfirm();
 
+    const user = useAuthStore((s) => s.user);
+    // El embudo (conteos por etapa) es un endpoint admin/vendedor: sólo esos roles
+    // lo consultan/ven. El badge y el filtro por etapa sí los ve cualquiera.
+    const puedeVerFunnel = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin' || r === 'vendedor');
+
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebounce(searchTerm, 500);
+    const [filterEstado, setFilterEstado] = useState<'' | EstadoLead>('');
     const [page, setPage] = useState(1);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
 
     // Queries
     const { data: response, isLoading, refetch } = useQuery<PaginatedResponse<Cliente>, ApiError>({
-        queryKey: ['clientes', page, debouncedSearch],
+        queryKey: ['clientes', page, debouncedSearch, filterEstado],
         queryFn: async () => {
             const filters: ClienteFilter = {};
             // `search` busca en nombre, DNI/CUIT, email y teléfono, que es lo
             // que ofrece el placeholder del buscador.
             if (debouncedSearch.trim()) filters.search = debouncedSearch;
+            if (filterEstado) filters.estadoLead = filterEstado;
             const res = await clientesApi.getAll(filters, { page, limit: 12 });
             // El interceptor devuelve response.data directamente
             // La estructura es: { results: [...], page, limit, totalPages, totalResults }
             return res;
         }
+    });
+
+    // Embudo de leads (conteos por etapa) para el resumen clickeable de arriba.
+    const { data: funnel } = useQuery({
+        queryKey: ['clientes', 'leads-resumen'],
+        queryFn: () => reportesApi.leadsResumen(),
+        enabled: puedeVerFunnel,
+        staleTime: 1000 * 60,
     });
 
     const clientes = response?.results || [];
@@ -194,6 +213,13 @@ const ClientesPage: React.FC = () => {
             )
         },
         {
+            header: 'Etapa',
+            accessor: (c) => {
+                const e = ESTADO_LEAD_MAP[c.estadoLead ?? 'nuevo'];
+                return <Badge variant={e.variant}>{e.label}</Badge>;
+            }
+        },
+        {
             header: 'Acciones',
             align: 'right',
             accessor: (c) => (
@@ -237,8 +263,33 @@ const ClientesPage: React.FC = () => {
                 </div>
             </header>
 
-            <div className="card glass filters-bar mb-6">
-                <div className="search-box">
+            {/* Embudo de leads: conteo por etapa, clickeable para filtrar. */}
+            {puedeVerFunnel && funnel && (
+                <div className="lead-funnel mb-6">
+                    <button
+                        type="button"
+                        className={`funnel-chip ${filterEstado === '' ? 'is-active' : ''}`}
+                        onClick={() => { setFilterEstado(''); setPage(1); }}
+                    >
+                        <span className="funnel-count">{funnel.total}</span>
+                        <span className="funnel-tag">Todos</span>
+                    </button>
+                    {ESTADOS_LEAD.map((k) => (
+                        <button
+                            key={k}
+                            type="button"
+                            className={`funnel-chip ${filterEstado === k ? 'is-active' : ''}`}
+                            onClick={() => { setFilterEstado(filterEstado === k ? '' : k); setPage(1); }}
+                        >
+                            <span className="funnel-count">{funnel[k]}</span>
+                            <Badge variant={ESTADO_LEAD_MAP[k].variant}>{ESTADO_LEAD_MAP[k].label}</Badge>
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            <div className="card glass filters-bar mb-6" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="search-box" style={{ flex: '1 1 240px' }}>
                     <Search size={18} className="text-slate-500" />
                     <input
                         type="text"
@@ -251,7 +302,26 @@ const ClientesPage: React.FC = () => {
                         className="bg-transparent border-none outline-none text-white w-full text-sm font-medium"
                     />
                 </div>
+                <select
+                    className="form-input"
+                    value={filterEstado}
+                    onChange={(e) => { setFilterEstado(e.target.value as '' | EstadoLead); setPage(1); }}
+                    style={{ minWidth: 170 }}
+                    aria-label="Filtrar por etapa"
+                >
+                    <option value="">Todas las etapas</option>
+                    {ESTADOS_LEAD.map((k) => <option key={k} value={k}>{ESTADO_LEAD_MAP[k].label}</option>)}
+                </select>
             </div>
+
+            <style>{`
+                .lead-funnel { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+                .funnel-chip { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 0.7rem 1rem; min-width: 100px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.8rem; cursor: pointer; transition: border-color .15s, transform .15s; }
+                .funnel-chip:hover { border-color: var(--accent); transform: translateY(-1px); }
+                .funnel-chip.is-active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+                .funnel-count { font-size: 1.5rem; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
+                .funnel-tag { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+            `}</style>
 
             <DataTable
                 columns={columns}

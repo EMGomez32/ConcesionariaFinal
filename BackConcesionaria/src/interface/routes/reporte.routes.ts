@@ -210,4 +210,18 @@ router.get('/alertas-resumen', authorize('admin'), ReporteController.alertasResu
  */
 router.get('/proximos-seguimientos', authorize('admin', 'vendedor'), ReporteController.proximosSeguimientos);
 
+/**
+ * @openapi
+ * /reportes/leads-resumen:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Embudo de leads (cantidad de clientes por etapa del pipeline)
+ *     description: Conteo de clientes por estado (nuevo/contactado/negociando/ganado/perdido) + total. Solo admin/vendedor.
+ *     responses:
+ *       200: { description: Conteos por etapa }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ */
+router.get('/leads-resumen', authorize('admin', 'vendedor'), ReporteController.leadsResumen);
+
 export default router;

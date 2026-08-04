@@ -1553,4 +1553,28 @@ export class ReporteController {
             next(error);
         }
     }
+
+    // ── 14. Embudo de leads (conteo de clientes por etapa) ───────────────────
+    // GET /api/reportes/leads-resumen
+    // Cuántos clientes hay en cada etapa del pipeline comercial. Un solo groupBy;
+    // la extensión lo scopea por tenant (super_admin ve todos los tenants, igual
+    // que el resto de reportes). Devuelve las 5 etapas SIEMPRE (0 si no hay filas).
+    static async leadsResumen(req: Request, res: Response, next: NextFunction) {
+        try {
+            const grupos = await prisma.cliente.groupBy({
+                by: ['estadoLead'],
+                _count: { _all: true },
+            });
+            const base: Record<string, number> = { nuevo: 0, contactado: 0, negociando: 0, ganado: 0, perdido: 0 };
+            let total = 0;
+            for (const g of grupos) {
+                const n = g._count?._all ?? 0;
+                if (g.estadoLead in base) base[g.estadoLead] = n;
+                total += n;
+            }
+            res.json({ ...base, total });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
