@@ -31,6 +31,7 @@ const TENANT_TABLES = [
     'usuarios',
     'clientes',
     'cliente_seguimientos',
+    'tasaciones',
     'proveedores',
     'vehiculos',
     'vehiculo_archivos',

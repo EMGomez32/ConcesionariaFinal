@@ -28,6 +28,7 @@ const SOFT_DELETE_MODELS = [
     'Usuario',
     'Cliente',
     'ClienteSeguimiento',
+    'Tasacion',
     'Proveedor',
     'Vehiculo',
     'VehiculoArchivo',

@@ -12,7 +12,7 @@ import { context } from '../../infrastructure/security/context';
 
 // Campos de marca que cada PDF necesita de su concesionaria (logo/colores/pie).
 const marcaSelect = {
-    nombre: true, cuit: true, email: true, telefono: true,
+    nombre: true, cuit: true, email: true, telefono: true, direccion: true,
     logoStorageKey: true, colorPrimario: true, colorSecundario: true, pdfPie: true, sitioWeb: true,
 } as const;
 
@@ -852,6 +852,110 @@ export class ComprobanteController {
                     50, 760, { align: 'center', width: 495 }
                 );
             doc.text('La seña se imputa al precio final. Documento no válido como factura.', 50, 772, { align: 'center', width: 495 });
+
+            doc.end();
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // GET /api/tasaciones/:id/pdf → PDF de la tasación del usado que trae el cliente.
+    static async tasacionPdf(req: Request, res: Response, next: NextFunction) {
+        try {
+            const id = Number(req.params.id);
+            const t = await prisma.tasacion.findFirst({
+                where: { id },
+                include: {
+                    cliente: true,
+                    tasador: { select: { nombre: true } },
+                    concesionaria: { select: marcaSelect },
+                },
+            }) as any;
+
+            if (!t) throw new NotFoundException('Tasación');
+
+            const moneda = t.moneda || 'ARS';
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="tasacion-${t.id}.pdf"`);
+
+            const doc = new PDFDocument({ size: 'A4', margin: 50 });
+            doc.pipe(res);
+
+            const brand = await resolveBranding(t.concesionaria);
+            const accent = brand.accent;
+            const muted = brand.muted;
+
+            const infoLineas = [
+                t.concesionaria?.cuit ? `CUIT: ${t.concesionaria.cuit}` : '',
+                t.concesionaria?.telefono ? `Tel: ${t.concesionaria.telefono}` : '',
+                t.concesionaria?.direccion || '',
+            ].filter(Boolean);
+            drawEncabezado(doc, brand, infoLineas);
+
+            doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold')
+                .text('TASACIÓN DE VEHÍCULO USADO', 50, 50, { align: 'right' });
+            doc.fillColor(muted).fontSize(10).font('Helvetica')
+                .text(`N° ${String(t.id).padStart(6, '0')}`, { align: 'right' })
+                .text(`Fecha: ${fecha(t.fecha)}`, { align: 'right' });
+
+            doc.moveTo(50, 130).lineTo(545, 130).strokeColor('#e5e7eb').stroke();
+
+            // ── Cliente y vehículo tasado ─────────────────────────────────────────
+            let y = 150;
+            const bloque = (titulo: string, lineas: string[], x: number) => {
+                doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text(titulo.toUpperCase(), x, y);
+                doc.fillColor('#111827').fontSize(10).font('Helvetica');
+                lineas.forEach((l, i) => doc.text(l, x, y + 15 + i * 14, { width: 230, lineBreak: false, ellipsis: true }));
+            };
+
+            bloque('Cliente', [
+                t.cliente?.nombre || 'Sin cliente asociado',
+                t.cliente?.dni ? `DNI/CUIT: ${t.cliente.dni}` : '',
+                t.cliente?.telefono ? `Tel: ${t.cliente.telefono}` : '',
+            ].filter(Boolean), 50);
+
+            bloque('Vehículo tasado', [
+                `${t.marca || ''} ${t.modelo || ''}`.trim() || '—',
+                t.anio ? `Año: ${t.anio}` : '',
+                t.km != null ? `Km: ${Number(t.km).toLocaleString('es-AR')}` : '',
+                t.dominio ? `Dominio: ${t.dominio}` : '',
+            ].filter(Boolean), 310);
+
+            y += 90;
+
+            // ── Detalle de la tasación ────────────────────────────────────────────
+            const fila = (label: string, valor: string, negrita = false) => {
+                doc.fillColor('#111827').fontSize(10).font(negrita ? 'Helvetica-Bold' : 'Helvetica');
+                doc.text(label, 50, y, { width: 380 });
+                doc.text(valor, 430, y, { width: 115, align: 'right' });
+                y += 18;
+            };
+
+            doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text('DETALLE DE LA VALUACIÓN', 50, y);
+            y += 16;
+            doc.moveTo(50, y).lineTo(545, y).strokeColor('#e5e7eb').stroke();
+            y += 8;
+
+            fila('Condición general', prettyEnum(t.condicion));
+            fila('Valor estimado', t.valorEstimado != null ? money(t.valorEstimado, moneda) : 'A convenir', true);
+
+            if (t.observaciones) {
+                y += 14;
+                doc.fillColor(accent).fontSize(9).font('Helvetica-Bold').text('OBSERVACIONES', 50, y);
+                y += 16;
+                // Altura acotada + ellipsis: una nota larga no invade el pie (y=720).
+                doc.fillColor('#111827').fontSize(9).font('Helvetica')
+                    .text(t.observaciones, 50, y, { width: 495, height: 300, ellipsis: true });
+            }
+
+            drawPie(doc, brand);
+            doc.fillColor(muted).fontSize(8).font('Helvetica')
+                .text(
+                    `Tasado por: ${t.tasador?.nombre || '—'}   ·   Generado el ${new Date().toLocaleString('es-AR')}`,
+                    50, 760, { align: 'center', width: 495 },
+                );
+            doc.text('Valuación orientativa y no vinculante, sujeta a inspección. No válido como factura.', 50, 772, { align: 'center', width: 495 });
 
             doc.end();
         } catch (error) {

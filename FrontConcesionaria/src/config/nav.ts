@@ -18,6 +18,7 @@ import {
     CreditCard,
     ClipboardList,
     CalendarClock,
+    Gauge,
     // BadgeCheck, // Billing deshabilitado temporalmente (ver ítem comentado abajo)
     BarChart3,
 } from 'lucide-react';
@@ -67,6 +68,7 @@ export const NAV_SECTIONS: NavSection[] = [
         items: [
             { label: 'Clientes', path: '/clientes', icon: Users, keywords: ['compradores', 'leads'] },
             { label: 'Seguimientos', path: '/seguimientos', icon: CalendarClock, keywords: ['crm', 'contactos', 'agenda', 'próximo contacto', 'llamar'], roles: ['admin', 'super_admin', 'vendedor'] },
+            { label: 'Tasaciones', path: '/tasaciones', icon: Gauge, keywords: ['tasación', 'valuación', 'usado', 'permuta', 'cotizar auto'], roles: ['admin', 'super_admin', 'vendedor'] },
             { label: 'Proveedores', path: '/proveedores', icon: Truck, keywords: ['suppliers'] },
             { label: 'Presupuestos', path: '/presupuestos', icon: FileText, keywords: ['cotización', 'quote'] },
             { label: 'Ventas', path: '/ventas', icon: BadgeDollarSign, keywords: ['vender'] },
