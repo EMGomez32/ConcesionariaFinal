@@ -18,6 +18,7 @@ const VehiculoDetallePage = lazy(() => import('./pages/vehiculos/VehiculoDetalle
 const ClientesPage = lazy(() => import('./pages/clientes/ClientesPage'));
 const ClienteDetallePage = lazy(() => import('./pages/clientes/ClienteDetallePage'));
 const SeguimientosPage = lazy(() => import('./pages/seguimientos/SeguimientosPage'));
+const TasacionesPage = lazy(() => import('./pages/tasaciones/TasacionesPage'));
 const VentasPage = lazy(() => import('./pages/ventas/VentasPage'));
 const PresupuestosPage = lazy(() => import('./pages/presupuestos/PresupuestosPage'));
 const ConcesionariasPage = lazy(() => import('./pages/concesionarias/ConcesionariasPage'));
@@ -68,6 +69,7 @@ function App() {
               <Route path="/clientes/:id" element={<ClienteDetallePage />} />
               {/* Agenda de seguimientos del CRM: admin y vendedor (no postventa). */}
               <Route path="/seguimientos" element={<RequireRole allowedRoles={['admin', 'super_admin', 'vendedor']}><SeguimientosPage /></RequireRole>} />
+              <Route path="/tasaciones" element={<RequireRole allowedRoles={['admin', 'super_admin', 'vendedor']}><TasacionesPage /></RequireRole>} />
 
               {/* Operaciones */}
               <Route path="/presupuestos" element={<PresupuestosPage />} />

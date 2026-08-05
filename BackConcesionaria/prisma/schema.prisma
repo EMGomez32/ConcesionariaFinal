@@ -33,6 +33,7 @@ model Concesionaria {
   tiposPostventa          TipoPostventa[]
   clientes                Cliente[]
   clienteSeguimientos     ClienteSeguimiento[]
+  tasaciones              Tasacion[]
   cotizaciones            Cotizacion[]
   metasVenta              MetaVenta[]
   objetivosVendedor       ObjetivoVendedor[]
@@ -123,6 +124,7 @@ model Usuario {
   ventas                 Venta[]              @relation("VentaVendedor")
   objetivos              ObjetivoVendedor[]
   seguimientos           ClienteSeguimiento[]
+  tasaciones             Tasacion[]           @relation("TasacionTasador")
   refreshTokens          RefreshToken[]
 
   @@unique([concesionariaId, email])
@@ -166,6 +168,7 @@ model Cliente {
   presupuestos            Presupuesto[]
   reservas                Reserva[]
   seguimientos            ClienteSeguimiento[]
+  tasaciones              Tasacion[]
   solicitudesFinanciacion SolicitudFinanciacion[]
   ventas                  Venta[]
 
@@ -202,6 +205,37 @@ model ClienteSeguimiento {
   @@index([clienteId])
   @@index([usuarioId])
   @@map("cliente_seguimientos")
+}
+
+// Tasación de un vehículo usado que trae un cliente (valuación PRE-permuta). Los
+// datos del auto van como texto libre: todavía NO es un Vehiculo del stock (eso
+// ocurre recién si se concreta el ingreso/permuta). `tasadorId` se estampa del
+// usuario logueado.
+model Tasacion {
+  id              Int               @id @default(autoincrement())
+  concesionariaId Int               @map("concesionaria_id")
+  clienteId       Int?              @map("cliente_id")
+  tasadorId       Int?              @map("tasador_id")
+  marca           String
+  modelo          String
+  anio            Int?
+  km              Int?
+  dominio         String?
+  condicion       CondicionTasacion @default(bueno)
+  valorEstimado   Decimal?          @map("valor_estimado") @db.Decimal(12, 2)
+  moneda          String            @default("ARS")
+  fecha           DateTime          @db.Date
+  observaciones   String?
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  deletedAt       DateTime?         @map("deleted_at")
+  cliente         Cliente?          @relation(fields: [clienteId], references: [id])
+  tasador         Usuario?          @relation("TasacionTasador", fields: [tasadorId], references: [id])
+  concesionaria   Concesionaria     @relation(fields: [concesionariaId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([clienteId])
+  @@map("tasaciones")
 }
 
 model Proveedor {
@@ -1265,6 +1299,15 @@ enum TipoSeguimiento {
   email
   visita
   otro
+}
+
+// Estado general del vehículo usado tasado.
+enum CondicionTasacion {
+  excelente
+  muy_bueno
+  bueno
+  regular
+  malo
 }
 
 // Etapa del cliente en el embudo comercial (pipeline de leads).
