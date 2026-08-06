@@ -104,4 +104,6 @@ export const updateCasoSchema = z.object({
     horaTurno: nullableHora(),
     // Facturación al cliente (lo típico: se carga en la edición, al cerrar el caso).
     montoFacturado: nullableMonto(),
+    // Recordatorio de próximo service (retención): cuándo debería volver el cliente.
+    proximoServiceFecha: nullableFecha(),
 });

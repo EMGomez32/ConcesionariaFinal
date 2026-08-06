@@ -123,6 +123,9 @@ export default function PostventaPage() {
     // Flag propio: el modal de detalle muestra turno y facturación a la vez, así que
     // guardar la facturación no debe poner en loading el botón del turno.
     const [savingFactura, setSavingFactura] = useState(false);
+    // ─ Próximo service (retención) ─
+    const [serviceForm, setServiceForm] = useState('');
+    const [savingService, setSavingService] = useState(false);
     const [descargandoOrden, setDescargandoOrden] = useState(false);
 
     // ─ Create Item form ─
@@ -443,10 +446,12 @@ export default function PostventaPage() {
             setDetailCaso(res as PostventaCaso);
             syncTurnoForm(res as PostventaCaso);
             syncFacturaForm(res as PostventaCaso);
+            syncServiceForm(res as PostventaCaso);
         } catch {
             setDetailCaso(caso);
             syncTurnoForm(caso);
             syncFacturaForm(caso);
+            syncServiceForm(caso);
         }
     };
 
@@ -484,6 +489,36 @@ export default function PostventaPage() {
     // Precarga el editor de facturación del detalle (sólo facturaForm, ver arriba).
     const syncFacturaForm = (c: PostventaCaso) => {
         setFacturaForm(c.montoFacturado != null ? String(c.montoFacturado) : '');
+    };
+
+    // Precarga el editor de "próximo service" del detalle.
+    const syncServiceForm = (c: PostventaCaso) => {
+        setServiceForm(c.proximoServiceFecha ? String(c.proximoServiceFecha).slice(0, 10) : '');
+    };
+
+    // Agenda / quita el recordatorio de próximo service ('' ⇒ null).
+    const handleGuardarService = async () => {
+        if (!detailCaso) return;
+        setSavingService(true);
+        try {
+            await postventaApi.updateCaso(detailCaso.id, { proximoServiceFecha: serviceForm || null });
+            addToast(serviceForm ? 'Próximo service agendado' : 'Recordatorio quitado', 'success');
+            const res = await postventaApi.getCasoById(detailCaso.id);
+            setDetailCaso(res as PostventaCaso);
+            syncServiceForm(res as PostventaCaso);
+            loadCasos();
+        } catch (e) {
+            addToast(getErrorMessage(e, 'Error al guardar el próximo service'), 'error');
+        } finally {
+            setSavingService(false);
+        }
+    };
+
+    // Borrador de recordatorio de próximo service por WhatsApp (el usuario revisa y manda).
+    const serviceWaHref = (c: PostventaCaso) => {
+        const veh = c.vehiculo ? `${c.vehiculo.marca} ${c.vehiculo.modelo}` : 'tu vehículo';
+        const msg = `Hola ${c.cliente?.nombre ?? ''}, te recordamos que ${veh} tiene su próximo service el ${fmtDate(c.proximoServiceFecha)}. Coordinemos un turno para hacerlo. ¡Gracias!`;
+        return waLink(c.cliente?.telefono, msg);
     };
 
     // Guarda el monto facturado al cliente ('' ⇒ null: sin facturar).
@@ -1084,6 +1119,24 @@ export default function PostventaPage() {
                                 <span style={{ color: 'var(--text-secondary)' }}>Margen: <strong style={{ color: (Number(detailCaso.montoFacturado) - totalItems) < 0 ? '#ef4444' : '#22c55e' }}>${fmt(Number(detailCaso.montoFacturado) - totalItems)}</strong></span>
                             </div>
                         )}
+                    </div>
+
+                    {/* Próximo service (retención): recordatorio para que el cliente vuelva */}
+                    <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.04)', borderRadius: '0.5rem' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
+                            Próximo service
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                            <div style={{ flex: '1 1 160px' }}>
+                                <input className="form-input" type="date" value={serviceForm} onChange={e => setServiceForm(e.target.value)} />
+                            </div>
+                            <Button variant="secondary" size="sm" onClick={handleGuardarService} disabled={savingService} loading={savingService}>Guardar</Button>
+                            {detailCaso.proximoServiceFecha && serviceWaHref(detailCaso) && (
+                                <a href={serviceWaHref(detailCaso)!} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+                                    <Button variant="secondary" size="sm"><MessageCircle size={14} /> Recordar</Button>
+                                </a>
+                            )}
+                        </div>
                     </div>
 
                     {/* Actions */}

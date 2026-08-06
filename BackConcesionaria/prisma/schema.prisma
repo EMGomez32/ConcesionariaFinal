@@ -1059,6 +1059,9 @@ model PostventaCaso {
   // pelear con zonas horarias (fecha_turno es @db.Date, medianoche UTC).
   fechaTurno      DateTime?       @map("fecha_turno") @db.Date
   horaTurno       String?         @map("hora_turno")
+  /// Recordatorio de próximo service/mantenimiento (retención): cuándo debería
+  /// volver el cliente. Se suele cargar al cerrar el caso. Opcional.
+  proximoServiceFecha DateTime?   @map("proximo_service_fecha") @db.Date
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
   deletedAt       DateTime?       @map("deleted_at")
@@ -1078,6 +1081,7 @@ model PostventaCaso {
   @@index([tipoId])
   @@index([estado])
   @@index([concesionariaId, fechaTurno])
+  @@index([concesionariaId, proximoServiceFecha])
   @@map("postventa_casos")
 }
 

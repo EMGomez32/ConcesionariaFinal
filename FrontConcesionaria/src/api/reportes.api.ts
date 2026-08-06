@@ -436,6 +436,23 @@ export interface ReporteVencimientosDoc {
     items: VencimientoDocItem[];
 }
 
+/** Un caso de postventa con un próximo service agendado por venir. */
+export interface ProximoServiceItem {
+    casoId: number;
+    cliente: string;
+    telefono: string;
+    vehiculo: string;
+    dominio: string;
+    tipo: string;
+    proximoServiceFecha: string;
+}
+
+export interface ReporteProximosService {
+    ventana: { dias: number; desde: string; hasta: string };
+    resumen: { cantidad: number; hoy: number };
+    items: ProximoServiceItem[];
+}
+
 export interface RangoFiltro {
     desde?: string;
     hasta?: string;
@@ -506,6 +523,10 @@ export const reportesApi = {
     /** Vehículos en stock con VTV/seguro vencido o por vencer. */
     vencimientosDocumentacion: (params: { dias?: number } = {}) =>
         client.get<ReporteVencimientosDoc>('/reportes/vencimientos-documentacion', { params }),
+
+    /** Casos de postventa con un próximo service por venir (retención). */
+    proximosService: (params: { dias?: number } = {}) =>
+        client.get<ReporteProximosService>('/reportes/proximos-service', { params }),
 
     /** Embudo de leads: cantidad de clientes por etapa del pipeline. */
     leadsResumen: () =>

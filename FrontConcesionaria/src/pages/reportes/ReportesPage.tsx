@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy, MessageCircle, Coins, Target, Wrench, ShieldCheck } from 'lucide-react';
+import { Download, TrendingUp, Wallet, AlertTriangle, BarChart3, DollarSign, Pencil, CalendarClock, Trophy, MessageCircle, Coins, Target, Wrench, ShieldCheck, CalendarCheck } from 'lucide-react';
 import {
     reportesApi,
     type ReporteVentasItem,
@@ -12,6 +12,7 @@ import {
     type ComisionVendedorItem,
     type PostventaCasoReporteItem,
     type VencimientoDocItem,
+    type ProximoServiceItem,
     type TotalPorMoneda,
 } from '../../api/reportes.api';
 import { cotizacionesApi } from '../../api/cotizaciones.api';
@@ -31,7 +32,7 @@ import Modal from '../../components/ui/Modal';
 import { StatCard } from './StatCard';
 import ObjetivosTab from './ObjetivosTab';
 
-type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos' | 'ranking' | 'comisiones' | 'postventa' | 'documentacion' | 'objetivos';
+type Tab = 'ventas' | 'caja' | 'mora' | 'rentabilidad' | 'proximos' | 'ranking' | 'comisiones' | 'postventa' | 'documentacion' | 'proximos-service' | 'objetivos';
 
 // Etapa del caso de postventa → etiqueta + variante de Badge.
 const ESTADO_POSTVENTA: Record<string, { label: string; variant: 'warning' | 'info' | 'success' }> = {
@@ -56,6 +57,7 @@ const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
     { key: 'comisiones', label: 'Comisiones', icon: Coins },
     { key: 'postventa', label: 'Postventa', icon: Wrench },
     { key: 'documentacion', label: 'Documentación', icon: ShieldCheck },
+    { key: 'proximos-service', label: 'Próx. service', icon: CalendarCheck },
     { key: 'objetivos', label: 'Objetivos', icon: Target },
     { key: 'rentabilidad', label: 'Rentabilidad', icon: BarChart3 },
 ];
@@ -74,6 +76,7 @@ const TAB_ROLES: Record<Tab, string[]> = {
     comisiones: ['admin', 'super_admin'],
     postventa: ['admin', 'super_admin', 'vendedor', 'postventa'],
     documentacion: ['admin', 'super_admin', 'vendedor'],
+    'proximos-service': ['admin', 'super_admin', 'vendedor', 'postventa'],
     objetivos: ['admin', 'super_admin'],
     rentabilidad: ['admin', 'super_admin'],
 };
@@ -331,11 +334,16 @@ const ReportesPage = () => {
         queryFn: () => reportesApi.vencimientosDocumentacion({ dias: 30 }),
         enabled: tab === 'documentacion',
     });
+    const proximosServiceQ = useQuery({
+        queryKey: ['reporte', 'proximos-service'],
+        queryFn: () => reportesApi.proximosService({ dias: 30 }),
+        enabled: tab === 'proximos-service',
+    });
 
     const handleExport = async () => {
-        // Objetivos no tiene endpoint CSV (el botón se oculta en ese tab); el guard
-        // además estrecha el tipo de `tab` para el exportCsv de abajo.
-        if (tab === 'objetivos' || tab === 'documentacion') return;
+        // Objetivos/documentación/próx.service no tienen endpoint CSV (el botón se
+        // oculta en esos tabs); el guard además estrecha el tipo de `tab` abajo.
+        if (tab === 'objetivos' || tab === 'documentacion' || tab === 'proximos-service') return;
         setExporting(true);
         try {
             const params: Record<string, unknown> =
@@ -589,6 +597,23 @@ const ReportesPage = () => {
         },
     ];
 
+    const proximoServiceCols: Column<ProximoServiceItem>[] = [
+        { header: 'Cliente', accessor: (r) => <span className="font-bold">{r.cliente || '—'}</span> },
+        { header: 'Vehículo', accessor: (r) => r.vehiculo || '—' },
+        { header: 'Dominio', accessor: (r) => r.dominio || '—' },
+        { header: 'Tipo', accessor: (r) => r.tipo || '—' },
+        { header: 'Próximo service', accessor: (r) => (r.proximoServiceFecha ? formatFecha(r.proximoServiceFecha) : '—') },
+        {
+            header: 'Recordar', align: 'center', accessor: (r) => {
+                const msg = `Hola ${r.cliente}, te recordamos que ${r.vehiculo || 'tu vehículo'} tiene su próximo service el ${formatFecha(r.proximoServiceFecha)}. Coordinemos un turno para hacerlo. ¡Gracias!`;
+                const href = waLink(r.telefono, msg);
+                return href
+                    ? <a href={href} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar por WhatsApp (revisá antes de enviar)"><MessageCircle size={16} /></a>
+                    : <span className="text-muted">—</span>;
+            }
+        },
+    ];
+
     // Comisión total: consolidada si se pidió, si no la suma por moneda.
     const comisionTotal = () => {
         const data = comisionesQ.data;
@@ -654,7 +679,7 @@ const ReportesPage = () => {
                         propio período y no genera CSV): se ocultan ahí. */}
                     {/* Consolidar no aplica a objetivos (su propio período) ni a postventa
                         (es monomoneda: Σ de costos): ahí el selector sería inerte. */}
-                    {tab !== 'objetivos' && tab !== 'postventa' && tab !== 'documentacion' && (
+                    {tab !== 'objetivos' && tab !== 'postventa' && tab !== 'documentacion' && tab !== 'proximos-service' && (
                         <select
                             className="form-input"
                             value={consolidar}
@@ -667,8 +692,8 @@ const ReportesPage = () => {
                             <option value="USD">Consolidar en USD</option>
                         </select>
                     )}
-                    {/* Exportar CSV: todos los tabs menos objetivos y documentación (no generan CSV). */}
-                    {tab !== 'objetivos' && tab !== 'documentacion' && (
+                    {/* Exportar CSV: todos los tabs menos objetivos, documentación y próx. service (no generan CSV). */}
+                    {tab !== 'objetivos' && tab !== 'documentacion' && tab !== 'proximos-service' && (
                         <Button variant="secondary" onClick={handleExport} loading={exporting}>
                             <Download size={16} /> Exportar CSV
                         </Button>
@@ -1005,6 +1030,27 @@ const ReportesPage = () => {
                         errorMessage="No se pudo cargar la documentación por vencer"
                         onRetry={() => documentacionQ.refetch()}
                         emptyMessage="No hay vehículos en stock con documentación vencida o por vencer"
+                    />
+                </>
+            )}
+
+            {/* ── PRÓXIMOS SERVICE (postventa, retención) ── */}
+            {tab === 'proximos-service' && (
+                <>
+                    {!proximosServiceQ.isError && (
+                        <div className="stats-grid stagger" style={{ marginBottom: '1.25rem' }}>
+                            <StatCard label="Con próximo service (30 días)" value={String(proximosServiceQ.data?.resumen.cantidad ?? 0)} />
+                            <StatCard label="Para hoy" value={String(proximosServiceQ.data?.resumen.hoy ?? 0)} color="var(--warning, #f59e0b)" />
+                        </div>
+                    )}
+                    <DataTable
+                        columns={proximoServiceCols}
+                        data={(proximosServiceQ.data?.items ?? []).map((it) => ({ ...it, id: it.casoId }))}
+                        isLoading={proximosServiceQ.isLoading}
+                        isError={proximosServiceQ.isError}
+                        errorMessage="No se pudo cargar los próximos service"
+                        onRetry={() => proximosServiceQ.refetch()}
+                        emptyMessage="No hay casos con un próximo service agendado en los próximos 30 días"
                     />
                 </>
             )}

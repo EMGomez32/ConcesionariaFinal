@@ -183,6 +183,22 @@ router.get('/turnos-taller', authorize('admin', 'vendedor', 'postventa'), Report
 
 /**
  * @openapi
+ * /reportes/proximos-service:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Próximos service/mantenimiento de postventa (retención)
+ *     description: Casos con un próximo service agendado en los próximos N días. admin/vendedor/postventa.
+ *     parameters:
+ *       - { in: query, name: dias, schema: { type: integer, default: 30 } }
+ *     responses:
+ *       200: { description: Casos con próximo service por venir }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ */
+router.get('/proximos-service', authorize('admin', 'vendedor', 'postventa'), ReporteController.proximosService);
+
+/**
+ * @openapi
  * /reportes/alertas-resumen:
  *   get:
  *     tags: [Reportes]
