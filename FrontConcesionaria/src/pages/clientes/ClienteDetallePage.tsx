@@ -26,7 +26,7 @@ import {
     ArrowLeft, User, Phone, Mail, MapPin, FileText,
     ShoppingCart, FileBarChart, Calendar, DollarSign,
     CreditCard, RefreshCw, BookmarkCheck, Wrench, Banknote, FileSignature, FileDown,
-    Clock, Plus, Trash2, MessageCircle, Check, CheckCircle2, Star, Car, type LucideIcon
+    Clock, Plus, Trash2, MessageCircle, Check, CheckCircle2, Star, Car, UserCheck, type LucideIcon
 } from 'lucide-react';
 
 type Tab = 'info' | 'ventas' | 'presupuestos' | 'reservas' | 'financiaciones' | 'solicitudes' | 'postventa' | 'seguimiento' | 'interes';
@@ -363,6 +363,10 @@ const ClienteDetallePage = () => {
                                 </select>
                             )}
                         </div>
+                        <p className="text-muted" style={{ marginTop: '0.45rem', fontSize: '0.8125rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <UserCheck size={13} /> Vendedor:&nbsp;
+                            <strong style={{ color: 'var(--text-secondary)' }}>{cliente.vendedorAsignado?.nombre ?? 'sin asignar'}</strong>
+                        </p>
                     </div>
                 </div>
                 {estadoCuenta && estadoCuenta.financiaciones.length > 0 && (

@@ -30,6 +30,14 @@ const emailOpcional = z.preprocess(
     z.string().email('Email inválido').optional(),
 );
 
+// FK que SÍ admite null explícito (para DESASIGNAR): '' / 0 / null => null (borra la
+// asignación), un id positivo => asigna, ausente (undefined) => no se toca. A
+// diferencia de optionalFk, no colapsa el null a undefined (si no, no se podría limpiar).
+const nullableFk = z.preprocess(
+    (v) => (v === '' || v === 0 || v === null ? null : v),
+    z.coerce.number().int().positive().nullable().optional(),
+);
+
 // Etapa del embudo comercial (espejo del enum EstadoLead de Prisma). Opcional: en
 // create el default de la DB es `nuevo`; en update sólo viene cuando se cambia.
 const estadoLeadEnum = z.enum(['nuevo', 'contactado', 'negociando', 'ganado', 'perdido'], {
@@ -51,6 +59,7 @@ export const createClienteSchema = z.object({
     direccion: z.string().optional(),
     observaciones: z.string().optional(),
     estadoLead: estadoLeadEnum,
+    vendedorAsignadoId: nullableFk,
 });
 
 export const updateClienteSchema = z.object({
@@ -62,6 +71,7 @@ export const updateClienteSchema = z.object({
     direccion: z.string().optional(),
     observaciones: z.string().optional(),
     estadoLead: estadoLeadEnum,
+    vendedorAsignadoId: nullableFk,
     // Sin concesionariaId: el repo (pickEditable) no lo persiste en update, no hay
     // reasignación de tenant para clientes. Si viniera, Zod lo descarta => igual
     // que hoy (el repo lo recortaba).
