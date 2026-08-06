@@ -35,6 +35,7 @@ model Concesionaria {
   clienteSeguimientos     ClienteSeguimiento[]
   tasaciones              Tasacion[]
   vehiculoIntereses       VehiculoInteres[]
+  vehiculoPrecioHistorial VehiculoPrecioHistorial[]
   cotizaciones            Cotizacion[]
   metasVenta              MetaVenta[]
   objetivosVendedor       ObjetivoVendedor[]
@@ -126,6 +127,7 @@ model Usuario {
   objetivos              ObjetivoVendedor[]
   seguimientos           ClienteSeguimiento[]
   tasaciones             Tasacion[]           @relation("TasacionTasador")
+  historialPreciosVehiculo VehiculoPrecioHistorial[] @relation("PrecioHistorialUsuario")
   refreshTokens          RefreshToken[]
 
   @@unique([concesionariaId, email])
@@ -335,6 +337,7 @@ model Vehiculo {
   ventaCanjeVehiculo       VentaCanjeVehiculo[]
   ventas                   Venta?
   interesados              VehiculoInteres[]
+  historialPrecios         VehiculoPrecioHistorial[]
 
   @@unique([concesionariaId, vin])
   @@index([concesionariaId])
@@ -343,6 +346,30 @@ model Vehiculo {
   @@index([vin])
   @@index([estado])
   @@map("vehiculos")
+}
+
+// Historial de precios de LISTA del vehículo (log append-only): cada cambio de
+// precio_lista queda registrado con el valor anterior/nuevo, quién lo hizo y
+// cuándo, para ver la evolución del precio en la ficha. A propósito NO va en
+// SOFT_DELETE_MODELS: es un log inmutable (no se borra ni edita). Igual queda
+// tenant-safe (RLS + inyección de tenant, que aplican a todo modelo no-global).
+model VehiculoPrecioHistorial {
+  id              Int           @id @default(autoincrement())
+  concesionariaId Int           @map("concesionaria_id")
+  vehiculoId      Int           @map("vehiculo_id")
+  precioAnterior  Decimal?      @map("precio_anterior") @db.Decimal(12, 2)
+  precioNuevo     Decimal       @map("precio_nuevo") @db.Decimal(12, 2)
+  moneda          String        @default("ARS")
+  motivo          String?
+  usuarioId       Int?          @map("usuario_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  vehiculo        Vehiculo      @relation(fields: [vehiculoId], references: [id])
+  usuario         Usuario?      @relation("PrecioHistorialUsuario", fields: [usuarioId], references: [id])
+  concesionaria   Concesionaria @relation(fields: [concesionariaId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([vehiculoId])
+  @@map("vehiculo_precio_historial")
 }
 
 model VehiculoArchivo {

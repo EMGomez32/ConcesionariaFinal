@@ -8,6 +8,7 @@ import clienteRoutes from '../interface/routes/cliente.routes';
 import clienteSeguimientoRoutes from '../interface/routes/cliente-seguimiento.routes';
 import tasacionRoutes from '../interface/routes/tasacion.routes';
 import vehiculoInteresRoutes from '../interface/routes/vehiculo-interes.routes';
+import vehiculoPrecioRoutes from '../interface/routes/vehiculo-precio.routes';
 import proveedorRoutes from '../interface/routes/proveedor.routes';
 import searchRoutes from '../interface/routes/search.routes';
 import vehiculoRoutes from '../interface/routes/vehiculo.routes';
@@ -81,6 +82,7 @@ router.use('/vehiculos', vehiculoRoutes);
 router.use('/vehiculo-archivos', archivoRoutes);
 router.use('/vehiculo-movimientos', movimientoRoutes);
 router.use('/vehiculo-ingresos', ingresoRoutes);
+router.use('/vehiculo-precios', vehiculoPrecioRoutes);
 
 // Operaciones
 router.use('/reservas', reservaRoutes);
