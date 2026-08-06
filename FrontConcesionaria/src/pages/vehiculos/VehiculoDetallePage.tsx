@@ -513,9 +513,18 @@ const VehiculoDetallePage = () => {
             header: '',
             align: 'right',
             accessor: (i) => (
-                <button className="icon-btn small danger" onClick={(e) => { e.stopPropagation(); handleDeleteInteres(i); }} title="Quitar interesado">
-                    <Trash2 size={14} />
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button
+                        className="icon-btn small"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/presupuestos?nuevoClienteId=${i.clienteId}&nuevoVehiculoId=${id}`); }}
+                        title="Generar presupuesto para este cliente"
+                    >
+                        <FileText size={14} />
+                    </button>
+                    <button className="icon-btn small danger" onClick={(e) => { e.stopPropagation(); handleDeleteInteres(i); }} title="Quitar interesado">
+                        <Trash2 size={14} />
+                    </button>
+                </div>
             ),
         },
     ];

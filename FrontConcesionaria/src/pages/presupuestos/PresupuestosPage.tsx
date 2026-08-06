@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { presupuestosApi } from '../../api/presupuestos.api';
 import { clientesApi } from '../../api/clientes.api';
 import { usuariosApi } from '../../api/usuarios.api';
@@ -60,6 +60,8 @@ interface VehiculoRef {
     version?: string;
     dominio?: string;
     vin?: string;
+    precioLista?: number;
+    moneda?: string;
 }
 
 interface VendedorRef {
@@ -141,6 +143,7 @@ const blankForm = () => ({
 const PresupuestosPage = () => {
     const { addToast } = useUIStore();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
 
     // Descarga el presupuesto en PDF (mismo patrón que el comprobante de venta).
     const handlePdf = async (id: number) => {
@@ -246,6 +249,59 @@ const PresupuestosPage = () => {
             setVehiculos((v.results ?? []) as VehiculoRef[]);
         });
     }, []);
+
+    /* ── prefill "generar presupuesto desde el interés" ──
+     * Se llega con /presupuestos?nuevoClienteId=..&nuevoVehiculoId=.. desde la
+     * ficha del cliente o del vehículo (tab de interés). Abre el form de alta ya
+     * con el cliente y el vehículo (y su precio) cargados. Corre una sola vez, y
+     * espera a que carguen los catálogos para que el precio se derive del stock. */
+    const prefillDone = useRef(false);
+    useEffect(() => {
+        if (prefillDone.current) return;
+        const cid = searchParams.get('nuevoClienteId');
+        if (!cid) return;
+        if (clientes.length === 0) return; // catálogos aún no cargados
+        prefillDone.current = true;
+        const vid = searchParams.get('nuevoVehiculoId');
+        (async () => {
+            const f = blankForm();
+            f.clienteId = cid;
+            // El cliente puede no estar entre los primeros del catálogo (tenant con
+            // muchos): si falta, lo traemos puntual y lo inyectamos para que el
+            // <select> lo muestre (simétrico al fallback del vehículo de abajo).
+            if (!clientes.some(c => String(c.id) === cid)) {
+                try {
+                    const full = await clientesApi.getById(Number(cid)) as unknown as ClienteRef;
+                    if (full?.id) setClientes(prev => prev.some(c => c.id === full.id) ? prev : [{ id: full.id, nombre: full.nombre }, ...prev]);
+                } catch { /* si no existe/accesible, el select queda sin la opción */ }
+            }
+            if (vid) {
+                let v = vehiculos.find(x => String(x.id) === vid);
+                if (!v) {
+                    // El vehículo del interés puede no estar 'publicado' (reservado, en
+                    // preparación): lo traemos puntual y lo inyectamos al catálogo para
+                    // que el <select> del ítem lo muestre.
+                    try {
+                        const full = await vehiculosApi.getById(Number(vid)) as unknown as VehiculoRef;
+                        if (full?.id) {
+                            v = full;
+                            setVehiculos(prev => prev.some(x => x.id === full.id) ? prev : [full, ...prev]);
+                        }
+                    } catch { /* si no existe/accesible, se deja el ítem vacío */ }
+                }
+                if (v) {
+                    const precio = v.precioLista != null ? String(v.precioLista) : '';
+                    f.items = [{ vehiculoId: String(v.id), precioLista: precio, descuento: '0', precioFinal: precio }];
+                    if (v.moneda === 'ARS' || v.moneda === 'USD') f.moneda = v.moneda;
+                }
+            }
+            setForm(f);
+            setCreateOpen(true);
+            // Limpiar los params para que un refresh/re-render no reabra el form.
+            setSearchParams({}, { replace: true });
+            addToast('Revisá el presupuesto precargado y guardá', 'info');
+        })();
+    }, [searchParams, clientes, vehiculos, setSearchParams, addToast]);
 
     /* ── load list ── */
     const load = useCallback(async (p = 1) => {
