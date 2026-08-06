@@ -5,6 +5,7 @@ import { vehiculoArchivosApi, type VehiculoArchivo } from '../../api/vehiculo-ar
 import { vehiculoMovimientosApi, type VehiculoMovimiento } from '../../api/vehiculo-movimientos.api';
 import { gastosApi, type GastoVehiculo } from '../../api/gastos.api';
 import { gastosCategoriaApi, type GastoCategoria } from '../../api/gastos-categorias.api';
+import { vehiculoInteresApi, type VehiculoInteres } from '../../api/vehiculoInteres.api';
 import type { Vehiculo, EstadoVehiculo } from '../../types/vehiculo.types';
 import { formatFecha } from '../../utils/fecha';
 import DataTable, { type Column } from '../../components/ui/DataTable';
@@ -17,12 +18,12 @@ import {
     ArrowLeft, Car, Calendar, DollarSign, MapPin,
     FileImage, Wrench, ArrowLeftRight, FileText,
     ShoppingCart, Bookmark, RefreshCw, Hash,
-    Plus, Trash2, ExternalLink, Upload, X, Image, FileText as FileIcon, Edit, MessageCircle, Star
+    Plus, Trash2, ExternalLink, Upload, X, Image, FileText as FileIcon, Edit, MessageCircle, Star, Users
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { PaginatedResponse, ApiError } from '../../types/api.types';
 
-type Tab = 'info' | 'archivos' | 'gastos' | 'movimientos' | 'presupuestos' | 'reservas' | 'ventas';
+type Tab = 'info' | 'archivos' | 'gastos' | 'movimientos' | 'presupuestos' | 'reservas' | 'ventas' | 'interesados';
 
 const STATUS_MAP: Record<EstadoVehiculo, { label: string; variant: 'warning' | 'success' | 'info' | 'default' | 'danger' }> = {
     preparacion: { label: 'En Preparación', variant: 'warning' },
@@ -102,6 +103,10 @@ const VehiculoDetallePage = () => {
     const [showArchivoForm, setShowArchivoForm] = useState(false);
     const [archivoTipo, setArchivoTipo] = useState('foto');
     const [archivoDescripcion, setArchivoDescripcion] = useState('');
+
+    // Interesados (clientes que marcaron este vehículo como interés) — carga diferida.
+    const [interesados, setInteresados] = useState<VehiculoInteres[]>([]);
+    const [loadingInteresados, setLoadingInteresados] = useState(false);
 
     useEffect(() => {
         if (!id) return;
@@ -226,6 +231,34 @@ const VehiculoDetallePage = () => {
             }).catch(() => { });
         }
     }, [activeTab, loadGastos]);
+
+    const loadInteresados = useCallback(async () => {
+        if (!id) return;
+        setLoadingInteresados(true);
+        try {
+            const res = await vehiculoInteresApi.getByVehiculo(Number(id));
+            setInteresados(Array.isArray(res) ? res : (res as PaginatedResponse<VehiculoInteres>)?.results ?? []);
+        } catch {
+            addToast('Error al cargar los interesados', 'error');
+        } finally {
+            setLoadingInteresados(false);
+        }
+    }, [id, addToast]);
+
+    useEffect(() => {
+        if (activeTab === 'interesados') loadInteresados();
+    }, [activeTab, loadInteresados]);
+
+    const handleDeleteInteres = async (i: VehiculoInteres) => {
+        if (!window.confirm('¿Quitar a este cliente de los interesados?')) return;
+        try {
+            await vehiculoInteresApi.delete(i.id);
+            addToast('Interés eliminado', 'success');
+            setInteresados(prev => prev.filter(x => x.id !== i.id));
+        } catch {
+            addToast('Error al eliminar el interés', 'error');
+        }
+    };
 
     const handleAddGasto = async () => {
         if (!gastoForm.categoriaId || !gastoForm.monto || !gastoForm.fechaGasto) {
@@ -444,6 +477,49 @@ const VehiculoDetallePage = () => {
         }
     ];
 
+    const interesadosColumns: Column<VehiculoInteres>[] = [
+        {
+            header: 'Cliente',
+            accessor: (i) => i.cliente ? (
+                <button
+                    type="button"
+                    className="link-cell"
+                    onClick={() => navigate(`/clientes/${i.clienteId}`)}
+                    title="Ver el cliente"
+                >
+                    {i.cliente.nombre}
+                </button>
+            ) : `Cliente #${i.clienteId}`,
+        },
+        {
+            header: 'Teléfono',
+            accessor: (i) => i.cliente?.telefono || '-',
+        },
+        {
+            header: 'Etapa',
+            accessor: (i) => i.cliente?.estadoLead
+                ? <span className="tipo-chip" style={{ textTransform: 'capitalize' }}>{i.cliente.estadoLead}</span>
+                : '-',
+        },
+        {
+            header: 'Nota',
+            accessor: (i) => i.nota || '-',
+        },
+        {
+            header: 'Desde',
+            accessor: (i) => i.createdAt ? formatFecha(i.createdAt) : '-',
+        },
+        {
+            header: '',
+            align: 'right',
+            accessor: (i) => (
+                <button className="icon-btn small danger" onClick={(e) => { e.stopPropagation(); handleDeleteInteres(i); }} title="Quitar interesado">
+                    <Trash2 size={14} />
+                </button>
+            ),
+        },
+    ];
+
     const presupuestos = useMemo(() => vehiculo?.presupuestos ?? [], [vehiculo]);
     const reservas = useMemo(() => vehiculo?.reservas ?? [], [vehiculo]);
     const ventas = useMemo(() => vehiculo?.ventas ?? [], [vehiculo]);
@@ -487,6 +563,7 @@ const VehiculoDetallePage = () => {
         { key: 'presupuestos', label: 'Presupuestos', icon: FileText, count: presupuestos.length },
         { key: 'reservas', label: 'Reservas', icon: Bookmark, count: reservas.length },
         { key: 'ventas', label: 'Ventas', icon: ShoppingCart, count: ventas.length },
+        { key: 'interesados', label: 'Interesados', icon: Users, count: interesados.length },
     ];
 
     return (
@@ -881,6 +958,17 @@ const VehiculoDetallePage = () => {
                         emptyIcon={<ShoppingCart size={40} className="text-slate-600" />}
                     />
                 )}
+
+                {/* INTERESADOS — clientes que marcaron este vehículo como interés (CRM↔inventario) */}
+                {activeTab === 'interesados' && (
+                    <DataTable
+                        columns={interesadosColumns}
+                        data={interesados}
+                        isLoading={loadingInteresados}
+                        emptyMessage="Ningún cliente marcó interés en este vehículo todavía."
+                        emptyIcon={<Users size={40} className="text-slate-600" />}
+                    />
+                )}
             </div>
 
             <style>{`
@@ -936,6 +1024,8 @@ const VehiculoDetallePage = () => {
                 .form-input { display: block; width: 100%; padding: 0.65rem 0.875rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.625rem; color: var(--text-primary); font-size: 0.875rem; outline: none; transition: border-color 0.15s; }
                 .form-input:focus { border-color: var(--accent); }
                 .fw-bold { font-weight: 700; }
+                .link-cell { font-weight: 600; color: var(--accent); background: none; border: none; padding: 0; cursor: pointer; }
+                .link-cell:hover { text-decoration: underline; }
 
                 .spin { animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }

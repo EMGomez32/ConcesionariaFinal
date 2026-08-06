@@ -7,6 +7,7 @@ import rolRoutes from '../interface/routes/rol.routes';
 import clienteRoutes from '../interface/routes/cliente.routes';
 import clienteSeguimientoRoutes from '../interface/routes/cliente-seguimiento.routes';
 import tasacionRoutes from '../interface/routes/tasacion.routes';
+import vehiculoInteresRoutes from '../interface/routes/vehiculo-interes.routes';
 import proveedorRoutes from '../interface/routes/proveedor.routes';
 import searchRoutes from '../interface/routes/search.routes';
 import vehiculoRoutes from '../interface/routes/vehiculo.routes';
@@ -71,6 +72,7 @@ router.use('/roles', rolRoutes);
 router.use('/clientes', clienteRoutes);
 router.use('/cliente-seguimientos', clienteSeguimientoRoutes);
 router.use('/tasaciones', tasacionRoutes);
+router.use('/vehiculo-intereses', vehiculoInteresRoutes);
 router.use('/proveedores', proveedorRoutes);
 router.use('/search', searchRoutes);
 
