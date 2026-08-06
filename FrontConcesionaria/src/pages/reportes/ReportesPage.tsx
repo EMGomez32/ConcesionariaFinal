@@ -15,6 +15,9 @@ import {
     type TotalPorMoneda,
 } from '../../api/reportes.api';
 import { cotizacionesApi } from '../../api/cotizaciones.api';
+import { vehiculosApi } from '../../api/vehiculos.api';
+import type { Vehiculo } from '../../types/vehiculo.types';
+import { dashboardKeys } from '../../hooks/useDashboard';
 import { useSucursales } from '../../hooks/useSucursales';
 import { useUsuarios } from '../../hooks/useUsuarios';
 import { useUIStore } from '../../store/uiStore';
@@ -235,6 +238,46 @@ const ReportesPage = () => {
         }
         setCotError('');
         cotMutation.mutate({ fecha: cotFecha, valor: valorNum });
+    };
+
+    // ── Renovar documentación (VTV/seguro) inline desde el panel ──
+    // Reusa el PATCH /vehiculos/:id (admin/vendedor) para actualizar las fechas sin
+    // abrir la ficha del vehículo. Al guardar, refresca el reporte y el contador de
+    // la campanita (alertas-resumen) para que el vehículo salga de la lista.
+    const [renovarItem, setRenovarItem] = useState<VencimientoDocItem | null>(null);
+    const [renovarVtv, setRenovarVtv] = useState('');
+    const [renovarSeguro, setRenovarSeguro] = useState('');
+    const [renovarError, setRenovarError] = useState('');
+
+    const renovarMutation = useMutation({
+        mutationFn: (data: { id: number; vencimientoVtv: string; vencimientoSeguro: string }) =>
+            vehiculosApi.update(data.id, {
+                vencimientoVtv: data.vencimientoVtv,
+                vencimientoSeguro: data.vencimientoSeguro,
+            } as Partial<Vehiculo>),
+        onSuccess: () => {
+            addToast('Documentación actualizada', 'success');
+            setRenovarItem(null);
+            queryClient.invalidateQueries({ queryKey: ['reporte'] });
+            queryClient.invalidateQueries({ queryKey: dashboardKeys.alertasResumen() });
+        },
+        onError: (e: unknown) => setRenovarError((e as { message?: string })?.message ?? 'No se pudo actualizar la documentación'),
+    });
+
+    const openRenovar = (r: VencimientoDocItem) => {
+        setRenovarError('');
+        setRenovarVtv(r.vencimientoVtv ?? '');
+        setRenovarSeguro(r.vencimientoSeguro ?? '');
+        setRenovarItem(r);
+    };
+    const handleRenovar = () => {
+        if (!renovarItem) return;
+        if (!renovarVtv && !renovarSeguro) {
+            setRenovarError('Cargá al menos una fecha (VTV o seguro).');
+            return;
+        }
+        setRenovarError('');
+        renovarMutation.mutate({ id: renovarItem.vehiculoId, vencimientoVtv: renovarVtv, vencimientoSeguro: renovarSeguro });
     };
 
     const rango = {
@@ -537,6 +580,13 @@ const ReportesPage = () => {
         { header: 'Estado VTV', align: 'center', accessor: (r) => docBadge(r.vtvEstado) },
         { header: 'Seguro', accessor: (r) => (r.vencimientoSeguro ? formatFecha(r.vencimientoSeguro) : <span className="text-muted">—</span>) },
         { header: 'Estado seguro', align: 'center', accessor: (r) => docBadge(r.seguroEstado) },
+        {
+            header: '', align: 'right', accessor: (r) => (
+                <Button variant="secondary" size="sm" onClick={() => openRenovar(r)} title="Renovar VTV / seguro sin abrir la ficha">
+                    <CalendarClock size={14} /> Renovar
+                </Button>
+            ),
+        },
     ];
 
     // Comisión total: consolidada si se pidió, si no la suma por moneda.
@@ -1002,6 +1052,39 @@ const ReportesPage = () => {
                         <div className="uploader-alert uploader-alert-error">
                             <AlertTriangle size={14} />
                             <span>{cotError}</span>
+                        </div>
+                    )}
+                </div>
+            </Modal>
+
+            {/* Modal de renovación de documentación (VTV / seguro) del vehículo */}
+            <Modal
+                isOpen={!!renovarItem}
+                onClose={() => setRenovarItem(null)}
+                title="Renovar documentación"
+                subtitle={renovarItem ? `${renovarItem.vehiculo}${renovarItem.dominio ? ' · ' + renovarItem.dominio : ''}` : ''}
+                maxWidth="440px"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setRenovarItem(null)}>Cancelar</Button>
+                        <Button variant="primary" onClick={handleRenovar} loading={renovarMutation.isPending}>Guardar</Button>
+                    </>
+                }
+            >
+                <div className="space-y-6">
+                    <div className="form-group">
+                        <label className="form-label">Vencimiento VTV</label>
+                        <input type="date" className="form-input" value={renovarVtv} onChange={(e) => setRenovarVtv(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Vencimiento seguro</label>
+                        <input type="date" className="form-input" value={renovarSeguro} onChange={(e) => setRenovarSeguro(e.target.value)} />
+                    </div>
+                    <p className="text-muted" style={{ fontSize: '0.8rem' }}>Dejá una fecha vacía para borrar ese vencimiento.</p>
+                    {renovarError && (
+                        <div className="uploader-alert uploader-alert-error">
+                            <AlertTriangle size={14} />
+                            <span>{renovarError}</span>
                         </div>
                     )}
                 </div>
