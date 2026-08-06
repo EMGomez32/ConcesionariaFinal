@@ -28,6 +28,9 @@ export interface Cliente {
     observaciones?: string;
     /** Etapa en el embudo comercial (default `nuevo`). */
     estadoLead?: EstadoLead;
+    /** Vendedor "dueño" del cliente (ownership CRM). null = sin asignar. */
+    vendedorAsignadoId?: number | null;
+    vendedorAsignado?: { id: number; nombre: string } | null;
     createdAt: string;
     updatedAt: string;
     concesionaria?: {
@@ -45,4 +48,6 @@ export interface ClienteFilter {
     concesionariaId?: number;
     /** Filtra por etapa del embudo. */
     estadoLead?: EstadoLead;
+    /** Filtra por vendedor "dueño" (ownership). "Mis clientes" = el id del vendedor logueado. */
+    vendedorAsignadoId?: number;
 }

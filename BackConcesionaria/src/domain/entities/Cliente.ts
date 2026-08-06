@@ -13,6 +13,9 @@ export class Cliente {
         public readonly createdAt: Date,
         public readonly updatedAt: Date,
         public readonly deletedAt: Date | null,
-        public readonly concesionaria?: { id: number; nombre: string }
+        public readonly concesionaria?: { id: number; nombre: string },
+        /** Vendedor "dueño" del cliente (ownership CRM). null = sin asignar. */
+        public readonly vendedorAsignadoId?: number | null,
+        public readonly vendedorAsignado?: { id: number; nombre: string } | null,
     ) { }
 }

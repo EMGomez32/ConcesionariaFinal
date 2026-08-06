@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { clientesApi } from '../../api/clientes.api';
+import { usuariosApi } from '../../api/usuarios.api';
 import { reportesApi } from '../../api/reportes.api';
 import { ESTADO_LEAD_MAP, ESTADOS_LEAD } from '../../types/cliente.types';
 import type { Cliente, ClienteFilter, EstadoLead } from '../../types/cliente.types';
@@ -24,7 +25,8 @@ import {
     ChevronRight,
     FileText,
     FileDown,
-    Building2
+    Building2,
+    UserCheck
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
 import DataTable, { type Column } from '../../components/ui/DataTable';
@@ -49,6 +51,14 @@ const ClientesPage: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebounce(searchTerm, 500);
     const [filterEstado, setFilterEstado] = useState<'' | EstadoLead>('');
+    // Filtro por vendedor "dueño": '' (todos), 'mios' (los del vendedor logueado) o un id.
+    const [filterVendedor, setFilterVendedor] = useState<string>('');
+    const { data: vendedoresData } = useQuery({
+        queryKey: ['usuarios-vendedores'],
+        queryFn: () => usuariosApi.getAll({}, { limit: 200 }),
+        staleTime: 5 * 60 * 1000,
+    });
+    const vendedores = ((vendedoresData as { results?: { id: number; nombre: string }[] })?.results ?? []);
     const [page, setPage] = useState(1);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
@@ -61,6 +71,8 @@ const ClientesPage: React.FC = () => {
             const filters: Record<string, unknown> = {};
             if (debouncedSearch.trim()) filters.search = debouncedSearch;
             if (filterEstado) filters.estadoLead = filterEstado;
+            if (filterVendedor === 'mios' && user?.id) filters.vendedorAsignadoId = user.id;
+            else if (filterVendedor) filters.vendedorAsignadoId = Number(filterVendedor);
             const res = await clientesApi.exportCsv(filters);
             const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
             const link = document.createElement('a');
@@ -82,13 +94,15 @@ const ClientesPage: React.FC = () => {
 
     // Queries
     const { data: response, isLoading, refetch } = useQuery<PaginatedResponse<Cliente>, ApiError>({
-        queryKey: ['clientes', page, debouncedSearch, filterEstado],
+        queryKey: ['clientes', page, debouncedSearch, filterEstado, filterVendedor],
         queryFn: async () => {
             const filters: ClienteFilter = {};
             // `search` busca en nombre, DNI/CUIT, email y teléfono, que es lo
             // que ofrece el placeholder del buscador.
             if (debouncedSearch.trim()) filters.search = debouncedSearch;
             if (filterEstado) filters.estadoLead = filterEstado;
+            if (filterVendedor === 'mios' && user?.id) filters.vendedorAsignadoId = user.id;
+            else if (filterVendedor) filters.vendedorAsignadoId = Number(filterVendedor);
             const res = await clientesApi.getAll(filters, { page, limit: 12 });
             // El interceptor devuelve response.data directamente
             // La estructura es: { results: [...], page, limit, totalPages, totalResults }
@@ -251,6 +265,17 @@ const ClientesPage: React.FC = () => {
             }
         },
         {
+            header: 'Vendedor',
+            accessor: (c) => (
+                c.vendedorAsignado ? (
+                    <div className="flex items-center gap-2 text-slate-300 text-xs">
+                        <UserCheck size={12} className="text-accent/60" />
+                        <span className="truncate max-w-[130px]">{c.vendedorAsignado.nombre}</span>
+                    </div>
+                ) : <span className="text-slate-600 text-xs italic">Sin asignar</span>
+            )
+        },
+        {
             header: 'Acciones',
             align: 'right',
             accessor: (c) => (
@@ -349,6 +374,17 @@ const ClientesPage: React.FC = () => {
                 >
                     <option value="">Todas las etapas</option>
                     {ESTADOS_LEAD.map((k) => <option key={k} value={k}>{ESTADO_LEAD_MAP[k].label}</option>)}
+                </select>
+                <select
+                    className="form-input"
+                    value={filterVendedor}
+                    onChange={(e) => { setFilterVendedor(e.target.value); setPage(1); }}
+                    style={{ minWidth: 170 }}
+                    aria-label="Filtrar por vendedor asignado"
+                >
+                    <option value="">Todos los vendedores</option>
+                    <option value="mios">Mis clientes</option>
+                    {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
                 </select>
             </div>
 

@@ -3,10 +3,11 @@ import type { Cliente } from '../../types/cliente.types';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import Select from '../ui/Select';
-import { User, Phone, Mail, MapPin, FileText, Building2, MessageSquare, Search, AlertCircle, Edit } from 'lucide-react';
+import { User, Phone, Mail, MapPin, FileText, Building2, MessageSquare, Search, AlertCircle, Edit, UserCheck } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { concesionariasApi } from '../../api/concesionarias.api';
 import { clientesApi } from '../../api/clientes.api';
+import { usuariosApi } from '../../api/usuarios.api';
 import type { Concesionaria } from '../../types/concesionaria.types';
 
 interface ClienteFormProps {
@@ -25,12 +26,20 @@ const buildFormData = (initialData: Cliente | null | undefined, concesionariaId?
     email: initialData?.email ?? '',
     direccion: initialData?.direccion ?? '',
     observaciones: initialData?.observaciones ?? '',
+    vendedorAsignadoId: initialData?.vendedorAsignadoId ?? null,
 });
 
 const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCancel, onEdit, loading }) => {
     const { user } = useAuthStore();
     const isSuperAdmin = user?.roles?.includes('super_admin') ?? false;
     const [concesionarias, setConcesionarias] = useState<Concesionaria[]>([]);
+    // Vendedores para asignar el "dueño" del cliente (ownership CRM).
+    const [vendedores, setVendedores] = useState<{ id: number; nombre: string }[]>([]);
+    useEffect(() => {
+        usuariosApi.getAll({}, { limit: 200 })
+            .then((res) => setVendedores(((res as { results?: { id: number; nombre: string }[] })?.results ?? [])))
+            .catch(() => { /* si falla, el select queda vacío; no bloquea el alta */ });
+    }, []);
     
     // Estado para verificación de DNI
     const [step, setStep] = useState<'dni-check' | 'form'>(initialData ? 'form' : 'dni-check');
@@ -66,7 +75,12 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
         const { name, value } = e.target;
         setFormData(prev => ({
             ...prev,
-            [name]: name === 'concesionariaId' ? (value ? parseInt(value, 10) : undefined) : value,
+            // vendedorAsignadoId: vacío ⇒ null (desasignar), un id ⇒ número.
+            [name]: name === 'concesionariaId'
+                ? (value ? parseInt(value, 10) : undefined)
+                : name === 'vendedorAsignadoId'
+                    ? (value ? parseInt(value, 10) : null)
+                    : value,
         }));
     };
 
@@ -517,6 +531,21 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
                         />
                     </div>
                 </div>
+            </div>
+
+            <div className="form-section">
+                <div className="section-header">
+                    <UserCheck size={18} className="section-icon" />
+                    <h3 className="section-title">Asignación</h3>
+                </div>
+                <Select
+                    label="Vendedor asignado"
+                    name="vendedorAsignadoId"
+                    value={formData.vendedorAsignadoId ?? ''}
+                    onChange={handleChange}
+                    options={vendedores.map((v) => ({ value: v.id, label: v.nombre }))}
+                    placeholder="— Sin asignar —"
+                />
             </div>
 
             <div className="form-section">

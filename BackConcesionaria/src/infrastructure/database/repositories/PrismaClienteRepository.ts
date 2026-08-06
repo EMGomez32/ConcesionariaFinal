@@ -48,6 +48,11 @@ export class PrismaClienteRepository implements IClienteRepository {
         if (filter.estadoLead && ESTADOS_LEAD.includes(String(filter.estadoLead))) {
             whereClause.estadoLead = filter.estadoLead;
         }
+        // Filtro por vendedor "dueño" (ownership CRM). "Mis clientes" = el id del
+        // vendedor logueado. Sólo un entero positivo entra al where (evita el 500 de Prisma).
+        if (filter.vendedorAsignadoId !== undefined && Number.isInteger(Number(filter.vendedorAsignadoId)) && Number(filter.vendedorAsignadoId) > 0) {
+            whereClause.vendedorAsignadoId = Number(filter.vendedorAsignadoId);
+        }
 
         const results = await prisma.cliente.findMany({
             where: whereClause,
@@ -60,7 +65,8 @@ export class PrismaClienteRepository implements IClienteRepository {
                         id: true,
                         nombre: true
                     }
-                }
+                },
+                vendedorAsignado: { select: { id: true, nombre: true } }
             }
         });
 
@@ -84,7 +90,8 @@ export class PrismaClienteRepository implements IClienteRepository {
                         id: true,
                         nombre: true
                     }
-                }
+                },
+                vendedorAsignado: { select: { id: true, nombre: true } }
             }
         });
         return c ? this.mapToEntity(c) : null;
@@ -96,7 +103,7 @@ export class PrismaClienteRepository implements IClienteRepository {
      * podrían pisar columnas internas (deletedAt, createdAt, concesionariaId).
      */
     private pickEditable(data: any): Record<string, any> {
-        const CAMPOS = ['nombre', 'dni', 'telefono', 'email', 'direccion', 'observaciones', 'estadoLead'];
+        const CAMPOS = ['nombre', 'dni', 'telefono', 'email', 'direccion', 'observaciones', 'estadoLead', 'vendedorAsignadoId'];
         const payload: Record<string, any> = {};
         for (const campo of CAMPOS) {
             if (data[campo] !== undefined) {
@@ -153,7 +160,9 @@ export class PrismaClienteRepository implements IClienteRepository {
             c.createdAt,
             c.updatedAt,
             c.deletedAt,
-            c.concesionaria ? { id: c.concesionaria.id, nombre: c.concesionaria.nombre } : undefined
+            c.concesionaria ? { id: c.concesionaria.id, nombre: c.concesionaria.nombre } : undefined,
+            c.vendedorAsignadoId ?? null,
+            c.vendedorAsignado ? { id: c.vendedorAsignado.id, nombre: c.vendedorAsignado.nombre } : null,
         );
     }
 }
