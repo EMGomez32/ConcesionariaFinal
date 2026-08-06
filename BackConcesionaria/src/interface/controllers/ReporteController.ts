@@ -1443,6 +1443,53 @@ export class ReporteController {
         }
     }
 
+    // ── 11b. Próximos service (postventa, retención) ─────────────────────────
+    // GET /api/reportes/proximos-service?dias=
+    // Casos con un próximo service/mantenimiento agendado en los próximos N días,
+    // para recordarle al cliente que traiga la unidad. Mismo criterio UTC que
+    // turnos-taller (proximo_service_fecha es @db.Date, se compara en UTC puro).
+    static async proximosService(req: Request, res: Response, next: NextFunction) {
+        try {
+            const dias = enteroEnRango(req.query.dias, 1, 180, 30, 'dias');
+            const ahora = new Date();
+            const inicioHoy = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
+            const finVentana = new Date(inicioHoy);
+            finVentana.setUTCDate(finVentana.getUTCDate() + dias);
+
+            const casos = await prisma.postventaCaso.findMany({
+                where: { proximoServiceFecha: { gte: inicioHoy, lt: finVentana } },
+                orderBy: { proximoServiceFecha: 'asc' },
+                include: {
+                    cliente: { select: { nombre: true, telefono: true } },
+                    vehiculo: { select: { marca: true, modelo: true, dominio: true } },
+                    tipoRef: { select: { nombre: true } },
+                },
+            });
+
+            const hoyStr = inicioHoy.toISOString().slice(0, 10);
+            const items = casos.map((c) => ({
+                casoId: c.id,
+                cliente: c.cliente?.nombre ?? '',
+                telefono: c.cliente?.telefono ?? '',
+                vehiculo: c.vehiculo ? `${c.vehiculo.marca} ${c.vehiculo.modelo}`.trim() : '',
+                dominio: c.vehiculo?.dominio ?? '',
+                tipo: c.tipoRef?.nombre ?? '',
+                proximoServiceFecha: c.proximoServiceFecha ? c.proximoServiceFecha.toISOString().slice(0, 10) : '',
+            }));
+
+            const ultimoDia = new Date(finVentana);
+            ultimoDia.setUTCDate(ultimoDia.getUTCDate() - 1);
+
+            res.json({
+                ventana: { dias, desde: hoyStr, hasta: ultimoDia.toISOString().slice(0, 10) },
+                resumen: { cantidad: items.length, hoy: items.filter((i) => i.proximoServiceFecha === hoyStr).length },
+                items,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
     // ── 12. Resumen de alertas (sólo conteos) para la campanita ──────────────
     // GET /api/reportes/alertas-resumen
     // Versión liviana del centro de alertas: una sola llamada con SÓLO los

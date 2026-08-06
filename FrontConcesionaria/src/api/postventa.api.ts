@@ -32,6 +32,8 @@ export interface PostventaCaso {
     /** Monto facturado al cliente por el trabajo (o null si aún no se facturó). */
     montoFacturado?: number | null;
     fechaCierre?: string;
+    /** Recordatorio de próximo service/mantenimiento (o null si no se agendó). */
+    proximoServiceFecha?: string | null;
     /** Turno de taller: cuándo se espera la unidad (o null si no se coordinó). */
     fechaTurno?: string | null;
     /** Hora del turno como "HH:MM" (o null). */
@@ -83,6 +85,8 @@ export interface UpdateCasoDto {
     horaTurno?: string | null;
     /** Facturación al cliente (o null para vaciar). */
     montoFacturado?: number | null;
+    /** Recordatorio de próximo service (o null para vaciar). */
+    proximoServiceFecha?: string | null;
 }
 
 export interface CreateItemDto {

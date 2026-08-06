@@ -17,10 +17,10 @@ const SORTABLE = ['createdAt', 'updatedAt', 'fechaReclamo', 'fechaCierre', 'fech
 // catálogo TipoPostventa. La columna vieja queda sólo como histórico.
 const EDITABLE_CREATE = ['clienteId', 'vehiculoId', 'sucursalId', 'ventaId', 'fechaReclamo', 'tipoId', 'descripcion', 'fechaTurno', 'horaTurno', 'montoFacturado'] as const;
 // `estado` sólo entra por acá: lo valida la máquina de estados en UpdateCaso.
-const EDITABLE_UPDATE = ['estado', 'tipoId', 'descripcion', 'fechaReclamo', 'fechaCierre', 'fechaTurno', 'horaTurno', 'montoFacturado'] as const;
+const EDITABLE_UPDATE = ['estado', 'tipoId', 'descripcion', 'fechaReclamo', 'fechaCierre', 'fechaTurno', 'horaTurno', 'montoFacturado', 'proximoServiceFecha'] as const;
 
 // @db.Date: el <input type="date"> manda 'YYYY-MM-DD' y Prisma espera DateTime.
-const DATE_KEYS = ['fechaReclamo', 'fechaCierre', 'fechaTurno'];
+const DATE_KEYS = ['fechaReclamo', 'fechaCierre', 'fechaTurno', 'proximoServiceFecha'];
 
 function pickEditable(data: any = {}, editable: readonly string[]): Record<string, any> {
     const out: Record<string, any> = {};
@@ -133,7 +133,8 @@ export class PrismaPostventaCasoRepository implements IPostventaCasoRepository {
             c.sucursal,
             c.items,
             c.tipoRef,
-            c.montoFacturado == null ? null : Number(c.montoFacturado)
+            c.montoFacturado == null ? null : Number(c.montoFacturado),
+            c.proximoServiceFecha ?? null
         );
     }
 }

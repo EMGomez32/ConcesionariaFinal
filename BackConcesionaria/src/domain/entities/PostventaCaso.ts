@@ -33,6 +33,8 @@ export class PostventaCaso {
         /** El tipo del catálogo completo (id, nombre, activo). */
         public readonly tipoRef?: any,
         /** Monto facturado al cliente por el trabajo (o null si aún no se facturó). */
-        public readonly montoFacturado: number | null = null
+        public readonly montoFacturado: number | null = null,
+        /** Recordatorio de próximo service/mantenimiento (o null si no se agendó). */
+        public readonly proximoServiceFecha: Date | null = null
     ) { }
 }
