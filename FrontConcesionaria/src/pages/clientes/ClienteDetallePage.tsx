@@ -828,9 +828,18 @@ const ClienteDetallePage = () => {
                                                 <span className="seg-user">agregado el {fmtDate(i.createdAt)}</span>
                                             </div>
                                             {puedeEditar && (
-                                                <button className="seg-del" title="Quitar interés" onClick={() => handleDeleteInteres(i)}>
-                                                    <Trash2 size={15} />
-                                                </button>
+                                                <div className="int-item-actions">
+                                                    <button
+                                                        className="int-gen-presu"
+                                                        title="Generar presupuesto con este vehículo"
+                                                        onClick={() => navigate(`/presupuestos?nuevoClienteId=${id}&nuevoVehiculoId=${i.vehiculoId}`)}
+                                                    >
+                                                        <FileText size={15} />
+                                                    </button>
+                                                    <button className="seg-del" title="Quitar interés" onClick={() => handleDeleteInteres(i)}>
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     );
@@ -910,6 +919,9 @@ const ClienteDetallePage = () => {
                 .int-veh-link:disabled { cursor: default; }
                 .int-chip { font-size: 0.72rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border); text-transform: capitalize; }
                 .int-precio { font-size: 0.8125rem; font-weight: 600; color: var(--success, #10b981); }
+                .int-item-actions { display: flex; align-items: flex-start; gap: 0.35rem; flex-shrink: 0; }
+                .int-gen-presu { color: var(--text-muted); padding: 0.35rem; border-radius: 0.5rem; transition: all 0.15s; }
+                .int-gen-presu:hover { color: var(--primary, #6366f1); background: color-mix(in srgb, var(--primary, #6366f1) 12%, transparent); }
                 .spin { animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
