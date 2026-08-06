@@ -19,6 +19,7 @@ import {
     ClipboardList,
     CalendarClock,
     Gauge,
+    GitCompare,
     // BadgeCheck, // Billing deshabilitado temporalmente (ver ítem comentado abajo)
     BarChart3,
 } from 'lucide-react';
@@ -57,6 +58,7 @@ export const NAV_SECTIONS: NavSection[] = [
         title: 'Gestión de Stock',
         items: [
             { label: 'Vehículos', path: '/vehiculos', icon: Car, keywords: ['autos', 'unidades', 'stock'] },
+            { label: 'Comparador', path: '/comparador', icon: GitCompare, keywords: ['comparar', 'versus', 'vs', 'comparativa', 'vehículos'] },
             { label: 'Ingresos', path: '/ingresos', icon: LogIn, keywords: ['compras', 'recepcion'] },
             { label: 'Movimientos', path: '/movimientos', icon: ArrowLeftRight, keywords: ['traslados'] },
             { label: 'Reservas', path: '/reservas', icon: Bookmark, keywords: ['señas', 'reservar'] },
