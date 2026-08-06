@@ -51,4 +51,13 @@ export const vehiculosApi = {
         if (estado) params.estado = Array.isArray(estado) ? estado.join(',') : estado;
         return client.get<Blob>('/vehiculos/catalogo/pdf', { params, responseType: 'blob' });
     },
+
+    // Export CSV del stock (Blob descargable), con los MISMOS filtros del listado.
+    // getRaw: conserva la respuesta completa para leer el header X-Export-Truncated.
+    exportCsv: (filters: VehiculoFilter = {}) => {
+        const { estado, ...resto } = filters;
+        const params: Record<string, unknown> = { ...resto };
+        if (estado) params.estado = Array.isArray(estado) ? estado.join(',') : estado;
+        return client.getRaw<Blob>('/vehiculos/export/csv', { params, responseType: 'blob' });
+    },
 };

@@ -54,6 +54,24 @@ router.get('/catalogo/pdf', authenticate, ComprobanteController.catalogoPdf);
 
 /**
  * @openapi
+ * /vehiculos/export/csv:
+ *   get:
+ *     tags: [Vehículos]
+ *     summary: Exportar el stock a CSV (mismos filtros del listado)
+ *     description: admin/vendedor. CSV con BOM (Excel) y protección anti-inyección de fórmulas. Tope 5000 unidades.
+ *     parameters:
+ *       - { in: query, name: search, schema: { type: string } }
+ *       - { in: query, name: estado, schema: { type: string } }
+ *       - { in: query, name: tipo, schema: { type: string } }
+ *       - { in: query, name: sucursalId, schema: { type: integer } }
+ *     responses:
+ *       200: { description: CSV del stock, content: { text/csv: {} } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ */
+router.get('/export/csv', authenticate, authorize('admin', 'vendedor'), VehiculoController.exportCsv);
+
+/**
+ * @openapi
  * /vehiculos/{id}:
  *   get:
  *     tags: [Vehículos]

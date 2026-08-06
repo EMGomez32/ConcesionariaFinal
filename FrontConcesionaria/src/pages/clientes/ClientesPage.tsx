@@ -23,6 +23,7 @@ import {
     MapPin,
     ChevronRight,
     FileText,
+    FileDown,
     Building2
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
@@ -41,6 +42,9 @@ const ClientesPage: React.FC = () => {
     // El embudo (conteos por etapa) es un endpoint admin/vendedor: sólo esos roles
     // lo consultan/ven. El badge y el filtro por etapa sí los ve cualquiera.
     const puedeVerFunnel = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin' || r === 'vendedor');
+    // Export CSV: admin/vendedor en el backend → ocultamos el botón para el resto
+    // (evita un botón muerto que siempre daría 403).
+    const puedeExportar = puedeVerFunnel;
 
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebounce(searchTerm, 500);
@@ -48,6 +52,33 @@ const ClientesPage: React.FC = () => {
     const [page, setPage] = useState(1);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+    const [exportando, setExportando] = useState(false);
+
+    // Export CSV de la cartera con el MISMO filtro actual (para Excel/planilla).
+    const handleExportCsv = async () => {
+        setExportando(true);
+        try {
+            const filters: Record<string, unknown> = {};
+            if (debouncedSearch.trim()) filters.search = debouncedSearch;
+            if (filterEstado) filters.estadoLead = filterEstado;
+            const res = await clientesApi.exportCsv(filters);
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'clientes.csv');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            // El backend avisa por header si el export se topó con el límite (5000).
+            const total = res.headers?.['x-export-truncated'];
+            if (total) addToast(`Se exportaron los primeros 5000 clientes de ${total}. Filtrá para acotar el CSV.`, 'info');
+        } catch {
+            addToast('Error al exportar los clientes', 'error');
+        } finally {
+            setExportando(false);
+        }
+    };
 
     // Queries
     const { data: response, isLoading, refetch } = useQuery<PaginatedResponse<Cliente>, ApiError>({
@@ -256,6 +287,13 @@ const ClientesPage: React.FC = () => {
                     <Button variant="secondary" onClick={() => refetch()}>
                         <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
                     </Button>
+                    {/* Export CSV del filtro actual (para Excel/planilla). admin/vendedor. */}
+                    {puedeExportar && (
+                        <Button variant="secondary" onClick={handleExportCsv} loading={exportando} title="Exportar la cartera filtrada a CSV (Excel)">
+                            <FileDown size={18} />
+                            CSV
+                        </Button>
+                    )}
                     <Button variant="primary" onClick={() => handleOpenModal()}>
                         <Plus size={18} />
                         Nuevo Cliente

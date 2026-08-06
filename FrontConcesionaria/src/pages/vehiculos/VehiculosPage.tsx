@@ -9,9 +9,10 @@ import type { Vehiculo, EstadoVehiculo, TipoVehiculo } from '../../types/vehicul
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { useUIStore } from '../../store/uiStore';
+import { useAuthStore } from '../../store/authStore';
 import {
     Plus, Search, Edit, Trash2,
-    RefreshCw, Car, ChevronDown, Calendar, Database, MapPin, DollarSign, FileText
+    RefreshCw, Car, ChevronDown, Calendar, Database, MapPin, DollarSign, FileText, FileDown
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
 import DataTable, { type Column } from '../../components/ui/DataTable';
@@ -52,6 +53,10 @@ const antiguedadVariant = (dias: number): 'success' | 'info' | 'warning' | 'dang
 const VehiculosPage: React.FC = () => {
     const navigate = useNavigate();
     const { addToast } = useUIStore();
+    // El export CSV es admin/vendedor en el backend: ocultamos el botón para los
+    // demás roles (si no, sería un botón muerto que siempre da 403).
+    const user = useAuthStore((s) => s.user);
+    const puedeExportar = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin' || r === 'vendedor');
     const confirm = useConfirm();
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -62,6 +67,7 @@ const VehiculosPage: React.FC = () => {
     const [orden, setOrden] = useState<'recientes' | 'antiguedad'>('recientes');
     const [page, setPage] = useState(1);
     const [catalogando, setCatalogando] = useState(false);
+    const [exportando, setExportando] = useState(false);
 
     // Cualquier cambio de filtro/búsqueda/orden vuelve a la página 1: si el nuevo
     // resultado tiene menos páginas, quedarse en la página actual dejaba una
@@ -120,6 +126,34 @@ const VehiculosPage: React.FC = () => {
             addToast('Error al generar el catálogo', 'error');
         } finally {
             setCatalogando(false);
+        }
+    };
+
+    // Export CSV del stock con el MISMO filtro actual (exporta "lo que se ve").
+    const handleExportCsv = async () => {
+        setExportando(true);
+        try {
+            const res = await vehiculosApi.exportCsv({
+                search: debouncedSearch || undefined,
+                estado: filterEstado ? (filterEstado as EstadoVehiculo) : undefined,
+                tipo: filterTipo ? (filterTipo as TipoVehiculo) : undefined,
+                sucursalId: filterSucursal ? Number(filterSucursal) : undefined,
+            });
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'stock-vehiculos.csv');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            // El backend avisa por header si el export se topó con el límite (5000).
+            const total = res.headers?.['x-export-truncated'];
+            if (total) addToast(`Se exportaron las primeras 5000 unidades de ${total}. Filtrá para acotar el CSV.`, 'info');
+        } catch {
+            addToast('Error al exportar el stock', 'error');
+        } finally {
+            setExportando(false);
         }
     };
 
@@ -267,6 +301,13 @@ const VehiculosPage: React.FC = () => {
                         <FileText size={18} />
                         Catálogo PDF
                     </Button>
+                    {/* Export CSV del filtro actual (para Excel/planilla). admin/vendedor. */}
+                    {puedeExportar && (
+                        <Button variant="secondary" onClick={handleExportCsv} loading={exportando} title="Exportar el stock filtrado a CSV (Excel)">
+                            <FileDown size={18} />
+                            CSV
+                        </Button>
+                    )}
                     <Button variant="primary" onClick={() => navigate('/vehiculos/nuevo')}>
                         <Plus size={18} />
                         Ingresar Vehículo

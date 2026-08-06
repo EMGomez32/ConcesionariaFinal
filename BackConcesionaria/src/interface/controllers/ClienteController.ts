@@ -9,6 +9,7 @@ import { cleanFilters } from '../../utils/cleanFilters';
 import parseNumericFields from '../../utils/parseNumericFields';
 import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
+import { Col, sendCsv } from '../../utils/csv';
 
 const repository = new PrismaClienteRepository();
 const getClientesUC = new GetClientes(repository);
@@ -26,6 +27,58 @@ export class ClienteController {
             const parsedFilters = parseNumericFields(cleanedFilters, ['concesionariaId']);
             const result = await getClientesUC.execute(parsedFilters, { limit, page, sortBy, sortOrder } as any);
             res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // Export CSV de la cartera de clientes con los MISMOS filtros del listado.
+    // Tope defensivo de 5000; orden alfabético por nombre. Dato personal, por eso
+    // la ruta va con authorize(admin, vendedor).
+    static async exportCsv(req: Request, res: Response, next: NextFunction) {
+        try {
+            const CAP = 5000;
+            const { limit, page, sortBy, sortOrder, ...filters } = req.query;
+            void limit; void page; void sortBy; void sortOrder;
+            const cleanedFilters = cleanFilters(filters);
+            const parsedFilters = parseNumericFields(cleanedFilters, ['concesionariaId']);
+            const result: any = await getClientesUC.execute(
+                parsedFilters,
+                { limit: CAP, page: 1, sortBy: 'nombre', sortOrder: 'asc' } as any,
+            );
+
+            // Truncado no-silencioso: si hay más que el tope, avisamos por header + log.
+            if (Number(result.totalResults) > CAP) {
+                res.setHeader('X-Export-Truncated', String(result.totalResults));
+                console.warn(`[export] clientes CSV truncado: ${result.totalResults} > ${CAP}`);
+            }
+
+            const toDia = (d: any) =>
+                d instanceof Date ? d.toISOString().slice(0, 10) : d ? String(d).slice(0, 10) : '';
+
+            const cols: Col[] = [
+                { key: 'nombre', header: 'Nombre' },
+                { key: 'dni', header: 'DNI/CUIT' },
+                { key: 'telefono', header: 'Teléfono' },
+                { key: 'email', header: 'Email' },
+                { key: 'direccion', header: 'Dirección' },
+                { key: 'estadoLead', header: 'Etapa' },
+                { key: 'observaciones', header: 'Observaciones' },
+                { key: 'alta', header: 'Fecha alta' },
+            ];
+
+            const rows = (result.results as any[]).map((c) => ({
+                nombre: c.nombre,
+                dni: c.dni,
+                telefono: c.telefono,
+                email: c.email,
+                direccion: c.direccion,
+                estadoLead: c.estadoLead,
+                observaciones: c.observaciones,
+                alta: toDia(c.createdAt),
+            }));
+
+            sendCsv(res, 'clientes', cols, rows);
         } catch (error) {
             next(error);
         }
