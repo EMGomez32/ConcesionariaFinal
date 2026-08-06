@@ -15,6 +15,7 @@ const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'));
 const VehiculosPage = lazy(() => import('./pages/vehiculos/VehiculosPage'));
 const VehiculoFormPage = lazy(() => import('./pages/vehiculos/VehiculoFormPage'));
 const VehiculoDetallePage = lazy(() => import('./pages/vehiculos/VehiculoDetallePage'));
+const ComparadorPage = lazy(() => import('./pages/vehiculos/ComparadorPage'));
 const ClientesPage = lazy(() => import('./pages/clientes/ClientesPage'));
 const ClienteDetallePage = lazy(() => import('./pages/clientes/ClienteDetallePage'));
 const SeguimientosPage = lazy(() => import('./pages/seguimientos/SeguimientosPage'));
@@ -60,6 +61,7 @@ function App() {
 
               {/* Vehículos */}
               <Route path="/vehiculos" element={<VehiculosPage />} />
+              <Route path="/comparador" element={<ComparadorPage />} />
               <Route path="/vehiculos/nuevo" element={<VehiculoFormPage />} />
               <Route path="/vehiculos/:id/editar" element={<VehiculoFormPage />} />
               <Route path="/vehiculos/:id" element={<VehiculoDetallePage />} />
