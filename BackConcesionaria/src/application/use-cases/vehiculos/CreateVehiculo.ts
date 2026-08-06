@@ -3,6 +3,7 @@ import { BaseException } from '../../../domain/exceptions/BaseException';
 import prisma from '../../../infrastructure/database/prisma';
 import { context } from '../../../infrastructure/security/context';
 import { assertMismoTenant, resolveTenantDestino } from '../../../infrastructure/security/tenantGuard';
+import { recordPrecioVehiculo } from '../../../infrastructure/pricing/recordPrecioVehiculo';
 
 export class CreateVehiculo {
     constructor(private readonly vehiculoRepository: IVehiculoRepository) { }
@@ -68,6 +69,22 @@ export class CreateVehiculo {
                 registradoPorId: context.getUser()?.userId ?? null,
             },
         });
+
+        // Registra el precio de lista inicial en el historial (log append-only).
+        const precioInicial =
+            vehiculoData.precioLista !== undefined && vehiculoData.precioLista !== null && vehiculoData.precioLista !== ''
+                ? Number(vehiculoData.precioLista)
+                : null;
+        if (precioInicial != null && !Number.isNaN(precioInicial)) {
+            await recordPrecioVehiculo({
+                concesionariaId: vehiculo.concesionariaId,
+                vehiculoId: vehiculo.id,
+                precioAnterior: null,
+                precioNuevo: precioInicial,
+                moneda: vehiculo.moneda,
+                motivo: 'Precio inicial',
+            });
+        }
 
         return vehiculo;
     }

@@ -2,6 +2,7 @@ import { IVehiculoRepository } from '../../../domain/repositories/IVehiculoRepos
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertValidTransition } from '../../../domain/services/stateMachine';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
+import { recordPrecioVehiculo } from '../../../infrastructure/pricing/recordPrecioVehiculo';
 
 export class UpdateVehiculo {
     constructor(private readonly vehiculoRepository: IVehiculoRepository) { }
@@ -42,6 +43,29 @@ export class UpdateVehiculo {
         }
         void clienteOrigenId;
 
-        return this.vehiculoRepository.update(id, vehiculoData);
+        const updated: any = await this.vehiculoRepository.update(id, vehiculoData);
+
+        // Si cambió el precio de lista, lo registramos en el historial (log
+        // append-only, best-effort). Sólo cuando el body trae precioLista con un
+        // valor numérico distinto al actual: un PATCH que no lo toca no registra
+        // nada, y limpiarlo a null tampoco es "un precio nuevo".
+        if (vehiculoData.precioLista !== undefined) {
+            const anterior = exists.precioLista == null ? null : Number(exists.precioLista);
+            const nuevo =
+                vehiculoData.precioLista === '' || vehiculoData.precioLista === null
+                    ? null
+                    : Number(vehiculoData.precioLista);
+            if (nuevo != null && !Number.isNaN(nuevo) && nuevo !== anterior) {
+                await recordPrecioVehiculo({
+                    concesionariaId: exists.concesionariaId,
+                    vehiculoId: id,
+                    precioAnterior: anterior,
+                    precioNuevo: nuevo,
+                    moneda: updated?.moneda ?? exists.moneda,
+                });
+            }
+        }
+
+        return updated;
     }
 }

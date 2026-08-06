@@ -6,6 +6,7 @@ import { vehiculoMovimientosApi, type VehiculoMovimiento } from '../../api/vehic
 import { gastosApi, type GastoVehiculo } from '../../api/gastos.api';
 import { gastosCategoriaApi, type GastoCategoria } from '../../api/gastos-categorias.api';
 import { vehiculoInteresApi, type VehiculoInteres } from '../../api/vehiculoInteres.api';
+import { vehiculoPreciosApi, type VehiculoPrecioHistorial } from '../../api/vehiculoPrecios.api';
 import type { Vehiculo, EstadoVehiculo } from '../../types/vehiculo.types';
 import { formatFecha } from '../../utils/fecha';
 import DataTable, { type Column } from '../../components/ui/DataTable';
@@ -18,12 +19,13 @@ import {
     ArrowLeft, Car, Calendar, DollarSign, MapPin,
     FileImage, Wrench, ArrowLeftRight, FileText,
     ShoppingCart, Bookmark, RefreshCw, Hash,
-    Plus, Trash2, ExternalLink, Upload, X, Image, FileText as FileIcon, Edit, MessageCircle, Star, Users
+    Plus, Trash2, ExternalLink, Upload, X, Image, FileText as FileIcon, Edit, MessageCircle, Star, Users,
+    TrendingUp, TrendingDown, Minus
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { PaginatedResponse, ApiError } from '../../types/api.types';
 
-type Tab = 'info' | 'archivos' | 'gastos' | 'movimientos' | 'presupuestos' | 'reservas' | 'ventas' | 'interesados';
+type Tab = 'info' | 'archivos' | 'gastos' | 'movimientos' | 'presupuestos' | 'reservas' | 'ventas' | 'interesados' | 'precios';
 
 const STATUS_MAP: Record<EstadoVehiculo, { label: string; variant: 'warning' | 'success' | 'info' | 'default' | 'danger' }> = {
     preparacion: { label: 'En Preparación', variant: 'warning' },
@@ -36,6 +38,9 @@ const STATUS_MAP: Record<EstadoVehiculo, { label: string; variant: 'warning' | '
 // Fecha @db.Date → DD/MM/YYYY sin pasar por new Date() (evita el corrimiento de día
 // en UTC-3 que arrastran las otras filas de fecha de esta ficha).
 const fmtDia = (s?: string) => (s ? s.split('T')[0].split('-').reverse().join('/') : undefined);
+
+const money = (n: number, moneda = 'ARS') =>
+    `${moneda === 'USD' ? 'US$' : '$'}${Number(n || 0).toLocaleString('es-AR')}`;
 
 // Estado de la documentación (VTV/seguro) para el badge de la ficha: vencida (alguna
 // ya pasó) tiene prioridad sobre por vencer (alguna dentro de 30 días).
@@ -107,6 +112,10 @@ const VehiculoDetallePage = () => {
     // Interesados (clientes que marcaron este vehículo como interés) — carga diferida.
     const [interesados, setInteresados] = useState<VehiculoInteres[]>([]);
     const [loadingInteresados, setLoadingInteresados] = useState(false);
+
+    // Historial de precios de lista — carga diferida.
+    const [precios, setPrecios] = useState<VehiculoPrecioHistorial[]>([]);
+    const [loadingPrecios, setLoadingPrecios] = useState(false);
 
     useEffect(() => {
         if (!id) return;
@@ -248,6 +257,23 @@ const VehiculoDetallePage = () => {
     useEffect(() => {
         if (activeTab === 'interesados') loadInteresados();
     }, [activeTab, loadInteresados]);
+
+    const loadPrecios = useCallback(async () => {
+        if (!id) return;
+        setLoadingPrecios(true);
+        try {
+            const res = await vehiculoPreciosApi.getByVehiculo(Number(id));
+            setPrecios(Array.isArray(res) ? res : (res as PaginatedResponse<VehiculoPrecioHistorial>)?.results ?? []);
+        } catch {
+            addToast('Error al cargar el historial de precios', 'error');
+        } finally {
+            setLoadingPrecios(false);
+        }
+    }, [id, addToast]);
+
+    useEffect(() => {
+        if (activeTab === 'precios') loadPrecios();
+    }, [activeTab, loadPrecios]);
 
     const handleDeleteInteres = async (i: VehiculoInteres) => {
         if (!window.confirm('¿Quitar a este cliente de los interesados?')) return;
@@ -529,6 +555,49 @@ const VehiculoDetallePage = () => {
         },
     ];
 
+    const precioColumns: Column<VehiculoPrecioHistorial>[] = [
+        {
+            header: 'Fecha',
+            accessor: (h) => formatFecha(h.createdAt),
+        },
+        {
+            header: 'Precio anterior',
+            accessor: (h) => h.precioAnterior != null
+                ? <span style={{ color: 'var(--text-secondary)' }}>{money(h.precioAnterior, h.moneda)}</span>
+                : <span className="tipo-chip">Inicial</span>,
+        },
+        {
+            header: 'Precio nuevo',
+            accessor: (h) => <span className="fw-bold">{money(h.precioNuevo, h.moneda)}</span>,
+        },
+        {
+            header: 'Variación',
+            accessor: (h) => {
+                if (h.precioAnterior == null || h.precioAnterior === 0) return <span style={{ color: 'var(--text-muted)' }}>—</span>;
+                const delta = h.precioNuevo - h.precioAnterior;
+                if (delta === 0) return <span className="flex-cell"><Minus size={13} /> 0%</span>;
+                const pct = (delta / h.precioAnterior) * 100;
+                const up = delta > 0;
+                // Convención de ticker: sube = verde (más margen), baja = rojo (rebaja).
+                const color = up ? '#10b981' : '#ef4444';
+                const Icon = up ? TrendingUp : TrendingDown;
+                return (
+                    <span style={{ color, display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}>
+                        <Icon size={14} /> {up ? '+' : '−'}{money(Math.abs(delta), h.moneda)} ({up ? '+' : '−'}{Math.abs(pct).toFixed(1)}%)
+                    </span>
+                );
+            },
+        },
+        {
+            header: 'Motivo',
+            accessor: (h) => h.motivo || '—',
+        },
+        {
+            header: 'Registrado por',
+            accessor: (h) => <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{h.usuario?.nombre ?? '—'}</span>,
+        },
+    ];
+
     const presupuestos = useMemo(() => vehiculo?.presupuestos ?? [], [vehiculo]);
     const reservas = useMemo(() => vehiculo?.reservas ?? [], [vehiculo]);
     const ventas = useMemo(() => vehiculo?.ventas ?? [], [vehiculo]);
@@ -573,6 +642,7 @@ const VehiculoDetallePage = () => {
         { key: 'reservas', label: 'Reservas', icon: Bookmark, count: reservas.length },
         { key: 'ventas', label: 'Ventas', icon: ShoppingCart, count: ventas.length },
         { key: 'interesados', label: 'Interesados', icon: Users, count: interesados.length },
+        { key: 'precios', label: 'Precios', icon: TrendingUp, count: precios.length },
     ];
 
     return (
@@ -976,6 +1046,17 @@ const VehiculoDetallePage = () => {
                         isLoading={loadingInteresados}
                         emptyMessage="Ningún cliente marcó interés en este vehículo todavía."
                         emptyIcon={<Users size={40} className="text-slate-600" />}
+                    />
+                )}
+
+                {/* PRECIOS — historial de precios de lista (registro automático en alta/edición) */}
+                {activeTab === 'precios' && (
+                    <DataTable
+                        columns={precioColumns}
+                        data={precios}
+                        isLoading={loadingPrecios}
+                        emptyMessage="Sin cambios de precio de lista registrados para este vehículo."
+                        emptyIcon={<TrendingUp size={40} className="text-slate-600" />}
                     />
                 )}
             </div>
