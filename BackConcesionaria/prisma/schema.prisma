@@ -34,6 +34,7 @@ model Concesionaria {
   clientes                Cliente[]
   clienteSeguimientos     ClienteSeguimiento[]
   tasaciones              Tasacion[]
+  vehiculoIntereses       VehiculoInteres[]
   cotizaciones            Cotizacion[]
   metasVenta              MetaVenta[]
   objetivosVendedor       ObjetivoVendedor[]
@@ -169,6 +170,7 @@ model Cliente {
   reservas                Reserva[]
   seguimientos            ClienteSeguimiento[]
   tasaciones              Tasacion[]
+  vehiculosInteres        VehiculoInteres[]
   solicitudesFinanciacion SolicitudFinanciacion[]
   ventas                  Venta[]
 
@@ -236,6 +238,31 @@ model Tasacion {
   @@index([concesionariaId])
   @@index([clienteId])
   @@map("tasaciones")
+}
+
+// Interés de un cliente en un vehículo del stock (puente CRM↔inventario): desde la
+// ficha del cliente se ven los autos que le interesan y desde la ficha del vehículo
+// los clientes interesados. Un cliente no puede figurar dos veces por el mismo auto.
+// A propósito NO va en SOFT_DELETE_MODELS: es un pivot y el borrado es DURO (quitar
+// el interés). El soft-delete dejaría una fila fantasma que chocaría con el @@unique
+// al re-marcar el mismo interés. Igual queda tenant-safe (RLS + inyección de tenant,
+// que la extensión aplica a todo modelo no-global, no sólo a los soft-delete).
+model VehiculoInteres {
+  id              Int           @id @default(autoincrement())
+  concesionariaId Int           @map("concesionaria_id")
+  clienteId       Int           @map("cliente_id")
+  vehiculoId      Int           @map("vehiculo_id")
+  nota            String?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  cliente         Cliente       @relation(fields: [clienteId], references: [id])
+  vehiculo        Vehiculo      @relation(fields: [vehiculoId], references: [id])
+  concesionaria   Concesionaria @relation(fields: [concesionariaId], references: [id])
+
+  @@unique([clienteId, vehiculoId])
+  @@index([concesionariaId])
+  @@index([vehiculoId])
+  @@map("vehiculo_intereses")
 }
 
 model Proveedor {
@@ -307,6 +334,7 @@ model Vehiculo {
   sucursal                 Sucursal             @relation(fields: [sucursalId], references: [id])
   ventaCanjeVehiculo       VentaCanjeVehiculo[]
   ventas                   Venta?
+  interesados              VehiculoInteres[]
 
   @@unique([concesionariaId, vin])
   @@index([concesionariaId])

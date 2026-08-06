@@ -11,6 +11,9 @@ import solicitudesFinanciacionApi from '../../api/solicitudesFinanciacion.api';
 import { postventaApi } from '../../api/postventa.api';
 import { reportesApi, type EstadoCuenta } from '../../api/reportes.api';
 import { seguimientosApi, type Seguimiento, type TipoSeguimiento } from '../../api/seguimientos.api';
+import { vehiculoInteresApi, type VehiculoInteres } from '../../api/vehiculoInteres.api';
+import { vehiculosApi } from '../../api/vehiculos.api';
+import type { Vehiculo } from '../../types/vehiculo.types';
 import { ESTADO_LEAD_MAP, ESTADOS_LEAD } from '../../types/cliente.types';
 import type { Cliente, EstadoLead } from '../../types/cliente.types';
 import Badge from '../../components/ui/Badge';
@@ -23,10 +26,10 @@ import {
     ArrowLeft, User, Phone, Mail, MapPin, FileText,
     ShoppingCart, FileBarChart, Calendar, DollarSign,
     CreditCard, RefreshCw, BookmarkCheck, Wrench, Banknote, FileSignature, FileDown,
-    Clock, Plus, Trash2, MessageCircle, Check, CheckCircle2, type LucideIcon
+    Clock, Plus, Trash2, MessageCircle, Check, CheckCircle2, Star, Car, type LucideIcon
 } from 'lucide-react';
 
-type Tab = 'info' | 'ventas' | 'presupuestos' | 'reservas' | 'financiaciones' | 'solicitudes' | 'postventa' | 'seguimiento';
+type Tab = 'info' | 'ventas' | 'presupuestos' | 'reservas' | 'financiaciones' | 'solicitudes' | 'postventa' | 'seguimiento' | 'interes';
 
 // Fecha local YYYY-MM-DD (no toISOString, que pasa a UTC y de noche en UTC-3 ya
 // es "mañana"): así el default del form de alta no se adelanta un día.
@@ -88,6 +91,7 @@ const ClienteDetallePage = () => {
     const [solicitudes, setSolicitudes] = useState<AnyRow[]>([]);
     const [postventaCasos, setPostventaCasos] = useState<AnyRow[]>([]);
     const [seguimientos, setSeguimientos] = useState<Seguimiento[]>([]);
+    const [interes, setInteres] = useState<VehiculoInteres[]>([]);
     const [estadoCuenta, setEstadoCuenta] = useState<EstadoCuenta | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -99,6 +103,12 @@ const ClienteDetallePage = () => {
     });
     const [savingSeg, setSavingSeg] = useState(false);
 
+    // ─ Alta de interés en un vehículo del stock ─
+    const [stock, setStock] = useState<Vehiculo[]>([]);
+    const [stockCargado, setStockCargado] = useState(false);
+    const [interesForm, setInteresForm] = useState<{ vehiculoId: string; nota: string }>({ vehiculoId: '', nota: '' });
+    const [savingInteres, setSavingInteres] = useState(false);
+
     useEffect(() => {
         const load = async () => {
             if (!id) return;
@@ -106,7 +116,7 @@ const ClienteDetallePage = () => {
             setLoading(true);
             setError(null);
             try {
-                const [clienteRes, ventasRes, presupuestosRes, reservasRes, financiacionesRes, solicitudesRes, postventaRes, estadoCuentaRes, seguimientosRes] = await Promise.all([
+                const [clienteRes, ventasRes, presupuestosRes, reservasRes, financiacionesRes, solicitudesRes, postventaRes, estadoCuentaRes, seguimientosRes, interesRes] = await Promise.all([
                     clientesApi.getById(cid),
                     ventasApi.getAll({ clienteId: cid }),
                     presupuestosApi.getAll({ clienteId: cid }),
@@ -118,6 +128,9 @@ const ClienteDetallePage = () => {
                     // (o falla), se degrada a null y la sección simplemente no aparece.
                     reportesApi.estadoCuenta(cid).catch(() => null),
                     seguimientosApi.getByCliente(cid),
+                    // Interés en vehículos (puente CRM↔inventario). admin/vendedor: si
+                    // el rol no accede, se degrada a [] y el tab queda vacío.
+                    vehiculoInteresApi.getByCliente(cid).catch(() => [] as VehiculoInteres[]),
                 ]);
                 setCliente(clienteRes);
                 setVentas(extractList(ventasRes));
@@ -128,6 +141,7 @@ const ClienteDetallePage = () => {
                 setPostventaCasos(extractList(postventaRes));
                 setEstadoCuenta(estadoCuentaRes);
                 setSeguimientos(extractList(seguimientosRes));
+                setInteres(extractList(interesRes));
             } catch {
                 setError('No se pudo cargar el cliente.');
             } finally {
@@ -136,6 +150,58 @@ const ClienteDetallePage = () => {
         };
         load();
     }, [id]);
+
+    // Carga diferida del stock: sólo la primera vez que se abre el tab "Interés"
+    // (evita pedir el listado completo de vehículos en el load inicial de la ficha).
+    useEffect(() => {
+        if (activeTab !== 'interes' || stockCargado) return;
+        let vivo = true;
+        (async () => {
+            try {
+                const res = await vehiculosApi.getAll({}, { limit: 500 });
+                if (vivo) setStock(extractList<Vehiculo>(res));
+            } catch {
+                if (vivo) addToast('No se pudo cargar el stock de vehículos', 'error');
+            } finally {
+                if (vivo) setStockCargado(true);
+            }
+        })();
+        return () => { vivo = false; };
+    }, [activeTab, stockCargado, addToast]);
+
+    // Registra el interés del cliente en un vehículo del stock. El POST es
+    // idempotente en el backend (si ya existe, actualiza la nota), así que no
+    // hace falta filtrar acá los ya agregados.
+    const handleAddInteres = async () => {
+        if (!id) return;
+        if (!interesForm.vehiculoId) { addToast('Elegí un vehículo del stock', 'error'); return; }
+        setSavingInteres(true);
+        try {
+            await vehiculoInteresApi.create({
+                clienteId: Number(id),
+                vehiculoId: Number(interesForm.vehiculoId),
+                nota: interesForm.nota.trim() || undefined,
+            });
+            addToast('Interés registrado', 'success');
+            setInteresForm({ vehiculoId: '', nota: '' });
+            setInteres(extractList(await vehiculoInteresApi.getByCliente(Number(id))));
+        } catch (e) {
+            addToast(getErrorMessage(e, 'No se pudo registrar el interés'), 'error');
+        } finally {
+            setSavingInteres(false);
+        }
+    };
+
+    const handleDeleteInteres = async (i: VehiculoInteres) => {
+        if (!window.confirm('¿Quitar este vehículo de los intereses del cliente?')) return;
+        try {
+            await vehiculoInteresApi.delete(i.id);
+            addToast('Interés eliminado', 'success');
+            setInteres((prev) => prev.filter((x) => x.id !== i.id));
+        } catch (e) {
+            addToast(getErrorMessage(e, 'No se pudo eliminar el interés'), 'error');
+        }
+    };
 
     // Descarga el estado de cuenta del cliente (PDF), mismo patrón que el
     // comprobante de venta y el recibo de cuota.
@@ -263,6 +329,7 @@ const ClienteDetallePage = () => {
         { key: 'solicitudes', label: 'Solicitudes', icon: FileSignature, count: solicitudes.length },
         { key: 'postventa', label: 'Postventa', icon: Wrench, count: postventaCasos.length },
         { key: 'seguimiento', label: 'Seguimiento', icon: Clock, count: seguimientos.length },
+        { key: 'interes', label: 'Interés', icon: Star, count: interes.length },
     ];
 
     return (
@@ -688,6 +755,90 @@ const ClienteDetallePage = () => {
                         )}
                     </div>
                 )}
+
+                {activeTab === 'interes' && (
+                    <div>
+                        {/* Alta de interés (sólo admin/vendedor; el backend igual lo exige) */}
+                        {puedeEditar && (
+                            <div className="seg-form">
+                                <div className="int-form-grid">
+                                    <div>
+                                        <label className="seg-lbl">Vehículo del stock</label>
+                                        <select
+                                            className="seg-input"
+                                            value={interesForm.vehiculoId}
+                                            onChange={(e) => setInteresForm((p) => ({ ...p, vehiculoId: e.target.value }))}
+                                            disabled={!stockCargado}
+                                        >
+                                            <option value="">{stockCargado ? 'Elegí un vehículo…' : 'Cargando stock…'}</option>
+                                            {stock.map((v) => (
+                                                <option key={v.id} value={v.id}>
+                                                    {v.marca} {v.modelo}{v.version ? ` ${v.version}` : ''}{v.anio ? ` (${v.anio})` : ''}{v.dominio ? ` — ${v.dominio}` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="seg-lbl">Nota (opcional)</label>
+                                        <input
+                                            className="seg-input"
+                                            type="text"
+                                            placeholder="Ej: quiere financiar, consulta color…"
+                                            value={interesForm.nota}
+                                            onChange={(e) => setInteresForm((p) => ({ ...p, nota: e.target.value }))}
+                                        />
+                                    </div>
+                                </div>
+                                <div style={{ textAlign: 'right', marginTop: '0.75rem' }}>
+                                    <Button variant="primary" size="sm" onClick={handleAddInteres} loading={savingInteres} disabled={savingInteres || !stockCargado}>
+                                        <Plus size={14} style={{ marginRight: '0.35rem' }} /> Agregar interés
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        {interes.length === 0 ? (
+                            <div className="empty-state"><Star size={48} style={{ opacity: 0.2 }} /><p>Este cliente no tiene vehículos marcados como interés.</p></div>
+                        ) : (
+                            <div className="seg-list">
+                                {interes.map((i) => {
+                                    const v = i.vehiculo;
+                                    return (
+                                        <div key={i.id} className="seg-item">
+                                            <span className="seg-item-icon" style={{ background: 'color-mix(in srgb, #f59e0b 14%, transparent)', color: '#f59e0b' }}><Car size={16} /></span>
+                                            <div className="seg-item-body">
+                                                <div className="seg-item-head">
+                                                    <button
+                                                        type="button"
+                                                        className="int-veh-link"
+                                                        onClick={() => v && navigate(`/vehiculos/${v.id}`)}
+                                                        disabled={!v}
+                                                        title={v ? 'Ver el vehículo' : undefined}
+                                                    >
+                                                        {v ? `${v.marca} ${v.modelo}${v.version ? ` ${v.version}` : ''}` : `Vehículo #${i.vehiculoId}`}
+                                                    </button>
+                                                    {v?.anio && <span className="flex-cell">{v.anio}</span>}
+                                                    {v?.dominio && <span className="int-chip">{v.dominio}</span>}
+                                                    {v?.estado && <span className="int-chip">{v.estado}</span>}
+                                                    {v?.precioLista != null && Number(v.precioLista) > 0 && (
+                                                        <span className="int-precio">{money(Number(v.precioLista), v.moneda)}</span>
+                                                    )}
+                                                </div>
+                                                {i.nota && <p className="seg-nota">{i.nota}</p>}
+                                                <span className="seg-user">agregado el {fmtDate(i.createdAt)}</span>
+                                            </div>
+                                            {puedeEditar && (
+                                                <button className="seg-del" title="Quitar interés" onClick={() => handleDeleteInteres(i)}>
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <style>{`
@@ -753,6 +904,12 @@ const ClienteDetallePage = () => {
                 .seg-user { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem; display: inline-block; }
                 .seg-del { color: var(--text-muted); padding: 0.35rem; border-radius: 0.5rem; flex-shrink: 0; transition: all 0.15s; }
                 .seg-del:hover { color: var(--danger, #ef4444); background: rgba(239,68,68,0.1); }
+                .int-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.9rem; }
+                .int-veh-link { font-weight: 600; color: var(--text-primary); background: none; border: none; padding: 0; cursor: pointer; transition: color 0.15s; }
+                .int-veh-link:hover:not(:disabled) { color: var(--primary, #6366f1); text-decoration: underline; }
+                .int-veh-link:disabled { cursor: default; }
+                .int-chip { font-size: 0.72rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border); text-transform: capitalize; }
+                .int-precio { font-size: 0.8125rem; font-weight: 600; color: var(--success, #10b981); }
                 .spin { animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
