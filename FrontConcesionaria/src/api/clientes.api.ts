@@ -29,4 +29,9 @@ export const clientesApi = {
     // Estado de cuenta del cliente en PDF (Blob descargable). admin/vendedor.
     estadoCuentaPdf: (id: number) =>
         client.get<Blob>(`/clientes/${id}/estado-cuenta/pdf`, { responseType: 'blob' }),
+
+    // Export CSV de la cartera de clientes (respeta los mismos filtros del listado).
+    // getRaw: conserva la respuesta completa para leer el header X-Export-Truncated.
+    exportCsv: (filters: ClienteFilter = {}) =>
+        client.getRaw<Blob>('/clientes/export/csv', { params: { ...filters }, responseType: 'blob' }),
 };

@@ -36,6 +36,22 @@ router.get('/', authenticate, ClienteController.getAll);
 
 /**
  * @openapi
+ * /clientes/export/csv:
+ *   get:
+ *     tags: [Clientes]
+ *     summary: Exportar la cartera de clientes a CSV (mismos filtros del listado)
+ *     description: admin/vendedor (dato personal). CSV con BOM (Excel) y protección anti-inyección de fórmulas. Tope 5000.
+ *     parameters:
+ *       - { in: query, name: search, schema: { type: string } }
+ *       - { in: query, name: estadoLead, schema: { type: string } }
+ *     responses:
+ *       200: { description: CSV de clientes, content: { text/csv: {} } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ */
+router.get('/export/csv', authenticate, authorize('admin', 'vendedor'), ClienteController.exportCsv);
+
+/**
+ * @openapi
  * /clientes/{id}:
  *   get:
  *     tags: [Clientes]
