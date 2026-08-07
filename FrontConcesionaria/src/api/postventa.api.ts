@@ -103,6 +103,11 @@ export const postventaApi = {
     getCasos: (params?: Record<string, unknown>) =>
         apiClient.get('/postventa-casos', { params }),
 
+    // Export CSV de la cartera de casos (respeta los mismos filtros del listado).
+    // getRaw: conserva la respuesta completa para leer el header X-Export-Truncated.
+    exportCasosCsv: (params?: Record<string, unknown>) =>
+        apiClient.getRaw<Blob>('/postventa-casos/export/csv', { params, responseType: 'blob' }),
+
     getCasoById: (id: number) =>
         apiClient.get(`/postventa-casos/${id}`),
 

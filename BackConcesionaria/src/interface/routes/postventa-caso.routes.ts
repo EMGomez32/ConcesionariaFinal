@@ -35,6 +35,23 @@ router.get('/', PostventaCasoController.getAll);
 
 /**
  * @openapi
+ * /postventa-casos/export/csv:
+ *   get:
+ *     tags: [Postventa]
+ *     summary: Exportar la cartera de casos a CSV (mismos filtros del listado)
+ *     description: admin/postventa/vendedor. CSV con BOM (Excel) y protección anti-inyección de fórmulas. Tope 5000.
+ *     parameters:
+ *       - { in: query, name: estado, schema: { type: string } }
+ *       - { in: query, name: clienteId, schema: { type: integer } }
+ *       - { in: query, name: vehiculoId, schema: { type: integer } }
+ *     responses:
+ *       200: { description: CSV de casos, content: { text/csv: {} } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ */
+router.get('/export/csv', authorize('admin', 'postventa', 'vendedor'), PostventaCasoController.exportCsv);
+
+/**
+ * @openapi
  * /postventa-casos/{id}:
  *   get:
  *     tags: [Postventa]

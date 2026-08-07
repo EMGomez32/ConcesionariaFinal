@@ -88,7 +88,10 @@ app.use(cors({
     // resto queda invisible para el JS aunque el server los mande. Los CSV de
     // reportes traen el nombre de archivo (con el período) en el
     // Content-Disposition, y sin exponerlo el front no puede usarlo.
-    exposedHeaders: ['Content-Disposition'],
+    // X-Export-Truncated: lo setean los exports que se topan con su límite (5000)
+    // para que el front avise "se exportaron N de M"; sin exponerlo, el toast se
+    // pierde en cross-origin (dev) — en prod es same-origin y no hace falta.
+    exposedHeaders: ['Content-Disposition', 'X-Export-Truncated'],
     maxAge: 86400, // cachear el preflight 24h
 }));
 

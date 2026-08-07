@@ -3,11 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import {
     Plus, Search, X, ChevronLeft, ChevronRight,
     Eye, Trash2, Edit, ArrowRight, CheckCircle, Package, Wrench, Clock, RefreshCw, Tags,
-    Calendar, MessageCircle, FileText
+    Calendar, MessageCircle, FileText, FileDown
 } from 'lucide-react';
 import { waLink } from '../../utils/whatsapp';
 import Button from '../../components/ui/Button';
 import { postventaApi } from '../../api/postventa.api';
+import { useAuthStore } from '../../store/authStore';
 import type { PostventaCaso, PostventaItem, CreateCasoDto, CreateItemDto, EstadoPostventa, TipoPostventa } from '../../api/postventa.api';
 import { clientesApi } from '../../api/clientes.api';
 import { vehiculosApi } from '../../api/vehiculos.api';
@@ -70,6 +71,10 @@ export default function PostventaPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [search, setSearch] = useState('');
     const [filterEstado, setFilterEstado] = useState('');
+    // Export CSV: admin/vendedor/postventa (mismo criterio que el endpoint).
+    const user = useAuthStore((s) => s.user);
+    const puedeExportar = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin' || r === 'vendedor' || r === 'postventa');
+    const [exportando, setExportando] = useState(false);
     const [filterSucursal, setFilterSucursal] = useState('');
     const [filterTipo, setFilterTipo] = useState('');
 
@@ -160,6 +165,35 @@ export default function PostventaPage() {
             setLoading(false);
         }
     }, [page, filterEstado, filterSucursal, addToast]);
+
+    // Export CSV de la cartera de casos con el MISMO filtro actual.
+    const handleExportCsv = async () => {
+        setExportando(true);
+        try {
+            const params: Record<string, unknown> = {};
+            if (filterEstado) params.estado = filterEstado;
+            if (filterSucursal) params.sucursalId = filterSucursal;
+            // El filtro de Tipo SÍ va al server (coerceFilter lo convierte por el
+            // sufijo Id). `search` queda afuera a propósito: es texto page-local y
+            // no es una columna → mandarlo reventaría el where de Prisma.
+            if (filterTipo) params.tipoId = filterTipo;
+            const res = await postventaApi.exportCasosCsv(params);
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'postventa-casos.csv');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            const total = res.headers?.['x-export-truncated'];
+            if (total) addToast(`Se exportaron los primeros 5000 de ${total} casos. Filtrá para acotar el CSV.`, 'info');
+        } catch {
+            addToast('Error al exportar los casos', 'error');
+        } finally {
+            setExportando(false);
+        }
+    };
 
     // Conteos por estado. Se piden con limit=1 y se lee `totalResults`: contar
     // sobre `casos` sólo vería la página actual (el backend pagina de a 20).
@@ -627,6 +661,11 @@ export default function PostventaPage() {
                     <Button variant="secondary" onClick={() => tab === 'casos' ? loadCasos() : tab === 'agenda' ? loadAgenda() : loadTipos()}>
                         <RefreshCw size={18} className={(tab === 'casos' ? loading : tab === 'agenda' ? loadingAgenda : loadingTipos) ? 'animate-spin' : ''} />
                     </Button>
+                    {tab === 'casos' && puedeExportar && (
+                        <Button variant="secondary" onClick={handleExportCsv} loading={exportando} title="Exportar la cartera de casos filtrada a CSV (Excel)">
+                            <FileDown size={18} /> CSV
+                        </Button>
+                    )}
                     <Button variant="primary" onClick={tab === 'tipos' ? openCreateTipo : () => setShowCreateModal(true)}>
                         <Plus size={18} /> {tab === 'tipos' ? 'Nuevo Tipo' : 'Nuevo Caso'}
                     </Button>
