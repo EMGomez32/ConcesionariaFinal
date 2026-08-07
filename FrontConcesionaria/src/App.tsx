@@ -3,7 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import RequireRole from './components/auth/RequireRole';
+import RedirectSuperAdmin from './components/auth/RedirectSuperAdmin';
 import PageLoader from './components/ui/PageLoader';
+import { PLATAFORMA_NAV } from './config/plataformaNav';
 
 // Login: eager (es la entrada antes de auth)
 import LoginPage from './pages/auth/LoginPage';
@@ -53,11 +55,27 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           <Route element={<ProtectedRoute />}>
+            {/* Panel de PLATAFORMA (super_admin): front separado con su propio
+                layout y navegación. Sólo administración global de tenants; no
+                muestra las pantallas operativas de la concesionaria. */}
+            <Route
+              element={
+                <RequireRole allowedRoles={['super_admin']}>
+                  <AppLayout sections={PLATAFORMA_NAV} brandTag="Plataforma" showNotifications={false} />
+                </RequireRole>
+              }
+            >
+              <Route path="/plataforma" element={<Navigate to="/plataforma/concesionarias" replace />} />
+              <Route path="/plataforma/concesionarias" element={<ConcesionariasPage />} />
+              <Route path="/plataforma/sucursales" element={<SucursalesPage />} />
+              <Route path="/plataforma/usuarios" element={<UsuariosPage />} />
+            </Route>
+
+            {/* Shell operativo del tenant. RedirectSuperAdmin manda al super_admin
+                a /plataforma: nunca ve estas pantallas. */}
+            <Route element={<RedirectSuperAdmin />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<DashboardPage />} />
-
-              {/* Admin (Super Admin) */}
-              <Route path="/concesionarias" element={<RequireRole allowedRoles={['super_admin']}><ConcesionariasPage /></RequireRole>} />
 
               {/* Vehículos */}
               <Route path="/vehiculos" element={<VehiculosPage />} />
@@ -109,6 +127,7 @@ function App() {
               {/* <Route path="/billing" element={<RequireRole allowedRoles={['admin', 'super_admin']}><BillingPage /></RequireRole>} /> */}
               <Route path="/configuracion" element={<ConfiguracionPage />} />
               <Route path="/403" element={<ForbiddenPage />} />
+            </Route>
             </Route>
           </Route>
 

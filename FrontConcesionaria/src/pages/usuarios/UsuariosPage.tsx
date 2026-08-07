@@ -12,7 +12,10 @@ import {
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usuariosApi } from '../../api/usuarios.api';
+import { concesionariasApi } from '../../api/concesionarias.api';
 import type { Usuario, CreateUsuarioDto, UpdateUsuarioDto } from '../../types/usuario.types';
+import type { Concesionaria } from '../../types/concesionaria.types';
+import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
 import { getApiErrorMessage } from '../../utils/error';
 import UsuarioForm from '../../components/forms/UsuarioForm';
@@ -24,6 +27,24 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 const UsuariosPage: React.FC = () => {
     const { addToast } = useUIStore();
     const queryClient = useQueryClient();
+    const isSuperAdmin = useAuthStore((s) => s.user?.roles.includes('super_admin') ?? false);
+
+    // Cupo de usuarios del tenant (sólo aplica al admin; el super_admin no está
+    // topeado y elige la concesionaria destino en el propio form). El candado real
+    // es el backend (409 USER_LIMIT_REACHED); esto es feedback de UX.
+    const { data: miConcesionaria } = useQuery({
+        queryKey: ['mi-concesionaria-cupo'],
+        queryFn: () => concesionariasApi.getMine() as Promise<Concesionaria>,
+        enabled: !isSuperAdmin,
+        staleTime: 30_000,
+    });
+    const limiteUsuarios = miConcesionaria?.limiteUsuarios ?? null;
+    const usuariosActivos = miConcesionaria?.usuariosActivos ?? null;
+    const cupoLleno =
+        !isSuperAdmin &&
+        limiteUsuarios != null &&
+        usuariosActivos != null &&
+        usuariosActivos >= limiteUsuarios;
 
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -49,6 +70,7 @@ const UsuariosPage: React.FC = () => {
         mutationFn: (id: number) => usuariosApi.delete(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['usuarios'] });
+            queryClient.invalidateQueries({ queryKey: ['mi-concesionaria-cupo'] });
             addToast('Usuario eliminado correctamente', 'success');
         },
         onError: (error) => {
@@ -78,6 +100,7 @@ const UsuariosPage: React.FC = () => {
             }
             handleCloseModal();
             queryClient.invalidateQueries({ queryKey: ['usuarios'] });
+            queryClient.invalidateQueries({ queryKey: ['mi-concesionaria-cupo'] });
         } catch (error) {
             addToast(getApiErrorMessage(error, 'Error al guardar los datos'), 'error');
         } finally {
@@ -134,11 +157,32 @@ const UsuariosPage: React.FC = () => {
                         <p>Gestión de usuarios del sistema</p>
                     </div>
                 </div>
-                <Button variant="primary" onClick={() => handleOpenModal()}>
-                    <UserPlus size={18} />
-                    Nuevo Usuario
-                </Button>
+                <div className="header-actions">
+                    {!isSuperAdmin && usuariosActivos != null && (
+                        <span className={`cupo-chip ${cupoLleno ? 'is-full' : ''}`} title="Usuarios activos / límite del tenant">
+                            <Users size={14} />
+                            {limiteUsuarios != null
+                                ? `${usuariosActivos} / ${limiteUsuarios} usuarios`
+                                : `${usuariosActivos} usuarios · sin límite`}
+                        </span>
+                    )}
+                    <Button
+                        variant="primary"
+                        onClick={() => handleOpenModal()}
+                        disabled={cupoLleno}
+                        title={cupoLleno ? 'Alcanzaste el límite de usuarios de tu concesionaria' : undefined}
+                    >
+                        <UserPlus size={18} />
+                        Nuevo Usuario
+                    </Button>
+                </div>
             </div>
+
+            {cupoLleno && (
+                <div className="cupo-aviso" role="status">
+                    Alcanzaste el límite de {limiteUsuarios} usuarios de tu concesionaria. Para sumar más, contactá a la administración de la plataforma o dá de baja un usuario existente.
+                </div>
+            )}
 
             <div className="filters-bar glass">
                 <div className="input-container has-icon" style={{ maxWidth: 400, flex: 1 }}>
@@ -346,6 +390,43 @@ const UsuariosPage: React.FC = () => {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
+                    gap: 1rem;
+                    flex-wrap: wrap;
+                }
+
+                .header-actions {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                }
+
+                .cupo-chip {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.4rem;
+                    padding: 0.4rem 0.75rem;
+                    border-radius: var(--radius-pill);
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--border);
+                    color: var(--text-secondary);
+                    font-size: var(--text-xs);
+                    font-weight: 600;
+                    font-variant-numeric: tabular-nums;
+                    white-space: nowrap;
+                }
+                .cupo-chip.is-full {
+                    background: rgba(239, 68, 68, 0.10);
+                    border-color: rgba(239, 68, 68, 0.30);
+                    color: var(--danger);
+                }
+
+                .cupo-aviso {
+                    padding: 0.75rem 1rem;
+                    border-radius: var(--radius-md);
+                    background: rgba(239, 68, 68, 0.08);
+                    border: 1px solid rgba(239, 68, 68, 0.22);
+                    color: var(--danger);
+                    font-size: var(--text-sm);
                 }
 
                 .page-title {

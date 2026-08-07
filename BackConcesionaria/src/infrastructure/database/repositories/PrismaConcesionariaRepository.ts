@@ -94,6 +94,7 @@ export class PrismaConcesionariaRepository implements IConcesionariaRepository {
             c.colorSecundario ?? null,
             c.pdfPie ?? null,
             c.sitioWeb ?? null,
+            c.limiteUsuarios ?? null,
             c.createdAt,
             c.updatedAt,
             c.deletedAt,

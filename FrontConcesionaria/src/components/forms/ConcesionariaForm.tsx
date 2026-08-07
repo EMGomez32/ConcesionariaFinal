@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { CreateConcesionariaDto, Concesionaria } from '../../types/concesionaria.types';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
-import { Building2, Mail, Phone, MapPin, Hash } from 'lucide-react';
+import { Building2, Mail, Phone, MapPin, Hash, Users } from 'lucide-react';
 
 interface ConcesionariaFormProps {
     onSubmit: (data: CreateConcesionariaDto) => Promise<void>;
@@ -14,12 +14,14 @@ interface ConcesionariaFormProps {
 const ConcesionariaForm: React.FC<ConcesionariaFormProps> = ({ onSubmit, initialData, onCancel, loading }) => {
     // Inicialización lazy: el state se deriva de initialData una sola vez al montar.
     // El caller monta/remonta este form con key={id || 'new'} cuando cambia el target.
-    const [formData, setFormData] = useState<CreateConcesionariaDto>(() => ({
+    // limiteUsuarios se maneja como string (input) y se convierte a number|null al enviar.
+    const [formData, setFormData] = useState(() => ({
         nombre: initialData?.nombre || '',
         cuit: initialData?.cuit || '',
         email: initialData?.email || '',
         telefono: initialData?.telefono || '',
         direccion: initialData?.direccion || '',
+        limiteUsuarios: initialData?.limiteUsuarios != null ? String(initialData.limiteUsuarios) : '',
     }));
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -29,7 +31,17 @@ const ConcesionariaForm: React.FC<ConcesionariaFormProps> = ({ onSubmit, initial
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await onSubmit(formData);
+        const limite = formData.limiteUsuarios.trim();
+        const payload: CreateConcesionariaDto = {
+            nombre: formData.nombre,
+            cuit: formData.cuit,
+            email: formData.email,
+            telefono: formData.telefono,
+            direccion: formData.direccion,
+            // '' → null (sin límite). Un número se manda tal cual.
+            limiteUsuarios: limite === '' ? null : Number(limite),
+        };
+        await onSubmit(payload);
     };
 
     return (
@@ -78,6 +90,18 @@ const ConcesionariaForm: React.FC<ConcesionariaFormProps> = ({ onSubmit, initial
                     icon={<MapPin size={16} />}
                 />
             </div>
+            <Input
+                label="Límite de usuarios"
+                type="number"
+                name="limiteUsuarios"
+                value={formData.limiteUsuarios}
+                onChange={handleChange}
+                placeholder="Sin límite"
+                icon={<Users size={16} />}
+                min={1}
+                step={1}
+                hint="Máximo de usuarios que el admin de esta concesionaria puede crear. Vacío = sin límite."
+            />
 
             <div className="form-actions full-width">
                 <Button type="button" variant="secondary" onClick={onCancel}>

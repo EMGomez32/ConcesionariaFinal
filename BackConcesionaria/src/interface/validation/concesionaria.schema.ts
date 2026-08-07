@@ -37,12 +37,25 @@ const colorOpcional = z.string()
 const pieOpcional = z.string().max(500, 'El pie no puede superar 500 caracteres').optional();
 const sitioOpcional = z.string().max(200, 'El sitio web es demasiado largo').optional();
 
+// Cupo de usuarios del tenant (sólo lo setea el super_admin). Se acepta:
+//   - un entero >= 1 (el tope),
+//   - '' o null → null (sin límite, para "limpiarlo"),
+//   - ausente → undefined (Prisma no toca la columna en un PATCH).
+// OJO: sólo llega a persistirse por POST / y PATCH /:id (super_admin). En
+// PATCH /me (admin) el controller usa su propia whitelist CAMPOS que NO lo
+// incluye, así que un admin no puede subirse su propio límite aunque lo mande.
+const limiteUsuariosOpcional = z.preprocess(
+    (v) => (v === '' ? null : v),
+    z.coerce.number().int().min(1, 'El límite debe ser al menos 1').nullable().optional(),
+);
+
 export const createConcesionariaSchema = z.object({
     nombre: z.string({ error: 'El nombre es obligatorio' }).min(1, 'El nombre es obligatorio'),
     cuit: textoOpcional,
     email: textoOpcional,
     telefono: textoOpcional,
     direccion: textoOpcional,
+    limiteUsuarios: limiteUsuariosOpcional,
 });
 
 // PATCH parcial. Reutilizado por PATCH /:id (super_admin) y PATCH /me
@@ -61,4 +74,5 @@ export const updateConcesionariaSchema = z.object({
     colorSecundario: colorOpcional,
     pdfPie: pieOpcional,
     sitioWeb: sitioOpcional,
+    limiteUsuarios: limiteUsuariosOpcional,
 });

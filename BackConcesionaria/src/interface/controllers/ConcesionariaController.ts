@@ -33,7 +33,10 @@ export class ConcesionariaController {
         try {
             const id = parseInt(req.params.id as string, 10);
             const result = await getConcesionariaByIdUC.execute(id);
-            res.json(result);
+            // usuariosActivos: uso actual del cupo (limiteUsuarios). Se adjunta para
+            // que el panel muestre "usados / límite" sin una segunda llamada.
+            const usuariosActivos = await repository.countActiveUsuarios(id);
+            res.json({ ...result, usuariosActivos });
         } catch (error) {
             next(error);
         }
@@ -49,7 +52,11 @@ export class ConcesionariaController {
             const cid = context.getUser()?.concesionariaId;
             if (!cid) throw new NotFoundException('Concesionaria');
             const result = await getConcesionariaByIdUC.execute(cid);
-            res.json(result);
+            // El admin ve su propio cupo: limiteUsuarios viene en la entidad y
+            // usuariosActivos es el uso actual (para el contador de la pantalla de
+            // Usuarios y el bloqueo del botón al llegar al tope).
+            const usuariosActivos = await repository.countActiveUsuarios(cid);
+            res.json({ ...result, usuariosActivos });
         } catch (error) {
             next(error);
         }

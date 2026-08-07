@@ -9,7 +9,6 @@ import {
     Store,
     Wallet,
     UserPlus,
-    Building2,
     Truck,
     LogIn,
     ArrowLeftRight,
@@ -51,7 +50,8 @@ export const NAV_SECTIONS: NavSection[] = [
         title: 'General',
         items: [
             { label: 'Dashboard', path: '/', icon: LayoutDashboard, keywords: ['inicio', 'home', 'panel', 'resumen'] },
-            { label: 'Concesionarias', path: '/concesionarias', icon: Building2, keywords: ['empresas', 'tenants'], superAdminOnly: true },
+            // La gestión de Concesionarias (super_admin) vive en el panel de
+            // plataforma separado (/plataforma), no en el shell del tenant.
         ],
     },
     {

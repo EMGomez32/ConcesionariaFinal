@@ -1,6 +1,7 @@
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
+import { assertRolesAsignables } from '../../../infrastructure/security/usuarioPolicy';
 import bcrypt from 'bcryptjs';
 
 export class UpdateUsuario {
@@ -13,6 +14,11 @@ export class UpdateUsuario {
         }
 
         const { password, ...updateData } = data;
+
+        // Seguridad: editar a OTRO usuario tampoco puede escalar a super_admin. El
+        // controller ya strippea roleIds cuando te editás a vos mismo (anti
+        // auto-lockout); esto cubre el vector de asignárselo a un tercero.
+        await assertRolesAsignables(updateData.roleIds);
 
         // Reasignar la sucursal no puede sacar al usuario de su tenant.
         await assertMismoTenant('sucursal', updateData.sucursalId, exists.concesionariaId);

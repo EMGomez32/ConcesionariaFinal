@@ -24,6 +24,10 @@ model Concesionaria {
   colorSecundario         String?                    @map("color_secundario")
   pdfPie                  String?                    @map("pdf_pie")
   sitioWeb                String?                    @map("sitio_web")
+  // Cupo de usuarios del tenant. Lo fija el super_admin al crear/editar la
+  // concesionaria; null = sin límite. El admin del tenant no puede crear
+  // usuarios por encima de este número (enforcement en CreateUsuario).
+  limiteUsuarios          Int?                       @map("limite_usuarios")
   createdAt               DateTime                   @default(now()) @map("created_at")
   updatedAt               DateTime                   @updatedAt @map("updated_at")
   deletedAt               DateTime?                  @map("deleted_at")
