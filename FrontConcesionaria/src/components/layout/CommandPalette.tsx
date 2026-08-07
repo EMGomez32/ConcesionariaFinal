@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Search, ArrowUpDown, CornerDownLeft, X, Car, User, Truck, Loader2 } from 'lucide-react';
-import { NAV_SECTIONS, type NavItem } from '../../config/nav';
+import { NAV_SECTIONS, type NavItem, type NavSection } from '../../config/nav';
 import { useAuthStore } from '../../store/authStore';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 import { searchApi, type GlobalSearchResult } from '../../api/search.api';
@@ -47,7 +47,14 @@ function scoreItem(item: NavItem, section: string, query: string): ScoredItem | 
     return score < 0 ? null : { item, section, score };
 }
 
-const CommandPalette = () => {
+interface CommandPaletteProps {
+    /** Nav sobre el que se busca. Por defecto el del tenant; el panel de plataforma pasa el suyo. */
+    sections?: NavSection[];
+    /** Búsqueda de datos del tenant (vehículos/clientes/proveedores). El panel de plataforma la apaga. */
+    enableGlobalSearch?: boolean;
+}
+
+const CommandPalette = ({ sections = NAV_SECTIONS, enableGlobalSearch = true }: CommandPaletteProps) => {
     const { isOpen, close } = useCommandPaletteStore();
     const navigate = useNavigate();
     const { user } = useAuthStore();
@@ -65,7 +72,7 @@ const CommandPalette = () => {
     // Navegación por páginas (scoring sobre el nav), como antes.
     const candidates = useMemo<ScoredItem[]>(() => {
         const flat: ScoredItem[] = [];
-        for (const sec of NAV_SECTIONS) {
+        for (const sec of sections) {
             for (const item of sec.items) {
                 if (item.superAdminOnly && !isSuper) continue;
                 if (item.adminOnly && !isAdmin) continue;
@@ -77,7 +84,7 @@ const CommandPalette = () => {
             }
         }
         return flat.sort((a, b) => b.score - a.score);
-    }, [query, isSuper, isAdmin, user]);
+    }, [query, isSuper, isAdmin, user, sections]);
 
     // Filas unificadas: primero los resultados de datos (lo que el usuario suele
     // buscar), después las páginas del nav. Todo navega con ↑↓ + Enter.
@@ -115,6 +122,9 @@ const CommandPalette = () => {
         // en vuelo: si el usuario baja de 2 chars o cierra/reabre, la respuesta
         // vieja ya no matchea el id vigente y se descarta.
         const myId = ++reqIdRef.current;
+        // En el panel de plataforma no hay datos de tenant que buscar (el super_admin
+        // no opera un tenant): sólo se navega por páginas.
+        if (!enableGlobalSearch) { setData(null); setLoadingData(false); return; }
         if (q.length < 2) { setData(null); setLoadingData(false); return; }
         setLoadingData(true);
         const t = setTimeout(async () => {
@@ -128,7 +138,7 @@ const CommandPalette = () => {
             }
         }, 250);
         return () => clearTimeout(t);
-    }, [query, isOpen]);
+    }, [query, isOpen, enableGlobalSearch]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -194,7 +204,7 @@ const CommandPalette = () => {
                     <input
                         ref={inputRef}
                         className="cmdk-input"
-                        placeholder="Buscar vehículos, clientes, proveedores, páginas…"
+                        placeholder={enableGlobalSearch ? 'Buscar vehículos, clientes, proveedores, páginas…' : 'Buscar páginas…'}
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         autoComplete="off"

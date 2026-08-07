@@ -40,7 +40,8 @@ const LoginPage = () => {
 
       const { user, tokens } = result;
       setAuth(user, tokens.access, tokens.refresh);
-      navigate('/');
+      // El super_admin vive en su panel de plataforma, no en el shell del tenant.
+      navigate(user.roles.includes('super_admin') ? '/plataforma' : '/');
     } catch (err) {
       console.error('Login error:', err);
       setError(getApiErrorMessage(err, 'Error al iniciar sesión'));

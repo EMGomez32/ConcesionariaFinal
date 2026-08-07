@@ -4,13 +4,18 @@ import Isotipo from '../brand/Isotipo';
 import { useAuthStore } from '../../store/authStore';
 import { useSidebarStore } from '../../store/sidebarStore';
 import { NAV_SECTIONS } from '../../config/nav';
+import type { NavSection } from '../../config/nav';
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Secciones a mostrar. Por defecto el nav del tenant; el panel de plataforma pasa el suyo. */
+  sections?: NavSection[];
+  /** Bajada del logo (p.ej. "Concesionaria" o "Plataforma"). */
+  brandTag?: string;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTIONS, brandTag = 'Concesionaria' }) => {
   const { user } = useAuthStore();
   const collapsed = useSidebarStore((s) => s.collapsed);
   const toggle = useSidebarStore((s) => s.toggle);
@@ -26,7 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         {!collapsed && (
           <div className="logo-text-wrapper">
             <span className="logo-text">AUTENZA</span>
-            <span className="logo-tag">Concesionaria</span>
+            <span className="logo-tag">{brandTag}</span>
           </div>
         )}
         <button className="sidebar-close-btn" onClick={onClose} aria-label="Cerrar menú">
@@ -35,7 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       </div>
 
       <nav className="sidebar-nav" aria-label="Navegación principal">
-        {NAV_SECTIONS.map((section) => {
+        {sections.map((section) => {
           const visibleItems = section.items.filter((it) =>
             (!it.superAdminOnly || isSuperAdmin) &&
             (!it.adminOnly || isAdmin) &&

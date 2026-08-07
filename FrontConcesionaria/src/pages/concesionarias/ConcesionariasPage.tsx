@@ -104,6 +104,7 @@ const ConcesionariasPage = () => {
                             <th>Contacto</th>
                             <th>Email</th>
                             <th>Fecha Registro</th>
+                            <th>Cupo usuarios</th>
                             <th style={{ textAlign: 'right' }}>Acciones</th>
                         </tr>
                     </thead>
@@ -111,7 +112,7 @@ const ConcesionariasPage = () => {
                         {loading ? (
                             [1, 2, 3].map(i => (
                                 <tr key={i}>
-                                    {Array.from({ length: 6 }).map((_, idx) => (
+                                    {Array.from({ length: 7 }).map((_, idx) => (
                                         <td key={idx} style={{ padding: '1.25rem 1rem' }}>
                                             <span className="skeleton skeleton-text" style={{ width: '70%' }} />
                                         </td>
@@ -119,12 +120,12 @@ const ConcesionariasPage = () => {
                                 </tr>
                             ))
                         ) : error ? (
-                            <tr><td colSpan={6} style={{ textAlign: 'center', padding: '3rem' }}>
+                            <tr><td colSpan={7} style={{ textAlign: 'center', padding: '3rem' }}>
                                 <div style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{getApiErrorMessage(error)}</div>
                                 <Button variant="secondary" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: concesionariasKeys.lists() })}>Reintentar</Button>
                             </td></tr>
                         ) : (concesionarias?.length || 0) === 0 ? (
-                            <tr><td colSpan={6}>
+                            <tr><td colSpan={7}>
                                 <div className="dt-empty">
                                     <div className="dt-empty-badge"><Building2 size={36} /></div>
                                     <p className="dt-empty-text">No se encontraron concesionarias.</p>
@@ -156,6 +157,11 @@ const ConcesionariasPage = () => {
                                     <td><div className="contact-link"><Phone size={14} /><span>{c.telefono || '-'}</span></div></td>
                                     <td><div className="contact-link"><Mail size={14} /><span>{c.email || '-'}</span></div></td>
                                     <td><div className="contact-link"><Calendar size={14} /><span>{new Date(c.createdAt).toLocaleDateString()}</span></div></td>
+                                    <td>
+                                        {c.limiteUsuarios != null
+                                            ? <span className="badge badge-emerald">{c.limiteUsuarios}</span>
+                                            : <span style={{ color: 'var(--text-muted)' }}>Sin límite</span>}
+                                    </td>
                                     <td style={{ textAlign: 'right' }}>
                                         <div className="action-buttons">
                                             <button className="icon-btn" onClick={() => handleOpenModal(c)} aria-label="Editar">

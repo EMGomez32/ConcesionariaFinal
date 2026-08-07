@@ -13,6 +13,8 @@ export class Concesionaria {
         public readonly colorSecundario: string | null,
         public readonly pdfPie: string | null,
         public readonly sitioWeb: string | null,
+        // Cupo de usuarios del tenant (lo fija el super_admin). null = ilimitado.
+        public readonly limiteUsuarios: number | null,
         public readonly createdAt: Date,
         public readonly updatedAt: Date,
         public readonly deletedAt: Date | null,

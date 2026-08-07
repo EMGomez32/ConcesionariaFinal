@@ -1,6 +1,7 @@
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { BaseException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
+import { assertRolesAsignables, assertLimiteUsuarios } from '../../../infrastructure/security/usuarioPolicy';
 import bcrypt from 'bcryptjs';
 
 export class CreateUsuario {
@@ -20,6 +21,15 @@ export class CreateUsuario {
         if (!userData.concesionariaId) {
             throw new BaseException(400, 'concesionariaId es obligatorio', 'VALIDATION_ERROR');
         }
+
+        // Seguridad: un admin de tenant NO puede asignar super_admin (escalada de
+        // privilegios que rompería el aislamiento multi-tenant). Sólo un super_admin
+        // puede otorgarlo. El candado real vive acá, no en el schema Zod.
+        await assertRolesAsignables(userData.roleIds);
+
+        // Cupo de usuarios de la concesionaria (lo fija el super_admin). Un admin no
+        // puede crear por encima del límite; super_admin no está topeado.
+        await assertLimiteUsuarios(userData.concesionariaId);
 
         // La sucursal asignada tiene que ser de la concesionaria del usuario: sin
         // esto un admin podría asignar a alguien a una sucursal de otro tenant.

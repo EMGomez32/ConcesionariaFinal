@@ -5,7 +5,7 @@ import Breadcrumbs from './Breadcrumbs';
 import NotificationBell from './NotificationBell';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 
-const TopBar = ({ onMenuClick }: { onMenuClick?: () => void }) => {
+const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () => void; showNotifications?: boolean }) => {
   const { user, logout } = useAuthStore();
   const openPalette = useCommandPaletteStore((s) => s.open);
 
@@ -53,7 +53,7 @@ const TopBar = ({ onMenuClick }: { onMenuClick?: () => void }) => {
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
-          <NotificationBell />
+          {showNotifications && <NotificationBell />}
         </div>
 
         <div className="user-profile">

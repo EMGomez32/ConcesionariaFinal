@@ -9,8 +9,18 @@ import Toast from '../ui/Toast';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useConfirmStore } from '../../store/confirmStore';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
+import type { NavSection } from '../../config/nav';
 
-const AppLayout = () => {
+interface AppLayoutProps {
+    /** Nav a renderizar en el sidebar. Por defecto el del tenant. */
+    sections?: NavSection[];
+    /** Bajada del logo del sidebar. */
+    brandTag?: string;
+    /** Mostrar la campanita de notificaciones del tenant. El panel de plataforma la oculta. */
+    showNotifications?: boolean;
+}
+
+const AppLayout = ({ sections, brandTag, showNotifications = true }: AppLayoutProps) => {
     const confirm = useConfirmStore();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const togglePalette = useCommandPaletteStore((s) => s.toggle);
@@ -31,7 +41,10 @@ const AppLayout = () => {
         <div style={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
             <SkipLink />
             <Toast />
-            <CommandPalette />
+            {/* El panel de plataforma (super_admin) pasa su propio nav y apaga la
+                búsqueda de datos del tenant: showNotifications=false marca ese shell. */}
+            <CommandPalette sections={sections} enableGlobalSearch={showNotifications} />
+
             <ConfirmDialog
                 isOpen={confirm.isOpen}
                 title={confirm.title}
@@ -49,10 +62,10 @@ const AppLayout = () => {
                     onClick={() => setIsSidebarOpen(false)}
                 />
             )}
-            <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+            <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} sections={sections} brandTag={brandTag} />
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                 <ScrollProgress />
-                <TopBar onMenuClick={() => setIsSidebarOpen(true)} />
+                <TopBar onMenuClick={() => setIsSidebarOpen(true)} showNotifications={showNotifications} />
                 <main
                     id="main-content"
                     className="app-main"
