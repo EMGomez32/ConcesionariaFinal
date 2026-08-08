@@ -207,7 +207,7 @@ router.delete('/:id', FinanciacionController.delete);
  *       404: { $ref: '#/components/responses/NotFound' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.patch('/cuotas/:cuotaId/pagar', validateBody(pagarCuotaSchema), FinanciacionController.pagarCuota);
+router.patch('/cuotas/:cuotaId/pagar', authorize('admin', 'cobrador', 'vendedor'), validateBody(pagarCuotaSchema), FinanciacionController.pagarCuota);
 
 /**
  * @openapi
