@@ -12,10 +12,18 @@
  * Runs every time the backend starts. All statements use IF EXISTS / IF NOT
  * EXISTS guards or DROP POLICY IF EXISTS so re-runs are no-ops.
  *
- * Important: this script connects with the same role as the app (postgres
- * superuser by default). FORCE ROW LEVEL SECURITY ensures even superusers
- * are subject to policies, so the app must always set the session vars
- * before running queries — that's done by the Prisma client extension.
+ * Important: este script corre con la conexión ADMIN (DATABASE_URL, superusuario)
+ * para poder crear policies/triggers y aplicar FORCE ROW LEVEL SECURITY.
+ *
+ * OJO — la RLS SÓLO filtra si la app corre con un rol NO superusuario: un
+ * superusuario (y cualquier rol con BYPASSRLS) SALTEA la RLS siempre, y FORCE
+ * ROW LEVEL SECURITY sólo somete al DUEÑO de la tabla, NO a un superusuario. Por
+ * eso el runtime de la app debe usar el rol `app_rw` (APP_DATABASE_URL, creado por
+ * setup-app-role.ts); mientras se conecte como superusuario, estas policies son
+ * decorativas y el aislamiento lo da únicamente la extensión de Prisma en la capa
+ * app (que inyecta concesionariaId). Igual la app SIEMPRE setea las session vars
+ * (app.tenant_id / app.is_super_admin) vía la extensión, para que las policies
+ * funcionen apenas se degrade el rol de conexión.
  *
  * To bypass during seed/migration runs, set `app.is_super_admin = 'true'`
  * at the start of the script (the seed does this).

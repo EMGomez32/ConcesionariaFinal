@@ -15,7 +15,18 @@ const KNOWN_DEV_SECRETS = new Set([
 const envSchema = z.object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     PORT: z.preprocess((val) => Number(val), z.number().default(3000)),
+    // DATABASE_URL = conexión ADMIN (superusuario). La usan SOLO las tareas de
+    // setup del arranque: `prisma db push` (DDL), init-rls (FORCE RLS + policies)
+    // y setup-app-role (crea el rol de app + grants). NO la usa el runtime.
     DATABASE_URL: z.string().url(),
+    // APP_DATABASE_URL = conexión de RUNTIME de la app (rol NO superusuario
+    // `app_rw`, para que la RLS de Postgres SÍ filtre — un superusuario la
+    // saltea). Opcional: si no está seteada, el runtime cae a DATABASE_URL
+    // (comportamiento actual, RLS inactiva). '' se trata como no seteada.
+    APP_DATABASE_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
+    // Password del rol app_rw. setup-app-role sólo crea/actualiza el rol si está
+    // presente; el usuario la fija en el .env junto con APP_DATABASE_URL.
+    APP_DB_PASSWORD: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
     JWT_SECRET: z.string().min(10),
     JWT_REFRESH_SECRET: z.string().min(10),
     JWT_EXPIRES_IN: z.string().default('15m'),
@@ -37,6 +48,15 @@ const envSchema = z.object({
     // no vea a todos como la IP interna del proxy. Con 1 nginx delante: 1.
     TRUST_PROXY: z.preprocess((val) => (val === undefined ? 1 : Number(val)), z.number().int().min(0).default(1)),
 }).superRefine((data, ctx) => {
+    // Cutover al rol app_rw: APP_DATABASE_URL y APP_DB_PASSWORD van juntas o
+    // ninguna (setear sólo una es misconfiguración). Aplica en todo entorno.
+    if (!!data.APP_DATABASE_URL !== !!data.APP_DB_PASSWORD) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [data.APP_DATABASE_URL ? 'APP_DB_PASSWORD' : 'APP_DATABASE_URL'],
+            message: 'APP_DATABASE_URL y APP_DB_PASSWORD deben setearse juntas (o ninguna): el cutover al rol app_rw necesita ambas.',
+        });
+    }
     if (data.NODE_ENV !== 'production') return;
     for (const [key, value] of [['JWT_SECRET', data.JWT_SECRET], ['JWT_REFRESH_SECRET', data.JWT_REFRESH_SECRET]] as const) {
         if (KNOWN_DEV_SECRETS.has(value)) {
