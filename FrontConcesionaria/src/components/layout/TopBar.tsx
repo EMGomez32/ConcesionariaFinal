@@ -1,29 +1,16 @@
 import { useAuthStore } from '../../store/authStore';
-import { LogOut, Sun, Moon, User, Menu, Search } from 'lucide-react';
-import { useState } from 'react';
+import { LogOut, User, Menu, Search } from 'lucide-react';
 import Breadcrumbs from './Breadcrumbs';
 import NotificationBell from './NotificationBell';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 
+// La app es dark-first: el tema oscuro se fija en index.html (<html data-theme="dark">)
+// desde el primer paint. No hay toggle de tema porque las pantallas usan colores
+// fijos para fondo oscuro; habilitar el tema claro requiere tokenizar esas páginas
+// (reemplazar text-white/bg-slate-* por var(--text-*)/var(--bg-*)) — follow-up.
 const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () => void; showNotifications?: boolean }) => {
   const { user, logout } = useAuthStore();
   const openPalette = useCommandPaletteStore((s) => s.open);
-
-  // Inicialización lazy desde localStorage + sync inicial al body (una sola vez al montar).
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    const theme = localStorage.getItem('theme');
-    const initial = theme === 'dark';
-    if (initial) document.body.setAttribute('data-theme', 'dark');
-    return initial;
-  });
-
-  const toggleTheme = () => {
-    const newTheme = !isDark ? 'dark' : 'light';
-    setIsDark(!isDark);
-    document.body.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-  };
 
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -48,13 +35,11 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
           <kbd className="cmdk-trigger-kbd">{isMac ? '⌘' : 'Ctrl'} K</kbd>
         </button>
 
-        <div className="action-buttons-group">
-          <button className="icon-button" onClick={toggleTheme} title="Cambiar tema" aria-label="Cambiar tema">
-            {isDark ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-
-          {showNotifications && <NotificationBell />}
-        </div>
+        {showNotifications && (
+          <div className="action-buttons-group">
+            <NotificationBell />
+          </div>
+        )}
 
         <div className="user-profile">
           <div className="user-info">
