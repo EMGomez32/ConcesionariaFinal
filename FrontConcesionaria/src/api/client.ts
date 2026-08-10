@@ -65,9 +65,10 @@ async function performRefresh(): Promise<string> {
 // Las demás esperan el lock y, al entrar, performRefresh relee el token ya rotado de
 // localStorage → nunca reusan uno revocado. Si el navegador no soporta Web Locks, degrada
 // al single-flight por pestaña (sigue cubriendo el caso secuencial vía la lectura persistida).
-function runExclusiveRefresh(): Promise<string> {
+async function runExclusiveRefresh(): Promise<string> {
     if (typeof navigator !== 'undefined' && 'locks' in navigator && navigator.locks?.request) {
-        return navigator.locks.request('autenza-auth-refresh', () => performRefresh());
+        // `await` desenrolla el Promise<Promise<string>> que tipa LockManager.request.
+        return await navigator.locks.request('autenza-auth-refresh', () => performRefresh());
     }
     return performRefresh();
 }
