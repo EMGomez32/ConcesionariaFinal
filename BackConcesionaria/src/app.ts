@@ -9,8 +9,6 @@ import { requestLogger } from './interface/middlewares/requestLogger.middleware'
 import { errorHandler } from './interface/middlewares/error.middleware';
 import { notFound } from './interface/middlewares/notFound.middleware';
 import routes from './routes';
-import swaggerUi from 'swagger-ui-express';
-import swaggerSpecs from './config/swagger';
 import prisma from './infrastructure/database/prisma';
 import { logger } from './infrastructure/logging/logger';
 
@@ -142,12 +140,22 @@ app.use('/uploads', express.static(uploadsDir, {
 // Rutas de la API
 app.use('/api', routes);
 
-// Swagger Documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
-    explorer: true,
-    customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: 'Concesionaria API Docs',
-}));
+// Swagger: sólo fuera de producción. En prod, /api-docs expondría toda la
+// superficie de la API (y las credenciales demo de los ejemplos de login) sin
+// aportar valor. Carga perezosa (require dentro del guard) para no arrastrar el
+// toolchain de Swagger cuando NODE_ENV=production. El mount va ANTES de notFound.
+if (env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const swaggerUi = require('swagger-ui-express');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const swaggerSpecs = require('./config/swagger').default;
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
+        explorer: true,
+        customCss: '.swagger-ui .topbar { display: none }',
+        customSiteTitle: 'Concesionaria API Docs',
+    }));
+    logger.info('[swagger] docs habilitados en /api-docs (no-producción)');
+}
 
 // Error Handling
 app.use(notFound);
