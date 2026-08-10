@@ -10,8 +10,11 @@
     "seed-demo": "ts-node prisma/seed-demo.ts",
     "init-rls": "ts-node prisma/init-rls.ts",
     "setup-app-role": "ts-node prisma/setup-app-role.ts",
+    "seed-ci": "ts-node prisma/seed-ci.ts",
     "sync:infoauto": "ts-node src/scripts/syncInfoauto.ts",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration --runInBand"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
