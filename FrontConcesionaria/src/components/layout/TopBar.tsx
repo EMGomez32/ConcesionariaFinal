@@ -3,13 +3,14 @@ import { LogOut, User, Menu, Search } from 'lucide-react';
 import Breadcrumbs from './Breadcrumbs';
 import NotificationBell from './NotificationBell';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
+import { performLogout } from '../../api/auth.api';
 
 // La app es dark-first: el tema oscuro se fija en index.html (<html data-theme="dark">)
 // desde el primer paint. No hay toggle de tema porque las pantallas usan colores
 // fijos para fondo oscuro; habilitar el tema claro requiere tokenizar esas páginas
 // (reemplazar text-white/bg-slate-* por var(--text-*)/var(--bg-*)) — follow-up.
 const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () => void; showNotifications?: boolean }) => {
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const openPalette = useCommandPaletteStore((s) => s.open);
 
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -52,7 +53,7 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
             </div>
             <div className="status-indicator"></div>
           </div>
-          <button className="logout-button" onClick={logout} title="Cerrar Sesión">
+          <button className="logout-button" onClick={() => { void performLogout(); }} title="Cerrar Sesión">
             <LogOut size={18} />
           </button>
         </div>

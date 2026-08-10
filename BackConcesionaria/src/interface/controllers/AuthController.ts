@@ -5,6 +5,7 @@ import { JwtTokenService } from '../../infrastructure/security/JwtTokenService';
 import { PrismaRefreshTokenRepository } from '../../infrastructure/database/repositories/PrismaRefreshTokenRepository';
 import { Login } from '../../application/use-cases/auth/Login';
 import { RefreshAuth } from '../../application/use-cases/auth/RefreshAuth';
+import { LogoutAuth } from '../../application/use-cases/auth/Logout';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
 import { rawPrisma } from '../../infrastructure/database/prisma';
@@ -15,6 +16,7 @@ const tokenService = new JwtTokenService();
 const refreshRepo = new PrismaRefreshTokenRepository();
 const loginUC = new Login(tokenService, refreshRepo);
 const refreshUC = new RefreshAuth(tokenService, refreshRepo);
+const logoutUC = new LogoutAuth(tokenService, refreshRepo);
 
 const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 const RESET_TTL_MS = 60 * 60 * 1000; // 1 hora
@@ -116,6 +118,13 @@ export class AuthController {
 
     static async logout(req: Request, res: Response, next: NextFunction) {
         try {
+            // Revoca el refresh token de la sesión (best-effort): a partir de acá ese
+            // token deja de servir para renovar, aunque todavía no haya expirado.
+            const { refreshToken } = req.body ?? {};
+            await logoutUC.execute(refreshToken);
+
+            // Auditar sólo si el access token seguía válido (contextMiddleware pobló
+            // el usuario): el audit_log es tenant-scoped y necesita la concesionaria.
             const user = context.getUser();
             if (user?.concesionariaId) {
                 await audit({

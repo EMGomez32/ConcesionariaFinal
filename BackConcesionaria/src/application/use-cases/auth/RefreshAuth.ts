@@ -25,13 +25,33 @@ export class RefreshAuth {
 
             if (stored.expiresAt < new Date()) throw new Error('Expired');
 
-            const usuario = await prisma.usuario.findUnique({ where: { id: payload.userId } });
+            const usuario = await prisma.usuario.findUnique({
+                where: { id: payload.userId },
+                include: { roles: { include: { rol: true } } },
+            });
             if (!usuario || !usuario.activo) throw new Error('Invalid user');
 
             // Rotation
             await this.refreshTokenRepository.update(stored.id, { isRevoked: true });
 
-            const newPayload = { ...payload };
+            // Reconstruir el payload desde la DB, NO del token viejo. Dos motivos:
+            //  1) `payload` (jwt.verify del refresh) trae los claims reservados de JWT
+            //     (exp, iat, jti); si se spread-eaban, jwt.sign explotaba con
+            //     "options.expiresIn ... payload already has an exp property" y TODO
+            //     refresh devolvía 401.
+            //  2) Leer roles/tenant frescos de la DB hace que un rol revocado o un
+            //     cambio de concesionaria se apliquen en el próximo refresh, en vez de
+            //     quedar congelados desde el token (control de acceso). Mismo filtro de
+            //     soft-delete que Login.
+            const roles = usuario.roles
+                .filter((r) => !r.deletedAt && !r.rol.deletedAt)
+                .map((r) => r.rol.nombre);
+            const newPayload = {
+                userId: usuario.id,
+                concesionariaId: usuario.concesionariaId,
+                sucursalId: usuario.sucursalId,
+                roles,
+            };
             const access = this.tokenService.generateAccessToken(newPayload);
             const refresh = this.tokenService.generateRefreshToken(newPayload);
 

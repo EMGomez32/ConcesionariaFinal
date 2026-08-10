@@ -5,4 +5,6 @@ export interface IRefreshTokenRepository {
     findByToken(token: string): Promise<RefreshToken | null>;
     update(id: number, data: { isRevoked: boolean }): Promise<void>;
     revokeAllForUser(usuarioId: number): Promise<void>;
+    /** Borra la fila del token (por hash). Idempotente: si no existe, no falla. */
+    deleteByToken(token: string): Promise<void>;
 }

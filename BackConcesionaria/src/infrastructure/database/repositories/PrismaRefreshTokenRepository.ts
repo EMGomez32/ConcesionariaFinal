@@ -33,6 +33,12 @@ export class PrismaRefreshTokenRepository implements IRefreshTokenRepository {
         });
     }
 
+    async deleteByToken(token: string): Promise<void> {
+        // deleteMany (no delete): idempotente — borra 0 ó 1 fila sin tirar P2025 si
+        // el token ya no existe.
+        await prisma.refreshToken.deleteMany({ where: { token } });
+    }
+
     private mapToEntity(r: any): RefreshToken {
         return new RefreshToken(r.id, r.token, r.usuarioId, r.expiresAt, r.isRevoked, r.createdAt);
     }
