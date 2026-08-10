@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { context, UserContext } from '../../infrastructure/security/context';
 import jwt from 'jsonwebtoken';
+import { JWT_ALGORITHMS } from '../../infrastructure/security/jwtOptions';
 import { env } from '../../config/env';
 import ApiError from '../../utils/ApiError';
 import { getClientIp } from '../../utils/clientIp';
@@ -13,7 +14,8 @@ export const contextMiddleware = (req: Request, res: Response, next: NextFunctio
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.split(' ')[1];
         try {
-            const decoded = jwt.verify(token, env.JWT_SECRET) as any;
+            // algorithms pinneado: sólo HS256, para cerrar la confusión de algoritmo.
+            const decoded = jwt.verify(token, env.JWT_SECRET, { algorithms: JWT_ALGORITHMS }) as any;
             user = {
                 userId: decoded.userId || decoded.sub || decoded.id,
                 concesionariaId: decoded.concesionariaId || null,
