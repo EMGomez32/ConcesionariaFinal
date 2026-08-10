@@ -1,113 +1,99 @@
-import { IFinanciacionRepository } from '../../../domain/repositories/IFinanciacionRepository';
+import { Prisma } from '@prisma/client';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
-import prisma from '../../../infrastructure/database/prisma';
-
-// Estados de cuota que admiten cobro. Una cuota 'pagada' (saldo 0) o
-// 'refinanciada' (su deuda ya se trasladó a otro contrato) NO se puede cobrar:
-// hacerlo duplicaría el ingreso o corrompería la cadena de refinanciación.
-const COBRABLES = ['pendiente', 'parcial', 'vencida'];
-
-// Las columnas de dinero son Decimal(12,2). Se opera y compara con el monto ya
-// redondeado a centavos para que lo validado sea EXACTAMENTE lo que se persiste
-// (un monto con >2 decimales redondearía distinto en el INSERT/decrement).
-const aCentavos = (n: number): number => Math.round(n * 100) / 100;
+import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
+import { evaluarPagoCuota } from '../../../domain/services/pagoCuota';
+import { context } from '../../../infrastructure/security/context';
 
 export class RegistrarPagoCuota {
-    constructor(private readonly repository: IFinanciacionRepository) { }
-
-    async execute(cuotaId: number, data: { monto: number; metodo: string; fechaPago?: string }) {
-        // Lookup top-level: pasa por la extensión (inyecta el tenant), así una cuota
-        // ajena da 404. Sirve además para validar estado/saldo con mensajes claros
-        // antes de tocar dinero. El candado real contra carreras es el updateMany
-        // condicionado de abajo, no esta lectura.
-        const cuota = await prisma.cuota.findUnique({ where: { id: cuotaId } });
-        if (!cuota) throw new NotFoundException('Cuota');
-
-        // Validaciones de dinero — server-side, NO delegadas al front (un request
-        // armado a mano saltea el guard de la UI):
-        if (!COBRABLES.includes(cuota.estado as string)) {
-            throw new BaseException(
-                422,
-                `La cuota no admite cobros (estado: ${cuota.estado})`,
-                'CUOTA_NO_COBRABLE',
-            );
+    async execute(cuotaId: number, data: { monto: number; metodo: string; fechaPago?: string; idempotencyKey?: string }) {
+        // Aislamiento de tenant en la capa APP (NO depender sólo de la RLS: la app
+        // se conecta como superusuario de Postgres, que saltea RLS). Es el mismo
+        // filtro que la extensión inyecta y que este camino raw debe replicar.
+        // super_admin no se filtra: opera sobre cualquier concesionaria.
+        const isSuper = context.getUser()?.roles?.includes('super_admin') || false;
+        const tenantId = context.getTenantId();
+        if (!isSuper && !tenantId) {
+            throw new BaseException(401, 'Sesión sin concesionaria', 'UNAUTHORIZED');
         }
-        const saldo = aCentavos(Number(cuota.saldoCuota));
-        if (saldo <= 0) {
-            throw new BaseException(422, 'La cuota ya está saldada', 'CUOTA_SALDADA');
-        }
-        const monto = aCentavos(Number(data.monto));
-        if (!(monto > 0)) {
-            throw new BaseException(400, 'El importe del pago debe ser mayor a 0', 'VALIDATION_ERROR');
-        }
-        if (monto > saldo) {
-            throw new BaseException(
-                422,
-                'El importe no puede superar el saldo de la cuota',
-                'MONTO_EXCEDE_SALDO',
-            );
-        }
+        const tenantSql = isSuper ? Prisma.empty : Prisma.sql`AND concesionaria_id = ${tenantId}`;
+        const tenantWhere = isSuper ? {} : { concesionariaId: tenantId };
 
-        // Decremento ATÓMICO y condicionado: el WHERE re-chequea, sobre la fila que
-        // el propio UPDATE bloquea, que la cuota siga cobrable y con saldo
-        // suficiente. Así la SUMA de cobros nunca supera el saldo y dos pagos
-        // TOTALES concurrentes (o un re-click) no pueden pasar ambos (el segundo da
-        // count 0 → 409). NO se setea `estado` acá: se deriva del saldo REAL
-        // post-decremento más abajo, para que un pago que satura la cuota bajo
-        // concurrencia no quede marcado 'parcial' por una lectura vieja.
-        //
-        // LIMITACIÓN CONOCIDA (idempotencia, va con el Unit of Work del roadmap):
-        // dos cobros PARCIALES iguales reenviados (doble-submit/retry de red)
-        // registran dos PagoCuota (recaudación duplicada, pero SIN superar el saldo
-        // de la cuota). La UI lo mitiga deshabilitando el botón mientras cobra; la
-        // idempotencia dura exige una clave de request y una tx cruda única.
-        const upd = await prisma.cuota.updateMany({
-            where: {
-                id: cuotaId,
-                estado: { in: COBRABLES as any },
-                saldoCuota: { gte: monto },
-            },
-            data: { saldoCuota: { decrement: monto } },
-        });
-        if (upd.count === 0) {
-            throw new BaseException(
-                409,
-                'El estado de la cuota cambió; recargá e intentá de nuevo',
-                'CUOTA_CONFLICTO',
-            );
-        }
+        // Todo el cobro en UNA transacción atómica con las vars de RLS seteadas una
+        // sola vez (Unit of Work): el decremento del saldo y el registro del pago
+        // commitean juntos o no commitean. Cierra la atomicidad cross-op, el
+        // lost-update por concurrencia y la idempotencia de reenvíos.
+        return withTenantTransaction(async (tx) => {
+            // 1) Lock de la fila de la cuota, ACOTADO al tenant. Serializa cobros
+            //    concurrentes de la MISMA cuota (el segundo espera al commit del
+            //    primero) y una cuota de otro tenant no aparece → 404.
+            const rows = await tx.$queryRaw<Array<{
+                estado: string;
+                saldo_cuota: string;
+                fecha_pago_completo: Date | null;
+            }>>(Prisma.sql`
+                SELECT estado, saldo_cuota, fecha_pago_completo
+                FROM cuotas
+                WHERE id = ${cuotaId} AND deleted_at IS NULL ${tenantSql}
+                FOR UPDATE`);
+            const locked = rows[0];
+            if (!locked) throw new NotFoundException('Cuota');
 
-        // Comprobante del pago. Orden intencional (decrementar → registrar): si algo
-        // fallara entre medio quedaría un saldo reducido sin recibo (a favor del
-        // cliente, reconciliable) en vez de un cobro de más. La atomicidad dura del
-        // par va con el Unit of Work del roadmap (la extensión RLS re-despacha cada
-        // operación a su propia sub-transacción).
-        await prisma.pagoCuota.create({
-            data: {
-                cuotaId,
-                monto,
-                metodo: data.metodo as any,
-                fechaPago: data.fechaPago ? new Date(data.fechaPago) : new Date(),
-            },
-        });
+            // 2) Idempotencia — DESPUÉS del lock y acotada a ESTA cuota: si otro
+            //    request con la misma clave ya registró el pago de esta cuota
+            //    (reenvío/retry, ahora serializado), devolvemos el estado actual sin
+            //    volver a cobrar.
+            if (data.idempotencyKey) {
+                const yaRegistrado = await tx.pagoCuota.findFirst({
+                    where: { cuotaId, idempotencyKey: data.idempotencyKey, ...tenantWhere },
+                    select: { id: true },
+                });
+                if (yaRegistrado) {
+                    return tx.cuota.findUnique({ where: { id: cuotaId } });
+                }
+            }
 
-        // Estado derivado del saldo REAL post-decremento (no de la lectura vieja):
-        // así una cuota que quedó en 0 SIEMPRE termina 'pagada' con fechaPagoCompleto,
-        // aun si el saldo lo llevó a 0 un pago parcial concurrente.
-        const fresca = await prisma.cuota.findUnique({ where: { id: cuotaId } });
-        if (!fresca) throw new NotFoundException('Cuota');
-        const saldada = aCentavos(Number(fresca.saldoCuota)) <= 0;
-        const estadoCorrecto = saldada ? 'pagada' : 'parcial';
-        const necesitaFecha = saldada && !fresca.fechaPagoCompleto;
-        if ((fresca.estado as string) !== estadoCorrecto || necesitaFecha) {
-            return prisma.cuota.update({
-                where: { id: cuotaId },
+            // 3) Validación de negocio (pura) sobre el saldo REAL bajo lock.
+            const ev = evaluarPagoCuota({
+                estado: locked.estado,
+                saldoCuota: Number(locked.saldo_cuota),
+                monto: data.monto,
+            });
+            if (!ev.ok) throw new BaseException(ev.status, ev.message, ev.code);
+
+            // 4) Actualiza la cuota (saldo/estado derivados del saldo lockeado) y
+            //    registra el pago, en la MISMA tx.
+            await tx.cuota.update({
+                where: { id: cuotaId, ...tenantWhere },
                 data: {
-                    estado: estadoCorrecto as any,
-                    ...(necesitaFecha ? { fechaPagoCompleto: new Date() } : {}),
+                    saldoCuota: ev.nuevoSaldo,
+                    estado: ev.nuevoEstado as any,
+                    ...(ev.saldada && !locked.fecha_pago_completo ? { fechaPagoCompleto: new Date() } : {}),
                 },
             });
-        }
-        return fresca;
+
+            try {
+                await tx.pagoCuota.create({
+                    data: {
+                        cuotaId,
+                        monto: ev.monto,
+                        metodo: data.metodo as any,
+                        fechaPago: data.fechaPago ? new Date(data.fechaPago) : new Date(),
+                        // Seteo explícito del tenant (no confiar en el trigger/RLS).
+                        ...(isSuper ? {} : { concesionariaId: tenantId }),
+                        ...(data.idempotencyKey ? { idempotencyKey: data.idempotencyKey } : {}),
+                    },
+                });
+            } catch (e: any) {
+                // Backstop: si por una carrera llegó a colar dos inserts con la misma
+                // clave, el unique lo rebota (P2002). El throw revierte TODA la tx
+                // (incluido el decremento) → nunca hay doble cobro.
+                if (data.idempotencyKey && e?.code === 'P2002') {
+                    throw new BaseException(409, 'El pago ya fue registrado (reenvío); recargá para ver el estado', 'PAGO_DUPLICADO');
+                }
+                throw e;
+            }
+
+            return tx.cuota.findUnique({ where: { id: cuotaId } });
+        });
     }
 }

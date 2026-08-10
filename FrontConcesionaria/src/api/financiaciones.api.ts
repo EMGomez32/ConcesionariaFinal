@@ -56,6 +56,12 @@ export interface PagarCuotaDto {
     referencia?: string;
     observaciones?: string;
     fechaPago?: string;
+    /**
+     * Clave de idempotencia por intento de cobro (se genera al abrir el modal).
+     * El backend la usa para no duplicar el pago ante un reenvío (doble-submit /
+     * retry de red): un segundo request con la misma clave no crea otro PagoCuota.
+     */
+    idempotencyKey?: string;
 }
 
 export const financiacionesApi = {

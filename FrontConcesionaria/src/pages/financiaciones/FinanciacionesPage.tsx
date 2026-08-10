@@ -142,7 +142,17 @@ const emptyForm = (): FinForm => ({
     cuotas: 12, diaVencimiento: 10,
     tasaMensual: '', observaciones: '',
 });
-const emptyPago = (): PagarCuotaDto => ({ monto: 0, metodo: 'efectivo', referencia: '', fechaPago: today() });
+// Clave de idempotencia con fallback: crypto.randomUUID sólo existe en secure
+// context (https/localhost); en un origen HTTP no-localhost sería undefined y
+// tiraría al generar la clave. El fallback (timestamp + random) evita romper la
+// página en ese caso — la clave sólo tiene que ser única por intento, no segura.
+const genIdemKey = (): string =>
+    globalThis.crypto?.randomUUID?.() ?? `pago-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+// idempotencyKey nuevo por cada intento (cada apertura del modal genera uno): así
+// un reenvío del MISMO cobro no duplica el pago, pero abrir el modal de nuevo es
+// un cobro nuevo.
+const emptyPago = (): PagarCuotaDto => ({ monto: 0, metodo: 'efectivo', referencia: '', fechaPago: today(), idempotencyKey: genIdemKey() });
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 const FinanciacionesPage = () => {
@@ -191,7 +201,7 @@ const FinanciacionesPage = () => {
 
     // Pagar cuota sub-modal
     const [pagarCuota, setPagarCuota] = useState<Cuota | null>(null);
-    const [pagoForm, setPagoForm] = useState<PagarCuotaDto>(emptyPago());
+    const [pagoForm, setPagoForm] = useState<PagarCuotaDto>(() => emptyPago());
     const [savingPago, setSavingPago] = useState(false);
 
     const { addToast } = useUIStore();
