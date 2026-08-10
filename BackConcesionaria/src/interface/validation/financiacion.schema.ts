@@ -124,15 +124,20 @@ export const updateFinanciacionSchema = z.object({
 });
 
 // PATCH /financiaciones/cuotas/:cuotaId/pagar — registrar pago de cuota.
-// OJO: el flujo de pago está DESHABILITADO en el front (FinanciacionesPage.tsx,
-// handlePagarCuota corta con un `return` antes de llamar a la API), pero la ruta
-// del backend sigue viva y sin validar, así que se cubre igual. `referencia` y
-// `observaciones` son parte del DTO pero RegistrarPagoCuota sólo persiste
-// monto/metodo/fechaPago; se aceptan y el use-case los ignora.
+// `referencia` y `observaciones` son parte del DTO pero RegistrarPagoCuota sólo
+// persiste monto/metodo/fechaPago/idempotencyKey; los demás se aceptan y se ignoran.
+// `idempotencyKey`: clave que el front genera al abrir el modal de cobro; el
+// backend la usa para no duplicar el pago ante reenvíos (doble-submit / retry).
 export const pagarCuotaSchema = z.object({
     monto: montoField('El monto del pago'),
     metodo: metodoPagoEnum,
     referencia: z.string().optional(),
     observaciones: z.string().optional(),
-    fechaPago: z.string().optional(),
+    // Fecha parseable: sin esto un string basura llega a new Date() y explota como
+    // 500 en el create (en vez de un 400 de validación).
+    fechaPago: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Fecha de pago inválida').optional(),
+    // REQUERIDA: la idempotencia de un endpoint de dinero no puede ser opcional.
+    // El front genera un UUID por apertura de modal; sin clave no hay dedupe de
+    // reenvíos, así que se exige a todo caller.
+    idempotencyKey: z.string().min(8).max(64),
 });

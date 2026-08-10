@@ -17,7 +17,7 @@ const getFinanciacionByIdUC = new GetFinanciacionById(repository);
 const createFinanciacionUC = new CreateFinanciacion(repository);
 const updateFinanciacionUC = new UpdateFinanciacion(repository);
 const deleteFinanciacionUC = new DeleteFinanciacion(repository);
-const registrarPagoUC = new RegistrarPagoCuota(repository);
+const registrarPagoUC = new RegistrarPagoCuota();
 
 export class FinanciacionController {
     static async getAll(req: Request, res: Response, next: NextFunction) {

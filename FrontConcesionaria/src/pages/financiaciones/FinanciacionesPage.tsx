@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { waShareLink } from '../../utils/whatsapp';
 import { formatFecha } from '../../utils/fecha';
+import { getApiErrorMessage } from '../../utils/error';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type EstadoFinanciacion = 'activa' | 'cancelada' | 'en_mora' | 'refinanciada';
@@ -141,7 +142,17 @@ const emptyForm = (): FinForm => ({
     cuotas: 12, diaVencimiento: 10,
     tasaMensual: '', observaciones: '',
 });
-const emptyPago = (): PagarCuotaDto => ({ monto: 0, metodo: 'efectivo', referencia: '', fechaPago: today() });
+// Clave de idempotencia con fallback: crypto.randomUUID sólo existe en secure
+// context (https/localhost); en un origen HTTP no-localhost sería undefined y
+// tiraría al generar la clave. El fallback (timestamp + random) evita romper la
+// página en ese caso — la clave sólo tiene que ser única por intento, no segura.
+const genIdemKey = (): string =>
+    globalThis.crypto?.randomUUID?.() ?? `pago-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+// idempotencyKey nuevo por cada intento (cada apertura del modal genera uno): así
+// un reenvío del MISMO cobro no duplica el pago, pero abrir el modal de nuevo es
+// un cobro nuevo.
+const emptyPago = (): PagarCuotaDto => ({ monto: 0, metodo: 'efectivo', referencia: '', fechaPago: today(), idempotencyKey: genIdemKey() });
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 const FinanciacionesPage = () => {
@@ -190,7 +201,7 @@ const FinanciacionesPage = () => {
 
     // Pagar cuota sub-modal
     const [pagarCuota, setPagarCuota] = useState<Cuota | null>(null);
-    const [pagoForm, setPagoForm] = useState<PagarCuotaDto>(emptyPago());
+    const [pagoForm, setPagoForm] = useState<PagarCuotaDto>(() => emptyPago());
     const [savingPago, setSavingPago] = useState(false);
 
     const { addToast } = useUIStore();
@@ -390,19 +401,27 @@ const FinanciacionesPage = () => {
     };
 
     const handlePagarCuota = async (e: MouseEvent<HTMLButtonElement>) => {
-        // Flujo de pago deshabilitado a propósito: el return corta acá.
-        e.preventDefault(); return;
-        if (pagoForm.monto <= 0) { addToast('El importe de recaudación debe ser mayor a 0', 'error'); return; }
+        e.preventDefault();
         if (!pagarCuota) return;
+        if (pagoForm.monto <= 0) { addToast('El importe a cobrar debe ser mayor a 0', 'error'); return; }
+        // El cobro es por cuota: no se puede acreditar más que su saldo (evita
+        // registrar una sobre-recaudación; el backend además tope el saldo en 0).
+        if (pagoForm.monto > Number(pagarCuota.saldoCuota)) {
+            addToast('El importe no puede superar el saldo de la cuota', 'error');
+            return;
+        }
+        const finId = detailId;
         setSavingPago(true);
         try {
-            await financiacionesApi.pagarCuota(pagarCuota!.id, pagoForm);
-            addToast('Cobro procesado y acreditado con éxito', 'success');
+            await financiacionesApi.pagarCuota(pagarCuota.id, pagoForm);
+            addToast('Cobro registrado y saldo actualizado', 'success');
             setPagarCuota(null);
-            if (detailId !== null) refreshDetail(Number(detailId));
-        } catch (e: unknown) {
-            const err = e as { response?: { data?: { message?: string } } };
-            addToast(err?.response?.data?.message ?? 'Fallo en la conciliación del cobro', 'error');
+            // Refresca el expediente abierto (cuotas y saldos) y la cartera (saldo,
+            // estado y mora de la fila) para que el cobro se vea reflejado.
+            if (finId !== null) await refreshDetail(Number(finId));
+            await loadList();
+        } catch (err: unknown) {
+            addToast(getApiErrorMessage(err, 'No se pudo registrar el cobro'), 'error');
         } finally {
             setSavingPago(false);
         }

@@ -940,6 +940,11 @@ model PagoCuota {
   metodo          MetodoPago
   referencia      String?
   observaciones   String?
+  // Clave de idempotencia por request (la genera el front al abrir el modal de
+  // cobro). Unique global: un reenvío del mismo cobro (doble-submit / retry de
+  // red) no crea un segundo PagoCuota. Nullable: los pagos sin clave (histórico,
+  // request sin key) no chocan entre sí (Postgres trata cada NULL como distinto).
+  idempotencyKey  String?    @unique @map("idempotency_key")
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
   deletedAt       DateTime?  @map("deleted_at")
