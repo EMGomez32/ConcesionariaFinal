@@ -18,6 +18,12 @@ export const refreshSchema = z.object({
     refreshToken: z.string({ error: 'El refresh token es obligatorio' }).min(1, 'El refresh token es obligatorio'),
 });
 
+// Logout: el refresh token es opcional a propósito. Cerrar sesión debe ser
+// siempre graceful (incluso sin token o con el body vacío); si viene, se revoca.
+export const logoutSchema = z.object({
+    refreshToken: z.string().optional(),
+});
+
 // La política de longitud mínima (10) vive acá, como única fuente de verdad
 // (antes estaba hardcodeada en el controller).
 export const resetPasswordSchema = z.object({

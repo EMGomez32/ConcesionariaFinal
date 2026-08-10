@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { AuthController } from '../controllers/AuthController';
 import { loginLimiter } from '../middlewares/rateLimiters';
 import { validateBody } from '../middlewares/validate.middleware';
-import { loginSchema, refreshSchema, resetPasswordSchema } from '../validation/auth.schema';
+import { loginSchema, refreshSchema, resetPasswordSchema, logoutSchema } from '../validation/auth.schema';
 
 const router = Router();
 
@@ -71,13 +71,20 @@ router.post('/refresh', validateBody(refreshSchema), AuthController.refresh);
  *   post:
  *     tags: [Auth]
  *     summary: Cerrar sesión
- *     description: Registra `accion=logout` en auditoría.
+ *     description: Revoca el refresh token de la sesión (si se envía) y registra `accion=logout` en auditoría.
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               refreshToken: { type: string }
  *     responses:
  *       204:
  *         description: OK (sin contenido)
- *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.post('/logout', AuthController.logout);
+router.post('/logout', validateBody(logoutSchema), AuthController.logout);
 
 /**
  * @openapi
