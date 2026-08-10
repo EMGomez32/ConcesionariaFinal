@@ -1,5 +1,5 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, getPersistedRefreshToken } from '../store/authStore';
 
 declare module 'axios' {
     interface AxiosRequestConfig {
@@ -30,30 +30,79 @@ axiosInstance.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
+// Single-flight del refresh: una sola promesa compartida a nivel módulo. Cuando el
+// access token vence y varias requests disparan 401 en paralelo, TODAS se suscriben
+// a este mismo refresh en vez de llamar cada una a /auth/refresh con el mismo
+// refresh token. Sin esto: el backend ROTA el refresh en cada uso y tiene detección
+// de reuso (revokeAllForUser), así que el 2º request usaría un token ya rotado →
+// revoca TODAS las sesiones → logout espurio. Con la cola: un solo /auth/refresh por
+// ventana de expiración; el resto reintenta con el token nuevo.
+//
+// El single-flight en memoria sólo cubre UNA pestaña (la variable vive por módulo/tab).
+// Para el caso multi-pestaña se suman dos defensas: (1) performRefresh relee el refresh
+// MÁS fresco de localStorage, no el de memoria (otra pestaña pudo haberlo rotado ya); y
+// (2) runExclusiveRefresh serializa el refresh ENTRE pestañas con la Web Locks API.
+let refreshPromise: Promise<string> | null = null;
+
+async function performRefresh(): Promise<string> {
+    // Preferir el refresh persistido: si otra pestaña ya rotó el token, nuestra memoria
+    // quedó vieja pero localStorage tiene el nuevo. Mandar el viejo → detección de reuso.
+    const refreshToken = getPersistedRefreshToken() ?? useAuthStore.getState().refreshToken;
+    if (!refreshToken) throw new Error('No refresh token');
+    // axios "pelado" (no axiosInstance) → no re-entra en este interceptor.
+    const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/auth/refresh`, {
+        refreshToken,
+    });
+    const { access, refresh } = response.data as { access: string; refresh: string };
+    // Guardar AMBOS: el refresh viejo quedó revocado en el backend; si no
+    // persistimos el nuevo, el próximo refresh mandaría el revocado y dispararía
+    // la detección de reuso (logout de todas las sesiones).
+    useAuthStore.getState().setTokens(access, refresh);
+    return access;
+}
+
+// Serializa el refresh ENTRE pestañas: sólo una pestaña ejecuta /auth/refresh a la vez.
+// Las demás esperan el lock y, al entrar, performRefresh relee el token ya rotado de
+// localStorage → nunca reusan uno revocado. Si el navegador no soporta Web Locks, degrada
+// al single-flight por pestaña (sigue cubriendo el caso secuencial vía la lectura persistida).
+function runExclusiveRefresh(): Promise<string> {
+    if (typeof navigator !== 'undefined' && 'locks' in navigator && navigator.locks?.request) {
+        return navigator.locks.request('autenza-auth-refresh', () => performRefresh());
+    }
+    return performRefresh();
+}
+
+function refreshAccessToken(): Promise<string> {
+    if (!refreshPromise) {
+        refreshPromise = runExclusiveRefresh().finally(() => { refreshPromise = null; });
+    }
+    return refreshPromise;
+}
+
 axiosInstance.interceptors.response.use(
     (response) => (response.config?.rawResponse ? response : response.data),
     async (error) => {
         const originalRequest = error.config;
+        const url: string = originalRequest?.url || '';
+        const isRefreshCall = url.includes('/auth/refresh');
 
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isRefreshCall) {
             originalRequest._retry = true;
-            const { refreshToken, setAccessToken, logout } = useAuthStore.getState();
+            const { refreshToken } = useAuthStore.getState();
 
             if (refreshToken) {
                 try {
-                    const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/auth/refresh`, {
-                        refreshToken,
-                    });
-
-                    const { access } = response.data;
-                    setAccessToken(access);
-
+                    const access = await refreshAccessToken();
+                    originalRequest.headers = originalRequest.headers || {};
                     originalRequest.headers.Authorization = `Bearer ${access}`;
                     return axiosInstance(originalRequest);
                 } catch (refreshError) {
-                    logout();
+                    useAuthStore.getState().logout();
                     window.location.href = '/login';
-                    return Promise.reject(refreshError);
+                    // Rechazar con la misma forma desempaquetada que el resto del
+                    // interceptor (línea de abajo), no el AxiosError crudo.
+                    const err = refreshError as { response?: { data?: unknown }; message?: string };
+                    return Promise.reject(err?.response?.data ?? err?.message ?? refreshError);
                 }
             }
         }
