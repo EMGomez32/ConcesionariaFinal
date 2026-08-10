@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+/** Clave de localStorage que usa el middleware `persist`. */
+const AUTH_STORAGE_KEY = 'auth-storage';
+
 interface User {
   id: number;
   nombre: string;
@@ -17,6 +20,8 @@ interface AuthState {
   isAuthenticated: boolean;
   setAuth: (user: User, accessToken: string, refreshToken: string) => void;
   setAccessToken: (token: string) => void;
+  /** Guarda el par rotado (access + refresh) tras un /auth/refresh. */
+  setTokens: (accessToken: string, refreshToken: string) => void;
   setUser: (user: Partial<User>) => void;
   logout: () => void;
 }
@@ -62,11 +67,12 @@ export const useAuthStore = create<AuthState>()(
       setAuth: (user, accessToken, refreshToken) =>
         set({ user, accessToken, refreshToken, isAuthenticated: true }),
       setAccessToken: (accessToken) => set({ accessToken }),
+      setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken }),
       setUser: (patch) => set((state) => ({ user: state.user ? { ...state.user, ...patch } as User : state.user })),
       logout: () => set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false }),
     }),
     {
-      name: 'auth-storage',
+      name: AUTH_STORAGE_KEY,
       onRehydrateStorage: () => (state) => {
         // On app load, check if the access token is expired
         if (state && isTokenExpired(state.accessToken)) {
@@ -81,3 +87,23 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+
+/**
+ * Lee el refreshToken más reciente directamente de localStorage (lo que `persist`
+ * escribió), en vez del estado en memoria. Necesario para el refresh entre pestañas:
+ * si otra pestaña ya rotó el token, el store en memoria de ésta quedó viejo pero
+ * localStorage tiene el nuevo. Mandar el viejo dispararía la detección de reuso del
+ * backend (revokeAllForUser → logout de TODAS las sesiones). Devuelve null si no hay
+ * token o si el storage es ilegible.
+ */
+export const getPersistedRefreshToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { state?: { refreshToken?: string | null } };
+    return parsed?.state?.refreshToken ?? null;
+  } catch {
+    return null;
+  }
+};
