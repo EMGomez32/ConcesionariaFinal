@@ -9,6 +9,7 @@ import { LogoutAuth } from '../../application/use-cases/auth/Logout';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
 import { rawPrisma } from '../../infrastructure/database/prisma';
+import { withAuthBypass } from '../../infrastructure/database/unitOfWork';
 import { sendPasswordResetEmail } from '../../infrastructure/email/mailer';
 import { env } from '../../config/env';
 
@@ -66,8 +67,9 @@ export class AuthController {
 
             if (!email) return res.json(respuestaGenerica);
 
-            // rawPrisma: flujo sin autenticación, sin contexto de tenant.
-            const usuario = await rawPrisma.usuario.findFirst({ where: { email, activo: true, deletedAt: null } });
+            // Flujo sin autenticación ni tenant: withAuthBypass saltea la RLS (bajo
+            // app_rw filtraría `usuarios` a 0 filas y nunca encontraría al usuario).
+            const usuario = await withAuthBypass((tx) => tx.usuario.findFirst({ where: { email, activo: true, deletedAt: null } }));
             if (!usuario) return res.json(respuestaGenerica);
 
             const token = crypto.randomBytes(32).toString('hex');
@@ -103,12 +105,15 @@ export class AuthController {
             }
 
             const passwordHash = await bcrypt.hash(String(password), 10);
-            await rawPrisma.$transaction([
-                rawPrisma.usuario.update({ where: { id: registro.usuarioId }, data: { passwordHash } }),
-                rawPrisma.passwordResetToken.update({ where: { id: registro.id }, data: { usedAt: new Date() } }),
+            // withAuthBypass: transacción única (atómica) con la RLS salteada — el
+            // update de `usuarios` es cross-tenant (reset sin sesión) y bajo app_rw la
+            // RLS lo filtraría a 0 filas (la contraseña no cambiaría).
+            await withAuthBypass(async (tx) => {
+                await tx.usuario.update({ where: { id: registro.usuarioId }, data: { passwordHash } });
+                await tx.passwordResetToken.update({ where: { id: registro.id }, data: { usedAt: new Date() } });
                 // Invalida sesiones activas: hay que volver a loguearse.
-                rawPrisma.refreshToken.updateMany({ where: { usuarioId: registro.usuarioId }, data: { isRevoked: true } }),
-            ]);
+                await tx.refreshToken.updateMany({ where: { usuarioId: registro.usuarioId }, data: { isRevoked: true } });
+            });
 
             return res.json({ message: 'Contraseña actualizada. Ya podés iniciar sesión.' });
         } catch (error) {

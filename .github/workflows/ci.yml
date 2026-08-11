@@ -107,6 +107,84 @@ jobs:
           if [ $CODE -ne 0 ]; then echo "=== server.log ==="; cat /tmp/server.log; fi
           exit $CODE
 
+  integration-rls:
+    name: Backend (integration bajo app_rw / RLS)
+    runs-on: ubuntu-latest
+    # Igual que 'integration' pero el backend corre como el rol NO-superusuario
+    # app_rw (APP_DATABASE_URL) → la RLS de Postgres FILTRA de verdad. Garantiza que
+    # la app funciona bajo RLS (la config OBJETIVO del cutover), no sólo como
+    # superusuario. Caza cualquier camino cross-tenant sin bypass que rompería la
+    # app apenas se active app_rw en prod.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpg
+          POSTGRES_DB: concesionaria_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d concesionaria_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Admin (superusuario): sólo db push / init-rls / setup-app-role / seed.
+      DATABASE_URL: postgresql://postgres:testpg@localhost:5432/concesionaria_test?sslmode=disable
+      # Runtime del server: rol NO-superusuario app_rw → la RLS aplica de verdad.
+      APP_DB_PASSWORD: app_rw_ci_pw_7h2n
+      APP_DATABASE_URL: postgresql://app_rw:app_rw_ci_pw_7h2n@localhost:5432/concesionaria_test?sslmode=disable
+      JWT_SECRET: test_jwt_secret_ci_1234567890_abcdef
+      JWT_REFRESH_SECRET: test_jwt_refresh_secret_ci_0987654321_zyxwv
+      NODE_ENV: test
+      PORT: '3000'
+      LOG_LEVEL: warn
+      API_BASE_URL: http://localhost:3000
+    defaults:
+      run:
+        working-directory: BackConcesionaria
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: BackConcesionaria/package-lock.json
+      - run: npm ci
+      - name: Generar cliente Prisma
+        run: npx prisma generate
+      - name: Aplicar schema (db push)
+        run: npx prisma db push
+      - name: Inicializar RLS (policies + triggers)
+        run: npm run init-rls
+      - name: Crear rol app_rw + grants
+        run: npm run setup-app-role
+      - name: Seed de CI (roles, plan, tenant, usuarios demo)
+        run: npm run seed-ci
+      - name: Build
+        run: npm run build
+      - name: Levantar backend (app_rw) + correr integración
+        run: |
+          node dist/server.js > /tmp/server.log 2>&1 &
+          SRVPID=$!
+          echo "esperando /health (PID $SRVPID, rol app_rw)..."
+          for i in $(seq 1 30); do
+            curl -sf -m 2 http://localhost:3000/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          if ! curl -sf -m 2 http://localhost:3000/health >/dev/null 2>&1; then
+            echo "::error::el backend no respondió a /health"; cat /tmp/server.log; kill $SRVPID 2>/dev/null; exit 1
+          fi
+          echo "backend healthy (app_rw); corriendo suites bajo RLS..."
+          set +e
+          npm run test:integration
+          CODE=$?
+          set -e
+          kill $SRVPID 2>/dev/null || true
+          if [ $CODE -ne 0 ]; then echo "=== server.log ==="; cat /tmp/server.log; fi
+          exit $CODE
+
   rls-verify:
     name: Backend (RLS role verification)
     runs-on: ubuntu-latest

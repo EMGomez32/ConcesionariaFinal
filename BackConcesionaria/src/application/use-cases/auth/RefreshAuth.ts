@@ -1,7 +1,7 @@
 import { ITokenService } from '../../../domain/services/ITokenService';
 import { IRefreshTokenRepository } from '../../../domain/repositories/IRefreshTokenRepository';
 import { UnauthorizedException } from '../../../domain/exceptions/BaseException';
-import prisma from '../../../infrastructure/database/prisma';
+import { withAuthBypass } from '../../../infrastructure/database/unitOfWork';
 import config from '../../../config';
 
 export class RefreshAuth {
@@ -25,10 +25,13 @@ export class RefreshAuth {
 
             if (stored.expiresAt < new Date()) throw new Error('Expired');
 
-            const usuario = await prisma.usuario.findUnique({
-                where: { id: payload.userId },
+            // withAuthBypass: el refresh valida al usuario fuera de una sesión (sin
+            // tenant en contexto). Bajo app_rw la RLS filtraría `usuarios`; se saltea
+            // explícito. `deletedAt: null` a mano (no pasa por la extensión).
+            const usuario = await withAuthBypass((tx) => tx.usuario.findFirst({
+                where: { id: payload.userId, deletedAt: null },
                 include: { roles: { include: { rol: true } } },
-            });
+            }));
             if (!usuario || !usuario.activo) throw new Error('Invalid user');
 
             // Rotation

@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { ITokenService } from '../../../domain/services/ITokenService';
 import { IRefreshTokenRepository } from '../../../domain/repositories/IRefreshTokenRepository';
 import { UnauthorizedException, ForbiddenException } from '../../../domain/exceptions/BaseException';
-import prisma from '../../../infrastructure/database/prisma';
+import { withAuthBypass } from '../../../infrastructure/database/unitOfWork';
 import config from '../../../config';
 
 export class Login {
@@ -12,12 +12,15 @@ export class Login {
     ) { }
 
     async execute(email: string, pass: string) {
-        const usuario = await prisma.usuario.findFirst({
-            where: { email },
+        // withAuthBypass: el login es legítimamente cross-tenant (busca por email sin
+        // saber el tenant). Bajo el rol app_rw la RLS filtraría `usuarios` a 0 filas;
+        // por eso se saltea explícito. `deletedAt: null` a mano (no pasa por la extensión).
+        const usuario = await withAuthBypass((tx) => tx.usuario.findFirst({
+            where: { email, deletedAt: null },
             include: {
                 roles: { include: { rol: true } }
             }
-        });
+        }));
 
         if (!usuario || !usuario.passwordHash) {
             throw new UnauthorizedException('Credenciales inválidas');
