@@ -142,8 +142,12 @@ services:
       dockerfile: Dockerfile
     restart: always
     logging: *default-logging
+    # Sólo loopback: el acceso externo entra por el Cloudflare Tunnel, que en la Pi
+    # apunta a http://localhost:80 (cloudflared corre en el host). Bindear a
+    # 0.0.0.0 exponía el front directo en la LAN / la red Tailscale de la Pi,
+    # salteando Cloudflare. Con 127.0.0.1 el tunnel sigue llegando y nadie más.
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"
     depends_on:
       - backend
 
