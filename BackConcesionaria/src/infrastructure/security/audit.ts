@@ -1,5 +1,5 @@
 import { context } from './context';
-import prisma from '../database/prisma';
+import { withAuthBypass } from '../database/unitOfWork';
 import { logger } from '../logging/logger';
 
 // 'refinanciar' mueve deuda de un contrato a otro: merece su propio rastro y no
@@ -31,7 +31,11 @@ export async function audit(params: AuditParams): Promise<void> {
             return;
         }
 
-        await prisma.auditLog.create({
+        // withAuthBypass: el audit_log tiene RLS. En flujos SIN tenant en contexto
+        // (login/logout) el INSERT lo rechazaría el WITH CHECK bajo app_rw. El row
+        // siempre lleva su concesionariaId explícito, así que saltear la RLS acá es
+        // seguro (escritura interna confiable) y garantiza que el rastro se escriba.
+        await withAuthBypass((tx) => tx.auditLog.create({
             data: {
                 concesionariaId,
                 usuarioId: params.usuarioId ?? user?.userId ?? null,
@@ -42,7 +46,7 @@ export async function audit(params: AuditParams): Promise<void> {
                 ip: context.getIp() ?? null,
                 userAgent: context.getUserAgent() ?? null,
             } as any,
-        });
+        }));
     } catch (err) {
         logger.error('[audit] failed to write audit log', { err, params });
     }

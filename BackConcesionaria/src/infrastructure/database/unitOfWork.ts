@@ -49,3 +49,31 @@ export function withTenantTransaction<T>(
         return fn(tx);
     }, options);
 }
+
+/**
+ * Ejecuta `fn` en una transacción con la RLS BYPASSEADA (`app.is_super_admin='true'`),
+ * para las operaciones de AUTENTICACIÓN/PLATAFORMA que son legítimamente cross-tenant
+ * y por eso NO tienen (ni pueden tener) un tenant en el contexto:
+ *   - login: busca el usuario por email SIN saber todavía a qué concesionaria pertenece.
+ *   - refresh: valida el usuario por id fuera de una sesión.
+ *   - forgot/reset password: operan sin sesión.
+ *   - audit de login/logout: escribe el rastro cuando aún no hay tenant en contexto.
+ *
+ * Bajo el rol `app_rw` (NO superusuario) la RLS filtraría esos `usuarios`/`audit_log`
+ * a 0 filas (o rechazaría el INSERT por WITH CHECK) y romperían login/refresh/reset y
+ * el audit trail. Como son operaciones de plataforma confiables, se saltea la RLS de
+ * forma explícita y acotada.
+ *
+ * OJO: al no pasar por la extensión, `tx` NO auto-filtra `deletedAt: null` — agregalo
+ * a mano donde corresponda. Usar SÓLO para credenciales/plataforma, nunca para datos
+ * de negocio de un tenant (para eso está withTenantTransaction / la extensión).
+ */
+export function withAuthBypass<T>(
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+    options?: { timeout?: number; maxWait?: number },
+): Promise<T> {
+    return rawPrisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`SELECT set_config('app.is_super_admin', 'true', true)`);
+        return fn(tx);
+    }, options);
+}
