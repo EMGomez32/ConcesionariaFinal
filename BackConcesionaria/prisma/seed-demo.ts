@@ -60,7 +60,7 @@ async function main() {
     const adminRol = await prisma.rol.findUnique({ where: { nombre: 'admin' } });
     const admin = await prisma.usuario.create({
         data: {
-            nombre: 'Admin Demo', email: 'admin@demo.com',
+            nombre: 'Admin Demo', email: 'admin@autosdelvalle.test',
             passwordHash: await bcrypt.hash('demo1234', 10),
             concesionariaId: cid, sucursalId: sid,
             roles: { create: { rolId: adminRol!.id } },
@@ -373,7 +373,7 @@ async function main() {
 
     console.log('✅ Datos demo cargados:');
     console.log(`   Concesionaria: ${NOMBRE_DEMO}`);
-    console.log('   Login: admin@demo.com / demo1234');
+    console.log('   Login: admin@autosdelvalle.test / demo1234');
     console.log(`   ${vehiculos.length} vehículos, ${clientes.length} clientes, ${ventas.length} ventas, 1 financiación (2 cuotas en mora).`);
     console.log(`   ${financieras.length} financieras, ${solicitudesDef.length} solicitudes de financiación externa.`);
 }

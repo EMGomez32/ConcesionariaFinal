@@ -42,7 +42,7 @@ Actualizá tu `.env` en la Pi con el bloque nuevo de `.env.example` (o dejá los
 3. (Opcional) Cargar datos demo en una instancia de demostración:
    ```bash
    docker compose exec backend npm run seed-demo
-   # Login demo: admin@demo.com / demo1234
+   # Login demo: admin@autosdelvalle.test / demo1234
    ```
 
 ---

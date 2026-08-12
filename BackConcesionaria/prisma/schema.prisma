@@ -110,7 +110,10 @@ model Usuario {
   concesionariaId        Int?                 @map("concesionaria_id")
   sucursalId             Int?                 @map("sucursal_id")
   nombre                 String
-  email                  String
+  // Email GLOBALMENTE único (una persona = una cuenta = un tenant). Antes era
+  // `@@unique([concesionariaId, email])`: el mismo email podía existir en varios
+  // tenants y el login (findFirst por email) resolvía a un tenant NO determinístico.
+  email                  String               @unique
   passwordHash           String?              @map("password_hash")
   activo                 Boolean              @default(true)
   // Comisión del vendedor: % sobre el facturado de sus ventas. Null = sin comisión.
@@ -135,9 +138,7 @@ model Usuario {
   clientesAsignados      Cliente[]            @relation("ClienteVendedorAsignado")
   refreshTokens          RefreshToken[]
 
-  @@unique([concesionariaId, email])
   @@index([concesionariaId])
-  @@index([email])
   @@map("usuarios")
 }
 
