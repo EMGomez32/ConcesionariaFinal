@@ -1,7 +1,9 @@
+import { Prisma } from '@prisma/client';
 import { IVentaRepository } from '../../../domain/repositories/IVentaRepository';
 import { IVehiculoRepository } from '../../../domain/repositories/IVehiculoRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
-import prisma from '../../../infrastructure/database/prisma';
+import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
+import { context } from '../../../infrastructure/security/context';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 
 export class CreateVenta {
@@ -35,15 +37,39 @@ export class CreateVenta {
             await assertMismoTenant('vehiculo', canje?.vehiculoCanjeId, tenantId);
         }
 
-        // We can use the Prisma transaction here.
-        // In a more pure Clean Architecture, we'd use a UnitOfWork.
-        return prisma.$transaction(async (tx) => {
-            // 1. Create venta. Note: schema has no `estado` field on Venta —
-            // estadoEntrega defaults to 'pendiente' in the database.
+        // Filtro de tenant EXPLÍCITO para el camino raw: la tx de withTenantTransaction
+        // NO pasa por la extensión, así que el aislamiento (que la extensión inyecta
+        // en cada op) hay que replicarlo a mano. super_admin no se filtra.
+        const isSuper = context.getUser()?.roles?.includes('super_admin') || false;
+        const tenantSql = isSuper ? Prisma.empty : Prisma.sql`AND concesionaria_id = ${tenantId}`;
+        const tenantWhere = isSuper ? {} : { concesionariaId: tenantId };
+
+        // Unit of Work: la venta + sus subrecursos + el marcado de vehículo/reserva/
+        // presupuesto commitean JUNTOS o nada. Antes usaba prisma.$transaction del
+        // cliente EXTENDIDO → atomicidad ILUSORIA (cada op re-entraba a la extensión y
+        // abría su PROPIA sub-tx): si fallaba el update del vehículo tras crear la
+        // venta, quedaba plata cobrada con el auto todavía re-vendible.
+        return withTenantTransaction(async (tx) => {
+            // Lock del vehículo acotado al tenant + revalidación bajo lock: serializa
+            // dos ventas concurrentes del MISMO auto (la 2da espera el commit de la 1ra,
+            // ve 'vendido' y aborta). Cierra la doble venta que un findById sin lock deja.
+            const rows = await tx.$queryRaw<Array<{ estado: string }>>(Prisma.sql`
+                SELECT estado FROM vehiculos
+                WHERE id = ${ventaData.vehiculoId} AND deleted_at IS NULL ${tenantSql}
+                FOR UPDATE`);
+            const locked = rows[0];
+            if (!locked) throw new NotFoundException('Vehículo');
+            if (locked.estado === 'vendido') {
+                throw new BaseException(400, 'El vehículo ya está vendido', 'VEHICULO_VENDIDO');
+            }
+
+            // 1. Crear la venta. El tenant top-level va explícito (no hay trigger);
+            //    los subrecursos (extras/pagos/canjes) heredan concesionaria_id por el
+            //    trigger derive_concesionaria_* (BEFORE INSERT), igual que con la extensión.
             const venta = await tx.venta.create({
                 data: {
                     ...ventaData,
-                    concesionariaId: vehiculo.concesionariaId, // Multi-tenancy inherited from vehicle
+                    concesionariaId: tenantId,
                     presupuestoId,
                     extras: { create: externos || [] },
                     pagos: { create: pagos || [] },
@@ -51,24 +77,24 @@ export class CreateVenta {
                 }
             });
 
-            // 2. Mark vehicle as sold
+            // 2. Marcar el vehículo como vendido (acotado al tenant).
             await tx.vehiculo.update({
-                where: { id: ventaData.vehiculoId },
+                where: { id: ventaData.vehiculoId, ...tenantWhere },
                 data: { estado: 'vendido' }
             });
 
-            // 3. Mark reservation as converted if it exists
+            // 3. Cerrar la reserva si venía de una.
             if (reservaId) {
                 await tx.reserva.update({
-                    where: { id: reservaId },
+                    where: { id: reservaId, ...tenantWhere },
                     data: { estado: 'convertida_en_venta' }
                 });
             }
 
-            // 4. Accept budget if it exists
+            // 4. Aceptar el presupuesto si venía de uno.
             if (presupuestoId) {
                 await tx.presupuesto.update({
-                    where: { id: presupuestoId },
+                    where: { id: presupuestoId, ...tenantWhere },
                     data: { estado: 'aceptado' }
                 });
             }

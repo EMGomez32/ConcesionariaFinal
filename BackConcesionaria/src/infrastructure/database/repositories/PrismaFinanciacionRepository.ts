@@ -1,6 +1,8 @@
 import { IFinanciacionRepository } from '../../../domain/repositories/IFinanciacionRepository';
+import { Prisma } from '@prisma/client';
 import { Financiacion, Cuota } from '../../../domain/entities/Financiacion';
 import prisma from '../prisma';
+import { withTenantTransaction } from '../unitOfWork';
 import { coerceFilter } from '../queryFilter';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
@@ -164,7 +166,12 @@ export class PrismaFinanciacionRepository implements IFinanciacionRepository {
         const total = parseFloat(montoFinanciado);
         const n = parseInt(cuotasCount, 10);
 
-        return prisma.$transaction(async (tx) => {
+        // Unit of Work: la financiación y su plan de cuotas nacen JUNTOS o nada. Antes
+        // era prisma.$transaction del cliente EXTENDIDO (atomicidad ilusoria): si fallaba
+        // el createMany quedaba un contrato SIN cuotas (préstamo sin cronograma de cobro).
+        // El tenant del top-level va explícito; las cuotas heredan concesionaria_id por
+        // el trigger derive_concesionaria_cuotas.
+        return withTenantTransaction(async (tx) => {
             const f = await tx.financiacion.create({
                 data: {
                     ventaId,
@@ -256,7 +263,31 @@ export class PrismaFinanciacionRepository implements IFinanciacionRepository {
             ? data.tasaMensual
             : null;
 
-        return prisma.$transaction(async (tx) => {
+        // Unit of Work: cerrar el viejo + crear el nuevo + mudar las cuotas commitean
+        // JUNTOS o nada. Antes era prisma.$transaction del cliente EXTENDIDO: su propio
+        // doc-comment AFIRMA una atomicidad que NO cumplía (cada op abría su sub-tx) →
+        // un fallo a mitad dejaba la deuda DUPLICADA o DESAPARECIDA.
+        return withTenantTransaction(async (tx) => {
+            // Lock del contrato original acotado al tenant + re-chequeo de "ya
+            // refinanciado" DENTRO del lock: cierra el race de doble refinanciación
+            // (dos requests concurrentes que refinancian el mismo contrato).
+            const lockRows = await tx.$queryRaw<Array<{ id: number }>>(Prisma.sql`
+                SELECT id FROM financiaciones
+                WHERE id = ${original.id} AND deleted_at IS NULL
+                  AND concesionaria_id = ${original.concesionariaId}
+                FOR UPDATE`);
+            if (!lockRows[0]) throw new NotFoundException('Financiación');
+            const yaDentro = await tx.financiacion.findFirst({
+                where: { refinanciaAId: id, concesionariaId: original.concesionariaId },
+            });
+            if (yaDentro) {
+                throw new BaseException(
+                    422,
+                    `Este contrato ya fue refinanciado en el contrato #${yaDentro.id}`,
+                    'YA_REFINANCIADO',
+                );
+            }
+
             const nueva = await tx.financiacion.create({
                 data: {
                     ventaId: original.ventaId,
@@ -285,12 +316,16 @@ export class PrismaFinanciacionRepository implements IFinanciacionRepository {
             // contrato nuevo. Marcarlas 'pagada' inflaría la cobranza, y dejarlas
             // pendientes contaría la deuda dos veces.
             await tx.cuota.updateMany({
-                where: { id: { in: impagas.map((c: any) => c.id) } },
+                where: {
+                    id: { in: impagas.map((c: any) => c.id) },
+                    deletedAt: null,
+                    concesionariaId: original.concesionariaId,
+                },
                 data: { estado: 'refinanciada' as any, saldoCuota: 0 },
             });
 
             await tx.financiacion.update({
-                where: { id: original.id },
+                where: { id: original.id, concesionariaId: original.concesionariaId },
                 data: { estado: 'refinanciada' },
             });
 
