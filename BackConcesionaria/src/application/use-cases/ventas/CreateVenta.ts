@@ -77,16 +77,17 @@ export class CreateVenta {
                 }
             });
 
-            // 2. Marcar el vehículo como vendido (acotado al tenant).
+            // 2. Marcar el vehículo como vendido (acotado al tenant + soft-delete:
+            //    el tx raw no auto-filtra deletedAt como la extensión).
             await tx.vehiculo.update({
-                where: { id: ventaData.vehiculoId, ...tenantWhere },
+                where: { id: ventaData.vehiculoId, ...tenantWhere, deletedAt: null },
                 data: { estado: 'vendido' }
             });
 
             // 3. Cerrar la reserva si venía de una.
             if (reservaId) {
                 await tx.reserva.update({
-                    where: { id: reservaId, ...tenantWhere },
+                    where: { id: reservaId, ...tenantWhere, deletedAt: null },
                     data: { estado: 'convertida_en_venta' }
                 });
             }
@@ -94,7 +95,7 @@ export class CreateVenta {
             // 4. Aceptar el presupuesto si venía de uno.
             if (presupuestoId) {
                 await tx.presupuesto.update({
-                    where: { id: presupuestoId, ...tenantWhere },
+                    where: { id: presupuestoId, ...tenantWhere, deletedAt: null },
                     data: { estado: 'aceptado' }
                 });
             }

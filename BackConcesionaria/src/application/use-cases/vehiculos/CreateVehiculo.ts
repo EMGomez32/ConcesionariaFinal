@@ -94,6 +94,10 @@ export class CreateVehiculo {
         }
 
         // Devuelvo la entidad mapeada (misma forma que antes: repo.create → mapToEntity).
-        return (await this.vehiculoRepository.findById(created.id)) ?? created;
+        // findById siempre encuentra el vehículo recién creado (mismo tenant); el throw
+        // cubre lo imposible y evita devolver el objeto crudo del tx (forma distinta).
+        const entity = await this.vehiculoRepository.findById(created.id);
+        if (!entity) throw new BaseException(500, 'El vehículo se creó pero no pudo recuperarse', 'INTERNAL_ERROR');
+        return entity;
     }
 }

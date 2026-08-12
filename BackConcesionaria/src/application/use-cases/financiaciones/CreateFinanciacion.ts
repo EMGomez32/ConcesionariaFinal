@@ -13,6 +13,10 @@ export class CreateFinanciacion {
         await assertMismoTenant('cliente', data.clienteId, tenantId);
         // cobradorId es un Usuario opcional: si viene, del mismo tenant.
         await assertMismoTenant('usuario', data.cobradorId, tenantId);
-        return this.repository.create(data);
+        // Tenant EXPLÍCITO derivado de la venta (no del body): así el contrato queda
+        // siempre atado al tenant de su venta y no depende de que el body traiga un
+        // concesionariaId (un super_admin sin ese campo dejaba concesionaria_id NULL →
+        // financiaciones.concesionaria_id es NOT NULL sin trigger → 500).
+        return this.repository.create({ ...data, concesionariaId: tenantId });
     }
 }

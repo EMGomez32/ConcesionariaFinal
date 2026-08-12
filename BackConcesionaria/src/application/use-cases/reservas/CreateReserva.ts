@@ -71,7 +71,7 @@ export class CreateReserva {
             });
 
             await tx.vehiculo.update({
-                where: { id: vehiculoId, ...tenantWhere },
+                where: { id: vehiculoId, ...tenantWhere, deletedAt: null },
                 data: { estado: 'reservado' }
             });
 
