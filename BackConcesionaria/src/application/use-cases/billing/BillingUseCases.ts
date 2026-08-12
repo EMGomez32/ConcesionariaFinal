@@ -1,6 +1,8 @@
+import { Prisma } from '@prisma/client';
 import { IBillingRepository } from '../../../domain/repositories/IBillingRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertValidTransition } from '../../../domain/services/stateMachine';
+import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 
 // Planes
 export class GetPlanes {
@@ -83,31 +85,51 @@ export class GetInvoiceById {
 export class RegistrarPagoInvoice {
     constructor(private readonly repository: IBillingRepository) { }
     async execute(invoiceId: number, data: any) {
-        const invoice = await this.repository.findInvoiceById(invoiceId);
-        if (!invoice) throw new NotFoundException('Factura');
-
-        // HU-96: el pago se crea en `pending`. Solo si llega `succeeded`
-        // explícito (porque el callback del proveedor lo confirmó), se
-        // recalcula el saldo y eventualmente se marca la factura como `paid`.
         const status = data.status ?? 'pending';
 
-        const pago = await this.repository.createPayment({
-            invoiceId,
-            status,
-            monto: data.monto,
-            moneda: data.moneda || invoice.moneda,
-            metodo: data.metodo,
-            provider: data.provider,
-            providerPaymentId: data.providerPaymentId
-        });
+        // Unit of Work: registrar el pago y (si corresponde) marcar la factura 'paid'
+        // commitean JUNTOS, con la factura LOCKEADA (FOR UPDATE) para serializar dos
+        // pagos concurrentes que la marcarían paid dos veces. Antes NO había transacción
+        // (createPayment + updateInvoice sueltos). Billing es super_admin (plataforma):
+        // withTenantTransaction corre con is_super_admin=true y concesionaria_id lo deriva
+        // el trigger derive_concesionaria_payments desde la factura.
+        return withTenantTransaction(async (tx) => {
+            const rows = await tx.$queryRaw<Array<{ total: string; moneda: string }>>(Prisma.sql`
+                SELECT total, moneda FROM invoices
+                WHERE id = ${invoiceId} AND deleted_at IS NULL
+                FOR UPDATE`);
+            const inv = rows[0];
+            if (!inv) throw new NotFoundException('Factura');
 
-        if (status === 'succeeded') {
-            const totalPagado = await this.repository.aggregatePaymentsByInvoice(invoiceId);
-            if (totalPagado._sum.monto && Number(totalPagado._sum.monto) >= Number(invoice.total)) {
-                await this.repository.updateInvoice(invoiceId, { status: 'paid', paidAt: new Date() });
+            // HU-96: el pago se crea en 'pending'. Sólo si llega 'succeeded' explícito
+            // (el callback del proveedor lo confirmó) se recalcula el saldo y
+            // eventualmente se marca la factura 'paid'.
+            const pago = await tx.payment.create({
+                data: {
+                    invoiceId,
+                    status,
+                    monto: data.monto,
+                    moneda: data.moneda || inv.moneda,
+                    metodo: data.metodo,
+                    provider: data.provider,
+                    providerPaymentId: data.providerPaymentId,
+                },
+            });
+
+            if (status === 'succeeded') {
+                const totalPagado = await tx.payment.aggregate({
+                    _sum: { monto: true },
+                    where: { invoiceId, status: 'succeeded' },
+                });
+                if (totalPagado._sum.monto && Number(totalPagado._sum.monto) >= Number(inv.total)) {
+                    await tx.invoice.update({
+                        where: { id: invoiceId },
+                        data: { status: 'paid', paidAt: new Date() },
+                    });
+                }
             }
-        }
 
-        return pago;
+            return pago;
+        });
     }
 }

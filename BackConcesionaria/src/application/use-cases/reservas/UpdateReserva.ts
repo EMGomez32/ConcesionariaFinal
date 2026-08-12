@@ -1,6 +1,6 @@
 import { IReservaRepository } from '../../../domain/repositories/IReservaRepository';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
-import prisma from '../../../infrastructure/database/prisma';
+import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { context } from '../../../infrastructure/security/context';
 import { assertValidTransition } from '../../../domain/services/stateMachine';
 
@@ -25,9 +25,15 @@ export class UpdateReserva {
         if (data.monto !== undefined) updateData.montoSenia = data.monto !== null && data.monto !== '' ? Number(data.monto) : null;
         if (data.fechaVencimiento !== undefined) updateData.venceEl = data.fechaVencimiento ? new Date(data.fechaVencimiento) : null;
 
-        return prisma.$transaction(async (tx) => {
+        const tenantId = current.concesionariaId;
+        const isSuper = user?.roles?.includes('super_admin') || false;
+        const tenantWhere = isSuper ? {} : { concesionariaId: tenantId };
+
+        // Unit of Work: el update de la reserva + (si libera) el vehículo + el
+        // movimiento commitean JUNTOS (antes: prisma.$transaction extendido, ilusorio).
+        return withTenantTransaction(async (tx) => {
             const updated = await tx.reserva.update({
-                where: { id },
+                where: { id, ...tenantWhere, deletedAt: null },
                 data: updateData,
             });
 
@@ -37,7 +43,7 @@ export class UpdateReserva {
 
             if (liberaVehiculo) {
                 await tx.vehiculo.update({
-                    where: { id: current.vehiculoId },
+                    where: { id: current.vehiculoId, ...tenantWhere, deletedAt: null },
                     data: { estado: 'publicado' },
                 });
 

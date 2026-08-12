@@ -1,6 +1,7 @@
 import { IVehiculoRepository } from '../../../domain/repositories/IVehiculoRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import prisma from '../../../infrastructure/database/prisma';
+import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { context } from '../../../infrastructure/security/context';
 
 export class TransferVehiculo {
@@ -26,10 +27,15 @@ export class TransferVehiculo {
 
         const desdeSucursalId = vehiculo.sucursalId;
         const user = context.getUser();
+        const tenantId = vehiculo.concesionariaId;
+        const isSuper = user?.roles?.includes('super_admin') || false;
+        const tenantWhere = isSuper ? {} : { concesionariaId: tenantId };
 
-        return prisma.$transaction(async (tx) => {
+        // Unit of Work: mover el vehículo + registrar el traslado commitean JUNTOS
+        // (antes: prisma.$transaction del cliente EXTENDIDO, atomicidad ilusoria).
+        return withTenantTransaction(async (tx) => {
             const updated = await tx.vehiculo.update({
-                where: { id: vehiculoId },
+                where: { id: vehiculoId, ...tenantWhere, deletedAt: null },
                 data: { sucursalId: sucursalDestinoId },
             });
 
