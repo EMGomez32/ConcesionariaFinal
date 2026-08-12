@@ -1,6 +1,6 @@
 import { IVehiculoRepository } from '../../../domain/repositories/IVehiculoRepository';
 import { BaseException } from '../../../domain/exceptions/BaseException';
-import prisma from '../../../infrastructure/database/prisma';
+import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { context } from '../../../infrastructure/security/context';
 import { assertMismoTenant, resolveTenantDestino } from '../../../infrastructure/security/tenantGuard';
 import { recordPrecioVehiculo } from '../../../infrastructure/pricing/recordPrecioVehiculo';
@@ -36,10 +36,7 @@ export class CreateVehiculo {
         vehiculoData.vencimientoSeguro = vehiculoData.vencimientoSeguro ? new Date(vehiculoData.vencimientoSeguro) : null;
         vehiculoData.proveedorCompraId = vehiculoData.proveedorCompraId ? Number(vehiculoData.proveedorCompraId) : null;
 
-        const vehiculo: any = await this.vehiculoRepository.create(vehiculoData);
-
-        // Al ingresar un vehículo se registra automáticamente su ingreso, para que
-        // aparezca tanto en Vehículos como en Ingresos con los mismos datos.
+        // Datos del ingreso (derivados del vehículo) — se calculan antes de la tx.
         const proveedorId = vehiculoData.proveedorCompraId;
         const clienteId = clienteOrigenId ? Number(clienteOrigenId) : null;
         const origen = String(vehiculoData.origen || 'compra');
@@ -55,37 +52,52 @@ export class CreateVehiculo {
                 ? Number(vehiculoData.precioCompra)
                 : null;
 
-        await prisma.ingresoVehiculo.create({
-            data: {
-                concesionariaId: vehiculo.concesionariaId,
-                sucursalId: vehiculo.sucursalId,
-                vehiculoId: vehiculo.id,
-                tipoIngreso: tipoIngreso as any,
-                fechaIngreso: vehiculoData.fechaIngreso || new Date(),
-                valorTomado,
-                proveedorOrigenId: proveedorId,
-                clienteOrigenId: clienteId,
-                observaciones: vehiculoData.observaciones || null,
-                registradoPorId: context.getUser()?.userId ?? null,
-            },
+        // Unit of Work: el vehículo y su ingreso automático NACEN JUNTOS o no nacen.
+        // Antes NO había transacción alguna (repo.create suelto + ingreso suelto): si
+        // fallaba el ingreso, quedaba el vehículo sin su registro de compra (contabilidad
+        // incompleta). El tenant va explícito (top-level, sin trigger; y el tx raw no
+        // pasa por la extensión que lo inyectaría).
+        const created: any = await withTenantTransaction(async (tx) => {
+            const v = await tx.vehiculo.create({ data: { ...vehiculoData, concesionariaId: tenantId } });
+            await tx.ingresoVehiculo.create({
+                data: {
+                    concesionariaId: v.concesionariaId,
+                    sucursalId: v.sucursalId,
+                    vehiculoId: v.id,
+                    tipoIngreso: tipoIngreso as any,
+                    fechaIngreso: vehiculoData.fechaIngreso || new Date(),
+                    valorTomado,
+                    proveedorOrigenId: proveedorId,
+                    clienteOrigenId: clienteId,
+                    observaciones: vehiculoData.observaciones || null,
+                    registradoPorId: context.getUser()?.userId ?? null,
+                },
+            });
+            return v;
         });
 
-        // Registra el precio de lista inicial en el historial (log append-only).
+        // Precio de lista inicial en el historial (log append-only, best-effort): a
+        // propósito FUERA de la tx — un fallo del log no debe revertir el alta.
         const precioInicial =
             vehiculoData.precioLista !== undefined && vehiculoData.precioLista !== null && vehiculoData.precioLista !== ''
                 ? Number(vehiculoData.precioLista)
                 : null;
         if (precioInicial != null && !Number.isNaN(precioInicial)) {
             await recordPrecioVehiculo({
-                concesionariaId: vehiculo.concesionariaId,
-                vehiculoId: vehiculo.id,
+                concesionariaId: created.concesionariaId,
+                vehiculoId: created.id,
                 precioAnterior: null,
                 precioNuevo: precioInicial,
-                moneda: vehiculo.moneda,
+                moneda: created.moneda,
                 motivo: 'Precio inicial',
             });
         }
 
-        return vehiculo;
+        // Devuelvo la entidad mapeada (misma forma que antes: repo.create → mapToEntity).
+        // findById siempre encuentra el vehículo recién creado (mismo tenant); el throw
+        // cubre lo imposible y evita devolver el objeto crudo del tx (forma distinta).
+        const entity = await this.vehiculoRepository.findById(created.id);
+        if (!entity) throw new BaseException(500, 'El vehículo se creó pero no pudo recuperarse', 'INTERNAL_ERROR');
+        return entity;
     }
 }

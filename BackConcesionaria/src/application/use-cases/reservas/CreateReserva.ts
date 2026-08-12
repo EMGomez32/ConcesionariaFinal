@@ -1,7 +1,8 @@
+import { Prisma } from '@prisma/client';
 import { IReservaRepository } from '../../../domain/repositories/IReservaRepository';
 import { IVehiculoRepository } from '../../../domain/repositories/IVehiculoRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
-import prisma from '../../../infrastructure/database/prisma';
+import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { context } from '../../../infrastructure/security/context';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 
@@ -29,13 +30,33 @@ export class CreateReserva {
         await assertMismoTenant('usuario', data.vendedorId, tenantId);
 
         const user = context.getUser();
+        // Filtro de tenant explícito para el camino raw (la tx NO pasa por la extensión).
+        const isSuper = user?.roles?.includes('super_admin') || false;
+        const tenantSql = isSuper ? Prisma.empty : Prisma.sql`AND concesionaria_id = ${tenantId}`;
+        const tenantWhere = isSuper ? {} : { concesionariaId: tenantId };
 
-        return prisma.$transaction(async (tx) => {
+        // Unit of Work: reserva + marcado del vehículo + movimiento commitean juntos.
+        // Antes era prisma.$transaction del cliente EXTENDIDO (atomicidad ilusoria): si
+        // fallaba el update del vehículo, quedaba la reserva con seña pero el auto
+        // seguía disponible → se podía reservar/vender dos veces.
+        return withTenantTransaction(async (tx) => {
+            // Lock del vehículo acotado al tenant + revalidación de disponibilidad bajo
+            // lock: serializa dos reservas concurrentes del mismo auto.
+            const rows = await tx.$queryRaw<Array<{ estado: string }>>(Prisma.sql`
+                SELECT estado FROM vehiculos
+                WHERE id = ${vehiculoId} AND deleted_at IS NULL ${tenantSql}
+                FOR UPDATE`);
+            const locked = rows[0];
+            if (!locked) throw new NotFoundException('Vehículo');
+            if (locked.estado === 'reservado' || locked.estado === 'vendido') {
+                throw new BaseException(400, 'El vehículo no está disponible para reserva', 'VEHICULO_NOT_AVAILABLE');
+            }
+
             // El frontend manda monto/moneda/fechaVencimiento/vendedorId; se
             // traducen a las columnas reales (montoSenia/venceEl/creadaPorId).
             const reserva = await tx.reserva.create({
                 data: {
-                    concesionariaId: vehiculo.concesionariaId,
+                    concesionariaId: tenantId,
                     sucursalId: Number(data.sucursalId),
                     vehiculoId,
                     clienteId: Number(data.clienteId),
@@ -50,13 +71,13 @@ export class CreateReserva {
             });
 
             await tx.vehiculo.update({
-                where: { id: vehiculoId },
+                where: { id: vehiculoId, ...tenantWhere, deletedAt: null },
                 data: { estado: 'reservado' }
             });
 
             await tx.vehiculoMovimiento.create({
                 data: {
-                    concesionariaId: vehiculo.concesionariaId,
+                    concesionariaId: tenantId,
                     vehiculoId,
                     tipo: 'asignacion_reserva',
                     motivo: `Reserva #${reserva.id} creada`,
