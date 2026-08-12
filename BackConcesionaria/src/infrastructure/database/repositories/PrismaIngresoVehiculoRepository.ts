@@ -92,7 +92,7 @@ export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoReposito
             });
 
             await tx.vehiculo.update({
-                where: { id: vehiculoId, ...tenantWhere, deletedAt: null },
+                where: { id: vehiculoId, ...tenantWhere },
                 data: { sucursalId }
             });
 

@@ -43,7 +43,7 @@ export class UpdateReserva {
 
             if (liberaVehiculo) {
                 await tx.vehiculo.update({
-                    where: { id: current.vehiculoId, ...tenantWhere, deletedAt: null },
+                    where: { id: current.vehiculoId, ...tenantWhere },
                     data: { estado: 'publicado' },
                 });
 

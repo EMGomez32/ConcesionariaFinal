@@ -1,8 +1,10 @@
 import { Prisma } from '@prisma/client';
 import { IBillingRepository } from '../../../domain/repositories/IBillingRepository';
+import { Payment } from '../../../domain/entities/Billing';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertValidTransition } from '../../../domain/services/stateMachine';
 import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
+import { context } from '../../../infrastructure/security/context';
 
 // Planes
 export class GetPlanes {
@@ -87,16 +89,25 @@ export class RegistrarPagoInvoice {
     async execute(invoiceId: number, data: any) {
         const status = data.status ?? 'pending';
 
+        // La ruta de pago de invoices es authorize('admin'): un admin paga las facturas
+        // de SU concesionaria (super_admin, cualquiera). Filtro de tenant EXPLÍCITO — el
+        // tx raw NO pasa por la extensión, así que el aislamiento no puede depender sólo
+        // de la RLS (misma regla que RegistrarPagoCuota).
+        const isSuper = context.getUser()?.roles?.includes('super_admin') || false;
+        const tenantId = context.getTenantId();
+        if (!isSuper && !tenantId) throw new BaseException(401, 'Sesión sin concesionaria', 'UNAUTHORIZED');
+        const tenantSql = isSuper ? Prisma.empty : Prisma.sql`AND concesionaria_id = ${tenantId}`;
+        const tenantWhere = isSuper ? {} : { concesionariaId: tenantId };
+
         // Unit of Work: registrar el pago y (si corresponde) marcar la factura 'paid'
         // commitean JUNTOS, con la factura LOCKEADA (FOR UPDATE) para serializar dos
         // pagos concurrentes que la marcarían paid dos veces. Antes NO había transacción
-        // (createPayment + updateInvoice sueltos). Billing es super_admin (plataforma):
-        // withTenantTransaction corre con is_super_admin=true y concesionaria_id lo deriva
-        // el trigger derive_concesionaria_payments desde la factura.
+        // (createPayment + updateInvoice sueltos). concesionaria_id del pago lo deriva el
+        // trigger derive_concesionaria_payments desde la factura.
         return withTenantTransaction(async (tx) => {
             const rows = await tx.$queryRaw<Array<{ total: string; moneda: string }>>(Prisma.sql`
                 SELECT total, moneda FROM invoices
-                WHERE id = ${invoiceId} AND deleted_at IS NULL
+                WHERE id = ${invoiceId} AND deleted_at IS NULL ${tenantSql}
                 FOR UPDATE`);
             const inv = rows[0];
             if (!inv) throw new NotFoundException('Factura');
@@ -117,19 +128,27 @@ export class RegistrarPagoInvoice {
             });
 
             if (status === 'succeeded') {
+                // deletedAt:null a mano: el tx raw no auto-filtra el soft-delete como la
+                // extensión → un pago borrado no debe sumar y marcar la factura 'paid'.
                 const totalPagado = await tx.payment.aggregate({
                     _sum: { monto: true },
-                    where: { invoiceId, status: 'succeeded' },
+                    where: { invoiceId, status: 'succeeded', deletedAt: null, ...tenantWhere },
                 });
                 if (totalPagado._sum.monto && Number(totalPagado._sum.monto) >= Number(inv.total)) {
                     await tx.invoice.update({
-                        where: { id: invoiceId },
+                        where: { id: invoiceId, ...tenantWhere },
                         data: { status: 'paid', paidAt: new Date() },
                     });
                 }
             }
 
-            return pago;
+            // Remapear a la entidad de dominio (mismo contrato que repository.createPayment):
+            // monto como number (la fila cruda serializa el Decimal como string) y sin
+            // exponer columnas internas (concesionariaId/deletedAt).
+            return new Payment(
+                pago.id, pago.invoiceId, pago.status, Number(pago.monto), pago.moneda,
+                pago.metodo, pago.provider, pago.providerPaymentId, pago.createdAt, pago.updatedAt,
+            );
         });
     }
 }

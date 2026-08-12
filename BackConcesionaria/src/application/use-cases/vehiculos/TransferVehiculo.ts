@@ -35,7 +35,7 @@ export class TransferVehiculo {
         // (antes: prisma.$transaction del cliente EXTENDIDO, atomicidad ilusoria).
         return withTenantTransaction(async (tx) => {
             const updated = await tx.vehiculo.update({
-                where: { id: vehiculoId, ...tenantWhere, deletedAt: null },
+                where: { id: vehiculoId, ...tenantWhere },
                 data: { sucursalId: sucursalDestinoId },
             });
 

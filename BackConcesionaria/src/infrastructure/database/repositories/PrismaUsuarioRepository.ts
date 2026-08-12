@@ -3,6 +3,7 @@ import { Usuario } from '../../../domain/entities/Usuario';
 import prisma from '../prisma';
 import { withTenantTransaction } from '../unitOfWork';
 import { context } from '../../security/context';
+import { BaseException } from '../../../domain/exceptions/BaseException';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 
 export class PrismaUsuarioRepository implements IUsuarioRepository {
@@ -113,7 +114,11 @@ export class PrismaUsuarioRepository implements IUsuarioRepository {
         const updateData: any = { ...userData };
 
         const isSuper = context.getUser()?.roles?.includes('super_admin') || false;
-        const tenantWhere = isSuper ? {} : { concesionariaId: context.getTenantId() ?? undefined };
+        const tenantId = context.getTenantId();
+        // Fail-CLOSED: sin concesionaria (y sin ser super) no se puede acotar el update
+        // por tenant → se rechaza en vez de dejar el where sin filtro (fail-open).
+        if (!isSuper && !tenantId) throw new BaseException(401, 'Sesión sin concesionaria', 'UNAUTHORIZED');
+        const tenantWhere = isSuper ? {} : { concesionariaId: tenantId };
 
         // Unit of Work: la reasignación de roles (borrar los viejos + crear los nuevos
         // vía el nested update) debe ser ATÓMICA. Antes NO había transacción: si fallaba

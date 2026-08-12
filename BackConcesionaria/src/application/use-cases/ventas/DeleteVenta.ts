@@ -19,8 +19,11 @@ export class DeleteVenta {
         // fallaba el borrado tras liberar el auto, quedaba el vehículo re-vendible con la
         // venta viva → doble venta.
         return withTenantTransaction(async (tx) => {
+            // Sólo filtro de tenant (como la extensión, que NO agrega deletedAt en
+            // updates): si el vehículo estuviera soft-deleted, igual se libera en vez
+            // de abortar la cancelación con un P2025.
             await tx.vehiculo.update({
-                where: { id: current.vehiculoId, ...tenantWhere, deletedAt: null },
+                where: { id: current.vehiculoId, ...tenantWhere },
                 data: { estado: 'publicado' }
             });
 

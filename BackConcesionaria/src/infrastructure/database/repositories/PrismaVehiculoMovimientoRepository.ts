@@ -111,7 +111,7 @@ export class PrismaVehiculoMovimientoRepository implements IVehiculoMovimientoRe
             // Solo el traslado cambia la sucursal física del vehículo.
             if (esTraslado) {
                 await tx.vehiculo.update({
-                    where: { id: vehiculoId, ...tenantWhere, deletedAt: null },
+                    where: { id: vehiculoId, ...tenantWhere },
                     data: { sucursalId: Number(hastaSucursalId) }
                 });
             }
