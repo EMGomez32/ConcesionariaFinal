@@ -15,8 +15,12 @@ export class Login {
         // withAuthBypass: el login es legítimamente cross-tenant (busca por email sin
         // saber el tenant). Bajo el rol app_rw la RLS filtraría `usuarios` a 0 filas;
         // por eso se saltea explícito. `deletedAt: null` a mano (no pasa por la extensión).
+        // El email es @unique global (schema): este findFirst devuelve a lo sumo 1 fila.
+        // `orderBy: { id: 'asc' }` es defensa en profundidad: si alguna vez se regresara
+        // a un unique por-tenant, el login seguiría resolviendo de forma determinística.
         const usuario = await withAuthBypass((tx) => tx.usuario.findFirst({
             where: { email, deletedAt: null },
+            orderBy: { id: 'asc' },
             include: {
                 roles: { include: { rol: true } }
             }

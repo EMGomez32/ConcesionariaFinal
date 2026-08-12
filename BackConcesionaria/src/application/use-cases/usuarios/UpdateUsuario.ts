@@ -23,16 +23,14 @@ export class UpdateUsuario {
         // Reasignar la sucursal no puede sacar al usuario de su tenant.
         await assertMismoTenant('sucursal', updateData.sucursalId, exists.concesionariaId);
 
-        // HU-11: si cambia el email, validar unicidad antes de tirar P2002.
+        // HU-11: si cambia el email, validar unicidad antes de tirar P2002. El email
+        // es @unique GLOBAL, así que el chequeo es global (no acotado al tenant).
         if (updateData.email && updateData.email !== exists.email) {
-            const dup = await this.usuarioRepository.findByEmailInConcesionaria(
-                updateData.email,
-                exists.concesionariaId
-            );
+            const dup = await this.usuarioRepository.findByEmail(updateData.email);
             if (dup && dup.id !== id) {
                 throw new BaseException(
                     409,
-                    `Ya existe otro usuario con email ${updateData.email} en esta concesionaria`,
+                    `Ya existe otro usuario con el email ${updateData.email}`,
                     'EMAIL_DUPLICATED'
                 );
             }

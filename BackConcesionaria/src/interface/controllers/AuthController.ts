@@ -69,7 +69,9 @@ export class AuthController {
 
             // Flujo sin autenticación ni tenant: withAuthBypass saltea la RLS (bajo
             // app_rw filtraría `usuarios` a 0 filas y nunca encontraría al usuario).
-            const usuario = await withAuthBypass((tx) => tx.usuario.findFirst({ where: { email, activo: true, deletedAt: null } }));
+            // email es @unique global → a lo sumo 1 fila; orderBy determinístico como
+            // defensa en profundidad (que el reset nunca le llegue a un homónimo).
+            const usuario = await withAuthBypass((tx) => tx.usuario.findFirst({ where: { email, activo: true, deletedAt: null }, orderBy: { id: 'asc' } }));
             if (!usuario) return res.json(respuestaGenerica);
 
             const token = crypto.randomBytes(32).toString('hex');
