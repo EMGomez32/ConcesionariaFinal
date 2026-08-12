@@ -192,7 +192,7 @@ const ProveedoresPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {isLoading && !proveedores.length ? (
                     [1, 2, 3, 4, 5, 6].map(i => (
-                        <div key={i} className="card animate-pulse" style={{ height: '220px', background: 'rgba(255,255,255,0.05)' }}></div>
+                        <div key={i} className="card animate-pulse" style={{ height: '220px', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)' }}></div>
                     ))
                 ) : isError ? (
                     <div className="col-span-full py-20 text-center text-red-400 font-bold">Error al sincronizar proveedores</div>

@@ -1083,7 +1083,7 @@ const VehiculoDetallePage = () => {
                 .tab-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 0.625rem; font-weight: 600; font-size: 0.8125rem; color: var(--text-secondary); transition: all 0.15s; cursor: pointer; }
                 .tab-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }
                 .tab-btn.active { background: var(--accent); color: white; }
-                .tab-badge { background: rgba(255,255,255,0.25); padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; }
+                .tab-badge { background: color-mix(in srgb, currentColor 25%, transparent); padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; }
                 .tab-btn:not(.active) .tab-badge { background: var(--bg-secondary); color: var(--text-muted); }
 
                 .tab-content { padding: 2rem; border-radius: 1.25rem; border: 1px solid var(--border); }

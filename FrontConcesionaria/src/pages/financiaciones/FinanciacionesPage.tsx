@@ -1287,10 +1287,10 @@ const FinanciacionesPage = () => {
 
             <style>{`
                 .form-input-premium {
-                    background: rgba(15, 23, 42, 0.6);
-                    border: 1px solid rgba(255, 255, 255, 0.05);
+                    background: var(--bg-card);
+                    border: 1px solid var(--border);
                     border-radius: 1rem;
-                    color: white;
+                    color: var(--text-primary);
                     font-weight: 700;
                     font-size: 0.85rem;
                     outline: none;
@@ -1298,7 +1298,7 @@ const FinanciacionesPage = () => {
                 }
                 .form-input-premium:focus {
                     border-color: var(--accent);
-                    background: rgba(15, 23, 42, 0.9);
+                    background: var(--bg-card);
                     box-shadow: 0 0 15px rgba(79, 70, 229, 0.1);
                 }
                 .icon-badge {
@@ -1338,8 +1338,8 @@ const FinanciacionesPage = () => {
                 }
                 .filters-bar {
                     padding: 1.5rem !important;
-                    background: rgba(15, 23, 42, 0.4) !important;
-                    border: 1px solid rgba(255,255,255,0.05) !important;
+                    background: var(--bg-card) !important;
+                    border: 1px solid var(--border) !important;
                 }
                 .icon-btn {
                     padding: 0.6rem;

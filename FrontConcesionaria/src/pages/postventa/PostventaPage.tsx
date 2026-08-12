@@ -761,7 +761,7 @@ export default function PostventaPage() {
                                     const wa = turnoWaHref(caso);
                                     return (
                                         <tr key={caso.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                                            onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--text-primary) 5%, transparent)')}
                                             onMouseLeave={e => (e.currentTarget.style.background = '')}
                                         >
                                             <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
@@ -865,7 +865,7 @@ export default function PostventaPage() {
                                 <tr><td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No hay casos de postventa</td></tr>
                             ) : filteredCasos.map(caso => (
                                 <tr key={caso.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--text-primary) 5%, transparent)')}
                                     onMouseLeave={e => (e.currentTarget.style.background = '')}
                                 >
                                     <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>#{caso.id}</td>
@@ -1015,7 +1015,7 @@ export default function PostventaPage() {
                                     {ESTADO_LABELS[detailCaso.estado]}
                                 </span>
                                 {detailCaso.tipo && (
-                                    <span style={{ padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)' }}>
+                                    <span style={{ padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: '0.8rem', background: 'color-mix(in srgb, var(--text-primary) 8%, transparent)', color: 'var(--text-secondary)' }}>
                                         {detailCaso.tipo}
                                     </span>
                                 )}
@@ -1047,7 +1047,7 @@ export default function PostventaPage() {
 
                     {/* Turno de taller: agendar / reprogramar / desagendar (no aplica a resueltos) */}
                     {detailCaso.estado !== 'resuelto' && (
-                        <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.04)', borderRadius: '0.5rem' }}>
+                        <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem' }}>
                             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                 <Calendar size={13} /> Turno de taller
                             </div>
@@ -1073,7 +1073,7 @@ export default function PostventaPage() {
                     )}
 
                     {/* Descripción */}
-                    <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.04)', borderRadius: '0.5rem', fontSize: '0.9rem' }}>
+                    <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem', fontSize: '0.9rem' }}>
                         <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Descripción</div>
                         {detailCaso.descripcion}
                     </div>
@@ -1090,14 +1090,14 @@ export default function PostventaPage() {
                         </div>
 
                         {(detailCaso.items ?? []).length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'rgba(255,255,255,0.02)', borderRadius: '0.5rem' }}>
+                            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'color-mix(in srgb, var(--text-primary) 4%, transparent)', borderRadius: '0.5rem' }}>
                                 Sin ítems registrados
                             </div>
                         ) : (
                             <div style={{ border: '1px solid var(--border)', borderRadius: '0.5rem', overflow: 'hidden' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                     <thead>
-                                        <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.03)' }}>
+                                        <tr style={{ borderBottom: '1px solid var(--border)', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)' }}>
                                             {['Fecha', 'Descripción', 'Proveedor', 'Monto', ''].map(h => (
                                                 <th key={h} style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{h}</th>
                                             ))}
@@ -1141,7 +1141,7 @@ export default function PostventaPage() {
                     </div>
 
                     {/* Facturación al cliente + margen (facturado − costo de los items) */}
-                    <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.04)', borderRadius: '0.5rem' }}>
+                    <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem' }}>
                         <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
                             Facturación al cliente
                         </div>
@@ -1161,7 +1161,7 @@ export default function PostventaPage() {
                     </div>
 
                     {/* Próximo service (retención): recordatorio para que el cliente vuelva */}
-                    <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.04)', borderRadius: '0.5rem' }}>
+                    <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem' }}>
                         <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
                             Próximo service
                         </div>
@@ -1439,7 +1439,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 
 function InfoBlock({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '0.5rem', padding: '1rem' }}>
+        <div style={{ background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem', padding: '1rem' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>{title}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>{children}</div>
         </div>

@@ -43,7 +43,7 @@ const ProgressRow = ({ etiqueta, actual, objetivo, pct }: { etiqueta: string; ac
           {actual} <span className="text-muted">de {objetivo}</span> · <span style={{ color }}>{pct}%</span>
         </span>
       </div>
-      <div style={{ height: '10px', width: '100%', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
+      <div style={{ height: '10px', width: '100%', background: 'color-mix(in srgb, var(--text-primary) 10%, transparent)', borderRadius: '999px', overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '999px', transition: 'width .4s var(--easing-soft, ease)' }} />
       </div>
     </div>

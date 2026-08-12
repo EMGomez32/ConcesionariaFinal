@@ -1,10 +1,23 @@
 <!doctype html>
-<!-- Tema OSCURO por defecto desde el primer paint (sin flash): la app está
-     diseñada dark-first y las pantallas usan colores fijos para fondo oscuro.
-     El CSS aplica los tokens dark con el selector [data-theme="dark"]. -->
-<html lang="es" data-theme="dark">
+<!-- El tema se fija ANTES del primer paint con el script de abajo (sin flash):
+     lee la elección persistida (store `autenza-theme`) y cae a OSCURO por defecto
+     (la app es dark-first; el claro es opt-in vía el toggle del TopBar). El CSS
+     resuelve los tokens con :root (claro) y [data-theme="dark"] (oscuro). -->
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Aplica el tema guardado antes de pintar, para que no haya flash de tema.
+      (function () {
+        try {
+          var raw = localStorage.getItem('autenza-theme');
+          var t = raw && (JSON.parse(raw).state || {}).theme;
+          document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />

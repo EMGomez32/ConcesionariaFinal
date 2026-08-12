@@ -543,7 +543,7 @@ export default function FinanciacionExternaPage() {
                                         <tr><td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No hay solicitudes</td></tr>
                                     ) : filteredSolicitudes.map(s => (
                                         <tr key={s.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                                            onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--text-primary) 5%, transparent)')}
                                             onMouseLeave={e => (e.currentTarget.style.background = '')}
                                         >
                                             <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>#{s.id}</td>
@@ -838,7 +838,7 @@ export default function FinanciacionExternaPage() {
                     </div>
 
                     {detailSolicitud.observaciones && (
-                        <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(255,255,255,0.04)', borderRadius: '0.5rem', fontSize: '0.9rem' }}>
+                        <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem', fontSize: '0.9rem' }}>
                             <strong>Observaciones:</strong> {detailSolicitud.observaciones}
                         </div>
                     )}
@@ -859,7 +859,7 @@ export default function FinanciacionExternaPage() {
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
                                 {archivosSol.map(a => (
-                                    <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '0.5rem' }}>
+                                    <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem' }}>
                                         <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1002,7 +1002,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 
 function InfoBlock({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '0.5rem', padding: '1rem' }}>
+        <div style={{ background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem', padding: '1rem' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>{title}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>{children}</div>
         </div>

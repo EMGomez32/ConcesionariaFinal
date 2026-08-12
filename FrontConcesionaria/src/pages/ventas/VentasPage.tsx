@@ -400,7 +400,7 @@ const VentasPage = () => {
                         type="text"
                         placeholder="BUSCAR POR CLIENTE, MARCA, MODELO, DOMINIO O RESPONSABLE COMERCIAL..."
                         className="form-input pl-12 h-12 w-full"
-                        style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '1rem', color: 'white' }}
+                        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '1rem', color: 'var(--text-primary)' }}
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                     />

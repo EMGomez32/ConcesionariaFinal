@@ -50,7 +50,7 @@ const ProgressCell = ({
                 </span>
                 <span className="text-xs font-bold" style={{ color }}>{p}%</span>
             </div>
-            <div style={{ height: '8px', width: '100%', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
+            <div style={{ height: '8px', width: '100%', background: 'color-mix(in srgb, var(--text-primary) 10%, transparent)', borderRadius: '999px', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${shown}%`, background: color, borderRadius: '999px', transition: 'width .3s' }} />
             </div>
         </div>
