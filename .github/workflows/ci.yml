@@ -78,8 +78,13 @@ jobs:
       - run: npm ci
       - name: Generar cliente Prisma
         run: npx prisma generate
-      - name: Aplicar schema (db push)
-        run: npx prisma db push
+      - name: Aplicar schema (migrate deploy)
+        run: npx prisma migrate deploy
+      # Drift guard SIN shadow DB (evita el footgun de --from-migrations, que Prisma
+      # RESETEA la DB apuntada): compara el schema.prisma contra la DB ya migrada por
+      # migrate deploy. exit 2 si el schema cambió sin una migración que lo acompañe.
+      - name: Drift guard (schema.prisma cubierto por las migraciones)
+        run: npx prisma migrate diff --from-schema prisma/schema.prisma --to-config-datasource --exit-code
       - name: Inicializar RLS (policies + triggers)
         run: npm run init-rls
       - name: Seed de CI (roles, plan, tenant, usuarios demo)
@@ -154,8 +159,8 @@ jobs:
       - run: npm ci
       - name: Generar cliente Prisma
         run: npx prisma generate
-      - name: Aplicar schema (db push)
-        run: npx prisma db push
+      - name: Aplicar schema (migrate deploy)
+        run: npx prisma migrate deploy
       - name: Inicializar RLS (policies + triggers)
         run: npm run init-rls
       - name: Crear rol app_rw + grants
