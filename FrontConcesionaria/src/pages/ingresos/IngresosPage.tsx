@@ -335,8 +335,8 @@ const IngresosPage = () => {
                 }
                 .filters-bar {
                     padding: 1.5rem !important;
-                    background: rgba(15, 23, 42, 0.4) !important;
-                    border: 1px solid rgba(255,255,255,0.05) !important;
+                    background: var(--bg-card) !important;
+                    border: 1px solid var(--border) !important;
                 }
                 .icon-btn {
                     padding: 0.6rem;

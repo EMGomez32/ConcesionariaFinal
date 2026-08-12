@@ -1,17 +1,20 @@
 import { useAuthStore } from '../../store/authStore';
-import { LogOut, User, Menu, Search } from 'lucide-react';
+import { LogOut, User, Menu, Search, Sun, Moon } from 'lucide-react';
 import Breadcrumbs from './Breadcrumbs';
 import NotificationBell from './NotificationBell';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
+import { useThemeStore } from '../../store/themeStore';
 import { performLogout } from '../../api/auth.api';
 
-// La app es dark-first: el tema oscuro se fija en index.html (<html data-theme="dark">)
-// desde el primer paint. No hay toggle de tema porque las pantallas usan colores
-// fijos para fondo oscuro; habilitar el tema claro requiere tokenizar esas páginas
-// (reemplazar text-white/bg-slate-* por var(--text-*)/var(--bg-*)) — follow-up.
+// La app es dark-first (default en index.html), pero el usuario puede conmutar a
+// claro con el toggle de acá; la elección se persiste (store `autenza-theme`) y se
+// aplica a <html data-theme>. Las pantallas de auth/login quedan siempre dark
+// (colores fijos, ver AuthShell/LoginPage).
 const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () => void; showNotifications?: boolean }) => {
   const { user } = useAuthStore();
   const openPalette = useCommandPaletteStore((s) => s.open);
+  const theme = useThemeStore((s) => s.theme);
+  const toggleTheme = useThemeStore((s) => s.toggleTheme);
 
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -34,6 +37,16 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
           <Search size={14} />
           <span className="cmdk-trigger-text">Buscar</span>
           <kbd className="cmdk-trigger-kbd">{isMac ? '⌘' : 'Ctrl'} K</kbd>
+        </button>
+
+        <button
+          type="button"
+          className="icon-button theme-toggle"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+          title={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
         {showNotifications && (

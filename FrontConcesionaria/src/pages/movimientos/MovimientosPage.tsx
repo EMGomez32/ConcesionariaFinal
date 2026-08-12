@@ -512,8 +512,8 @@ const MovimientosPage = () => {
                 }
                 .filters-bar {
                     padding: 1.5rem !important;
-                    background: rgba(15, 23, 42, 0.6) !important;
-                    border: 1px solid rgba(255,255,255,0.03) !important;
+                    background: var(--bg-card) !important;
+                    border: 1px solid var(--border) !important;
                 }
             `}</style>
         </div>
