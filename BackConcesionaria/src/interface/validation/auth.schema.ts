@@ -10,7 +10,10 @@ import { z } from 'zod';
 // para sus propios casos (vacío / formato).
 
 export const loginSchema = z.object({
-    email: z.string({ error: 'El email es obligatorio' }).trim().min(1, 'El email es obligatorio').email('Email inválido'),
+    // `.toLowerCase()`: el email es identidad GLOBAL (schema: @unique). Normalizarlo
+    // en el borde hace la unicidad case-insensitive de hecho y evita que 'Admin@x' y
+    // 'admin@x' sean cuentas distintas o que el login no matchee por diferencia de case.
+    email: z.string({ error: 'El email es obligatorio' }).trim().toLowerCase().min(1, 'El email es obligatorio').email('Email inválido'),
     password: z.string({ error: 'La contraseña es obligatoria' }).min(1, 'La contraseña es obligatoria'),
 });
 

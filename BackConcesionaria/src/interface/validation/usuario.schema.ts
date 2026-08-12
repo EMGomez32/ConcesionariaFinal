@@ -37,7 +37,9 @@ const comisionPorcentaje = z.preprocess(
 
 export const createUsuarioSchema = z.object({
     nombre: z.string({ error: 'El nombre es obligatorio' }).min(1, 'El nombre es obligatorio'),
-    email: z.string({ error: 'El email es obligatorio' }).trim().min(1, 'El email es obligatorio').email('Email inválido'),
+    // `.toLowerCase()`: email = identidad GLOBAL (@unique). Canonizar en minúscula acá
+    // hace la unicidad case-insensitive y mantiene login/alta/reset consistentes.
+    email: z.string({ error: 'El email es obligatorio' }).trim().toLowerCase().min(1, 'El email es obligatorio').email('Email inválido'),
     // El use-case exige y hashea password (min 6). Se centraliza la regla acá.
     password: z.string({ error: 'La contraseña es obligatoria' }).min(6, 'La contraseña debe tener al menos 6 caracteres'),
     // Opcional a propósito: lo inyecta el controller desde el token para un admin;
@@ -57,7 +59,7 @@ export const createUsuarioSchema = z.object({
 // (anti auto-lockout); el schema igual valida su forma, el strip ocurre después.
 export const updateUsuarioSchema = z.object({
     nombre: z.string().min(1, 'El nombre no puede estar vacío').optional(),
-    email: z.string().trim().min(1, 'El email no puede estar vacío').email('Email inválido').optional(),
+    email: z.string().trim().toLowerCase().min(1, 'El email no puede estar vacío').email('Email inválido').optional(),
     // El form de edición NO renderiza el campo password, pero igual manda
     // password:'' (queda del estado inicial y el padre no lo strippea). '' => undefined
     // para no rechazar el request ni re-hashear; un password real sigue exigiendo min 6.
@@ -86,7 +88,7 @@ export const resetUsuarioPasswordSchema = z.object({
 // PATCH /usuarios/me — autogestión. El controller sólo lee nombre y email.
 export const updateMeSchema = z.object({
     nombre: z.string().min(1, 'El nombre no puede estar vacío').optional(),
-    email: z.string().trim().min(1, 'El email no puede estar vacío').email('Email inválido').optional(),
+    email: z.string().trim().toLowerCase().min(1, 'El email no puede estar vacío').email('Email inválido').optional(),
 });
 
 // POST /usuarios/me/password — cambio de la propia clave (verifica la actual).

@@ -35,16 +35,15 @@ export class CreateUsuario {
         // esto un admin podría asignar a alguien a una sucursal de otro tenant.
         await assertMismoTenant('sucursal', userData.sucursalId, userData.concesionariaId);
 
-        // HU-09: validar unicidad email dentro de la concesionaria.
-        // Mejor que dejar a Prisma tirar P2002 con mensaje genérico.
-        const dup = await this.usuarioRepository.findByEmailInConcesionaria(
-            userData.email,
-            userData.concesionariaId
-        );
+        // HU-09: validar unicidad de email. Ahora el email es @unique GLOBAL (no por
+        // tenant), así que el pre-chequeo también es global: un email que ya existe en
+        // OTRA concesionaria debe cortar acá con un 409 amistoso, no reventar en el
+        // INSERT con un P2002 crudo.
+        const dup = await this.usuarioRepository.findByEmail(userData.email);
         if (dup) {
             throw new BaseException(
                 409,
-                `Ya existe un usuario con email ${userData.email} en esta concesionaria`,
+                `Ya existe un usuario con el email ${userData.email}`,
                 'EMAIL_DUPLICATED'
             );
         }
