@@ -39,7 +39,7 @@ services:
     # en backend:3000. No hace falta exponerlo al host, y evita choques con
     # otros servicios que usen el 3000.
     environment:
-      # ADMIN (superusuario): SOLO para db push / init-rls / setup-app-role.
+      # ADMIN (superusuario): SOLO para migrate deploy / init-rls / setup-app-role.
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-concesionaria}?sslmode=disable
       # RUNTIME (rol NO superusuario app_rw) para que la RLS filtre de verdad.
       # Opcional: si está vacío, la app cae a DATABASE_URL (RLS inactiva). Para
@@ -72,10 +72,12 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
-    # 'db push' (sin --accept-data-loss) aplica cambios NO destructivos y aborta
-    # si un cambio implicara perder datos — en vez de borrarlos en silencio.
+    # 'migrate deploy' aplica las migraciones versionadas pendientes (prisma/migrations)
+    # y las registra en _prisma_migrations; nunca cambia el schema fuera de una migración.
+    # Idempotente: sin pendientes es no-op. El cutover desde 'db push' requirió baselinear
+    # prod UNA vez con `migrate resolve --applied 0_init` (crea _prisma_migrations sin DDL).
     # El seed ya NO corre en cada arranque (ver README: se corre una sola vez).
-    command: sh -c "npx prisma db push && npm run init-rls && npm run setup-app-role && npm start"
+    command: sh -c "npx prisma migrate deploy && npm run init-rls && npm run setup-app-role && npm start"
     volumes:
       - uploads:/app/uploads
     healthcheck:

@@ -35,7 +35,7 @@ CREATE TYPE "MetodoPago" AS ENUM ('efectivo', 'transferencia', 'tarjeta', 'chequ
 CREATE TYPE "EstadoFinanciacion" AS ENUM ('activa', 'cancelada', 'en_mora', 'refinanciada');
 
 -- CreateEnum
-CREATE TYPE "EstadoCuota" AS ENUM ('pendiente', 'parcial', 'pagada', 'vencida');
+CREATE TYPE "EstadoCuota" AS ENUM ('pendiente', 'parcial', 'pagada', 'vencida', 'refinanciada');
 
 -- CreateEnum
 CREATE TYPE "EstadoSolicitudFinanciacion" AS ENUM ('borrador', 'enviada', 'pendiente', 'aprobada', 'rechazada', 'cancelada');
@@ -45,6 +45,15 @@ CREATE TYPE "TipoFinanciera" AS ENUM ('financiera', 'banco', 'otra');
 
 -- CreateEnum
 CREATE TYPE "EstadoPostventa" AS ENUM ('pendiente', 'en_curso', 'resuelto');
+
+-- CreateEnum
+CREATE TYPE "TipoSeguimiento" AS ENUM ('llamada', 'whatsapp', 'email', 'visita', 'otro');
+
+-- CreateEnum
+CREATE TYPE "CondicionTasacion" AS ENUM ('excelente', 'muy_bueno', 'bueno', 'regular', 'malo');
+
+-- CreateEnum
+CREATE TYPE "EstadoLead" AS ENUM ('nuevo', 'contactado', 'negociando', 'ganado', 'perdido');
 
 -- CreateEnum
 CREATE TYPE "TipoMovimientoVehiculo" AS ENUM ('traslado', 'preparacion', 'ingreso', 'egreso', 'asignacion_reserva', 'liberacion_reserva', 'otro');
@@ -72,6 +81,13 @@ CREATE TABLE "concesionarias" (
     "email" TEXT,
     "telefono" TEXT,
     "direccion" TEXT,
+    "logo_url" TEXT,
+    "logo_storage_key" TEXT,
+    "color_primario" TEXT,
+    "color_secundario" TEXT,
+    "pdf_pie" TEXT,
+    "sitio_web" TEXT,
+    "limite_usuarios" INTEGER,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
@@ -116,6 +132,7 @@ CREATE TABLE "usuarios" (
     "email" TEXT NOT NULL,
     "password_hash" TEXT,
     "activo" BOOLEAN NOT NULL DEFAULT true,
+    "comision_porcentaje" DECIMAL(5,2),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
@@ -145,11 +162,67 @@ CREATE TABLE "clientes" (
     "email" TEXT,
     "direccion" TEXT,
     "observaciones" TEXT,
+    "estado_lead" "EstadoLead" NOT NULL DEFAULT 'nuevo',
+    "vendedor_asignado_id" INTEGER,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "clientes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "cliente_seguimientos" (
+    "id" SERIAL NOT NULL,
+    "concesionaria_id" INTEGER NOT NULL,
+    "cliente_id" INTEGER NOT NULL,
+    "usuario_id" INTEGER NOT NULL,
+    "tipo" "TipoSeguimiento" NOT NULL DEFAULT 'otro',
+    "fecha" DATE NOT NULL,
+    "nota" TEXT NOT NULL,
+    "proximo_contacto" DATE,
+    "proximo_contacto_hecho" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
+
+    CONSTRAINT "cliente_seguimientos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tasaciones" (
+    "id" SERIAL NOT NULL,
+    "concesionaria_id" INTEGER NOT NULL,
+    "cliente_id" INTEGER,
+    "tasador_id" INTEGER,
+    "marca" TEXT NOT NULL,
+    "modelo" TEXT NOT NULL,
+    "anio" INTEGER,
+    "km" INTEGER,
+    "dominio" TEXT,
+    "condicion" "CondicionTasacion" NOT NULL DEFAULT 'bueno',
+    "valor_estimado" DECIMAL(12,2),
+    "moneda" TEXT NOT NULL DEFAULT 'ARS',
+    "fecha" DATE NOT NULL,
+    "observaciones" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
+
+    CONSTRAINT "tasaciones_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "vehiculo_intereses" (
+    "id" SERIAL NOT NULL,
+    "concesionaria_id" INTEGER NOT NULL,
+    "cliente_id" INTEGER NOT NULL,
+    "vehiculo_id" INTEGER NOT NULL,
+    "nota" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "vehiculo_intereses_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -187,6 +260,8 @@ CREATE TABLE "vehiculos" (
     "estado" "EstadoVehiculo" NOT NULL DEFAULT 'preparacion',
     "fecha_ingreso" DATE NOT NULL,
     "fecha_compra" DATE,
+    "vencimiento_vtv" DATE,
+    "vencimiento_seguro" DATE,
     "precio_compra" DECIMAL(12,2),
     "precio_lista" DECIMAL(12,2),
     "moneda" TEXT NOT NULL DEFAULT 'ARS',
@@ -198,6 +273,21 @@ CREATE TABLE "vehiculos" (
     "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "vehiculos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "vehiculo_precio_historial" (
+    "id" SERIAL NOT NULL,
+    "concesionaria_id" INTEGER NOT NULL,
+    "vehiculo_id" INTEGER NOT NULL,
+    "precio_anterior" DECIMAL(12,2),
+    "precio_nuevo" DECIMAL(12,2) NOT NULL,
+    "moneda" TEXT NOT NULL DEFAULT 'ARS',
+    "motivo" TEXT,
+    "usuario_id" INTEGER,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "vehiculo_precio_historial_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -213,6 +303,7 @@ CREATE TABLE "vehiculo_archivos" (
     "size_bytes" INTEGER,
     "storage_key" TEXT,
     "uploaded_by_id" INTEGER,
+    "es_principal" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
@@ -252,6 +343,7 @@ CREATE TABLE "vehiculo_movimientos" (
     "tipo" "TipoMovimientoVehiculo" NOT NULL,
     "fecha" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "motivo" TEXT,
+    "proveedor_destino_id" INTEGER,
     "destino" TEXT,
     "fecha_retorno" TIMESTAMP(3),
     "registrado_por_id" INTEGER,
@@ -290,6 +382,7 @@ CREATE TABLE "categorias_gasto_vehiculo" (
     "id" SERIAL NOT NULL,
     "concesionaria_id" INTEGER NOT NULL,
     "nombre" TEXT NOT NULL,
+    "descripcion" TEXT,
     "activo" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
@@ -303,7 +396,7 @@ CREATE TABLE "gastos_vehiculo" (
     "id" SERIAL NOT NULL,
     "concesionaria_id" INTEGER NOT NULL,
     "vehiculo_id" INTEGER NOT NULL,
-    "categoria_id" INTEGER NOT NULL,
+    "categoria_id" INTEGER,
     "proveedor_id" INTEGER,
     "fecha" DATE NOT NULL,
     "monto" DECIMAL(12,2) NOT NULL,
@@ -348,6 +441,49 @@ CREATE TABLE "gastos_fijos" (
     "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "gastos_fijos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "cotizaciones" (
+    "id" SERIAL NOT NULL,
+    "concesionaria_id" INTEGER NOT NULL,
+    "fecha" DATE NOT NULL,
+    "valor" DECIMAL(14,4) NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "cotizaciones_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "metas_venta" (
+    "id" SERIAL NOT NULL,
+    "concesionaria_id" INTEGER NOT NULL,
+    "anio" INTEGER NOT NULL,
+    "mes" INTEGER NOT NULL,
+    "unidades_objetivo" INTEGER,
+    "monto_objetivo" DECIMAL(14,2),
+    "moneda" TEXT NOT NULL DEFAULT 'ARS',
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "metas_venta_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "objetivos_vendedor" (
+    "id" SERIAL NOT NULL,
+    "concesionaria_id" INTEGER NOT NULL,
+    "vendedor_id" INTEGER NOT NULL,
+    "anio" INTEGER NOT NULL,
+    "mes" INTEGER NOT NULL,
+    "unidades_objetivo" INTEGER,
+    "monto_objetivo" DECIMAL(14,2),
+    "moneda" TEXT NOT NULL DEFAULT 'ARS',
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "objetivos_vendedor_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -508,6 +644,7 @@ CREATE TABLE "financiaciones" (
     "tasa_mensual" DECIMAL(8,4),
     "estado" "EstadoFinanciacion" NOT NULL DEFAULT 'activa',
     "observaciones" TEXT,
+    "refinancia_a_id" INTEGER,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
@@ -543,6 +680,7 @@ CREATE TABLE "pagos_cuota" (
     "metodo" "MetodoPago" NOT NULL,
     "referencia" TEXT,
     "observaciones" TEXT,
+    "idempotency_key" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
@@ -574,6 +712,7 @@ CREATE TABLE "solicitudes_financiacion" (
     "sucursal_id" INTEGER,
     "venta_id" INTEGER,
     "presupuesto_id" INTEGER,
+    "vehiculo_id" INTEGER,
     "cliente_id" INTEGER NOT NULL,
     "financiera_id" INTEGER NOT NULL,
     "estado" "EstadoSolicitudFinanciacion" NOT NULL DEFAULT 'borrador',
@@ -620,15 +759,33 @@ CREATE TABLE "postventa_casos" (
     "vehiculo_id" INTEGER NOT NULL,
     "cliente_id" INTEGER NOT NULL,
     "fecha_reclamo" DATE NOT NULL,
+    "tipo_id" INTEGER,
     "tipo" TEXT,
     "descripcion" TEXT NOT NULL,
     "estado" "EstadoPostventa" NOT NULL DEFAULT 'pendiente',
+    "monto_facturado" DECIMAL(12,2),
     "fecha_cierre" DATE,
+    "fecha_turno" DATE,
+    "hora_turno" TEXT,
+    "proximo_service_fecha" DATE,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "postventa_casos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tipos_postventa" (
+    "id" SERIAL NOT NULL,
+    "concesionaria_id" INTEGER NOT NULL,
+    "nombre" TEXT NOT NULL,
+    "activo" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
+
+    CONSTRAINT "tipos_postventa_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -834,13 +991,10 @@ CREATE UNIQUE INDEX "sucursales_concesionaria_id_nombre_key" ON "sucursales"("co
 CREATE UNIQUE INDEX "roles_nombre_key" ON "roles"("nombre");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "usuarios_email_key" ON "usuarios"("email");
+
+-- CreateIndex
 CREATE INDEX "usuarios_concesionaria_id_idx" ON "usuarios"("concesionaria_id");
-
--- CreateIndex
-CREATE INDEX "usuarios_email_idx" ON "usuarios"("email");
-
--- CreateIndex
-CREATE UNIQUE INDEX "usuarios_concesionaria_id_email_key" ON "usuarios"("concesionaria_id", "email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "usuario_roles_usuario_id_rol_id_key" ON "usuario_roles"("usuario_id", "rol_id");
@@ -849,10 +1003,40 @@ CREATE UNIQUE INDEX "usuario_roles_usuario_id_rol_id_key" ON "usuario_roles"("us
 CREATE INDEX "clientes_concesionaria_id_idx" ON "clientes"("concesionaria_id");
 
 -- CreateIndex
+CREATE INDEX "clientes_concesionaria_id_estado_lead_idx" ON "clientes"("concesionaria_id", "estado_lead");
+
+-- CreateIndex
+CREATE INDEX "clientes_vendedor_asignado_id_idx" ON "clientes"("vendedor_asignado_id");
+
+-- CreateIndex
 CREATE INDEX "clientes_dni_idx" ON "clientes"("dni");
 
 -- CreateIndex
 CREATE INDEX "clientes_telefono_idx" ON "clientes"("telefono");
+
+-- CreateIndex
+CREATE INDEX "cliente_seguimientos_concesionaria_id_idx" ON "cliente_seguimientos"("concesionaria_id");
+
+-- CreateIndex
+CREATE INDEX "cliente_seguimientos_cliente_id_idx" ON "cliente_seguimientos"("cliente_id");
+
+-- CreateIndex
+CREATE INDEX "cliente_seguimientos_usuario_id_idx" ON "cliente_seguimientos"("usuario_id");
+
+-- CreateIndex
+CREATE INDEX "tasaciones_concesionaria_id_idx" ON "tasaciones"("concesionaria_id");
+
+-- CreateIndex
+CREATE INDEX "tasaciones_cliente_id_idx" ON "tasaciones"("cliente_id");
+
+-- CreateIndex
+CREATE INDEX "vehiculo_intereses_concesionaria_id_idx" ON "vehiculo_intereses"("concesionaria_id");
+
+-- CreateIndex
+CREATE INDEX "vehiculo_intereses_vehiculo_id_idx" ON "vehiculo_intereses"("vehiculo_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "vehiculo_intereses_cliente_id_vehiculo_id_key" ON "vehiculo_intereses"("cliente_id", "vehiculo_id");
 
 -- CreateIndex
 CREATE INDEX "proveedores_concesionaria_id_idx" ON "proveedores"("concesionaria_id");
@@ -879,10 +1063,19 @@ CREATE INDEX "vehiculos_estado_idx" ON "vehiculos"("estado");
 CREATE UNIQUE INDEX "vehiculos_concesionaria_id_vin_key" ON "vehiculos"("concesionaria_id", "vin");
 
 -- CreateIndex
+CREATE INDEX "vehiculo_precio_historial_concesionaria_id_idx" ON "vehiculo_precio_historial"("concesionaria_id");
+
+-- CreateIndex
+CREATE INDEX "vehiculo_precio_historial_vehiculo_id_idx" ON "vehiculo_precio_historial"("vehiculo_id");
+
+-- CreateIndex
 CREATE INDEX "vehiculo_archivos_concesionaria_id_idx" ON "vehiculo_archivos"("concesionaria_id");
 
 -- CreateIndex
 CREATE INDEX "vehiculo_archivos_vehiculo_id_idx" ON "vehiculo_archivos"("vehiculo_id");
+
+-- CreateIndex
+CREATE INDEX "vehiculo_archivos_vehiculo_id_es_principal_idx" ON "vehiculo_archivos"("vehiculo_id", "es_principal");
 
 -- CreateIndex
 CREATE INDEX "ingresos_vehiculo_concesionaria_id_idx" ON "ingresos_vehiculo"("concesionaria_id");
@@ -904,6 +1097,9 @@ CREATE INDEX "vehiculo_movimientos_desde_sucursal_id_idx" ON "vehiculo_movimient
 
 -- CreateIndex
 CREATE INDEX "vehiculo_movimientos_hasta_sucursal_id_idx" ON "vehiculo_movimientos"("hasta_sucursal_id");
+
+-- CreateIndex
+CREATE INDEX "vehiculo_movimientos_proveedor_destino_id_idx" ON "vehiculo_movimientos"("proveedor_destino_id");
 
 -- CreateIndex
 CREATE INDEX "reservas_concesionaria_id_idx" ON "reservas"("concesionaria_id");
@@ -949,6 +1145,24 @@ CREATE INDEX "gastos_fijos_concesionaria_id_anio_mes_idx" ON "gastos_fijos"("con
 
 -- CreateIndex
 CREATE INDEX "gastos_fijos_categoria_id_idx" ON "gastos_fijos"("categoria_id");
+
+-- CreateIndex
+CREATE INDEX "cotizaciones_concesionaria_id_fecha_idx" ON "cotizaciones"("concesionaria_id", "fecha");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "cotizaciones_concesionaria_id_fecha_key" ON "cotizaciones"("concesionaria_id", "fecha");
+
+-- CreateIndex
+CREATE INDEX "metas_venta_concesionaria_id_anio_mes_idx" ON "metas_venta"("concesionaria_id", "anio", "mes");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "metas_venta_concesionaria_id_anio_mes_key" ON "metas_venta"("concesionaria_id", "anio", "mes");
+
+-- CreateIndex
+CREATE INDEX "objetivos_vendedor_concesionaria_id_anio_mes_idx" ON "objetivos_vendedor"("concesionaria_id", "anio", "mes");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "objetivos_vendedor_concesionaria_id_vendedor_id_anio_mes_key" ON "objetivos_vendedor"("concesionaria_id", "vendedor_id", "anio", "mes");
 
 -- CreateIndex
 CREATE INDEX "presupuestos_concesionaria_id_idx" ON "presupuestos"("concesionaria_id");
@@ -1038,9 +1252,6 @@ CREATE INDEX "venta_canje_vehiculo_venta_id_idx" ON "venta_canje_vehiculo"("vent
 CREATE INDEX "venta_canje_vehiculo_vehiculo_canje_id_idx" ON "venta_canje_vehiculo"("vehiculo_canje_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "financiaciones_venta_id_key" ON "financiaciones"("venta_id");
-
--- CreateIndex
 CREATE INDEX "financiaciones_concesionaria_id_idx" ON "financiaciones"("concesionaria_id");
 
 -- CreateIndex
@@ -1063,6 +1274,9 @@ CREATE INDEX "cuotas_estado_idx" ON "cuotas"("estado");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "cuotas_financiacion_id_nro_cuota_key" ON "cuotas"("financiacion_id", "nro_cuota");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "pagos_cuota_idempotency_key_key" ON "pagos_cuota"("idempotency_key");
 
 -- CreateIndex
 CREATE INDEX "pagos_cuota_concesionaria_id_idx" ON "pagos_cuota"("concesionaria_id");
@@ -1092,6 +1306,9 @@ CREATE INDEX "solicitudes_financiacion_cliente_id_idx" ON "solicitudes_financiac
 CREATE INDEX "solicitudes_financiacion_financiera_id_idx" ON "solicitudes_financiacion"("financiera_id");
 
 -- CreateIndex
+CREATE INDEX "solicitudes_financiacion_vehiculo_id_idx" ON "solicitudes_financiacion"("vehiculo_id");
+
+-- CreateIndex
 CREATE INDEX "solicitudes_financiacion_estado_idx" ON "solicitudes_financiacion"("estado");
 
 -- CreateIndex
@@ -1116,7 +1333,22 @@ CREATE INDEX "postventa_casos_vehiculo_id_idx" ON "postventa_casos"("vehiculo_id
 CREATE INDEX "postventa_casos_cliente_id_idx" ON "postventa_casos"("cliente_id");
 
 -- CreateIndex
+CREATE INDEX "postventa_casos_tipo_id_idx" ON "postventa_casos"("tipo_id");
+
+-- CreateIndex
 CREATE INDEX "postventa_casos_estado_idx" ON "postventa_casos"("estado");
+
+-- CreateIndex
+CREATE INDEX "postventa_casos_concesionaria_id_fecha_turno_idx" ON "postventa_casos"("concesionaria_id", "fecha_turno");
+
+-- CreateIndex
+CREATE INDEX "postventa_casos_concesionaria_id_proximo_service_fecha_idx" ON "postventa_casos"("concesionaria_id", "proximo_service_fecha");
+
+-- CreateIndex
+CREATE INDEX "tipos_postventa_concesionaria_id_idx" ON "tipos_postventa"("concesionaria_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tipos_postventa_concesionaria_id_nombre_key" ON "tipos_postventa"("concesionaria_id", "nombre");
 
 -- CreateIndex
 CREATE INDEX "postventa_items_concesionaria_id_idx" ON "postventa_items"("concesionaria_id");
@@ -1212,6 +1444,36 @@ ALTER TABLE "usuario_roles" ADD CONSTRAINT "usuario_roles_usuario_id_fkey" FOREI
 ALTER TABLE "clientes" ADD CONSTRAINT "clientes_concesionaria_id_fkey" FOREIGN KEY ("concesionaria_id") REFERENCES "concesionarias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "clientes" ADD CONSTRAINT "clientes_vendedor_asignado_id_fkey" FOREIGN KEY ("vendedor_asignado_id") REFERENCES "usuarios"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cliente_seguimientos" ADD CONSTRAINT "cliente_seguimientos_cliente_id_fkey" FOREIGN KEY ("cliente_id") REFERENCES "clientes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cliente_seguimientos" ADD CONSTRAINT "cliente_seguimientos_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "usuarios"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cliente_seguimientos" ADD CONSTRAINT "cliente_seguimientos_concesionaria_id_fkey" FOREIGN KEY ("concesionaria_id") REFERENCES "concesionarias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tasaciones" ADD CONSTRAINT "tasaciones_cliente_id_fkey" FOREIGN KEY ("cliente_id") REFERENCES "clientes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tasaciones" ADD CONSTRAINT "tasaciones_tasador_id_fkey" FOREIGN KEY ("tasador_id") REFERENCES "usuarios"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tasaciones" ADD CONSTRAINT "tasaciones_concesionaria_id_fkey" FOREIGN KEY ("concesionaria_id") REFERENCES "concesionarias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vehiculo_intereses" ADD CONSTRAINT "vehiculo_intereses_cliente_id_fkey" FOREIGN KEY ("cliente_id") REFERENCES "clientes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vehiculo_intereses" ADD CONSTRAINT "vehiculo_intereses_vehiculo_id_fkey" FOREIGN KEY ("vehiculo_id") REFERENCES "vehiculos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vehiculo_intereses" ADD CONSTRAINT "vehiculo_intereses_concesionaria_id_fkey" FOREIGN KEY ("concesionaria_id") REFERENCES "concesionarias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "proveedores" ADD CONSTRAINT "proveedores_concesionaria_id_fkey" FOREIGN KEY ("concesionaria_id") REFERENCES "concesionarias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1222,6 +1484,15 @@ ALTER TABLE "vehiculos" ADD CONSTRAINT "vehiculos_proveedor_compra_id_fkey" FORE
 
 -- AddForeignKey
 ALTER TABLE "vehiculos" ADD CONSTRAINT "vehiculos_sucursal_id_fkey" FOREIGN KEY ("sucursal_id") REFERENCES "sucursales"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vehiculo_precio_historial" ADD CONSTRAINT "vehiculo_precio_historial_vehiculo_id_fkey" FOREIGN KEY ("vehiculo_id") REFERENCES "vehiculos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vehiculo_precio_historial" ADD CONSTRAINT "vehiculo_precio_historial_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "usuarios"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vehiculo_precio_historial" ADD CONSTRAINT "vehiculo_precio_historial_concesionaria_id_fkey" FOREIGN KEY ("concesionaria_id") REFERENCES "concesionarias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "vehiculo_archivos" ADD CONSTRAINT "vehiculo_archivos_vehiculo_id_fkey" FOREIGN KEY ("vehiculo_id") REFERENCES "vehiculos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1260,6 +1531,9 @@ ALTER TABLE "vehiculo_movimientos" ADD CONSTRAINT "vehiculo_movimientos_desde_su
 ALTER TABLE "vehiculo_movimientos" ADD CONSTRAINT "vehiculo_movimientos_hasta_sucursal_id_fkey" FOREIGN KEY ("hasta_sucursal_id") REFERENCES "sucursales"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "vehiculo_movimientos" ADD CONSTRAINT "vehiculo_movimientos_proveedor_destino_id_fkey" FOREIGN KEY ("proveedor_destino_id") REFERENCES "proveedores"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "vehiculo_movimientos" ADD CONSTRAINT "vehiculo_movimientos_registrado_por_id_fkey" FOREIGN KEY ("registrado_por_id") REFERENCES "usuarios"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1287,7 +1561,7 @@ ALTER TABLE "reservas" ADD CONSTRAINT "reservas_venta_id_fkey" FOREIGN KEY ("ven
 ALTER TABLE "categorias_gasto_vehiculo" ADD CONSTRAINT "categorias_gasto_vehiculo_concesionaria_id_fkey" FOREIGN KEY ("concesionaria_id") REFERENCES "concesionarias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "gastos_vehiculo" ADD CONSTRAINT "gastos_vehiculo_categoria_id_fkey" FOREIGN KEY ("categoria_id") REFERENCES "categorias_gasto_vehiculo"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "gastos_vehiculo" ADD CONSTRAINT "gastos_vehiculo_categoria_id_fkey" FOREIGN KEY ("categoria_id") REFERENCES "categorias_gasto_vehiculo"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "gastos_vehiculo" ADD CONSTRAINT "gastos_vehiculo_concesionaria_id_fkey" FOREIGN KEY ("concesionaria_id") REFERENCES "concesionarias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1312,6 +1586,18 @@ ALTER TABLE "gastos_fijos" ADD CONSTRAINT "gastos_fijos_proveedor_id_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "gastos_fijos" ADD CONSTRAINT "gastos_fijos_sucursal_id_fkey" FOREIGN KEY ("sucursal_id") REFERENCES "sucursales"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cotizaciones" ADD CONSTRAINT "cotizaciones_concesionaria_id_fkey" FOREIGN KEY ("concesionaria_id") REFERENCES "concesionarias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "metas_venta" ADD CONSTRAINT "metas_venta_concesionaria_id_fkey" FOREIGN KEY ("concesionaria_id") REFERENCES "concesionarias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "objetivos_vendedor" ADD CONSTRAINT "objetivos_vendedor_concesionaria_id_fkey" FOREIGN KEY ("concesionaria_id") REFERENCES "concesionarias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "objetivos_vendedor" ADD CONSTRAINT "objetivos_vendedor_vendedor_id_fkey" FOREIGN KEY ("vendedor_id") REFERENCES "usuarios"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "presupuestos" ADD CONSTRAINT "presupuestos_cliente_id_fkey" FOREIGN KEY ("cliente_id") REFERENCES "clientes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1371,6 +1657,9 @@ ALTER TABLE "venta_canje_vehiculo" ADD CONSTRAINT "venta_canje_vehiculo_vehiculo
 ALTER TABLE "venta_canje_vehiculo" ADD CONSTRAINT "venta_canje_vehiculo_venta_id_fkey" FOREIGN KEY ("venta_id") REFERENCES "ventas"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "financiaciones" ADD CONSTRAINT "financiaciones_refinancia_a_id_fkey" FOREIGN KEY ("refinancia_a_id") REFERENCES "financiaciones"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "financiaciones" ADD CONSTRAINT "financiaciones_cliente_id_fkey" FOREIGN KEY ("cliente_id") REFERENCES "clientes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1413,6 +1702,9 @@ ALTER TABLE "solicitudes_financiacion" ADD CONSTRAINT "solicitudes_financiacion_
 ALTER TABLE "solicitudes_financiacion" ADD CONSTRAINT "solicitudes_financiacion_venta_id_fkey" FOREIGN KEY ("venta_id") REFERENCES "ventas"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "solicitudes_financiacion" ADD CONSTRAINT "solicitudes_financiacion_vehiculo_id_fkey" FOREIGN KEY ("vehiculo_id") REFERENCES "vehiculos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "solicitud_financiacion_archivos" ADD CONSTRAINT "solicitud_financiacion_archivos_solicitud_id_fkey" FOREIGN KEY ("solicitud_id") REFERENCES "solicitudes_financiacion"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1429,6 +1721,12 @@ ALTER TABLE "postventa_casos" ADD CONSTRAINT "postventa_casos_vehiculo_id_fkey" 
 
 -- AddForeignKey
 ALTER TABLE "postventa_casos" ADD CONSTRAINT "postventa_casos_venta_id_fkey" FOREIGN KEY ("venta_id") REFERENCES "ventas"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "postventa_casos" ADD CONSTRAINT "postventa_casos_tipo_id_fkey" FOREIGN KEY ("tipo_id") REFERENCES "tipos_postventa"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tipos_postventa" ADD CONSTRAINT "tipos_postventa_concesionaria_id_fkey" FOREIGN KEY ("concesionaria_id") REFERENCES "concesionarias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "postventa_items" ADD CONSTRAINT "postventa_items_caso_id_fkey" FOREIGN KEY ("caso_id") REFERENCES "postventa_casos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
