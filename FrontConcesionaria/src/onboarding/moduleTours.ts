@@ -26,32 +26,32 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
             {
                 element: '[data-tour="veh-nuevo"]',
                 popover: {
-                    title: 'Sumá una unidad',
-                    description: 'Cargá un vehículo al parque con sus fotos, precios y datos de compra.',
+                    title: 'Sumá una unidad al parque',
+                    description: 'El alta del vehículo —fotos, precios y datos de compra— en un solo formulario.',
                     side: 'bottom', align: 'end',
                 },
             },
             {
                 element: '[data-tour="veh-filtros"]',
                 popover: {
-                    title: 'Encontrá rápido',
-                    description: 'Filtrá por estado, tipo y sucursal, y ordená por antigüedad en stock para ver qué conviene repreciar.',
+                    title: 'Filtrá y priorizá',
+                    description: 'Por estado, tipo y sucursal. Ordená por antigüedad en stock para detectar qué conviene repreciar.',
                     side: 'bottom', align: 'start',
                 },
             },
             {
                 element: '[data-tour="veh-catalogo"]',
                 popover: {
-                    title: 'Catálogo para compartir',
-                    description: 'Exportás lo que estás viendo como catálogo PDF o CSV.',
+                    title: 'Llevatelo en PDF',
+                    description: 'Exportás el listado que estás viendo como catálogo PDF o planilla CSV.',
                     side: 'bottom', align: 'end',
                 },
             },
             {
                 element: '[data-tour="veh-tabla"]',
                 popover: {
-                    title: 'Tu stock',
-                    description: 'Tocá el estado de una fila para avanzar su ciclo de vida; el color de la antigüedad marca las unidades que llevan mucho tiempo.',
+                    title: 'Tu stock, vivo',
+                    description: 'Tocá el estado de una fila para avanzar su ciclo de vida; el color de la antigüedad delata las unidades que se están durmiendo.',
                     side: 'top', align: 'center',
                 },
             },
@@ -65,15 +65,15 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
             {
                 element: '[data-tour="ventas-nueva"]',
                 popover: {
-                    title: 'Registrá una venta',
-                    description: 'La unidad, el cliente, los pagos y hasta el usado en canje — todo junto. El stock se actualiza solo.',
+                    title: 'Registrá la operación',
+                    description: 'Unidad, cliente, pagos y el usado en canje, todo junto. El auto se marca vendido solo.',
                     side: 'bottom', align: 'end',
                 },
             },
             {
                 element: '[data-tour="ventas-kpis"]',
                 popover: {
-                    title: 'Tus números',
+                    title: 'El pulso del mes',
                     description: 'Volumen facturado (por moneda), ventas del mes y entregas pendientes.',
                     side: 'bottom', align: 'center',
                 },
@@ -81,7 +81,7 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
             {
                 element: '[data-tour="ventas-filtros"]',
                 popover: {
-                    title: 'Filtrá',
+                    title: 'Afiná la vista',
                     description: 'Buscá y acotá por estado de entrega o forma de pago.',
                     side: 'bottom', align: 'start',
                 },
@@ -89,8 +89,8 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
             {
                 element: '[data-tour="ventas-tabla"]',
                 popover: {
-                    title: 'Cada operación',
-                    description: 'Abrí una venta para auditarla, bajar el comprobante o gestionar la entrega.',
+                    title: 'Entrá a cada venta',
+                    description: 'Auditala, bajá el comprobante o gestioná la entrega desde el detalle.',
                     side: 'top', align: 'center',
                 },
             },
@@ -104,24 +104,24 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
             {
                 element: '[data-tour="fin-nuevo"]',
                 popover: {
-                    title: 'Instrumentá un plan',
-                    description: 'Armás el plan de cuotas sobre una venta.',
+                    title: 'Armá el plan',
+                    description: 'Instrumentás las cuotas sobre una venta.',
                     side: 'bottom', align: 'end',
                 },
             },
             {
                 element: '[data-tour="fin-simular"]',
                 popover: {
-                    title: 'Simulá antes de cerrar',
-                    description: 'Mostrale al cliente cómo quedan las cuotas sin crear nada — y compartilas por WhatsApp.',
+                    title: 'Simulá y enganchá',
+                    description: 'Mostrale al cliente cómo quedan las cuotas sin crear nada — y pasásela por WhatsApp.',
                     side: 'bottom', align: 'end',
                 },
             },
             {
                 element: '[data-tour="fin-kpis"]',
                 popover: {
-                    title: 'Tu cartera',
-                    description: 'Cartera administrada, planes activos y alerta de mora, de un vistazo.',
+                    title: 'Tu cartera de un vistazo',
+                    description: 'Capital administrado, planes activos y la alerta de mora.',
                     side: 'bottom', align: 'center',
                 },
             },
@@ -129,7 +129,7 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
                 element: '[data-tour="fin-tabla"]',
                 popover: {
                     title: 'Cobrá y refinanciá',
-                    description: 'Abrí un contrato para registrar el cobro de cada cuota (RECAUDAR) o pasar el saldo impago a un plan nuevo (REFINANCIAR).',
+                    description: 'Entrá a un contrato para recaudar cada cuota, o pasar el saldo impago a un plan nuevo.',
                     side: 'top', align: 'center',
                 },
             },
@@ -143,23 +143,23 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
             {
                 element: '[data-tour="cli-nuevo"]',
                 popover: {
-                    title: 'Sumá un cliente',
-                    description: 'Cargás un cliente o prospecto a tu cartera.',
+                    title: 'Cargá un cliente',
+                    description: 'Sumás un cliente o prospecto a tu cartera.',
                     side: 'bottom', align: 'end',
                 },
             },
             {
                 element: '[data-tour="cli-funnel"]',
                 popover: {
-                    title: 'Tu embudo',
-                    description: 'El pipeline por etapa: tocá una para filtrar la cartera y ver en qué anda cada lead.',
+                    title: 'Movés el embudo',
+                    description: 'El pipeline por etapa: tocá una para filtrar y ver en qué anda cada lead.',
                     side: 'bottom', align: 'center',
                 },
             },
             {
                 element: '[data-tour="cli-filtros"]',
                 popover: {
-                    title: 'Buscá y filtrá',
+                    title: 'Encontralo ya',
                     description: 'Por nombre, CUIT o email; por etapa; o "Mis clientes" para ver sólo los tuyos.',
                     side: 'bottom', align: 'start',
                 },
@@ -167,8 +167,8 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
             {
                 element: '[data-tour="cli-tabla"]',
                 popover: {
-                    title: 'Cada contacto',
-                    description: 'Editá, seguí su etapa o entrá a la ficha completa con su historial.',
+                    title: 'Entrá a la ficha',
+                    description: 'Editá el contacto, seguí su etapa o abrí su historial completo.',
                     side: 'top', align: 'center',
                 },
             },
@@ -183,14 +183,14 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
                 element: '[data-tour="pv-nuevo"]',
                 popover: {
                     title: 'Abrí un caso',
-                    description: 'Registrás un reclamo o service (o un tipo de caso, según la pestaña).',
+                    description: 'Un reclamo o service — o un tipo de caso, según la pestaña.',
                     side: 'bottom', align: 'end',
                 },
             },
             {
                 element: '[data-tour="pv-stats"]',
                 popover: {
-                    title: 'El estado del taller',
+                    title: 'El pulso del taller',
                     description: 'Pendientes, en curso y resueltos.',
                     side: 'bottom', align: 'center',
                 },
@@ -198,15 +198,15 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
             {
                 element: '[data-tour="pv-tabs"]',
                 popover: {
-                    title: 'Tres vistas',
-                    description: 'Casos, agenda de taller (con recordatorios por WhatsApp) y el catálogo de tipos.',
+                    title: 'Tres vistas en una',
+                    description: 'Casos, agenda de taller (con recordatorio por WhatsApp) y el catálogo de tipos.',
                     side: 'bottom', align: 'center',
                 },
             },
             {
                 element: '[data-tour="pv-filtros"]',
                 popover: {
-                    title: 'Filtrá los casos',
+                    title: 'Acotá los casos',
                     description: 'Por estado, sucursal y tipo.',
                     side: 'bottom', align: 'start',
                 },
@@ -214,7 +214,7 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
             {
                 element: '[data-tour="pv-tabla"]',
                 popover: {
-                    title: 'Cada caso',
+                    title: 'Gestioná cada caso',
                     description: 'Avanzá su estado, cargá los costos y mandá el recordatorio del turno.',
                     side: 'top', align: 'center',
                 },
@@ -237,7 +237,7 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
             {
                 element: '[data-tour="res-filtros"]',
                 popover: {
-                    title: 'Filtrá',
+                    title: 'Acotá la lista',
                     description: 'Por estado, sucursal o cliente.',
                     side: 'bottom', align: 'start',
                 },
@@ -245,8 +245,8 @@ export const MODULE_TOURS: Record<string, ModuleTour> = {
             {
                 element: '[data-tour="res-tabla"]',
                 popover: {
-                    title: 'Tus reservas',
-                    description: 'Las que están por vencer se marcan en ámbar. Al cancelar una, el vehículo vuelve a Publicado.',
+                    title: 'Ojo con los vencimientos',
+                    description: 'Las reservas por vencer se marcan en ámbar. Si cancelás una, el vehículo vuelve a Publicado.',
                     side: 'top', align: 'center',
                 },
             },
