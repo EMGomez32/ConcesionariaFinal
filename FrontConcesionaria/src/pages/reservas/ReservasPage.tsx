@@ -181,13 +181,13 @@ const ReservasPage = () => {
                         <p className="page-subtitle">{total} reserva{total !== 1 ? 's' : ''} en total</p>
                     </div>
                 </div>
-                <Button variant="primary" onClick={openModal}>
+                <Button data-tour="res-nueva" variant="primary" onClick={openModal}>
                     <Plus size={16} style={{ marginRight: '0.5rem' }} /> Nueva Reserva
                 </Button>
             </div>
 
             {/* Filters */}
-            <div className="glass filter-bar" style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap', padding: '1rem 1.5rem', borderRadius: '1rem', marginBottom: '1.5rem' }}>
+            <div className="glass filter-bar" data-tour="res-filtros" style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap', padding: '1rem 1.5rem', borderRadius: '1rem', marginBottom: '1.5rem' }}>
                 <div className="filter-group">
                     <label className="filter-label"><Filter size={12} /> Estado</label>
                     <select className="form-input" value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }} style={{ minWidth: '140px' }}>
@@ -215,7 +215,7 @@ const ReservasPage = () => {
             </div>
 
             {/* Table */}
-            <div className="glass table-container">
+            <div className="glass table-container" data-tour="res-tabla">
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                         <RefreshCw size={24} className="spin" />

@@ -297,7 +297,7 @@ const VehiculosPage: React.FC = () => {
                         <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                     </Button>
                     {/* Catálogo PDF del filtro actual (exporta "lo que se está viendo"). */}
-                    <Button variant="secondary" onClick={handleCatalogo} loading={catalogando} title="Catálogo PDF de los vehículos del filtro actual">
+                    <Button data-tour="veh-catalogo" variant="secondary" onClick={handleCatalogo} loading={catalogando} title="Catálogo PDF de los vehículos del filtro actual">
                         <FileText size={18} />
                         Catálogo PDF
                     </Button>
@@ -308,14 +308,14 @@ const VehiculosPage: React.FC = () => {
                             CSV
                         </Button>
                     )}
-                    <Button variant="primary" onClick={() => navigate('/vehiculos/nuevo')}>
+                    <Button data-tour="veh-nuevo" variant="primary" onClick={() => navigate('/vehiculos/nuevo')}>
                         <Plus size={18} />
                         Ingresar Vehículo
                     </Button>
                 </div>
             </header>
 
-            <div className="filters-bar">
+            <div className="filters-bar" data-tour="veh-filtros">
                 <div className="filter-group">
                     <label className="filter-label">Buscar</label>
                     <div className="search-box">
@@ -365,6 +365,7 @@ const VehiculosPage: React.FC = () => {
                 </div>
             </div>
 
+            <div data-tour="veh-tabla">
             <DataTable
                 columns={columns}
                 data={vehiculos}
@@ -376,6 +377,7 @@ const VehiculosPage: React.FC = () => {
                 onPageChange={setPage}
                 onRowClick={(v) => navigate(`/vehiculos/${v.id}`)}
             />
+            </div>
 
             {/* Modales Reutilizados */}
             <Modal

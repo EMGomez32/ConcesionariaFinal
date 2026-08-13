@@ -536,17 +536,17 @@ const FinanciacionesPage = () => {
                     <Button variant="secondary" onClick={() => loadList(page)}>
                         <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                     </Button>
-                    <Button variant="secondary" onClick={openSimulador} title="Simular un plan de cuotas para mostrarle al cliente (no crea nada)">
+                    <Button data-tour="fin-simular" variant="secondary" onClick={openSimulador} title="Simular un plan de cuotas para mostrarle al cliente (no crea nada)">
                         <Calculator size={18} /> Simular cuotas
                     </Button>
-                    <Button variant="primary" onClick={() => { setForm(emptyForm()); setCreateOpen(true); }}>
+                    <Button data-tour="fin-nuevo" variant="primary" onClick={() => { setForm(emptyForm()); setCreateOpen(true); }}>
                         <Plus size={18} /> Instrumentar Nuevo Plan
                     </Button>
                 </div>
             </header>
 
             {/* Quick Stats Overlay (Optional design element) */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" data-tour="fin-kpis">
                 <div className="card glass stat-tile border-blue-500/20 bg-blue-500/5 group">
                     <div className="relative z-10">
                         <span className="stat-tile-label" style={{ color: 'var(--info)' }}>Planes Activos</span>
@@ -625,7 +625,7 @@ const FinanciacionesPage = () => {
             </div>
 
             {/* List Table */}
-            <div className="table-container card">
+            <div className="table-container card" data-tour="fin-tabla">
                 <table className="data-table">
                     <thead>
                         <tr>
