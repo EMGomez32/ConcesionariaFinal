@@ -319,7 +319,7 @@ const ClientesPage: React.FC = () => {
                             CSV
                         </Button>
                     )}
-                    <Button variant="primary" onClick={() => handleOpenModal()}>
+                    <Button data-tour="cli-nuevo" variant="primary" onClick={() => handleOpenModal()}>
                         <Plus size={18} />
                         Nuevo Cliente
                     </Button>
@@ -328,7 +328,7 @@ const ClientesPage: React.FC = () => {
 
             {/* Embudo de leads: conteo por etapa, clickeable para filtrar. */}
             {puedeVerFunnel && funnel && (
-                <div className="lead-funnel mb-6">
+                <div className="lead-funnel mb-6" data-tour="cli-funnel">
                     <button
                         type="button"
                         className={`funnel-chip ${filterEstado === '' ? 'is-active' : ''}`}
@@ -351,7 +351,7 @@ const ClientesPage: React.FC = () => {
                 </div>
             )}
 
-            <div className="card glass filters-bar mb-6" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="card glass filters-bar mb-6" data-tour="cli-filtros" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
                 <div className="search-box" style={{ flex: '1 1 240px' }}>
                     <Search size={18} className="text-slate-500" />
                     <input
@@ -397,6 +397,7 @@ const ClientesPage: React.FC = () => {
                 .funnel-tag { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
             `}</style>
 
+            <div data-tour="cli-tabla">
             <DataTable
                 columns={columns}
                 data={clientes}
@@ -408,6 +409,7 @@ const ClientesPage: React.FC = () => {
                 emptyMessage="No se encontraron registros de clientes"
                 emptyIcon={<Users size={40} className="text-slate-600" />}
             />
+            </div>
 
             <Modal
                 isOpen={isModalOpen}

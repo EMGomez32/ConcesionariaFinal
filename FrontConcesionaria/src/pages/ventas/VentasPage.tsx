@@ -333,14 +333,14 @@ const VentasPage = () => {
                     <Button variant="secondary" onClick={() => refetchVentas()}>
                         <RefreshCw size={18} className={loadingVentas ? 'animate-spin' : ''} />
                     </Button>
-                    <Button variant="primary" onClick={() => { setForm(emptyForm()); setCreateOpen(true); }}>
+                    <Button data-tour="ventas-nueva" variant="primary" onClick={() => { setForm(emptyForm()); setCreateOpen(true); }}>
                         <Plus size={18} /> Registrar Nueva Transacción
                     </Button>
                 </div>
             </header>
 
             {/* Metrics Row */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" data-tour="ventas-kpis">
                 <div className="card glass stat-tile">
                     <div className="stat-tile-body">
                         <span className="text-xs text-muted uppercase font-black tracking-tight">Ventas del Mes</span>
@@ -393,7 +393,7 @@ const VentasPage = () => {
             </div>
 
             {/* Filters */}
-            <div className="card glass filters-bar flex flex-wrap items-center justify-between gap-6 mb-6">
+            <div className="card glass filters-bar flex flex-wrap items-center justify-between gap-6 mb-6" data-tour="ventas-filtros">
                 <div className="flex-1 min-w-[300px] relative">
                     <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input
@@ -426,6 +426,7 @@ const VentasPage = () => {
                 </div>
             </div>
 
+            <div data-tour="ventas-tabla">
             <DataTable
                 columns={columns}
                 data={ventasFiltradas}
@@ -436,6 +437,7 @@ const VentasPage = () => {
                 onPageChange={setPage}
                 emptyMessage="Sin operaciones en este registro"
             />
+            </div>
 
             {/* CREATE MODAL */}
             <Modal

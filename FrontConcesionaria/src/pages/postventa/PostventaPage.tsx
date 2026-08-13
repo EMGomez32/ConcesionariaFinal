@@ -666,14 +666,14 @@ export default function PostventaPage() {
                             <FileDown size={18} /> CSV
                         </Button>
                     )}
-                    <Button variant="primary" onClick={tab === 'tipos' ? openCreateTipo : () => setShowCreateModal(true)}>
+                    <Button data-tour="pv-nuevo" variant="primary" onClick={tab === 'tipos' ? openCreateTipo : () => setShowCreateModal(true)}>
                         <Plus size={18} /> {tab === 'tipos' ? 'Nuevo Tipo' : 'Nuevo Caso'}
                     </Button>
                 </div>
             </header>
 
             {/* Stats */}
-            <div className="stats-grid mb-6">
+            <div className="stats-grid mb-6" data-tour="pv-stats">
                 <div className="card glass stat-tile border-amber-500/20 bg-amber-500/5">
                     <span className="stat-tile-label" style={{ color: '#f59e0b' }}>Pendientes</span>
                     <div className="flex items-baseline gap-2">
@@ -702,7 +702,7 @@ export default function PostventaPage() {
 
             {/* Tabs */}
             <div className="card glass p-6 border-slate-700/30 mb-6">
-                <div className="segmented" role="tablist">
+                <div className="segmented" role="tablist" data-tour="pv-tabs">
                     <button
                         role="tab"
                         aria-selected={tab === 'casos'}
@@ -815,7 +815,7 @@ export default function PostventaPage() {
             ) : (
             <>
             {/* Filters */}
-            <div className="card glass filters-bar mb-6">
+            <div className="card glass filters-bar mb-6" data-tour="pv-filtros">
                 <div className="search-box">
                     <Search size={18} className="text-slate-500" />
                     <input
@@ -848,7 +848,7 @@ export default function PostventaPage() {
             </div>
 
             {/* Table */}
-            <div className="glass" style={{ borderRadius: '0.75rem', overflow: 'hidden' }}>
+            <div className="glass" data-tour="pv-tabla" style={{ borderRadius: '0.75rem', overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>

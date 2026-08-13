@@ -6,6 +6,7 @@ import NotificationBell from './NotificationBell';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 import { useThemeStore } from '../../store/themeStore';
 import { useTour } from '../../onboarding/useTour';
+import { MODULE_TOURS } from '../../onboarding/moduleTours';
 import { performLogout } from '../../api/auth.api';
 
 // La app es dark-first (default en index.html), pero el usuario puede conmutar a
@@ -17,19 +18,18 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
   const openPalette = useCommandPaletteStore((s) => s.open);
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
-  const { startTour } = useTour();
+  const { startTour, startModuleTour } = useTour();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // El tour se ancla al Dashboard (sus tarjetas). Si lo lanzan desde otra pantalla,
-  // primero volvemos al Dashboard y arrancamos ahí, para dar el recorrido completo.
+  // "?" contextual: si estás en un módulo con tour, muestra el de ESA pantalla; en el
+  // Dashboard, el panorama; en cualquier otra, vuelve al Dashboard y arranca el panorama.
   const handleHelp = () => {
-    if (location.pathname !== '/') {
-      navigate('/');
-      window.setTimeout(() => startTour(), 450);
-    } else {
-      startTour();
-    }
+    const path = location.pathname;
+    if (MODULE_TOURS[path]) { startModuleTour(path); return; }
+    if (path === '/') { startTour(); return; }
+    navigate('/');
+    window.setTimeout(() => startTour(), 450);
   };
 
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);

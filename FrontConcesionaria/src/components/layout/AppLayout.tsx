@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import ModuleTourController from './ModuleTourController';
 import CommandPalette from './CommandPalette';
 import ScrollProgress from './ScrollProgress';
 import SkipLink from './SkipLink';
@@ -41,6 +42,8 @@ const AppLayout = ({ sections, brandTag, showNotifications = true }: AppLayoutPr
         <div style={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
             <SkipLink />
             <Toast />
+            {/* Sólo en el shell del tenant: auto-inicia el mini-tour del módulo al entrar. */}
+            {showNotifications && <ModuleTourController />}
             {/* El panel de plataforma (super_admin) pasa su propio nav y apaga la
                 búsqueda de datos del tenant: showNotifications=false marca ese shell. */}
             <CommandPalette sections={sections} enableGlobalSearch={showNotifications} />
