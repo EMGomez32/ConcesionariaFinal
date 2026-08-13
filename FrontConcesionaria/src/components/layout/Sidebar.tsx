@@ -39,7 +39,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
         </button>
       </div>
 
-      <nav className="sidebar-nav" aria-label="Navegación principal">
+      <nav className="sidebar-nav" aria-label="Navegación principal" data-tour="sidebar-nav">
         {sections.map((section) => {
           const visibleItems = section.items.filter((it) =>
             (!it.superAdminOnly || isSuperAdmin) &&
@@ -57,6 +57,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
                     key={item.path}
                     to={item.path}
                     end={item.path === '/'}
+                    data-tour={`nav:${item.path}`}
                     className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                     title={collapsed ? item.label : undefined}
                     aria-label={collapsed ? item.label : undefined}

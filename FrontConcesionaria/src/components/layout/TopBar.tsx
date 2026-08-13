@@ -1,9 +1,11 @@
 import { useAuthStore } from '../../store/authStore';
-import { LogOut, User, Menu, Search, Sun, Moon } from 'lucide-react';
+import { LogOut, User, Menu, Search, Sun, Moon, HelpCircle } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Breadcrumbs from './Breadcrumbs';
 import NotificationBell from './NotificationBell';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 import { useThemeStore } from '../../store/themeStore';
+import { useTour } from '../../onboarding/useTour';
 import { performLogout } from '../../api/auth.api';
 
 // La app es dark-first (default en index.html), pero el usuario puede conmutar a
@@ -15,6 +17,20 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
   const openPalette = useCommandPaletteStore((s) => s.open);
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
+  const { startTour } = useTour();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // El tour se ancla al Dashboard (sus tarjetas). Si lo lanzan desde otra pantalla,
+  // primero volvemos al Dashboard y arrancamos ahí, para dar el recorrido completo.
+  const handleHelp = () => {
+    if (location.pathname !== '/') {
+      navigate('/');
+      window.setTimeout(() => startTour(), 450);
+    } else {
+      startTour();
+    }
+  };
 
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -31,6 +47,7 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
         <button
           type="button"
           className="cmdk-trigger"
+          data-tour="search"
           onClick={openPalette}
           aria-label="Abrir buscador rápido"
         >
@@ -41,7 +58,19 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
 
         <button
           type="button"
+          className="icon-button tour-help-btn"
+          data-tour="help"
+          onClick={handleHelp}
+          aria-label="Ver el tour de bienvenida"
+          title="Ver el tour de bienvenida"
+        >
+          <HelpCircle size={18} />
+        </button>
+
+        <button
+          type="button"
           className="icon-button theme-toggle"
+          data-tour="theme"
           onClick={toggleTheme}
           aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
           title={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}
@@ -50,7 +79,7 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
         </button>
 
         {showNotifications && (
-          <div className="action-buttons-group">
+          <div className="action-buttons-group" data-tour="notifications">
             <NotificationBell />
           </div>
         )}

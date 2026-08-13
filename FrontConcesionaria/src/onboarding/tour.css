@@ -1,0 +1,100 @@
+/* Tour de onboarding (driver.js) tematizado con la marca AUTENZA.
+   Todo scopeado a .autenza-tour-popover (popoverClass) para no tocar nada mas.
+   Usa los tokens de tema (--bg, --text, --accent) y respeta claro/oscuro solo. */
+
+.driver-popover.autenza-tour-popover {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 14px);
+  box-shadow: var(--shadow-xl, 0 20px 50px rgba(0, 0, 0, 0.35)),
+    0 0 0 1px rgba(var(--accent-rgb), 0.06),
+    0 12px 40px rgba(var(--accent-2-rgb), 0.18);
+  font-family: var(--font-sans);
+  max-width: 340px;
+  padding: 18px;
+}
+
+.autenza-tour-popover .driver-popover-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  color: var(--text-primary);
+  padding-right: 26px; /* deja lugar para la X */
+}
+
+.autenza-tour-popover .driver-popover-description {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  margin-top: 6px;
+}
+
+.autenza-tour-popover .driver-popover-description strong {
+  color: var(--text-primary);
+}
+
+.autenza-tour-popover .driver-popover-description kbd {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs, 4px);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.autenza-tour-popover .driver-popover-close-btn {
+  color: var(--text-muted);
+}
+.autenza-tour-popover .driver-popover-close-btn:hover,
+.autenza-tour-popover .driver-popover-close-btn:focus {
+  color: var(--text-primary);
+}
+
+.autenza-tour-popover .driver-popover-progress-text {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+}
+
+/* Botones. Base = secundario ("Atrás"); el último de navegación = "Siguiente"/"Listo"
+   con el gradiente de la marca. */
+.autenza-tour-popover .driver-popover-footer-btn {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  padding: 6px 14px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-shadow: none;
+  transition: filter 0.15s var(--easing-soft, ease), background 0.15s, color 0.15s, border-color 0.15s;
+}
+.autenza-tour-popover .driver-popover-footer-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border-strong, var(--border));
+}
+.autenza-tour-popover .driver-popover-navigation-btns button:last-child {
+  background: var(--accent-gradient, linear-gradient(135deg, var(--accent), var(--accent-3, var(--accent))));
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.35);
+}
+.autenza-tour-popover .driver-popover-navigation-btns button:last-child:hover {
+  filter: brightness(1.07);
+  color: #fff;
+}
+.autenza-tour-popover .driver-popover-btn-disabled {
+  opacity: 0.4;
+}
+
+/* Flecha del mismo color que el popover (--bg-card), según el lado. */
+.autenza-tour-popover .driver-popover-arrow-side-left { border-left-color: var(--bg-card); }
+.autenza-tour-popover .driver-popover-arrow-side-right { border-right-color: var(--bg-card); }
+.autenza-tour-popover .driver-popover-arrow-side-top { border-top-color: var(--bg-card); }
+.autenza-tour-popover .driver-popover-arrow-side-bottom { border-bottom-color: var(--bg-card); }
