@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle, Bookmark, Target, Wrench, CalendarClock } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -13,6 +13,8 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import AnimatedNumber from '../../components/ui/AnimatedNumber';
 import DonutChart from '../../components/ui/DonutChart';
+import { useTour } from '../../onboarding/useTour';
+import { useTourStore } from '../../store/tourStore';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -76,6 +78,18 @@ const DashboardPage = () => {
   const miObjetivo = miObjetivoData?.objetivo ?? null;
   const queryClient = useQueryClient();
   const { addToast } = useUIStore();
+
+  // Tour de bienvenida: se auto-inicia UNA vez al entrar (si el usuario no lo
+  // desactivó y no lo vio). Vive acá porque varios pasos se anclan a las tarjetas de
+  // esta pantalla (la landing tras login). El "?" del TopBar lo relanza cuando quieran.
+  const { startTour } = useTour();
+  useEffect(() => {
+    if (!useTourStore.getState().shouldAutoStart()) return;
+    const t = window.setTimeout(() => startTour(), 700); // deja renderizar las tarjetas
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const hoyDate = new Date();
   const mesActualLabel = MESES[hoyDate.getMonth()];
   const [showMetaModal, setShowMetaModal] = useState(false);
@@ -189,7 +203,7 @@ const DashboardPage = () => {
         </div>
       </header>
 
-      <div className="stats-grid stagger">
+      <div className="stats-grid stagger" data-tour="dashboard-kpis">
         {stats.map((stat) => (
           <div key={stat.label} className="card stat-card">
             <div className="flex justify-between items-start mb-4">

@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon } from 'lucide-react';
+import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
+import { useTour } from '../../onboarding/useTour';
+import { useTourStore } from '../../store/tourStore';
 import { concesionariasApi } from '../../api/concesionarias.api';
 import { usuariosApi } from '../../api/usuarios.api';
 import Button from '../../components/ui/Button';
@@ -11,7 +14,7 @@ import { getApiErrorMessage } from '../../utils/error';
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
-type Tab = 'concesionaria' | 'perfil' | 'password';
+type Tab = 'concesionaria' | 'perfil' | 'password' | 'preferencias';
 
 // Selector de color de marca: swatch nativo + hex editable + botón para volver
 // al color por defecto (valor vacío = el PDF usa el color AUTENZA).
@@ -56,6 +59,23 @@ function ColorField({ label, value, onChange, fallback }: {
 const ConfiguracionPage = () => {
     const { user, setUser } = useAuthStore();
     const { addToast } = useUIStore();
+    const navigate = useNavigate();
+
+    // Tour de bienvenida (preferencia por usuario, persistida en localStorage).
+    const { startTour } = useTour();
+    const tourAutoStart = useTourStore((s) => s.autoStart);
+    const setTourAutoStart = useTourStore((s) => s.setAutoStart);
+    const replayTour = useTourStore((s) => s.replay);
+    const toggleTour = () => {
+        const next = !tourAutoStart;
+        setTourAutoStart(next);
+        // Al reactivarlo, reseteamos el "ya visto" para que vuelva a aparecer solo.
+        if (next) replayTour();
+    };
+    const verTourAhora = () => {
+        navigate('/');
+        window.setTimeout(() => startTour(), 450);
+    };
 
     const [tab, setTab] = useState<Tab>('concesionaria');
 
@@ -242,6 +262,9 @@ const ConfiguracionPage = () => {
                 <button className={`segmented-btn ${tab === 'password' ? 'is-active' : ''}`} onClick={() => setTab('password')}>
                     <Lock size={16} /> Cambiar contraseña
                 </button>
+                <button className={`segmented-btn ${tab === 'preferencias' ? 'is-active' : ''}`} onClick={() => setTab('preferencias')}>
+                    <Sparkles size={16} /> Preferencias
+                </button>
             </div>
 
             {tab === 'concesionaria' && (
@@ -414,6 +437,47 @@ const ConfiguracionPage = () => {
                     <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
                         <Button variant="primary" onClick={handleSavePassword} disabled={savingPass}>
                             <Lock size={16} /> {savingPass ? 'Guardando...' : 'Cambiar contraseña'}
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            {tab === 'preferencias' && (
+                <div className="card">
+                    <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Sparkles size={18} /> Preferencias
+                    </h2>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                        <div style={{ maxWidth: 460 }}>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Tour de bienvenida</div>
+                            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>
+                                Mostrar el recorrido guiado automáticamente la primera vez que entrás. Podés apagarlo cuando ya lo conozcas, y volver a verlo cuando quieras con el botón <strong>?</strong> del encabezado.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={tourAutoStart}
+                            aria-label="Tour de bienvenida automático"
+                            onClick={toggleTour}
+                            style={{
+                                flexShrink: 0, width: 46, height: 26, borderRadius: 'var(--radius-pill)',
+                                border: '1px solid var(--border)',
+                                background: tourAutoStart ? 'var(--accent-gradient)' : 'var(--bg-secondary)',
+                                position: 'relative', cursor: 'pointer', transition: 'background 0.2s',
+                                boxShadow: tourAutoStart ? '0 2px 8px rgba(var(--accent-rgb), 0.35)' : 'none',
+                            }}
+                        >
+                            <span style={{
+                                position: 'absolute', top: 2, left: tourAutoStart ? 22 : 2,
+                                width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                                transition: 'left 0.2s var(--easing-spring, ease)', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                            }} />
+                        </button>
+                    </div>
+                    <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' }}>
+                        <Button variant="secondary" onClick={verTourAhora}>
+                            <PlayCircle size={16} /> Ver el tour ahora
                         </Button>
                     </div>
                 </div>
