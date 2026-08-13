@@ -14,18 +14,18 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
         {
             // Paso de bienvenida (sin elemento → popover centrado).
             popover: {
-                title: '¡Bienvenido a AUTENZA! 👋',
+                title: '¡Te damos la bienvenida! 👋',
                 description:
-                    'Te muestro lo esencial en 30 segundos para que sepas moverte. Podés saltarlo cuando quieras, y volver a verlo desde el botón <strong>?</strong> arriba a la derecha.',
+                    'En menos de un minuto te mostramos dónde está cada cosa. Podés saltarlo cuando quieras y retomarlo con el <strong>?</strong> de la barra de arriba.',
                 align: 'center',
             },
         },
         {
             element: '[data-tour="sidebar-nav"]',
             popover: {
-                title: 'Tu navegación',
+                title: 'Todo empieza por acá',
                 description:
-                    'Desde acá entrás a todos los módulos: stock, operaciones, finanzas y postventa. Podés colapsar el menú con el botón de abajo.',
+                    'Tu menú, agrupado por tema: stock, operaciones, finanzas y postventa. ¿Necesitás más espacio? Colapsalo con el botón de abajo.',
                 side: 'right',
                 align: 'start',
             },
@@ -33,9 +33,9 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
         {
             element: '[data-tour="nav:/vehiculos"]',
             popover: {
-                title: 'Vehículos',
+                title: 'El corazón: tus vehículos',
                 description:
-                    'Tu inventario: alta de unidades, fotos, precios y estado (publicado, reservado, vendido).',
+                    'Cargá unidades con fotos y precios, y seguí su estado —publicado, reservado, vendido— de un vistazo.',
                 side: 'right',
                 align: 'start',
             },
@@ -43,9 +43,9 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
         {
             element: '[data-tour="nav:/ventas"]',
             popover: {
-                title: 'Ventas',
+                title: 'Cerrá la venta',
                 description:
-                    'Registrás las ventas con sus pagos, extras y vehículos en canje. El stock se actualiza solo.',
+                    'Registrás la operación con sus pagos, extras y hasta el usado en canje. El stock y la ficha del auto se actualizan solos.',
                 side: 'right',
                 align: 'start',
             },
@@ -53,9 +53,9 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
         {
             element: '[data-tour="nav:/financiaciones"]',
             popover: {
-                title: 'Financiación',
+                title: 'Financiá y cobrá',
                 description:
-                    'Armás planes de cuotas y llevás la cobranza. Cada cuota se puede cobrar y refinanciar.',
+                    'Armás el plan de cuotas y llevás la cobranza al día. Cada cuota se cobra y, si hace falta, se refinancia.',
                 side: 'right',
                 align: 'start',
             },
@@ -63,9 +63,9 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
         {
             element: '[data-tour="dashboard-kpis"]',
             popover: {
-                title: 'Tu tablero',
+                title: 'Tu tablero de un vistazo',
                 description:
-                    'Un vistazo rápido a la operación: stock, ventas, reservas y clientes. Más abajo tenés finanzas y alertas del día.',
+                    'Los números que importan: stock, ventas, reservas y clientes. Más abajo, las finanzas del mes y las alertas del día.',
                 side: 'bottom',
                 align: 'center',
             },
@@ -73,9 +73,9 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
         {
             element: '[data-tour="search"]',
             popover: {
-                title: 'Buscador rápido',
+                title: 'Buscá sin dar vueltas',
                 description:
-                    'Encontrá cualquier cosa al instante —una unidad, un cliente, una sección— con <kbd>Ctrl/⌘ K</kbd>.',
+                    'Un auto, un cliente, una sección… lo que sea, al toque. Atajo desde cualquier pantalla: <kbd>Ctrl/⌘ K</kbd>.',
                 side: 'bottom',
                 align: 'end',
             },
@@ -86,9 +86,9 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
         steps.push({
             element: '[data-tour="notifications"]',
             popover: {
-                title: 'Alertas',
+                title: 'No se te escapa nada',
                 description:
-                    'La campanita te avisa lo que necesita atención: turnos, vencimientos, mora y más.',
+                    'La campanita junta lo que necesita atención: turnos, vencimientos, cuotas en mora y más.',
                 side: 'bottom',
                 align: 'end',
             },
@@ -99,8 +99,8 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
         {
             element: '[data-tour="theme"]',
             popover: {
-                title: 'Tema claro u oscuro',
-                description: 'Cambiá el aspecto de la app a tu gusto. Tu elección se recuerda.',
+                title: 'A tu gusto: claro u oscuro',
+                description: 'Cambiá el aspecto de la app con un toque. Tu elección queda guardada.',
                 side: 'bottom',
                 align: 'end',
             },
@@ -108,9 +108,9 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
         {
             element: '[data-tour="help"]',
             popover: {
-                title: '¿Perdido? Volvé acá',
+                title: '¿Lo querés ver de nuevo?',
                 description:
-                    'Este botón <strong>?</strong> vuelve a lanzar el tour cuando quieras. Y podés apagarlo en Configuración → Preferencias. ¡A vender! 🚗',
+                    'Este <strong>?</strong> relanza el tour cuando quieras. Y si ya te lo sabés, apagalo en <strong>Configuración → Preferencias</strong>. ¡A vender! 🚗',
                 side: 'bottom',
                 align: 'end',
             },
