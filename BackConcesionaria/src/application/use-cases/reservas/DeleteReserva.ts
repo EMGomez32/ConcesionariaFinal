@@ -1,6 +1,6 @@
 import { IReservaRepository } from '../../../domain/repositories/IReservaRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
-import prisma from '../../../infrastructure/database/prisma';
+import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { context } from '../../../infrastructure/security/context';
 
 // DELETE /reservas/:id ejecuta una CANCELACIÓN: cambia el estado a 'cancelada',
@@ -18,16 +18,23 @@ export class DeleteReserva {
         }
 
         const user = context.getUser();
+        const tenantId = current.concesionariaId;
+        const isSuper = user?.roles?.includes('super_admin') || false;
+        const tenantWhere = isSuper ? {} : { concesionariaId: tenantId };
 
-        return prisma.$transaction(async (tx) => {
+        // Unit of Work: cancelar la reserva + liberar el vehículo + registrar el
+        // movimiento commitean JUNTOS (antes: prisma.$transaction del cliente
+        // EXTENDIDO, atomicidad ilusoria). Filtros tenant/deletedAt a mano: el tx raw
+        // no pasa por la extensión.
+        return withTenantTransaction(async (tx) => {
             const reserva = await tx.reserva.update({
-                where: { id },
+                where: { id, ...tenantWhere, deletedAt: null },
                 data: { estado: 'cancelada' },
             });
 
             if (current.estado === 'activa') {
                 await tx.vehiculo.update({
-                    where: { id: current.vehiculoId },
+                    where: { id: current.vehiculoId, ...tenantWhere },
                     data: { estado: 'publicado' },
                 });
 

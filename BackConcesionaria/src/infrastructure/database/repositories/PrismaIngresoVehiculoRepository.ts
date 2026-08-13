@@ -1,6 +1,8 @@
 import { IIngresoVehiculoRepository } from '../../../domain/repositories/IIngresoVehiculoRepository';
 import { IngresoVehiculo } from '../../../domain/entities/IngresoVehiculo';
 import prisma from '../prisma';
+import { withTenantTransaction } from '../unitOfWork';
+import { context } from '../../security/context';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
@@ -70,7 +72,12 @@ export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoReposito
         await assertMismoTenant('presupuesto', rest.presupuestoId, v.concesionariaId);
         await assertMismoTenant('venta', rest.ventaId, v.concesionariaId);
 
-        return prisma.$transaction(async (tx) => {
+        const isSuper = context.getUser()?.roles?.includes('super_admin') || false;
+        const tenantWhere = isSuper ? {} : { concesionariaId: v.concesionariaId };
+
+        // Unit of Work: el ingreso + reubicar el vehículo + el movimiento commitean
+        // JUNTOS (antes: prisma.$transaction del cliente EXTENDIDO, atomicidad ilusoria).
+        return withTenantTransaction(async (tx) => {
             const i = await tx.ingresoVehiculo.create({
                 data: {
                     ...rest,
@@ -85,7 +92,7 @@ export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoReposito
             });
 
             await tx.vehiculo.update({
-                where: { id: vehiculoId },
+                where: { id: vehiculoId, ...tenantWhere },
                 data: { sucursalId }
             });
 

@@ -1,6 +1,8 @@
 import { IVehiculoMovimientoRepository } from '../../../domain/repositories/IVehiculoMovimientoRepository';
 import { VehiculoMovimiento } from '../../../domain/entities/VehiculoMovimiento';
 import prisma from '../prisma';
+import { withTenantTransaction } from '../unitOfWork';
+import { context } from '../../security/context';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
@@ -86,7 +88,12 @@ export class PrismaVehiculoMovimientoRepository implements IVehiculoMovimientoRe
             }
         }
 
-        return prisma.$transaction(async (tx) => {
+        const isSuper = context.getUser()?.roles?.includes('super_admin') || false;
+        const tenantWhere = isSuper ? {} : { concesionariaId: v.concesionariaId };
+
+        // Unit of Work: el movimiento + (si es traslado) reubicar el vehículo commitean
+        // JUNTOS (antes: prisma.$transaction del cliente EXTENDIDO, atomicidad ilusoria).
+        return withTenantTransaction(async (tx) => {
             const m = await tx.vehiculoMovimiento.create({
                 data: {
                     vehiculoId,
@@ -104,7 +111,7 @@ export class PrismaVehiculoMovimientoRepository implements IVehiculoMovimientoRe
             // Solo el traslado cambia la sucursal física del vehículo.
             if (esTraslado) {
                 await tx.vehiculo.update({
-                    where: { id: vehiculoId },
+                    where: { id: vehiculoId, ...tenantWhere },
                     data: { sucursalId: Number(hastaSucursalId) }
                 });
             }
