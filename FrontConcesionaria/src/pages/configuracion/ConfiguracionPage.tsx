@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle } from 'lucide-react';
+import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
@@ -9,7 +9,8 @@ import { concesionariasApi } from '../../api/concesionarias.api';
 import { usuariosApi } from '../../api/usuarios.api';
 import Button from '../../components/ui/Button';
 import { FileUploader } from '../../components/ui/FileUploader';
-import type { Concesionaria } from '../../types/concesionaria.types';
+import type { Concesionaria, UpdateConcesionariaDto } from '../../types/concesionaria.types';
+import { CONDICION_IVA_EMISOR_LABEL } from '../../types/concesionaria.types';
 import { getApiErrorMessage } from '../../utils/error';
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -85,6 +86,7 @@ const ConfiguracionPage = () => {
     const [concesionariaForm, setConcesionariaForm] = useState({
         nombre: '', cuit: '', email: '', telefono: '', direccion: '',
         colorPrimario: '', colorSecundario: '', pdfPie: '', sitioWeb: '',
+        razonSocial: '', condicionIva: '', puntoVenta: '',
     });
     const [savingConcesionaria, setSavingConcesionaria] = useState(false);
     const [deletingLogo, setDeletingLogo] = useState(false);
@@ -123,6 +125,9 @@ const ConfiguracionPage = () => {
                         colorSecundario: data.colorSecundario || '',
                         pdfPie: data.pdfPie || '',
                         sitioWeb: data.sitioWeb || '',
+                        razonSocial: data.razonSocial || '',
+                        condicionIva: data.condicionIva || '',
+                        puntoVenta: data.puntoVenta != null ? String(data.puntoVenta) : '',
                     });
                 }
             })
@@ -161,6 +166,10 @@ const ConfiguracionPage = () => {
                 colorSecundario: sec,
                 pdfPie: concesionariaForm.pdfPie.trim(),
                 sitioWeb: concesionariaForm.sitioWeb.trim(),
+                // Datos fiscales del emisor (AFIP). '' → el backend lo persiste como null.
+                razonSocial: concesionariaForm.razonSocial.trim(),
+                condicionIva: concesionariaForm.condicionIva as UpdateConcesionariaDto['condicionIva'],
+                puntoVenta: concesionariaForm.puntoVenta.trim(),
             });
             // El PATCH devuelve la concesionaria ya actualizada: se refleja en el
             // preview (logo, etc.) sin necesidad de recargar.
@@ -312,6 +321,42 @@ const ConfiguracionPage = () => {
                             </div>
                             {isAdmin && (
                                 <>
+                                    {/* ── Datos fiscales (facturación AFIP) ──────────────────── */}
+                                    <div style={{ marginTop: '1.75rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' }}>
+                                        <h3 style={{ fontSize: '0.98rem', fontWeight: 700, marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <Receipt size={16} /> Datos fiscales (facturación AFIP)
+                                        </h3>
+                                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem', lineHeight: 1.5 }}>
+                                            Necesarios para emitir facturas electrónicas. La condición frente al IVA determina qué comprobante emitís
+                                            (Responsable Inscripto → Factura A/B). Hoy las facturas se emiten en <strong>modo demo</strong> (CAE simulado,
+                                            sin validez fiscal) hasta cargar un certificado AFIP.
+                                        </p>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                                <label className="form-label-xs">Razón social (denominación fiscal)</label>
+                                                <input type="text" className="form-input" value={concesionariaForm.razonSocial} maxLength={200}
+                                                    placeholder="Ej: Autos del Valle S.A."
+                                                    onChange={e => setConcesionariaForm(f => ({ ...f, razonSocial: e.target.value }))} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="form-label-xs">Condición frente al IVA</label>
+                                                <select className="form-input" value={concesionariaForm.condicionIva}
+                                                    onChange={e => setConcesionariaForm(f => ({ ...f, condicionIva: e.target.value }))}>
+                                                    <option value="">— Sin definir —</option>
+                                                    {(Object.keys(CONDICION_IVA_EMISOR_LABEL) as Array<keyof typeof CONDICION_IVA_EMISOR_LABEL>).map((k) => (
+                                                        <option key={k} value={k}>{CONDICION_IVA_EMISOR_LABEL[k]}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="form-label-xs">Punto de venta</label>
+                                                <input type="number" min={1} max={99999} className="form-input" value={concesionariaForm.puntoVenta}
+                                                    placeholder="Ej: 1"
+                                                    onChange={e => setConcesionariaForm(f => ({ ...f, puntoVenta: e.target.value }))} />
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {/* ── Marca de los documentos (PDF) ──────────────────────── */}
                                     <div style={{ marginTop: '1.75rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' }}>
                                         <h3 style={{ fontSize: '0.98rem', fontWeight: 700, marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

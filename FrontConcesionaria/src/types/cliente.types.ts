@@ -1,6 +1,20 @@
 /** Etapa del cliente en el embudo comercial (pipeline de leads). */
 export type EstadoLead = 'nuevo' | 'contactado' | 'negociando' | 'ganado' | 'perdido';
 
+/** Tipo de documento fiscal del receptor (AFIP). */
+export type TipoDocumento = 'CUIT' | 'CUIL' | 'DNI' | 'CF';
+
+/** Condición frente al IVA (AFIP), compartida por emisor y receptor. */
+export type CondicionIva = 'responsable_inscripto' | 'monotributo' | 'exento' | 'consumidor_final';
+
+/** Etiqueta legible de la condición frente al IVA. */
+export const CONDICION_IVA_LABEL: Record<CondicionIva, string> = {
+    responsable_inscripto: 'Responsable Inscripto',
+    monotributo: 'Monotributo',
+    exento: 'IVA Exento',
+    consumidor_final: 'Consumidor Final',
+};
+
 /**
  * Etiqueta + variante de Badge por etapa. El orden del record ES el del embudo.
  * Las 5 variantes mapean a 5 clases CSS DISTINTAS (violet/cyan/warning/emerald/
@@ -31,6 +45,10 @@ export interface Cliente {
     /** Vendedor "dueño" del cliente (ownership CRM). null = sin asignar. */
     vendedorAsignadoId?: number | null;
     vendedorAsignado?: { id: number; nombre: string } | null;
+    /** Tipo de documento fiscal (AFIP). null/undefined = sin definir. */
+    tipoDoc?: TipoDocumento | null;
+    /** Condición frente al IVA (AFIP). Determina Factura A vs B. */
+    condicionIva?: CondicionIva | null;
     createdAt: string;
     updatedAt: string;
     concesionaria?: {

@@ -64,4 +64,39 @@ export const ventasApi = {
     // Comprobante de venta en PDF (Blob descargable).
     comprobantePdf: (id: number) =>
         client.get<Blob>(`/ventas/${id}/comprobante`, { responseType: 'blob' }),
+
+    // ── Facturación electrónica AFIP ─────────────────────────────────────────
+    // Emite la factura (obtiene el CAE). Idempotente: si ya se facturó devuelve 409
+    // con error 'COMPROBANTE_YA_EMITIDO'.
+    emitirFactura: (id: number) =>
+        client.post<ComprobanteAfip>(`/ventas/${id}/factura`),
+
+    // Comprobante fiscal ya emitido de la venta (404 si no existe).
+    getFactura: (id: number) =>
+        client.get<ComprobanteAfip>(`/ventas/${id}/factura`),
+
+    // Factura electrónica en PDF (Blob descargable) con CAE + QR.
+    facturaPdf: (id: number) =>
+        client.get<Blob>(`/ventas/${id}/factura/pdf`, { responseType: 'blob' }),
 };
+
+// Comprobante fiscal AFIP asociado a una venta.
+export interface ComprobanteAfip {
+    id: number;
+    ventaId: number;
+    tipoComprobante: 'factura_a' | 'factura_b' | 'factura_c';
+    puntoVenta: number;
+    numero: number;
+    fechaComprobante: string;
+    receptorNombre: string;
+    receptorDocNro: string;
+    moneda: string;
+    neto: number;
+    alicuotaIva: number;
+    iva: number;
+    total: number;
+    estado: 'pendiente' | 'emitida' | 'error';
+    entorno: 'mock' | 'homologacion' | 'produccion';
+    cae: string | null;
+    caeVencimiento: string | null;
+}

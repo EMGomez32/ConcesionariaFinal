@@ -1,3 +1,12 @@
+/** Condición del emisor frente al IVA (AFIP). Un consumidor final no emite. */
+export type CondicionIvaEmisor = 'responsable_inscripto' | 'monotributo' | 'exento';
+
+export const CONDICION_IVA_EMISOR_LABEL: Record<CondicionIvaEmisor, string> = {
+    responsable_inscripto: 'Responsable Inscripto',
+    monotributo: 'Monotributo',
+    exento: 'IVA Exento',
+};
+
 export interface Concesionaria {
     id: number;
     nombre: string;
@@ -5,6 +14,12 @@ export interface Concesionaria {
     email?: string;
     telefono?: string;
     direccion?: string;
+    // Datos fiscales del emisor (facturación electrónica AFIP).
+    razonSocial?: string | null;
+    condicionIva?: CondicionIvaEmisor | null;
+    puntoVenta?: number | null;
+    /** Entorno AFIP. En Corte 1 siempre 'mock' (CAE simulado). */
+    afipEntorno?: 'mock' | 'homologacion' | 'produccion';
     // Marca de los documentos (PDF). null/ausente = look AUTENZA por defecto.
     logoUrl?: string | null;
     colorPrimario?: string | null;
@@ -46,6 +61,11 @@ export interface UpdateConcesionariaDto {
     colorSecundario?: string;
     pdfPie?: string;
     sitioWeb?: string;
+    // Datos fiscales del emisor (AFIP). '' limpia el campo; el backend coacciona
+    // puntoVenta a número y '' → null.
+    razonSocial?: string;
+    condicionIva?: CondicionIvaEmisor | '';
+    puntoVenta?: string | number;
     /** Cupo de usuarios (sólo super_admin). null = sin límite. */
     limiteUsuarios?: number | null;
 }
