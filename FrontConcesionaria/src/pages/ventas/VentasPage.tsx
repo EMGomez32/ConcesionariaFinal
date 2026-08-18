@@ -20,6 +20,7 @@ import {
 import type { FormaPagoVenta, EstadoEntrega, Venta } from '../../types/venta.types';
 import type { ApiError } from '../../types/api.types';
 import VentaSubResources from '../../components/ventas/VentaSubResources';
+import VentaFacturaPanel from '../../components/ventas/VentaFacturaPanel';
 import { ventasApi } from '../../api/ventas.api';
 
 // ─── Tipos auxiliares ──────────────────────────────────────────────────────
@@ -814,6 +815,9 @@ const VentasPage = () => {
                                 "{detail.observaciones}"
                             </div>
                         )}
+
+                        {/* Facturación electrónica AFIP */}
+                        <VentaFacturaPanel ventaId={detail.id} />
 
                         {/* Sub-recursos: Pagos, Extras, Canjes */}
                         <div className="space-y-4">
