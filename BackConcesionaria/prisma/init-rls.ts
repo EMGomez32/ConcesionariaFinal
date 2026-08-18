@@ -76,6 +76,7 @@ const TENANT_TABLES = [
     'concesionaria_subscriptions',
     'invoices',
     'payments',
+    'comprobantes_afip',
 ];
 
 // Sub-resources that need concesionaria_id backfilled from a parent table.

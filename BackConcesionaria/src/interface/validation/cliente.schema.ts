@@ -44,6 +44,17 @@ const estadoLeadEnum = z.enum(['nuevo', 'contactado', 'negociando', 'ganado', 'p
     error: 'Estado inválido. Válidos: nuevo, contactado, negociando, ganado, perdido',
 }).optional();
 
+// Datos fiscales del receptor (AFIP). El '' del form (limpieza) → null. Todo
+// opcional: un cliente sin estos datos se factura como consumidor final (B).
+const tipoDocOpcional = z.preprocess(
+    (v) => (v === '' ? null : v),
+    z.enum(['CUIT', 'CUIL', 'DNI', 'CF']).nullable().optional(),
+);
+const condicionIvaOpcional = z.preprocess(
+    (v) => (v === '' ? null : v),
+    z.enum(['responsable_inscripto', 'monotributo', 'exento', 'consumidor_final']).nullable().optional(),
+);
+
 export const createClienteSchema = z.object({
     // Lo inyecta el controller (resolveConcesionariaId) para un admin desde el
     // token; el super_admin lo elige por body y DEBE sobrevivir al strip de Zod,
@@ -60,6 +71,8 @@ export const createClienteSchema = z.object({
     observaciones: z.string().optional(),
     estadoLead: estadoLeadEnum,
     vendedorAsignadoId: nullableFk,
+    tipoDoc: tipoDocOpcional,
+    condicionIva: condicionIvaOpcional,
 });
 
 export const updateClienteSchema = z.object({
@@ -72,6 +85,8 @@ export const updateClienteSchema = z.object({
     observaciones: z.string().optional(),
     estadoLead: estadoLeadEnum,
     vendedorAsignadoId: nullableFk,
+    tipoDoc: tipoDocOpcional,
+    condicionIva: condicionIvaOpcional,
     // Sin concesionariaId: el repo (pickEditable) no lo persiste en update, no hay
     // reasignación de tenant para clientes. Si viniera, Zod lo descarta => igual
     // que hoy (el repo lo recortaba).

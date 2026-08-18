@@ -103,7 +103,7 @@ export class PrismaClienteRepository implements IClienteRepository {
      * podrían pisar columnas internas (deletedAt, createdAt, concesionariaId).
      */
     private pickEditable(data: any): Record<string, any> {
-        const CAMPOS = ['nombre', 'dni', 'telefono', 'email', 'direccion', 'observaciones', 'estadoLead', 'vendedorAsignadoId'];
+        const CAMPOS = ['nombre', 'dni', 'telefono', 'email', 'direccion', 'observaciones', 'estadoLead', 'vendedorAsignadoId', 'tipoDoc', 'condicionIva'];
         const payload: Record<string, any> = {};
         for (const campo of CAMPOS) {
             if (data[campo] !== undefined) {
@@ -163,6 +163,8 @@ export class PrismaClienteRepository implements IClienteRepository {
             c.concesionaria ? { id: c.concesionaria.id, nombre: c.concesionaria.nombre } : undefined,
             c.vendedorAsignadoId ?? null,
             c.vendedorAsignado ? { id: c.vendedorAsignado.id, nombre: c.vendedorAsignado.nombre } : null,
+            c.tipoDoc ?? null,
+            c.condicionIva ?? null,
         );
     }
 }

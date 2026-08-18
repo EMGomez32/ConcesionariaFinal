@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Cliente } from '../../types/cliente.types';
+import { CONDICION_IVA_LABEL } from '../../types/cliente.types';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import Select from '../ui/Select';
@@ -27,6 +28,8 @@ const buildFormData = (initialData: Cliente | null | undefined, concesionariaId?
     direccion: initialData?.direccion ?? '',
     observaciones: initialData?.observaciones ?? '',
     vendedorAsignadoId: initialData?.vendedorAsignadoId ?? null,
+    tipoDoc: initialData?.tipoDoc ?? null,
+    condicionIva: initialData?.condicionIva ?? null,
 });
 
 const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCancel, onEdit, loading }) => {
@@ -485,12 +488,48 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
                     </div>
 
                     <Input
-                        label="CUIT/CUIL"
+                        label="N° de documento"
                         name="dni"
                         value={formData.dni}
                         onChange={handleChange}
                         placeholder="20-12345678-9"
                         icon={<FileText size={18} />}
+                    />
+                </div>
+            </div>
+
+            <div className="form-section">
+                <div className="section-header">
+                    <FileText size={18} className="section-icon" />
+                    <h3 className="section-title">Datos Fiscales (AFIP)</h3>
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 0.75rem', lineHeight: 1.5 }}>
+                    Determinan el comprobante que se emite al facturar: un cliente Responsable Inscripto con CUIT recibe
+                    <strong> Factura A</strong> (IVA discriminado); el resto, <strong>Factura B</strong>. Si lo dejás sin definir,
+                    se trata como consumidor final.
+                </p>
+                <div className="form-grid">
+                    <Select
+                        label="Tipo de documento"
+                        name="tipoDoc"
+                        value={formData.tipoDoc ?? ''}
+                        onChange={handleChange}
+                        options={[
+                            { value: 'CUIT', label: 'CUIT' },
+                            { value: 'CUIL', label: 'CUIL' },
+                            { value: 'DNI', label: 'DNI' },
+                            { value: 'CF', label: 'Consumidor final (sin identificar)' },
+                        ]}
+                        placeholder="— Sin definir —"
+                    />
+                    <Select
+                        label="Condición frente al IVA"
+                        name="condicionIva"
+                        value={formData.condicionIva ?? ''}
+                        onChange={handleChange}
+                        options={(Object.keys(CONDICION_IVA_LABEL) as Array<keyof typeof CONDICION_IVA_LABEL>)
+                            .map((k) => ({ value: k, label: CONDICION_IVA_LABEL[k] }))}
+                        placeholder="— Sin definir —"
                     />
                 </div>
             </div>

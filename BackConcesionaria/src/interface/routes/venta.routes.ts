@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { VentaController } from '../controllers/VentaController';
 import { ComprobanteController } from '../controllers/ComprobanteController';
+import { FacturaController } from '../controllers/FacturaController';
 import { validateBody } from '../middlewares/validate.middleware';
 import {
     createVentaSchema,
@@ -26,6 +27,59 @@ const router = Router();
  *       404: { $ref: '#/components/responses/NotFound' }
  */
 router.get('/:id/comprobante', ComprobanteController.ventaPdf);
+
+// ── Facturación electrónica AFIP ─────────────────────────────────────────────
+/**
+ * @openapi
+ * /ventas/{id}/factura:
+ *   post:
+ *     tags: [Ventas]
+ *     summary: Emitir factura electrónica AFIP de la venta (obtiene el CAE)
+ *     description: >
+ *       Determina el tipo (A si el cliente es Responsable Inscripto, B si es
+ *       consumidor final), descompone neto + IVA, numera el comprobante y solicita
+ *       el CAE. En Corte 1 el CAE es simulado (modo mock). Idempotente por venta:
+ *       si ya se facturó devuelve 409.
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     responses:
+ *       201: { description: Comprobante emitido, content: { application/json: { schema: { type: object } } } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       409: { $ref: '#/components/responses/Conflict' }
+ *       422: { description: Faltan datos fiscales del emisor o del receptor }
+ */
+router.post('/:id/factura', FacturaController.emitir);
+
+/**
+ * @openapi
+ * /ventas/{id}/factura:
+ *   get:
+ *     tags: [Ventas]
+ *     summary: Comprobante fiscal AFIP de la venta
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     responses:
+ *       200: { description: Comprobante, content: { application/json: { schema: { type: object } } } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.get('/:id/factura', FacturaController.getByVenta);
+
+/**
+ * @openapi
+ * /ventas/{id}/factura/pdf:
+ *   get:
+ *     tags: [Ventas]
+ *     summary: Factura electrónica AFIP en PDF (con CAE y QR)
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     responses:
+ *       200: { description: PDF de la factura, content: { application/pdf: {} } }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.get('/:id/factura/pdf', FacturaController.pdf);
 
 /**
  * @openapi

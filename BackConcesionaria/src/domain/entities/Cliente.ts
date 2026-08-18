@@ -17,5 +17,9 @@ export class Cliente {
         /** Vendedor "dueño" del cliente (ownership CRM). null = sin asignar. */
         public readonly vendedorAsignadoId?: number | null,
         public readonly vendedorAsignado?: { id: number; nombre: string } | null,
+        /** Tipo de documento fiscal (AFIP): CUIT|CUIL|DNI|CF. null = sin definir. */
+        public readonly tipoDoc?: string | null,
+        /** Condición frente al IVA del receptor. Determina A vs B al facturar. */
+        public readonly condicionIva?: string | null,
     ) { }
 }

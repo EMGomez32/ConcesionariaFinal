@@ -49,6 +49,23 @@ const limiteUsuariosOpcional = z.preprocess(
     z.coerce.number().int().min(1, 'El límite debe ser al menos 1').nullable().optional(),
 );
 
+// ── Datos fiscales (facturación electrónica AFIP) ────────────────────────────
+// El '' de "limpieza" del form se acepta y se convierte a null (mismo criterio
+// que el resto de opcionales). `condicionIva` del EMISOR determina qué factura
+// emite (RI → A/B; monotributo/exento → C). `puntoVenta` es obligatorio para
+// facturar, pero opcional acá (se valida al emitir, no al guardar el perfil).
+// El EMISOR no puede ser 'consumidor_final' (un CF no factura). Enum acotado a
+// los tres que sí emiten — distinto del enum del receptor (cliente.schema), que
+// sí incluye consumidor_final.
+const condicionIvaOpcional = z.preprocess(
+    (v) => (v === '' ? null : v),
+    z.enum(['responsable_inscripto', 'monotributo', 'exento']).nullable().optional(),
+);
+const puntoVentaOpcional = z.preprocess(
+    (v) => (v === '' ? null : v),
+    z.coerce.number().int().min(1, 'El punto de venta debe ser al menos 1').max(99999, 'Punto de venta inválido').nullable().optional(),
+);
+
 export const createConcesionariaSchema = z.object({
     nombre: z.string({ error: 'El nombre es obligatorio' }).min(1, 'El nombre es obligatorio'),
     cuit: textoOpcional,
@@ -75,4 +92,8 @@ export const updateConcesionariaSchema = z.object({
     pdfPie: pieOpcional,
     sitioWeb: sitioOpcional,
     limiteUsuarios: limiteUsuariosOpcional,
+    // Datos fiscales del emisor (AFIP).
+    razonSocial: textoOpcional,
+    condicionIva: condicionIvaOpcional,
+    puntoVenta: puntoVentaOpcional,
 });

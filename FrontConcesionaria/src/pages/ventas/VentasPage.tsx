@@ -15,7 +15,7 @@ import DataTable, { type Column } from '../../components/ui/DataTable';
 import {
     Plus, Search, Eye, Trash2, X, RefreshCw, DollarSign,
     ArrowRightLeft, User, ShoppingBag, Car, MapPin,
-    CheckCircle2, TrendingUp, Printer, Package
+    CheckCircle2, TrendingUp, Printer, Package, FileText
 } from 'lucide-react';
 import type { FormaPagoVenta, EstadoEntrega, Venta } from '../../types/venta.types';
 import type { ApiError } from '../../types/api.types';
@@ -107,6 +107,8 @@ const VentasPage = () => {
     const [createOpen, setCreateOpen] = useState(false);
     const [form, setForm] = useState<VentaForm>(emptyForm());
     const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
+    // Facturas en curso (por venta): evita doble emisión al doble-clickear.
+    const [facturaEnCurso, setFacturaEnCurso] = useState<Set<number>>(new Set());
 
     // Queries
     const { data: ventasData, isLoading: loadingVentas, refetch: refetchVentas } = useVentas(
@@ -198,6 +200,45 @@ const VentasPage = () => {
             window.URL.revokeObjectURL(url);
         } catch {
             addToast('Error al generar el comprobante', 'error');
+        }
+    };
+
+    // Factura electrónica AFIP: emite (obtiene el CAE) y descarga el PDF fiscal.
+    // Idempotente: si la venta ya fue facturada, el backend responde 409 con
+    // 'COMPROBANTE_YA_EMITIDO' → no es un error, se salta directo a la descarga.
+    // Un 422 (faltan datos fiscales del emisor/receptor) se muestra tal cual.
+    const handleFactura = async (id: number) => {
+        // Guard anti-doble-emisión: si ya hay una factura en curso para esta venta,
+        // el segundo click se ignora (el botón además queda deshabilitado).
+        if (facturaEnCurso.has(id)) return;
+        setFacturaEnCurso(prev => new Set(prev).add(id));
+        try {
+            let emitida = false;
+            try {
+                await ventasApi.emitirFactura(id);
+                emitida = true;
+            } catch (err: unknown) {
+                const apiError = err as { error?: string; message?: string };
+                if (apiError?.error !== 'COMPROBANTE_YA_EMITIDO') {
+                    addToast(apiError?.message ?? 'No se pudo emitir la factura', 'error');
+                    return;
+                }
+            }
+            if (emitida) addToast('Factura AFIP emitida — CAE obtenido', 'success');
+
+            const blob = await ventasApi.facturaPdf(id) as unknown as Blob;
+            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `factura-venta-${id}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            addToast('Error al generar la factura', 'error');
+        } finally {
+            setFacturaEnCurso(prev => { const next = new Set(prev); next.delete(id); return next; });
         }
     };
 
@@ -310,6 +351,7 @@ const VentasPage = () => {
                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
                     <button className="icon-btn" title="Auditar Operación" onClick={(e) => { e.stopPropagation(); setSelectedDetailId(v.id); }}><Eye size={16} /></button>
                     <button className="icon-btn" title="Descargar comprobante PDF" onClick={(e) => { e.stopPropagation(); handleComprobante(v.id); }}><Printer size={16} /></button>
+                    <button className="icon-btn" title="Emitir / descargar factura AFIP" disabled={facturaEnCurso.has(v.id)} onClick={(e) => { e.stopPropagation(); handleFactura(v.id); }}><FileText size={16} /></button>
                     <button className="icon-btn danger" onClick={e => { e.stopPropagation(); handleDelete(v.id); }} title="Anular Venta"><Trash2 size={16} /></button>
                 </div>
             )

@@ -14,6 +14,15 @@ model Concesionaria {
   email                   String?
   telefono                String?
   direccion               String?
+  // ── Datos fiscales (facturación electrónica AFIP) ──────────────────────────
+  // `nombre` es la marca comercial; `razonSocial` es la denominación fiscal.
+  // `condicionIva` del EMISOR determina qué comprobantes emite (RI → A/B).
+  // `puntoVenta` es obligatorio para WSFEv1. `afipEntorno` arranca en `mock`
+  // (CAE simulado) hasta que se cargue un certificado real (Corte 2).
+  razonSocial             String?                    @map("razon_social")
+  condicionIva            CondicionIva?              @map("condicion_iva")
+  puntoVenta              Int?                       @map("punto_venta")
+  afipEntorno             EntornoAfip                @default(mock) @map("afip_entorno")
   // Marca de los documentos (PDF) por tenant. Todo opcional: si está en null se
   // cae al look AUTENZA por defecto (útil para demos). El logo se guarda vía
   // storage adapter: `logoUrl` es la URL pública (/uploads/...) y
@@ -59,6 +68,7 @@ model Concesionaria {
   vehiculoMovimientos     VehiculoMovimiento[]
   vehiculos               Vehiculo[]
   ventas                  Venta[]
+  comprobantesAfip        ComprobanteAfip[]
 
   @@map("concesionarias")
 }
@@ -161,6 +171,11 @@ model Cliente {
   concesionariaId         Int                     @map("concesionaria_id")
   nombre                  String
   dni                     String?
+  // Datos fiscales del receptor (facturación AFIP). `dni` es el número de doc;
+  // `tipoDoc` dice qué es (DNI/CUIT/CUIL); `condicionIva` determina A vs B y si el
+  // IVA se discrimina. Null → se trata como consumidor final.
+  tipoDoc                 TipoDocumento?          @map("tipo_doc")
+  condicionIva            CondicionIva?           @map("condicion_iva")
   telefono                String?
   email                   String?
   direccion               String?
@@ -790,6 +805,7 @@ model Venta {
   canjes                  VentaCanjeVehiculo[]
   extras                  VentaExtra[]
   pagos                   VentaPago[]
+  comprobanteAfip         ComprobanteAfip?
   cliente                 Cliente                 @relation(fields: [clienteId], references: [id])
   concesionaria           Concesionaria           @relation(fields: [concesionariaId], references: [id])
   presupuesto             Presupuesto?            @relation(fields: [presupuestoId], references: [id])
@@ -1538,4 +1554,89 @@ model PasswordResetToken {
   @@index([tokenHash])
   @@index([usuarioId])
   @@map("password_reset_tokens")
+}
+
+// ── Facturación electrónica AFIP ──────────────────────────────────────────────
+
+/// Condición frente al IVA (emisor y receptor). Determina el tipo de comprobante
+/// (RI→A/B, Monotributo→C) y si el IVA se discrimina.
+enum CondicionIva {
+  responsable_inscripto
+  monotributo
+  exento
+  consumidor_final
+}
+
+/// Tipo de documento del receptor. Mapea a los códigos de AFIP en el use-case
+/// (CUIT→80, CUIL→86, DNI→96, CF→99).
+enum TipoDocumento {
+  CUIT
+  CUIL
+  DNI
+  CF
+}
+
+/// Tipo/letra de comprobante. Mapea a los códigos de AFIP (A→1, B→6, C→11).
+enum TipoComprobanteAfip {
+  factura_a
+  factura_b
+  factura_c
+}
+
+enum EstadoComprobanteAfip {
+  pendiente
+  emitida
+  error
+}
+
+/// Entorno de emisión. `mock` = CAE simulado (sin AFIP); `homologacion`/`produccion`
+/// = WSAA+WSFEv1 real (requiere certificado, Corte 2).
+enum EntornoAfip {
+  mock
+  homologacion
+  produccion
+}
+
+/// Comprobante electrónico (factura) emitido para una Venta. Snapshot fiscal: se
+/// guardan los datos del receptor y los importes AL MOMENTO de emitir (no se
+/// dependen del Cliente/Venta actuales). Una factura por venta (ventaId único).
+model ComprobanteAfip {
+  id               Int                   @id @default(autoincrement())
+  concesionariaId  Int                   @map("concesionaria_id")
+  ventaId          Int                   @unique @map("venta_id")
+  // Cabecera
+  tipoComprobante  TipoComprobanteAfip   @map("tipo_comprobante")
+  puntoVenta       Int                   @map("punto_venta")
+  numero           Int
+  concepto         Int                   @default(1) // 1 = productos
+  fechaComprobante DateTime              @map("fecha_comprobante") @db.Date
+  // Receptor (snapshot)
+  receptorNombre   String                @map("receptor_nombre")
+  receptorDocTipo  Int                   @map("receptor_doc_tipo") // código AFIP (80/86/96/99)
+  receptorDocNro   String                @map("receptor_doc_nro")
+  receptorCondIva  CondicionIva          @map("receptor_cond_iva")
+  // Importes (moneda del comprobante: PES/DOL)
+  moneda           String                @default("PES")
+  cotizacion       Decimal               @default(1) @db.Decimal(18, 6)
+  neto             Decimal               @db.Decimal(14, 2)
+  alicuotaIva      Decimal               @map("alicuota_iva") @db.Decimal(5, 2)
+  iva              Decimal               @db.Decimal(14, 2)
+  total            Decimal               @db.Decimal(14, 2)
+  // Resultado AFIP
+  estado           EstadoComprobanteAfip @default(pendiente)
+  entorno          EntornoAfip
+  cae              String?
+  caeVencimiento   DateTime?             @map("cae_vencimiento") @db.Date
+  qrData           String?               @map("qr_data") // string base64 del QR (RG 4291)
+  errorMsg         String?               @map("error_msg")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+  deletedAt        DateTime?             @map("deleted_at")
+  concesionaria    Concesionaria         @relation(fields: [concesionariaId], references: [id])
+  venta            Venta                 @relation(fields: [ventaId], references: [id])
+
+  @@unique([concesionariaId, tipoComprobante, puntoVenta, numero], map: "comprobantes_afip_numero_key")
+  @@index([concesionariaId])
+  @@index([concesionariaId, tipoComprobante, puntoVenta])
+  @@map("comprobantes_afip")
 }

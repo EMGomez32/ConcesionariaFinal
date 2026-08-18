@@ -71,7 +71,10 @@ export class ConcesionariaController {
             // cualquier columna del tenant desde este endpoint. `logoUrl` y
             // `logoStorageKey` NO están: el logo sólo se toca vía /me/logo.
             const CAMPOS = ['nombre', 'cuit', 'email', 'telefono', 'direccion',
-                'colorPrimario', 'colorSecundario', 'pdfPie', 'sitioWeb'];
+                'colorPrimario', 'colorSecundario', 'pdfPie', 'sitioWeb',
+                // Datos fiscales del emisor (AFIP). afipEntorno NO se expone acá:
+                // queda en 'mock' hasta que el Corte 2 sume la carga del certificado.
+                'razonSocial', 'condicionIva', 'puntoVenta'];
             const data: Record<string, any> = {};
             for (const campo of CAMPOS) {
                 if (req.body?.[campo] !== undefined) {
