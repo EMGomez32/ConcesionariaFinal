@@ -13,6 +13,9 @@ build/
 # ── Datos subidos por usuarios (PII: DNI, recibos de sueldo) ─
 uploads/
 
+# ── Datos de negocio locales (planillas de migración, no es fuente) ─
+Migracion-AUTENZA.xlsx
+
 # ── Logs de runtime ─────────────────────────────────────────
 logs/
 *.log
