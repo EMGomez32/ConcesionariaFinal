@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle, Bookmark, Target, Wrench, CalendarClock } from 'lucide-react';
+import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle, Bookmark, Target, Wrench, CalendarClock, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { useDashboardStats, useStockDistribution, useDashboardFinanzas, useDashboardAlertas, useDashboardTendencia, useDashboardMeta, useMiObjetivo, dashboardKeys, type FinanzaKpi, type AlertaItem, type AlertaKey } from '../../hooks/useDashboard';
@@ -56,7 +56,9 @@ const ProgressRow = ({ etiqueta, actual, objetivo, pct }: { etiqueta: string; ac
         </span>
       </div>
       <div style={{ height: '10px', width: '100%', background: 'color-mix(in srgb, var(--text-primary) 10%, transparent)', borderRadius: '999px', overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '999px', transition: 'width .4s var(--easing-soft, ease)' }} />
+        {/* Sin transition de width: animar layout provoca thrash y el valor cambia
+            sólo al refetchear (no hay momento de motion que justifique el costo). */}
+        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '999px' }} />
       </div>
     </div>
   );
@@ -180,18 +182,22 @@ const DashboardPage = () => {
   ] : [];
 
   // Tarjetas de "Acciones del día": sólo las señales que este rol pidió (las no
-  // pedidas vienen null del hook). El color marca el ROL DE ESTADO de la paleta
-  // (peligro / atención / info), no la identidad de la tarjeta: la identidad la
-  // dan ícono + etiqueta. Tokens siempre (los hex hardcodeados no viraban en dark).
-  type AlertCard = { key: AlertaKey; label: string; count: number; monto: string; montoLabel: string; icon: LucideIcon; color: string; to: string };
+  // pedidas vienen null del hook). Se arman YA en orden de urgencia —danger
+  // (vencido) → warning (vence pronto / se estanca) → info (agenda)— y el color
+  // marca ese ROL DE ESTADO, no la identidad de la tarjeta: la identidad la dan
+  // ícono + etiqueta. Las señales en 0 no rinden tarjeta: colapsan a un chip en
+  // la línea "Al día" (menos ruido, jerarquía por urgencia; fix P2 de la crítica).
+  type AlertCard = { key: AlertaKey; label: string; corto: string; count: number; monto: string; montoLabel: string; icon: LucideIcon; color: string; to: string };
   const alertCards: AlertCard[] = [];
-  if (alertas?.estancados) alertCards.push({ key: 'estancados', label: `Estancadas (+${alertas.estancados.umbral} días)`, count: alertas.estancados.count, monto: alertaMonto(alertas.estancados), montoLabel: 'capital inmovilizado', icon: Car, color: 'var(--warning)', to: '/vehiculos' });
-  if (alertas?.porVencer) alertCards.push({ key: 'porVencer', label: `Cuotas vencen en ${alertas.porVencer.dias} días`, count: alertas.porVencer.count, monto: alertaMonto(alertas.porVencer), montoLabel: 'a cobrar', icon: Clock, color: 'var(--accent)', to: '/reportes?tab=proximos' });
-  if (alertas?.mora) alertCards.push({ key: 'mora', label: 'Cuotas en mora', count: alertas.mora.count, monto: alertaMonto(alertas.mora), montoLabel: 'saldo adeudado', icon: AlertTriangle, color: 'var(--danger)', to: '/reportes?tab=mora' });
-  if (alertas?.reservas) alertCards.push({ key: 'reservas', label: `Reservas vencen en ${alertas.reservas.dias} días`, count: alertas.reservas.count, monto: alertaMonto(alertas.reservas), montoLabel: 'en señas', icon: Bookmark, color: 'var(--accent-2)', to: '/reservas' });
-  if (alertas?.turnos) alertCards.push({ key: 'turnos', label: `Turnos de taller (${alertas.turnos.dias} días)`, count: alertas.turnos.count, monto: String(alertas.turnos.hoy), montoLabel: alertas.turnos.hoy === 1 ? 'turno hoy' : 'turnos hoy', icon: Wrench, color: 'var(--info)', to: '/postventa?tab=agenda' });
-  if (alertas?.seguimientos) alertCards.push({ key: 'seguimientos', label: `Seguimientos CRM (${alertas.seguimientos.dias} días)`, count: alertas.seguimientos.count, monto: String(alertas.seguimientos.vencidos), montoLabel: alertas.seguimientos.vencidos === 1 ? 'vencido' : 'vencidos', icon: CalendarClock, color: 'var(--info)', to: '/seguimientos' });
-  if (alertas?.documentacion) alertCards.push({ key: 'documentacion', label: `Documentación (${alertas.documentacion.dias} días)`, count: alertas.documentacion.count, monto: String(alertas.documentacion.vencidos), montoLabel: alertas.documentacion.vencidos === 1 ? 'vencida' : 'vencidas', icon: ShieldCheck, color: 'var(--warning)', to: '/reportes?tab=documentacion' });
+  if (alertas?.mora) alertCards.push({ key: 'mora', label: 'Cuotas en mora', corto: 'Mora', count: alertas.mora.count, monto: alertaMonto(alertas.mora), montoLabel: 'saldo adeudado', icon: AlertTriangle, color: 'var(--danger)', to: '/reportes?tab=mora' });
+  if (alertas?.porVencer) alertCards.push({ key: 'porVencer', label: `Cuotas vencen en ${alertas.porVencer.dias} días`, corto: 'Cuotas por vencer', count: alertas.porVencer.count, monto: alertaMonto(alertas.porVencer), montoLabel: 'a cobrar', icon: Clock, color: 'var(--warning)', to: '/reportes?tab=proximos' });
+  if (alertas?.reservas) alertCards.push({ key: 'reservas', label: `Reservas vencen en ${alertas.reservas.dias} días`, corto: 'Reservas', count: alertas.reservas.count, monto: alertaMonto(alertas.reservas), montoLabel: 'en señas', icon: Bookmark, color: 'var(--warning)', to: '/reservas' });
+  if (alertas?.documentacion) alertCards.push({ key: 'documentacion', label: `Documentación (${alertas.documentacion.dias} días)`, corto: 'Documentación', count: alertas.documentacion.count, monto: String(alertas.documentacion.vencidos), montoLabel: alertas.documentacion.vencidos === 1 ? 'vencida' : 'vencidas', icon: ShieldCheck, color: 'var(--warning)', to: '/reportes?tab=documentacion' });
+  if (alertas?.estancados) alertCards.push({ key: 'estancados', label: `Estancadas (+${alertas.estancados.umbral} días)`, corto: 'Estancadas', count: alertas.estancados.count, monto: alertaMonto(alertas.estancados), montoLabel: 'capital inmovilizado', icon: Car, color: 'var(--warning)', to: '/vehiculos' });
+  if (alertas?.turnos) alertCards.push({ key: 'turnos', label: `Turnos de taller (${alertas.turnos.dias} días)`, corto: 'Turnos', count: alertas.turnos.count, monto: String(alertas.turnos.hoy), montoLabel: alertas.turnos.hoy === 1 ? 'turno hoy' : 'turnos hoy', icon: Wrench, color: 'var(--info)', to: '/postventa?tab=agenda' });
+  if (alertas?.seguimientos) alertCards.push({ key: 'seguimientos', label: `Seguimientos CRM (${alertas.seguimientos.dias} días)`, corto: 'Seguimientos', count: alertas.seguimientos.count, monto: String(alertas.seguimientos.vencidos), montoLabel: alertas.seguimientos.vencidos === 1 ? 'vencido' : 'vencidos', icon: CalendarClock, color: 'var(--info)', to: '/seguimientos' });
+  const alertasActivas = alertCards.filter((a) => a.count > 0);
+  const alertasAlDia = alertCards.filter((a) => a.count === 0);
 
   // ── Tendencia de ventas ──
   const tItems: VentaMensualItem[] = tendencia?.items ?? [];
@@ -368,38 +374,87 @@ const DashboardPage = () => {
               No se pudieron cargar las alertas.{' '}
               <button className="btn btn-secondary btn-sm" type="button" onClick={() => refetchAlertas()}>Reintentar</button>
             </div>
-          ) : (
-          <div className="stats-grid stagger">
-            {alertasLoading
-              ? Array.from({ length: alertKeys.length }).map((_, i) => (
+          ) : alertasLoading ? (
+            <div className="stats-grid stagger">
+              {Array.from({ length: alertKeys.length }).map((_, i) => (
                 <div key={i} className="card stat-card">
                   <div className="stat-content">
                     <span className="skeleton skeleton-text" style={{ width: '55%' }} />
                     <span className="skeleton skeleton-text-lg" style={{ width: '4ch', display: 'inline-block', marginTop: '0.5rem' }} />
                   </div>
                 </div>
-              ))
-              : alertCards.map((a) => {
-                // Verde cuando no hay nada que atender; el color de alerta si hay.
-                const color = a.count > 0 ? a.color : 'var(--success)';
-                return (
-                  <Link key={a.key} to={a.to} className="card stat-card" style={{ textDecoration: 'none', borderLeft: `3px solid ${color}` }}>
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="stat-icon-wrapper" style={{ backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`, color }}>
-                        <a.icon size={20} />
+              ))}
+            </div>
+          ) : (
+            <>
+              {alertasActivas.length === 0 ? (
+                <div className="card" style={{ padding: '1.5rem', color: 'var(--text-secondary)' }}>
+                  Todo al día. No hay acciones pendientes hoy.
+                </div>
+              ) : (
+                <div className="stats-grid stagger">
+                  {alertasActivas.map((a, idx) => (
+                    <Link
+                      key={a.key}
+                      to={a.to}
+                      className="card stat-card"
+                      style={{
+                        textDecoration: 'none',
+                        // Sólo la tarjeta MÁS urgente (la primera del orden
+                        // danger→warning→info) lleva énfasis de superficie: un tinte
+                        // y borde de su color de estado. El resto queda plano; la
+                        // identidad la cargan el chip del ícono y la etiqueta.
+                        ...(idx === 0
+                          ? {
+                              background: `color-mix(in srgb, ${a.color} 4%, var(--bg-card))`,
+                              borderColor: `color-mix(in srgb, ${a.color} 30%, var(--border))`,
+                            }
+                          : {}),
+                      }}
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="stat-icon-wrapper" style={{ backgroundColor: `color-mix(in srgb, ${a.color} 10%, transparent)`, color: a.color }}>
+                          <a.icon size={20} />
+                        </div>
+                        <span className="text-3xl font-black tabular-nums" style={{ color: 'var(--text-primary)' }}>{a.count}</span>
                       </div>
-                      <span className="text-3xl font-black tabular-nums" style={{ color: 'var(--text-primary)' }}>{a.count}</span>
-                    </div>
-                    <div className="stat-content">
-                      <span className="text-muted font-bold text-xs uppercase tracking-wider mb-1">{a.label}</span>
-                      <span className="text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>
-                        {a.monto} <span className="text-muted text-xs">{a.montoLabel}</span>
-                      </span>
-                    </div>
-                  </Link>
-                );
-              })}
-          </div>
+                      <div className="stat-content">
+                        <span className="text-muted font-bold text-xs uppercase tracking-wider mb-1">{a.label}</span>
+                        <span className="text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>
+                          {a.monto} <span className="text-muted text-xs">{a.montoLabel}</span>
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {alertasAlDia.length > 0 && (
+                <div className="flex items-center flex-wrap gap-2" style={{ marginTop: '1rem' }}>
+                  <span className="text-xs text-muted font-bold uppercase tracking-wider">Al día:</span>
+                  {alertasAlDia.map((a) => (
+                    <Link
+                      key={a.key}
+                      to={a.to}
+                      className="text-xs"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        padding: '0.25rem 0.625rem',
+                        borderRadius: 'var(--radius-pill)',
+                        border: '1px solid var(--border)',
+                        background: 'var(--bg-card)',
+                        color: 'var(--text-secondary)',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <Check size={12} style={{ color: 'var(--success)' }} aria-hidden="true" />
+                      {a.corto}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </section>
       )}
@@ -440,7 +495,7 @@ const DashboardPage = () => {
                     </div>
                     <div className="stat-content">
                       <span className="text-muted font-bold text-xs uppercase tracking-wider mb-1">{c.label}</span>
-                      <span className="stat-value" style={{ color: c.color, fontSize: '1.4rem', lineHeight: 1.2, wordBreak: 'break-word' }}>{c.value}</span>
+                      <span className="stat-value" style={{ color: c.color, fontSize: 'var(--text-xl)', lineHeight: 1.2, wordBreak: 'break-word' }}>{c.value}</span>
                       {c.sub && <span className="text-muted text-xs" style={{ marginTop: '0.35rem' }}>{c.sub}</span>}
                     </div>
                   </div>
@@ -488,11 +543,13 @@ const DashboardPage = () => {
                         title={`${m.label}: ${m.cantidad} ${m.cantidad === 1 ? 'unidad' : 'unidades'} · ${facturadoMes(m)}`}
                         style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}
                       >
-                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: m.cantidad > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>{m.cantidad}</span>
+                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 800, color: m.cantidad > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>{m.cantidad}</span>
+                        {/* Sin transition de height (layout thrash); radios y cuerpos en
+                            tokens de la rampa (0.625rem es el micro-label documentado). */}
                         <div style={{ width: '100%', height: '140px', display: 'flex', alignItems: 'flex-end', marginTop: '0.25rem' }}>
-                          <div style={{ width: '100%', maxWidth: '46px', margin: '0 auto', height: `${barPct}%`, minHeight: m.cantidad > 0 ? '6px' : '0', background: 'var(--accent)', borderRadius: '5px 5px 0 0', transition: 'height .3s var(--easing-soft, ease)' }} />
+                          <div style={{ width: '100%', maxWidth: '46px', margin: '0 auto', height: `${barPct}%`, minHeight: m.cantidad > 0 ? '6px' : '0', background: 'var(--accent)', borderRadius: 'var(--radius-xs) var(--radius-xs) 0 0' }} />
                         </div>
-                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.4rem', whiteSpace: 'nowrap' }}>{m.label}</span>
+                        <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)', marginTop: '0.4rem', whiteSpace: 'nowrap' }}>{m.label}</span>
                       </div>
                     );
                   })}

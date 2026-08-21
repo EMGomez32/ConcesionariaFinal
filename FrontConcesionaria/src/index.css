@@ -112,7 +112,7 @@
 
   /* Motion */
   --easing-soft: cubic-bezier(0.4, 0, 0.2, 1);
-  --easing-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --easing-out: cubic-bezier(0.22, 1, 0.36, 1);
   --duration-fast: 150ms;
   --duration-base: 220ms;
   --duration-slow: 360ms;
@@ -346,7 +346,7 @@ button {
   overflow: hidden;
   opacity: 0;
   transform: scale(0.95) translateY(10px);
-  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .modal-box.active {
@@ -1018,31 +1018,6 @@ button {
   perspective: 1000px;
 }
 
-/* Background grid pattern — sutil, opcional via class .has-grid */
-.has-grid {
-  position: relative;
-}
-
-.has-grid::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(var(--border) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
-  -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
-  pointer-events: none;
-  opacity: 0.5;
-  z-index: 0;
-}
-
-.has-grid > * {
-  position: relative;
-  z-index: 1;
-}
-
 .dashboard-layout {
   display: grid;
   grid-template-columns: 1fr;
@@ -1451,7 +1426,7 @@ button {
 }
 
 .animate-slide-up {
-  animation: slideUp 0.45s var(--easing-spring) forwards;
+  animation: slideUp 0.45s var(--easing-out) forwards;
 }
 
 @keyframes slideUp {
@@ -1460,7 +1435,7 @@ button {
 }
 
 .animate-scale-in {
-  animation: scaleIn 0.32s var(--easing-spring) forwards;
+  animation: scaleIn 0.32s var(--easing-out) forwards;
 }
 
 @keyframes scaleIn {
@@ -1471,7 +1446,7 @@ button {
 /* Stagger helper — usar en hijos directos, ej: .stagger > *:nth-child(N) */
 .stagger > * {
   opacity: 0;
-  animation: slideUp 0.45s var(--easing-spring) forwards;
+  animation: slideUp 0.45s var(--easing-out) forwards;
 }
 
 .stagger > *:nth-child(1) { animation-delay: 0ms; }

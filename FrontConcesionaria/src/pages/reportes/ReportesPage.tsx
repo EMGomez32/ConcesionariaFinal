@@ -141,7 +141,7 @@ const ConsolidadoCard = ({
     valor: number;
     cot: { moneda: string; valor: number; fechaCotizacion: string };
 }) => (
-    <div className="card glass" style={{ marginBottom: '1.5rem', padding: '1rem 1.5rem', borderLeft: '3px solid var(--accent)' }}>
+    <div className="card glass" style={{ marginBottom: '1.5rem', padding: '1rem 1.5rem' }}>
         <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex flex-col">
                 <span className="text-muted font-bold text-xs uppercase tracking-wider">{etiqueta} · consolidado en {cot.moneda}</span>
@@ -1130,7 +1130,7 @@ const ReportesPage = () => {
                         <label className="form-label">Vencimiento seguro</label>
                         <input type="date" className="form-input" value={renovarSeguro} onChange={(e) => setRenovarSeguro(e.target.value)} />
                     </div>
-                    <p className="text-muted" style={{ fontSize: '0.8rem' }}>Dejá una fecha vacía para borrar ese vencimiento.</p>
+                    <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>Dejá una fecha vacía para borrar ese vencimiento.</p>
                     {renovarError && (
                         <div className="uploader-alert uploader-alert-error">
                             <AlertTriangle size={14} />

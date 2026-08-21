@@ -47,8 +47,8 @@ const NotificationBell = () => {
     // cosa que los hex hardcodeados no hacían).
     const items = data ? [
         { key: 'mora', label: 'Cuotas en mora', count: data.mora, icon: AlertTriangle, color: 'var(--danger)', to: '/reportes?tab=mora' },
-        { key: 'proximos', label: `Cuotas vencen en ${data.dias} días`, count: data.proximos, icon: Clock, color: 'var(--accent)', to: '/reportes?tab=proximos' },
-        { key: 'reservas', label: `Reservas vencen en ${data.dias} días`, count: data.reservas, icon: Bookmark, color: 'var(--accent-2)', to: '/reservas' },
+        { key: 'proximos', label: `Cuotas vencen en ${data.dias} días`, count: data.proximos, icon: Clock, color: 'var(--warning)', to: '/reportes?tab=proximos' },
+        { key: 'reservas', label: `Reservas vencen en ${data.dias} días`, count: data.reservas, icon: Bookmark, color: 'var(--warning)', to: '/reservas' },
         { key: 'turnos', label: `Turnos de taller (${data.dias} días)`, count: data.turnos, icon: Wrench, color: 'var(--info)', to: '/postventa?tab=agenda' },
         { key: 'seguimientos', label: `Seguimientos CRM (${data.dias} días)`, count: data.seguimientos, icon: CalendarClock, color: 'var(--info)', to: '/seguimientos' },
         { key: 'documentacion', label: 'Documentación por vencer (VTV/seguro)', count: data.documentacion, icon: ShieldCheck, color: 'var(--warning)', to: '/reportes?tab=documentacion' },
@@ -105,7 +105,7 @@ const NotificationBell = () => {
                     position: absolute; top: 3px; right: 2px;
                     min-width: 16px; height: 16px; padding: 0 3px;
                     background: var(--accent-2); color: #fff;
-                    font-size: 0.62rem; font-weight: 800; line-height: 16px;
+                    font-size: 0.625rem; font-weight: 800; line-height: 16px;
                     text-align: center; border-radius: 999px;
                     border: 2px solid var(--bg-card);
                 }
@@ -113,17 +113,17 @@ const NotificationBell = () => {
                     width: 330px; max-width: calc(100vw - 24px);
                     background: var(--bg-card); border: 1px solid var(--border);
                     border-radius: var(--radius-lg, 0.75rem);
-                    box-shadow: 0 12px 44px rgba(0, 0, 0, 0.38);
+                    box-shadow: var(--shadow-xl);
                     overflow: hidden;
                 }
                 .notif-panel-head {
                     display: flex; align-items: center; justify-content: space-between;
                     padding: 0.7rem 1rem; border-bottom: 1px solid var(--border);
-                    font-weight: 700; font-size: 0.9rem; color: var(--text-primary);
+                    font-weight: 700; font-size: var(--text-base); color: var(--text-primary);
                 }
                 .notif-close { color: var(--text-muted); display: flex; background: transparent; border: none; cursor: pointer; }
                 .notif-close:hover { color: var(--text-primary); }
-                .notif-empty { padding: 1.5rem 1rem; text-align: center; color: var(--text-secondary); font-size: 0.85rem; }
+                .notif-empty { padding: 1.5rem 1rem; text-align: center; color: var(--text-secondary); font-size: var(--text-sm); }
                 .notif-list { display: flex; flex-direction: column; max-height: 60vh; overflow-y: auto; }
                 .notif-item {
                     display: flex; align-items: center; gap: 0.75rem;
@@ -132,7 +132,7 @@ const NotificationBell = () => {
                 }
                 .notif-item:hover { background: var(--bg-secondary); }
                 .notif-item-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-                .notif-item-label { flex: 1; font-size: 0.82rem; }
+                .notif-item-label { flex: 1; font-size: var(--text-sm); }
                 .notif-item-count { font-weight: 800; font-size: 0.95rem; }
                 .notif-foot { display: block; text-align: center; padding: 0.6rem; font-size: 0.78rem; color: var(--accent); text-decoration: none; }
                 .notif-foot:hover { background: var(--bg-secondary); }

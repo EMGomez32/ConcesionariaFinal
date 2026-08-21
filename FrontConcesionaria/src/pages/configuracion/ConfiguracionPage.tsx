@@ -516,7 +516,7 @@ const ConfiguracionPage = () => {
                             <span style={{
                                 position: 'absolute', top: 2, left: tourAutoStart ? 22 : 2,
                                 width: 20, height: 20, borderRadius: '50%', background: '#fff',
-                                transition: 'left 0.2s var(--easing-spring, ease)', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                                transition: 'left 0.2s var(--easing-out, ease)', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                             }} />
                         </button>
                     </div>

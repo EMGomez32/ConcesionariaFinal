@@ -138,7 +138,7 @@ const LoginPage = () => {
           </button>
 
           <div style={{ textAlign: 'center', marginTop: '0.25rem' }}>
-            <Link to="/forgot-password" style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem' }}>
+            <Link to="/forgot-password" style={{ color: 'rgba(255,255,255,0.55)', fontSize: 'var(--text-sm)' }}>
               ¿Olvidaste tu contraseña?
             </Link>
           </div>

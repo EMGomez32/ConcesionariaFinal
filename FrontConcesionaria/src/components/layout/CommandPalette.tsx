@@ -300,7 +300,7 @@ const CommandPalette = ({ sections = NAV_SECTIONS, enableGlobalSearch = true }: 
                     flex-direction: column;
                     max-height: 70vh;
                     overflow: hidden;
-                    animation: cmdk-pop 0.22s var(--easing-spring);
+                    animation: cmdk-pop 0.22s var(--easing-out);
                 }
 
                 .cmdk-search {

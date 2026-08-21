@@ -1,0 +1,89 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "#14d8a3",
+        "createdAt": "2026-08-21T15:09:55.500Z",
+        "reason": "token del tema oscuro ([data-theme=dark] --accent): emerald de accion brillante del sistema incumbente"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#dc2626",
+        "createdAt": "2026-08-21T15:09:55.584Z",
+        "reason": "DESIGN.md Components documenta el gradiente danger ef4444-dc2626 del btn-danger"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "0.625rem",
+        "createdAt": "2026-08-21T15:09:55.666Z",
+        "reason": "micro-label documentado en DESIGN.md (.stat-tile-label 900/0.625rem)"
+      },
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "FrontConcesionaria/src/index.css"
+        ],
+        "createdAt": "2026-08-21T15:09:55.758Z",
+        "reason": "DESIGN.md documenta gradiente sutil en titulos de pagina y .text-gradient como flourish del mundo comprometido"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "1.6rem",
+        "files": [
+          "FrontConcesionaria/src/pages/auth/LoginPage.tsx"
+        ],
+        "createdAt": "2026-08-21T15:10:17.044Z",
+        "reason": "lockup de marca del login (.login-brand), identidad preexistente del escenario de entrada"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "0.7rem",
+        "files": [
+          "FrontConcesionaria/src/pages/auth/LoginPage.tsx"
+        ],
+        "createdAt": "2026-08-21T15:10:17.123Z",
+        "reason": "micro-tag y footer del lockup del login, identidad preexistente"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "1.25rem",
+        "files": [
+          "FrontConcesionaria/src/pages/auth/LoginPage.tsx"
+        ],
+        "createdAt": "2026-08-21T15:10:17.200Z",
+        "reason": "titulo de bienvenida del lockup del login, identidad preexistente"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fecaca",
+        "files": [
+          "FrontConcesionaria/src/pages/auth/LoginPage.tsx"
+        ],
+        "createdAt": "2026-08-21T15:10:17.274Z",
+        "reason": "texto de error legible sobre danger translucido en la card oscura del login"
+      },
+      {
+        "rule": "codex-grid-background",
+        "value": "*",
+        "files": [
+          "FrontConcesionaria/src/pages/auth/LoginPage.tsx"
+        ],
+        "createdAt": "2026-08-21T15:10:23.890Z",
+        "reason": "escenografia del login (grid + orbs): momento de marca preexistente del mundo comprometido"
+      },
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "FrontConcesionaria/src/components/layout/Sidebar.tsx"
+        ],
+        "createdAt": "2026-08-21T15:11:35.213Z",
+        "reason": "el colapso del sidebar anima width a proposito: el reflow del contenido es el efecto buscado y no se puede lograr con transform"
+      }
+    ]
+  }
+}

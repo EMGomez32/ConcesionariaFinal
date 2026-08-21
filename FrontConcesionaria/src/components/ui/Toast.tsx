@@ -61,7 +61,7 @@ const Toast = () => {
           color: var(--text-primary);
           font-family: var(--font-sans);
           pointer-events: auto;
-          animation: toast-slide-in 0.32s var(--easing-spring) both;
+          animation: toast-slide-in 0.32s var(--easing-out) both;
         }
 
         .toast::before {
