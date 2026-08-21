@@ -8,6 +8,7 @@
 node_modules/
 dist/
 build/
+*.tsbuildinfo
 
 # ── Datos subidos por usuarios (PII: DNI, recibos de sueldo) ─
 uploads/

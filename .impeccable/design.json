@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-23T00:00:00Z",
+  "title": "Design System: AUTENZA",
+  "extensions": {
+    "colorMeta": {
+      "accent-emerald": { "role": "primary", "displayName": "Emerald Acción", "canonical": "#10b981", "tonalRamp": ["#022c22", "#064e3b", "#065f46", "#047857", "#059669", "#10b981", "#34d399", "#a7f3d0"] },
+      "accent-violet": { "role": "secondary", "displayName": "Violet Premium", "canonical": "#8b5cf6", "tonalRamp": ["#2e1065", "#4c1d95", "#5b21b6", "#6d28d9", "#7c3aed", "#8b5cf6", "#a78bfa", "#ddd6fe"] },
+      "accent-cyan": { "role": "tertiary", "displayName": "Cyan Dato", "canonical": "#06b6d4", "tonalRamp": ["#083344", "#155e75", "#0e7490", "#0891b2", "#06b6d4", "#22d3ee", "#67e8f9", "#cffafe"] },
+      "navy-sidebar": { "role": "neutral", "displayName": "Navy Cabina", "canonical": "#0a0f1f", "tonalRamp": ["#020409", "#06080f", "#0a0f1f", "#1e293b", "#334155", "#475569", "#94a3b8", "#cbd5e1"] },
+      "text-primary": { "role": "neutral", "displayName": "Tinta", "canonical": "#0f172a", "tonalRamp": ["#0f172a", "#334155", "#475569", "#8a93a6", "#cdd3e0", "#e2e6ef", "#eef0f6", "#f6f7fb"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Valores de stat y títulos de página (Space Grotesk)." },
+      "headline": { "displayName": "Headline", "purpose": "Encabezados de sección; h1–h6 heredan Space Grotesk 700." },
+      "title": { "displayName": "Title", "purpose": "Headers de card y de modal." },
+      "body": { "displayName": "Body", "purpose": "Texto general de UI (Inter)." },
+      "label": { "displayName": "Label", "purpose": "Etiquetas en micro-mayúsculas y headers de tabla." }
+    },
+    "shadows": [
+      { "name": "xs", "value": "0 1px 2px rgba(15,23,42,0.05)", "purpose": "Reposo de tablas, filtros y botón secundario." },
+      { "name": "sm", "value": "0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04)", "purpose": "Reposo de cards." },
+      { "name": "md", "value": "0 4px 12px -2px rgba(15,23,42,0.08)", "purpose": "Card en hover." },
+      { "name": "lg", "value": "0 12px 24px -8px rgba(15,23,42,0.12)", "purpose": "Stat-card en hover." },
+      { "name": "xl", "value": "0 24px 48px -12px rgba(15,23,42,0.18)", "purpose": "Modales." },
+      { "name": "glow-accent", "value": "0 0 0 1px rgba(16,185,129,0.25), 0 8px 32px -8px rgba(16,185,129,0.45)", "purpose": "Señal: hover del botón primario, cards .glow, skip-link. No ambiente." },
+      { "name": "glow-violet", "value": "0 0 0 1px rgba(139,92,246,0.25), 0 8px 32px -8px rgba(139,92,246,0.45)", "purpose": "Realce premium/violet puntual." },
+      { "name": "glow-cyan", "value": "0 0 0 1px rgba(6,182,212,0.25), 0 8px 32px -8px rgba(6,182,212,0.45)", "purpose": "Realce de datos/cyan puntual." }
+    ],
+    "motion": [
+      { "name": "easing-soft", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Easing por defecto de transiciones de estado." },
+      { "name": "easing-spring", "value": "cubic-bezier(0.34, 1.56, 0.64, 1)", "purpose": "Rebote sutil para entradas (modales, slide-up, scale-in)." },
+      { "name": "duration-fast", "value": "150ms", "purpose": "Micro-respuestas (hover lift de botones)." },
+      { "name": "duration-base", "value": "220ms", "purpose": "Transición estándar de color/sombra/borde." },
+      { "name": "duration-slow", "value": "360ms", "purpose": "Transiciones amplias (tema, overlays)." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción primaria única por vista: gradiente emerald con lift y glow en hover.",
+      "html": "<button class='ds-btn-primary'><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12h14'/><path d='M12 5v14'/></svg>Nueva venta</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.75rem 1.5rem;border:1px solid transparent;border-radius:999px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;font-family:Inter,sans-serif;font-weight:600;font-size:.9375rem;letter-spacing:-.005em;box-shadow:0 6px 20px -8px rgba(16,185,129,.55);cursor:pointer;transition:transform .15s cubic-bezier(.4,0,.2,1),box-shadow .22s cubic-bezier(.4,0,.2,1)}.ds-btn-primary:hover{transform:translateY(-1px);box-shadow:0 0 0 1px rgba(16,185,129,.25),0 8px 32px -8px rgba(16,185,129,.45)}.ds-btn-primary:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(16,185,129,.35)}.ds-btn-primary:active{transform:translateY(0) scale(.98)}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Acción de soporte: superficie card con borde hairline.",
+      "html": "<button class='ds-btn-secondary'>Cancelar</button>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.75rem 1.5rem;border:1px solid #e2e6ef;border-radius:999px;background:#fff;color:#0f172a;font-family:Inter,sans-serif;font-weight:600;font-size:.9375rem;box-shadow:0 1px 2px rgba(15,23,42,.05);cursor:pointer;transition:background .22s,border-color .22s,box-shadow .22s}.ds-btn-secondary:hover{background:#f6f7fb;border-color:#cdd3e0;box-shadow:0 1px 3px rgba(15,23,42,.06)}.ds-btn-secondary:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(16,185,129,.35)}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-control",
+      "description": "Campo de formulario con etiqueta en micro-mayúsculas y foco emerald.",
+      "html": "<div class='ds-input-wrap'><span class='ds-input-label'>Nombre del cliente</span><input class='ds-input' placeholder='Ej. Juan Pérez' /></div>",
+      "css": ".ds-input-wrap{display:flex;flex-direction:column;gap:.4rem}.ds-input-label{font-family:Inter,sans-serif;font-size:.75rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#475569}.ds-input{width:100%;padding:.7rem .9rem;background:#fff;border:1px solid #e2e6ef;border-radius:12px;color:#0f172a;font-family:Inter,sans-serif;font-size:.9375rem;line-height:1.4;transition:border-color .22s,box-shadow .22s}.ds-input::placeholder{color:#8a93a6}.ds-input:hover:not(:focus){border-color:#cdd3e0}.ds-input:focus{outline:none;border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.35)}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Superficie contenedora plana en reposo; borde y sombra suben en hover.",
+      "html": "<div class='ds-card'><h3 class='ds-card-title'>Resumen de cartera</h3><p class='ds-card-body'>Contratos activos y su saldo administrado.</p></div>",
+      "css": ".ds-card{background:#fff;border:1px solid #e2e6ef;border-radius:16px;padding:1.5rem;box-shadow:0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04);transition:border-color .22s,box-shadow .22s,transform .22s}.ds-card:hover{border-color:#cdd3e0;box-shadow:0 4px 12px -2px rgba(15,23,42,.08)}.ds-card-title{margin:0 0 .35rem;font-family:'Space Grotesk',Inter,sans-serif;font-size:1.125rem;font-weight:600;letter-spacing:-.01em;color:#0f172a}.ds-card-body{margin:0;font-family:Inter,sans-serif;font-size:.9375rem;line-height:1.5;color:#475569}"
+    },
+    {
+      "name": "Emerald Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Etiqueta de estado tipo píldora, fondo translúcido del acento.",
+      "html": "<span class='ds-badge-emerald'>Activa</span>",
+      "css": ".ds-badge-emerald{display:inline-flex;align-items:center;gap:.375rem;padding:.25rem .625rem;border-radius:999px;background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.2);font-family:Inter,sans-serif;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em}"
+    },
+    {
+      "name": "Segmented Tabs",
+      "kind": "nav",
+      "refersTo": "segmented",
+      "description": "Control de pestañas tipo píldora; el segmento activo toma el gradiente emerald.",
+      "html": "<div class='ds-segmented'><button class='ds-seg-btn is-active'>Egresos</button><button class='ds-seg-btn'>Rubros</button></div>",
+      "css": ".ds-segmented{display:inline-flex;align-items:center;gap:4px;padding:4px;background:#eef0f6;border:1px solid #e2e6ef;border-radius:999px}.ds-seg-btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.5rem 1.25rem;border:1px solid transparent;border-radius:999px;background:transparent;color:#8a93a6;font-family:Inter,sans-serif;font-size:.8125rem;font-weight:700;cursor:pointer;transition:background .22s,color .22s,box-shadow .22s}.ds-seg-btn:hover:not(.is-active){color:#0f172a;background:#fff}.ds-seg-btn.is-active{background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;box-shadow:0 6px 20px -8px rgba(16,185,129,.55)}"
+    },
+    {
+      "name": "Stat Card",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Tarjeta de métrica: valor en Space Grotesk display, etiqueta micro-mayúscula, tilt sutil en hover.",
+      "html": "<div class='ds-stat'><span class='ds-stat-label'>Cartera administrada</span><span class='ds-stat-value'>$1.240.000</span></div>",
+      "css": ".ds-stat{position:relative;overflow:hidden;padding:1.75rem;border:1px solid #e2e6ef;border-radius:24px;background:#fff;display:flex;flex-direction:column;transition:transform .22s,box-shadow .22s,border-color .22s}.ds-stat:hover{transform:translateY(-3px);box-shadow:0 12px 24px -8px rgba(15,23,42,.12),0 0 0 1px rgba(16,185,129,.18);border-color:rgba(16,185,129,.25)}.ds-stat-label{display:block;margin-bottom:.35rem;font-family:Inter,sans-serif;font-size:.625rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#8a93a6}.ds-stat-value{font-family:'Space Grotesk',Inter,sans-serif;font-size:2.25rem;font-weight:700;letter-spacing:-.03em;line-height:1;color:#0f172a;font-variant-numeric:tabular-nums}"
+    }
+  ],
+  "narrative": {
+    "northStar": "La Cabina Fintech",
+    "overview": "AUTENZA es la cabina de mando de una concesionaria: una herramienta de trabajo donde el personal opera el negocio entero durante todo el día. La base es de producto financiero premium —superficies claras y neutras, tarjetas blancas con bordes de un pelo, una barra lateral navy casi negra y números en cifras tabulares—, sobria a propósito: la densidad de datos y la escaneabilidad mandan sobre la expresión. Sobre esa base corre un acento futurista (emerald actúa, violet y cyan categorizan) y un vocabulario de glows y un gradiente aurora que son señal, no papel tapiz: aparecen cuando algo significa algo, nunca como decoración de fondo. La dirección es utilitaria: los destellos existen pero se usan con cuentagotas.",
+    "keyCharacteristics": [
+      "Base fintech sobria (grises fríos + navy) con acentos neón funcionales.",
+      "Emerald = acción; violet = premium/categoría; cyan = datos/info.",
+      "Superficies planas en reposo; profundidad y glow solo como respuesta a estado.",
+      "Space Grotesk para titulares y números; Inter para todo el texto de UI.",
+      "Cifras siempre en tabular-nums; etiquetas en micro-mayúsculas.",
+      "Formas tipo píldora para acciones; radios de 12–16px para contenedores."
+    ],
+    "rules": [
+      { "name": "The Signal-Not-Wallpaper Rule", "body": "El neón (acentos, glows, gradiente aurora) marca significado —acción, estado, foco, una métrica que importa— y nunca decora un fondo denso de datos. Si un glow no comunica estado, sobra.", "section": "colors" },
+      { "name": "The Emerald-Acts Rule", "body": "Emerald es el único color de acción. Violet y cyan categorizan y señalan datos, pero jamás pintan un CTA primario.", "section": "colors" },
+      { "name": "The Space-Grotesk-Headlines Rule", "body": "Space Grotesk es solo para titulares, valores de stat y números destacados. Inter carga todo el texto corrido y de controles.", "section": "typography" },
+      { "name": "The Tabular-Numbers Rule", "body": "Toda cifra monetaria o de cantidad va en font-variant-numeric: tabular-nums para que las columnas alineen.", "section": "typography" },
+      { "name": "The Flat-At-Rest Rule", "body": "En reposo, las superficies son planas: hairline + sombra mínima. Sombra elevada y glow de color solo como respuesta a hover, foco o selección.", "section": "elevation" },
+      { "name": "The Pill-for-Actions Rule", "body": "Lo que se toca es píldora; lo que contiene es 12–16px. Un botón con esquina de 8px o una card con forma de píldora rompen el sistema.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do reservar el gradiente emerald para la única acción primaria de cada vista; lo demás es secondary/outline/ghost.",
+      "Do poner toda cifra monetaria o de cantidad en tabular-nums.",
+      "Do mantener las superficies planas con borde hairline y dejar que el hover revele profundidad.",
+      "Do etiquetar métricas y headers con micro-mayúsculas (text-xs, ls 0.08–0.12em, text-muted).",
+      "Do usar los colores de estado (success emerald, warning ámbar, danger rojo, info cyan) solo por su significado.",
+      "Do respetar prefers-reduced-motion y los anillos de foco (0 0 0 3px var(--ring)) en todo interactivo."
+    ],
+    "donts": [
+      "Don't convertir el fondo aurora ni los glows en decoración ambiente detrás de vistas densas de datos: la cabina es utilitaria primero.",
+      "Don't usar violet o cyan para acciones primarias —emerald actúa, violet/cyan categorizan.",
+      "Don't introducir un cuarto tono de acento, ni radios o sombras fuera de la escala de tokens.",
+      "Don't renderizar números en Space Grotesk de cuerpo ni perder la alineación tabular.",
+      "Don't poner sombra elevada en reposo: la profundidad es una respuesta a estado.",
+      "Don't dar forma de píldora a un contenedor ni esquina viva a un botón."
+    ]
+  }
+}
