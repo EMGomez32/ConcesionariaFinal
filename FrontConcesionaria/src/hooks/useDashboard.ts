@@ -12,7 +12,7 @@ export const dashboardKeys = {
     stats: () => [...dashboardKeys.all, 'stats'] as const,
     stockDistribution: () => [...dashboardKeys.all, 'stockDistribution'] as const,
     finanzas: () => [...dashboardKeys.all, 'finanzas'] as const,
-    alertas: () => [...dashboardKeys.all, 'alertas'] as const,
+    alertas: (keys: readonly string[] = []) => [...dashboardKeys.all, 'alertas', ...keys] as const,
     tendencia: (meses: number) => [...dashboardKeys.all, 'tendencia', meses] as const,
     meta: () => [...dashboardKeys.all, 'meta'] as const,
     miObjetivo: () => [...dashboardKeys.all, 'miObjetivo'] as const,
@@ -159,7 +159,10 @@ export const useDashboardFinanzas = (enabled = true) => {
 // ── Acciones del día (centro de alertas) ─────────────────────────────────────
 // Junta las señales accionables de la home: unidades estancadas, cuotas por vencer,
 // cuotas en mora, reservas por vencer y turnos de taller de la semana. Cada una
-// linkea al lugar donde se actúa. Sólo admin (stock-antiguedad expone precio de compra).
+// linkea al lugar donde se actúa. La visibilidad es POR SEÑAL, no por jerarquía:
+// cada rol pide sólo las señales de su trabajo (espejo del authorize de cada
+// reporte en el backend), así un cobrador ve su cola de cobranza sin pegarle a
+// endpoints admin-only como stock-antiguedad (que expone precio de compra).
 
 /** Una alerta accionable: un conteo + su monto (consolidado o por moneda). */
 export interface AlertaItem {
@@ -168,81 +171,89 @@ export interface AlertaItem {
     porMoneda: ImportePorMoneda[];
 }
 
+/** Cada señal de "Acciones del día"; el llamador pide las que su rol puede ver. */
+export type AlertaKey = 'estancados' | 'porVencer' | 'mora' | 'reservas' | 'turnos' | 'seguimientos' | 'documentacion';
+
 export interface DashboardAlertas {
     cotizacion: { valor: number; fecha: string } | null;
-    estancados: AlertaItem & { umbral: number };
-    porVencer: AlertaItem & { dias: number };
-    mora: AlertaItem;
-    reservas: AlertaItem & { dias: number };
+    /** Cada señal viene null si no se pidió (el rol no la ve). */
+    estancados: (AlertaItem & { umbral: number }) | null;
+    porVencer: (AlertaItem & { dias: number }) | null;
+    mora: AlertaItem | null;
+    reservas: (AlertaItem & { dias: number }) | null;
     /** Turnos de taller (postventa): no llevan monto, sí un subconteo de "hoy". */
-    turnos: { count: number; hoy: number; dias: number };
+    turnos: { count: number; hoy: number; dias: number } | null;
     /** Próximos seguimientos del CRM: sin monto, con subconteo de "vencidos". */
-    seguimientos: { count: number; vencidos: number; hoy: number; dias: number };
+    seguimientos: { count: number; vencidos: number; hoy: number; dias: number } | null;
     /** Documentación (VTV/seguro) de vehículos en stock: con subconteo de "vencidos". */
-    documentacion: { count: number; vencidos: number; dias: number };
+    documentacion: { count: number; vencidos: number; dias: number } | null;
 }
 
-export const useDashboardAlertas = (enabled = true) => {
+export const useDashboardAlertas = (keys: AlertaKey[]) => {
+    // La key de caché ordena las señales para que el mismo set comparta entrada
+    // sin importar en qué orden lo arme el llamador.
+    const sortedKeys = [...keys].sort();
     return useQuery<DashboardAlertas>({
-        queryKey: dashboardKeys.alertas(),
-        enabled,
+        queryKey: dashboardKeys.alertas(sortedKeys),
+        enabled: keys.length > 0,
         staleTime: 1000 * 60 * 2,
         queryFn: async () => {
+            const want = (k: AlertaKey) => keys.includes(k);
             const DIAS_POR_VENCER = 7;
             const DIAS_DOC = 30; // documentación: ventana más larga (misma que el backend)
             // Se pide consolidar en ARS: con cotización cargada da un monto en pesos;
             // si no, cada endpoint devuelve consolidado:null + el desglose por moneda.
             const [stock, proximos, mora, reservas, turnos, seguimientos, documentacion] = await Promise.all([
-                reportesApi.stockAntiguedad({ umbral: 60, consolidar: 'ARS' }),
-                reportesApi.proximosVencimientos({ dias: DIAS_POR_VENCER, consolidar: 'ARS' }),
-                reportesApi.mora({ consolidar: 'ARS' }),
-                reportesApi.reservasPorVencer({ dias: DIAS_POR_VENCER, consolidar: 'ARS' }),
-                reportesApi.turnosTaller({ dias: DIAS_POR_VENCER }),
-                reportesApi.proximosSeguimientos({ dias: DIAS_POR_VENCER }),
-                reportesApi.vencimientosDocumentacion({ dias: DIAS_DOC }),
+                want('estancados') ? reportesApi.stockAntiguedad({ umbral: 60, consolidar: 'ARS' }) : null,
+                want('porVencer') ? reportesApi.proximosVencimientos({ dias: DIAS_POR_VENCER, consolidar: 'ARS' }) : null,
+                want('mora') ? reportesApi.mora({ consolidar: 'ARS' }) : null,
+                want('reservas') ? reportesApi.reservasPorVencer({ dias: DIAS_POR_VENCER, consolidar: 'ARS' }) : null,
+                want('turnos') ? reportesApi.turnosTaller({ dias: DIAS_POR_VENCER }) : null,
+                want('seguimientos') ? reportesApi.proximosSeguimientos({ dias: DIAS_POR_VENCER }) : null,
+                want('documentacion') ? reportesApi.vencimientosDocumentacion({ dias: DIAS_DOC }) : null,
             ]);
-            const cot = stock.consolidado || proximos.consolidado || mora.consolidado || reservas.consolidado || null;
+            const cot = stock?.consolidado || proximos?.consolidado || mora?.consolidado || reservas?.consolidado || null;
             return {
                 cotizacion: cot ? { valor: cot.valor, fecha: cot.fechaCotizacion } : null,
-                estancados: {
+                estancados: stock ? {
                     umbral: stock.estancados.umbral,
                     count: stock.estancados.count,
                     montoConsolidado: stock.consolidado ? stock.consolidado.capital : null,
                     porMoneda: (stock.estancados.porMoneda ?? []).map((m) => ({ moneda: m.moneda, valor: Number(m.capital ?? 0) })),
-                },
-                porVencer: {
+                } : null,
+                porVencer: proximos ? {
                     dias: DIAS_POR_VENCER,
                     count: proximos.resumen?.cuotasPorVencer ?? 0,
                     montoConsolidado: proximos.consolidado ? proximos.consolidado.saldo : null,
                     porMoneda: (proximos.resumen?.porMoneda ?? []).map((m) => ({ moneda: m.moneda, valor: Number(m.saldo ?? 0) })),
-                },
-                mora: {
+                } : null,
+                mora: mora ? {
                     count: mora.resumen?.cuotasVencidas ?? 0,
                     montoConsolidado: mora.consolidado ? mora.consolidado.saldo : null,
                     porMoneda: (mora.resumen?.porMoneda ?? []).map((m) => ({ moneda: m.moneda, valor: Number(m.saldo ?? 0) })),
-                },
-                reservas: {
+                } : null,
+                reservas: reservas ? {
                     dias: DIAS_POR_VENCER,
                     count: reservas.resumen?.cantidad ?? 0,
                     montoConsolidado: reservas.consolidado ? reservas.consolidado.montoSenia : null,
                     porMoneda: (reservas.resumen?.porMoneda ?? []).map((m) => ({ moneda: m.moneda, valor: Number(m.montoSenia ?? 0) })),
-                },
-                turnos: {
+                } : null,
+                turnos: turnos ? {
                     dias: DIAS_POR_VENCER,
                     count: turnos.resumen?.cantidad ?? 0,
                     hoy: turnos.resumen?.hoy ?? 0,
-                },
-                seguimientos: {
+                } : null,
+                seguimientos: seguimientos ? {
                     dias: DIAS_POR_VENCER,
                     count: seguimientos.resumen?.cantidad ?? 0,
                     vencidos: seguimientos.resumen?.vencidos ?? 0,
                     hoy: seguimientos.resumen?.hoy ?? 0,
-                },
-                documentacion: {
+                } : null,
+                documentacion: documentacion ? {
                     dias: DIAS_DOC,
                     count: documentacion.resumen?.cantidad ?? 0,
                     vencidos: documentacion.resumen?.vencidos ?? 0,
-                },
+                } : null,
             };
         },
     });

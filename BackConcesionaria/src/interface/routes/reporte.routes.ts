@@ -39,7 +39,7 @@ router.get('/ventas', authorize('admin', 'vendedor'), ReporteController.ventas);
  *       - { in: query, name: mes, schema: { type: integer } }
  *       - { in: query, name: format, schema: { type: string, enum: [csv] } }
  */
-router.get('/caja', authorize('admin', 'vendedor'), ReporteController.caja);
+router.get('/caja', authorize('admin', 'vendedor', 'cobrador'), ReporteController.caja);
 
 /**
  * @openapi
@@ -51,7 +51,7 @@ router.get('/caja', authorize('admin', 'vendedor'), ReporteController.caja);
  *     parameters:
  *       - { in: query, name: format, schema: { type: string, enum: [csv] } }
  */
-router.get('/mora', authorize('admin', 'vendedor'), ReporteController.mora);
+router.get('/mora', authorize('admin', 'vendedor', 'cobrador'), ReporteController.mora);
 
 /**
  * @openapi
@@ -80,7 +80,7 @@ router.get('/rentabilidad', authorize('admin'), ReporteController.rentabilidad);
  *       - { in: query, name: consolidar, schema: { type: string, enum: [ARS, USD] } }
  *       - { in: query, name: format, schema: { type: string, enum: [csv] } }
  */
-router.get('/proximos-vencimientos', authorize('admin', 'vendedor'), ReporteController.proximosVencimientos);
+router.get('/proximos-vencimientos', authorize('admin', 'vendedor', 'cobrador'), ReporteController.proximosVencimientos);
 
 /**
  * @openapi
@@ -274,7 +274,7 @@ router.get('/postventa', authorize('admin', 'vendedor', 'postventa'), ReporteCon
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
-router.get('/vencimientos-documentacion', authorize('admin', 'vendedor'), ReporteController.vencimientosDocumentacion);
+router.get('/vencimientos-documentacion', authorize('admin', 'vendedor', 'postventa'), ReporteController.vencimientosDocumentacion);
 
 /**
  * @openapi

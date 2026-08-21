@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle, Bookmark, Target, Wrench, CalendarClock } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useDashboardStats, useStockDistribution, useDashboardFinanzas, useDashboardAlertas, useDashboardTendencia, useDashboardMeta, useMiObjetivo, dashboardKeys, type FinanzaKpi, type AlertaItem } from '../../hooks/useDashboard';
+import type { LucideIcon } from 'lucide-react';
+import { useDashboardStats, useStockDistribution, useDashboardFinanzas, useDashboardAlertas, useDashboardTendencia, useDashboardMeta, useMiObjetivo, dashboardKeys, type FinanzaKpi, type AlertaItem, type AlertaKey } from '../../hooks/useDashboard';
 import type { VentaMensualItem } from '../../api/reportes.api';
 import { metasApi } from '../../api/metas.api';
 import { useAuditLogs } from '../../hooks/useAuditLogs';
@@ -45,7 +46,7 @@ const alertaMonto = (a: AlertaItem) =>
 
 // Barra de progreso etiquetada (objetivo del mes). Verde al cumplir, ámbar lejos.
 const ProgressRow = ({ etiqueta, actual, objetivo, pct }: { etiqueta: string; actual: string; objetivo: string; pct: number }) => {
-  const color = pct >= 100 ? 'var(--success, #16a34a)' : pct >= 60 ? 'var(--accent)' : 'var(--warning, #f59e0b)';
+  const color = pct >= 100 ? 'var(--success)' : pct >= 60 ? 'var(--accent)' : 'var(--warning, #f59e0b)';
   return (
     <div>
       <div className="flex items-center justify-between flex-wrap gap-1" style={{ marginBottom: '0.4rem' }}>
@@ -69,14 +70,26 @@ const DashboardPage = () => {
   // El vendedor ve su propio objetivo del mes (self-view). El admin ya ve la meta
   // del tenant más arriba, así que esto apunta al equipo comercial.
   const esVendedor = !!user?.roles?.includes('vendedor');
+  const esCobrador = !!user?.roles?.includes('cobrador');
+  const esPostventa = !!user?.roles?.includes('postventa');
 
   const { data: statsData, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useDashboardStats();
   const { data: stockData, isLoading: stockLoading, isError: stockError, refetch: refetchStock } = useStockDistribution();
   const { data: auditsData, isLoading: auditsLoading, refetch: refetchAudits } = useAuditLogs({}, { limit: 5 }, { enabled: isAdmin });
   // Finanzas del mes: dato de dueño, solo admin (igual criterio que Actividad Reciente).
   const { data: finanzas, isLoading: finanzasLoading, isError: finanzasError, refetch: refetchFinanzas } = useDashboardFinanzas(isAdmin);
-  // Acciones del día: alertas accionables (estancados / por vencer / mora), solo admin.
-  const { data: alertas, isLoading: alertasLoading, isError: alertasError, refetch: refetchAlertas } = useDashboardAlertas(isAdmin);
+  // Acciones del día: cada rol ve LAS SEÑALES DE SU TRABAJO, no un gate binario
+  // admin/no-admin: admin todo; cobrador su cola de cobranza; vendedor su agenda
+  // comercial; postventa su taller y la documentación. Espejo del authorize de
+  // cada reporte en el backend (los roles acá deben poder consultar su endpoint).
+  const alertKeys: AlertaKey[] = isAdmin
+    ? ['estancados', 'porVencer', 'mora', 'reservas', 'turnos', 'seguimientos', 'documentacion']
+    : Array.from(new Set<AlertaKey>([
+        ...(esCobrador ? (['porVencer', 'mora'] as AlertaKey[]) : []),
+        ...(esVendedor ? (['reservas', 'seguimientos'] as AlertaKey[]) : []),
+        ...(esPostventa ? (['turnos', 'documentacion'] as AlertaKey[]) : []),
+      ]));
+  const { data: alertas, isLoading: alertasLoading, isError: alertasError, refetch: refetchAlertas } = useDashboardAlertas(alertKeys);
   // Tendencia de ventas (últimos 6 meses), solo admin.
   const { data: tendencia, isLoading: tendenciaLoading, isError: tendenciaError, refetch: refetchTendencia } = useDashboardTendencia(isAdmin);
 
@@ -160,21 +173,25 @@ const DashboardPage = () => {
 
   const financeCards = finanzas ? [
     { label: 'Ventas del mes', value: kpiValue(finanzas.ventasMes), sub: `${finanzas.ventasMes.cantidad} ${finanzas.ventasMes.cantidad === 1 ? 'operación' : 'operaciones'}`, icon: TrendingUp, color: 'var(--accent)' },
-    { label: 'Ingresos del mes', value: kpiValue(finanzas.ingresosMes), sub: 'cobros de ventas y cuotas', icon: ArrowUpRight, color: 'var(--success, #16a34a)' },
-    { label: 'Egresos del mes', value: kpiValue(finanzas.egresosMes), sub: 'gastos de unidades y fijos', icon: ArrowDownRight, color: 'var(--danger, #dc2626)' },
-    { label: 'Resultado neto', value: kpiValue(finanzas.netoMes), sub: 'ingresos − egresos', icon: Wallet, color: (finanzas.netoMes.consolidado != null ? finanzas.netoMes.consolidado < 0 : finanzas.netoMes.porMoneda.some((m) => m.valor < 0)) ? 'var(--danger, #dc2626)' : 'var(--success, #16a34a)' },
-    { label: 'En mora', value: kpiValue(finanzas.mora), sub: `${finanzas.mora.cuotas} ${finanzas.mora.cuotas === 1 ? 'cuota vencida' : 'cuotas vencidas'}`, icon: AlertTriangle, color: 'var(--danger, #dc2626)' },
+    { label: 'Ingresos del mes', value: kpiValue(finanzas.ingresosMes), sub: 'cobros de ventas y cuotas', icon: ArrowUpRight, color: 'var(--success)' },
+    { label: 'Egresos del mes', value: kpiValue(finanzas.egresosMes), sub: 'gastos de unidades y fijos', icon: ArrowDownRight, color: 'var(--danger)' },
+    { label: 'Resultado neto', value: kpiValue(finanzas.netoMes), sub: 'ingresos − egresos', icon: Wallet, color: (finanzas.netoMes.consolidado != null ? finanzas.netoMes.consolidado < 0 : finanzas.netoMes.porMoneda.some((m) => m.valor < 0)) ? 'var(--danger)' : 'var(--success)' },
+    { label: 'En mora', value: kpiValue(finanzas.mora), sub: `${finanzas.mora.cuotas} ${finanzas.mora.cuotas === 1 ? 'cuota vencida' : 'cuotas vencidas'}`, icon: AlertTriangle, color: 'var(--danger)' },
   ] : [];
 
-  const alertCards = alertas ? [
-    { key: 'estancados', label: `Estancadas (+${alertas.estancados.umbral} días)`, count: alertas.estancados.count, monto: alertaMonto(alertas.estancados), montoLabel: 'capital inmovilizado', icon: Car, color: 'var(--warning)', to: '/vehiculos' },
-    { key: 'porvencer', label: `Cuotas vencen en ${alertas.porVencer.dias} días`, count: alertas.porVencer.count, monto: alertaMonto(alertas.porVencer), montoLabel: 'a cobrar', icon: Clock, color: 'var(--accent)', to: '/reportes?tab=proximos' },
-    { key: 'mora', label: 'Cuotas en mora', count: alertas.mora.count, monto: alertaMonto(alertas.mora), montoLabel: 'saldo adeudado', icon: AlertTriangle, color: 'var(--danger, #dc2626)', to: '/reportes?tab=mora' },
-    { key: 'reservas', label: `Reservas vencen en ${alertas.reservas.dias} días`, count: alertas.reservas.count, monto: alertaMonto(alertas.reservas), montoLabel: 'en señas', icon: Bookmark, color: '#8b5cf6', to: '/reservas' },
-    { key: 'turnos', label: `Turnos de taller (${alertas.turnos.dias} días)`, count: alertas.turnos.count, monto: String(alertas.turnos.hoy), montoLabel: alertas.turnos.hoy === 1 ? 'turno hoy' : 'turnos hoy', icon: Wrench, color: 'var(--info)', to: '/postventa?tab=agenda' },
-    { key: 'seguimientos', label: `Seguimientos CRM (${alertas.seguimientos.dias} días)`, count: alertas.seguimientos.count, monto: String(alertas.seguimientos.vencidos), montoLabel: alertas.seguimientos.vencidos === 1 ? 'vencido' : 'vencidos', icon: CalendarClock, color: '#0ea5e9', to: '/seguimientos' },
-    { key: 'documentacion', label: `Documentación (${alertas.documentacion.dias} días)`, count: alertas.documentacion.count, monto: String(alertas.documentacion.vencidos), montoLabel: alertas.documentacion.vencidos === 1 ? 'vencida' : 'vencidas', icon: ShieldCheck, color: '#ea580c', to: '/reportes?tab=documentacion' },
-  ] : [];
+  // Tarjetas de "Acciones del día": sólo las señales que este rol pidió (las no
+  // pedidas vienen null del hook). El color marca el ROL DE ESTADO de la paleta
+  // (peligro / atención / info), no la identidad de la tarjeta: la identidad la
+  // dan ícono + etiqueta. Tokens siempre (los hex hardcodeados no viraban en dark).
+  type AlertCard = { key: AlertaKey; label: string; count: number; monto: string; montoLabel: string; icon: LucideIcon; color: string; to: string };
+  const alertCards: AlertCard[] = [];
+  if (alertas?.estancados) alertCards.push({ key: 'estancados', label: `Estancadas (+${alertas.estancados.umbral} días)`, count: alertas.estancados.count, monto: alertaMonto(alertas.estancados), montoLabel: 'capital inmovilizado', icon: Car, color: 'var(--warning)', to: '/vehiculos' });
+  if (alertas?.porVencer) alertCards.push({ key: 'porVencer', label: `Cuotas vencen en ${alertas.porVencer.dias} días`, count: alertas.porVencer.count, monto: alertaMonto(alertas.porVencer), montoLabel: 'a cobrar', icon: Clock, color: 'var(--accent)', to: '/reportes?tab=proximos' });
+  if (alertas?.mora) alertCards.push({ key: 'mora', label: 'Cuotas en mora', count: alertas.mora.count, monto: alertaMonto(alertas.mora), montoLabel: 'saldo adeudado', icon: AlertTriangle, color: 'var(--danger)', to: '/reportes?tab=mora' });
+  if (alertas?.reservas) alertCards.push({ key: 'reservas', label: `Reservas vencen en ${alertas.reservas.dias} días`, count: alertas.reservas.count, monto: alertaMonto(alertas.reservas), montoLabel: 'en señas', icon: Bookmark, color: 'var(--accent-2)', to: '/reservas' });
+  if (alertas?.turnos) alertCards.push({ key: 'turnos', label: `Turnos de taller (${alertas.turnos.dias} días)`, count: alertas.turnos.count, monto: String(alertas.turnos.hoy), montoLabel: alertas.turnos.hoy === 1 ? 'turno hoy' : 'turnos hoy', icon: Wrench, color: 'var(--info)', to: '/postventa?tab=agenda' });
+  if (alertas?.seguimientos) alertCards.push({ key: 'seguimientos', label: `Seguimientos CRM (${alertas.seguimientos.dias} días)`, count: alertas.seguimientos.count, monto: String(alertas.seguimientos.vencidos), montoLabel: alertas.seguimientos.vencidos === 1 ? 'vencido' : 'vencidos', icon: CalendarClock, color: 'var(--info)', to: '/seguimientos' });
+  if (alertas?.documentacion) alertCards.push({ key: 'documentacion', label: `Documentación (${alertas.documentacion.dias} días)`, count: alertas.documentacion.count, monto: String(alertas.documentacion.vencidos), montoLabel: alertas.documentacion.vencidos === 1 ? 'vencida' : 'vencidas', icon: ShieldCheck, color: 'var(--warning)', to: '/reportes?tab=documentacion' });
 
   // ── Tendencia de ventas ──
   const tItems: VentaMensualItem[] = tendencia?.items ?? [];
@@ -198,7 +215,8 @@ const DashboardPage = () => {
     // refetch dispara la query aunque esté enabled:false; por eso sólo se agregan
     // las que este rol realmente ve (no le pegamos a endpoints admin como no-admin).
     const jobs: Promise<unknown>[] = [refetchStats(), refetchStock()];
-    if (isAdmin) jobs.push(refetchFinanzas(), refetchAlertas(), refetchTendencia(), refetchMeta(), refetchAudits());
+    if (isAdmin) jobs.push(refetchFinanzas(), refetchTendencia(), refetchMeta(), refetchAudits());
+    if (alertKeys.length > 0) jobs.push(refetchAlertas());
     if (esVendedor) jobs.push(refetchMiObjetivo());
     try {
       await Promise.all(jobs);
@@ -329,7 +347,7 @@ const DashboardPage = () => {
         </section>
       )}
 
-      {isAdmin && (alertasLoading || alertas || alertasError) && (
+      {alertKeys.length > 0 && (alertasLoading || alertas || alertasError) && (
         <section style={{ marginTop: '1.75rem' }}>
           <div className="flex items-center gap-2" style={{ marginBottom: '1rem' }}>
             <Zap size={18} className="text-accent" />
@@ -343,7 +361,7 @@ const DashboardPage = () => {
           ) : (
           <div className="stats-grid stagger">
             {alertasLoading
-              ? Array.from({ length: 7 }).map((_, i) => (
+              ? Array.from({ length: alertKeys.length }).map((_, i) => (
                 <div key={i} className="card stat-card">
                   <div className="stat-content">
                     <span className="skeleton skeleton-text" style={{ width: '55%' }} />
@@ -353,7 +371,7 @@ const DashboardPage = () => {
               ))
               : alertCards.map((a) => {
                 // Verde cuando no hay nada que atender; el color de alerta si hay.
-                const color = a.count > 0 ? a.color : 'var(--success, #16a34a)';
+                const color = a.count > 0 ? a.color : 'var(--success)';
                 return (
                   <Link key={a.key} to={a.to} className="card stat-card" style={{ textDecoration: 'none', borderLeft: `3px solid ${color}` }}>
                     <div className="flex justify-between items-start mb-3">

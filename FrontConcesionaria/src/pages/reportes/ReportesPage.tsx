@@ -69,13 +69,13 @@ const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
 // puede consultar. Cada rol ve SÓLO los tabs que su endpoint le permite.
 const TAB_ROLES: Record<Tab, string[]> = {
     ventas: ['admin', 'super_admin', 'vendedor'],
-    caja: ['admin', 'super_admin', 'vendedor'],
-    mora: ['admin', 'super_admin', 'vendedor'],
-    proximos: ['admin', 'super_admin', 'vendedor'],
+    caja: ['admin', 'super_admin', 'vendedor', 'cobrador'],
+    mora: ['admin', 'super_admin', 'vendedor', 'cobrador'],
+    proximos: ['admin', 'super_admin', 'vendedor', 'cobrador'],
     ranking: ['admin', 'super_admin'],
     comisiones: ['admin', 'super_admin'],
     postventa: ['admin', 'super_admin', 'vendedor', 'postventa'],
-    documentacion: ['admin', 'super_admin', 'vendedor'],
+    documentacion: ['admin', 'super_admin', 'vendedor', 'postventa'],
     'proximos-service': ['admin', 'super_admin', 'vendedor', 'postventa'],
     objetivos: ['admin', 'super_admin'],
     rentabilidad: ['admin', 'super_admin'],
@@ -444,14 +444,14 @@ const ReportesPage = () => {
                 if (consolidar && r.consolidado) {
                     const rc = r.consolidado.rentabilidad;
                     return (
-                        <span className="font-bold" title={`Convertido a ${r.consolidado.moneda}`} style={{ color: rc >= 0 ? 'var(--success, #16a34a)' : 'var(--danger, #dc2626)' }}>
+                        <span className="font-bold" title={`Convertido a ${r.consolidado.moneda}`} style={{ color: rc >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                             {money(rc, r.consolidado.moneda)}<span className="text-muted"> *</span>
                         </span>
                     );
                 }
                 return r.rentabilidad === null
                     ? <span className="text-muted" title={sinContarTexto(r)}>—</span>
-                    : <span className="font-bold" style={{ color: r.rentabilidad >= 0 ? 'var(--success, #16a34a)' : 'var(--danger, #dc2626)' }}>{money(r.rentabilidad, r.moneda)}</span>;
+                    : <span className="font-bold" style={{ color: r.rentabilidad >= 0 ? 'var(--success)' : 'var(--danger)' }}>{money(r.rentabilidad, r.moneda)}</span>;
             }
         },
         {
@@ -573,7 +573,7 @@ const ReportesPage = () => {
         { header: 'Días', align: 'center', accessor: (r) => (r.diasResolucion != null ? String(r.diasResolucion) : <span className="text-muted">—</span>) },
         { header: 'Costo', align: 'right', accessor: (r) => money(r.costo) },
         { header: 'Facturado', align: 'right', accessor: (r) => (r.facturado != null ? money(r.facturado) : <span className="text-muted">—</span>) },
-        { header: 'Margen', align: 'right', accessor: (r) => (r.margen != null ? <span style={{ color: r.margen < 0 ? 'var(--danger, #dc2626)' : 'var(--success, #16a34a)' }}>{money(r.margen)}</span> : <span className="text-muted">—</span>) },
+        { header: 'Margen', align: 'right', accessor: (r) => (r.margen != null ? <span style={{ color: r.margen < 0 ? 'var(--danger)' : 'var(--success)' }}>{money(r.margen)}</span> : <span className="text-muted">—</span>) },
     ];
 
     // ── Documentación (VTV / seguro) ──
@@ -581,6 +581,10 @@ const ReportesPage = () => {
         const m = e ? ESTADO_DOC[e] : null;
         return m ? <Badge variant={m.variant}>{m.label}</Badge> : <span className="text-muted">—</span>;
     };
+    // "Renovar" reusa el PATCH /vehiculos/:id, que el backend limita a
+    // admin/vendedor: un rol postventa ve el reporte pero no puede editar fechas,
+    // así que la columna de acción no se le muestra (evita un botón que da 403).
+    const puedeRenovarDoc = userRoles.some((r) => r === 'admin' || r === 'super_admin' || r === 'vendedor');
     const documentacionCols: Column<VencimientoDocItem>[] = [
         { header: 'Vehículo', accessor: (r) => <span className="font-bold">{r.vehiculo || '—'}</span> },
         { header: 'Dominio', accessor: (r) => r.dominio || '—' },
@@ -588,13 +592,13 @@ const ReportesPage = () => {
         { header: 'Estado VTV', align: 'center', accessor: (r) => docBadge(r.vtvEstado) },
         { header: 'Seguro', accessor: (r) => (r.vencimientoSeguro ? formatFecha(r.vencimientoSeguro) : <span className="text-muted">—</span>) },
         { header: 'Estado seguro', align: 'center', accessor: (r) => docBadge(r.seguroEstado) },
-        {
-            header: '', align: 'right', accessor: (r) => (
+        ...(puedeRenovarDoc ? [{
+            header: '', align: 'right', accessor: (r: VencimientoDocItem) => (
                 <Button variant="secondary" size="sm" onClick={() => openRenovar(r)} title="Renovar VTV / seguro sin abrir la ficha">
                     <CalendarClock size={14} /> Renovar
                 </Button>
             ),
-        },
+        } as Column<VencimientoDocItem>] : []),
     ];
 
     const proximoServiceCols: Column<ProximoServiceItem>[] = [
@@ -828,22 +832,22 @@ const ReportesPage = () => {
                                 <div className="flex items-center gap-2 mb-3">
                                     <span className="badge badge-navy">{c.moneda}</span>
                                     <span className="text-xs text-muted">
-                                        Resultado neto: <strong style={{ color: c.neto >= 0 ? 'var(--success, #16a34a)' : 'var(--danger, #dc2626)' }}>
+                                        Resultado neto: <strong style={{ color: c.neto >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                                             {money(c.neto, c.moneda)}
                                         </strong>
                                     </span>
                                 </div>
                                 <div className="stats-grid stagger">
-                                    <StatCard label="Cobros de ventas" value={money(c.ingresos.cobrosVentas, c.moneda)} color="var(--success, #16a34a)" />
-                                    <StatCard label="Cobros de cuotas" value={money(c.ingresos.cobrosCuotas, c.moneda)} color="var(--success, #16a34a)" />
-                                    <StatCard label="Total ingresos" value={money(c.ingresos.total, c.moneda)} color="var(--success, #16a34a)" />
-                                    <StatCard label="Gastos de vehículos" value={money(c.egresos.gastosVehiculos, c.moneda)} color="var(--danger, #dc2626)" />
-                                    <StatCard label="Gastos fijos" value={money(c.egresos.gastosFijos, c.moneda)} color="var(--danger, #dc2626)" />
-                                    <StatCard label="Total egresos" value={money(c.egresos.total, c.moneda)} color="var(--danger, #dc2626)" />
+                                    <StatCard label="Cobros de ventas" value={money(c.ingresos.cobrosVentas, c.moneda)} color="var(--success)" />
+                                    <StatCard label="Cobros de cuotas" value={money(c.ingresos.cobrosCuotas, c.moneda)} color="var(--success)" />
+                                    <StatCard label="Total ingresos" value={money(c.ingresos.total, c.moneda)} color="var(--success)" />
+                                    <StatCard label="Gastos de vehículos" value={money(c.egresos.gastosVehiculos, c.moneda)} color="var(--danger)" />
+                                    <StatCard label="Gastos fijos" value={money(c.egresos.gastosFijos, c.moneda)} color="var(--danger)" />
+                                    <StatCard label="Total egresos" value={money(c.egresos.total, c.moneda)} color="var(--danger)" />
                                     <StatCard
                                         label="Resultado neto"
                                         value={money(c.neto, c.moneda)}
-                                        color={c.neto >= 0 ? 'var(--success, #16a34a)' : 'var(--danger, #dc2626)'}
+                                        color={c.neto >= 0 ? 'var(--success)' : 'var(--danger)'}
                                     />
                                 </div>
                             </div>
@@ -857,8 +861,8 @@ const ReportesPage = () => {
                 <>
                     {!moraQ.isError && (
                         <div className="stats-grid stagger" style={{ marginBottom: '1.5rem' }}>
-                            <StatCard label="Cuotas vencidas" value={String(moraQ.data?.resumen.cuotasVencidas ?? 0)} color="var(--danger, #dc2626)" />
-                            <StatCard label="Saldo total en mora" value={fmtMoneda(moraQ.data?.resumen.porMoneda, 'saldo')} color="var(--danger, #dc2626)" />
+                            <StatCard label="Cuotas vencidas" value={String(moraQ.data?.resumen.cuotasVencidas ?? 0)} color="var(--danger)" />
+                            <StatCard label="Saldo total en mora" value={fmtMoneda(moraQ.data?.resumen.porMoneda, 'saldo')} color="var(--danger)" />
                             <StatCard label="Clientes en mora" value={String(moraQ.data?.resumen.clientes ?? 0)} />
                         </div>
                     )}
@@ -983,14 +987,14 @@ const ReportesPage = () => {
                             <StatCard label="Casos" value={String(postventaQ.data?.resumen.total ?? 0)} />
                             <StatCard label="Pendientes" value={String(postventaQ.data?.porEstado.pendiente ?? 0)} color="var(--warning, #f59e0b)" />
                             <StatCard label="En curso" value={String(postventaQ.data?.porEstado.en_curso ?? 0)} color="var(--info, #0ea5e9)" />
-                            <StatCard label="Resueltos" value={String(postventaQ.data?.porEstado.resuelto ?? 0)} color="var(--success, #16a34a)" />
+                            <StatCard label="Resueltos" value={String(postventaQ.data?.porEstado.resuelto ?? 0)} color="var(--success)" />
                             <StatCard
                                 label="Tiempo prom. resolución"
                                 value={postventaQ.data?.resumen.tiempoPromedioDias != null ? `${postventaQ.data.resumen.tiempoPromedioDias} días` : '—'}
                             />
                             <StatCard label="Costo de postventa" value={money(postventaQ.data?.resumen.costoTotal ?? 0)} color="var(--warning, #f59e0b)" />
                             <StatCard label="Facturado" value={money(postventaQ.data?.resumen.facturadoTotal ?? 0)} color="var(--accent)" />
-                            <StatCard label="Margen (facturados)" value={money(postventaQ.data?.resumen.margenTotal ?? 0)} color={(postventaQ.data?.resumen.margenTotal ?? 0) < 0 ? 'var(--danger, #dc2626)' : 'var(--success, #16a34a)'} />
+                            <StatCard label="Margen (facturados)" value={money(postventaQ.data?.resumen.margenTotal ?? 0)} color={(postventaQ.data?.resumen.margenTotal ?? 0) < 0 ? 'var(--danger)' : 'var(--success)'} />
                         </div>
                     )}
                     {!!postventaQ.data?.porTipo.length && (
@@ -1019,7 +1023,7 @@ const ReportesPage = () => {
                     {!documentacionQ.isError && (
                         <div className="stats-grid stagger" style={{ marginBottom: '1.25rem' }}>
                             <StatCard label="Vehículos con vencimientos" value={String(documentacionQ.data?.resumen.cantidad ?? 0)} />
-                            <StatCard label="Con documentación vencida" value={String(documentacionQ.data?.resumen.vencidos ?? 0)} color="var(--danger, #dc2626)" />
+                            <StatCard label="Con documentación vencida" value={String(documentacionQ.data?.resumen.vencidos ?? 0)} color="var(--danger)" />
                         </div>
                     )}
                     <DataTable
