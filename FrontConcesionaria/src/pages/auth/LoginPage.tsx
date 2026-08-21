@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { useNavigate, Link } from 'react-router-dom';
 import client from '../../api/client';
+import { queryClient } from '../../api/queryClient';
 import { getApiErrorMessage } from '../../utils/error';
 import { Key, Mail, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import Isotipo from '../../components/brand/Isotipo';
@@ -39,6 +40,11 @@ const LoginPage = () => {
       });
 
       const { user, tokens } = result;
+      // Frontera de sesión: si quedó caché de una sesión anterior (p.ej. alguien
+      // abrió /login estando autenticado y entra con otra cuenta, camino que no
+      // pasa por performLogout), acá se descarta. En /login no hay queries de
+      // datos montadas, así que el clear() no dispara ningún refetch.
+      queryClient.clear();
       setAuth(user, tokens.access, tokens.refresh);
       // El super_admin vive en su panel de plataforma, no en el shell del tenant.
       navigate(user.roles.includes('super_admin') ? '/plataforma' : '/');

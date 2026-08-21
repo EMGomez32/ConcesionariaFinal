@@ -1,4 +1,5 @@
 import client from './client';
+import { queryClient } from './queryClient';
 import { useAuthStore, getPersistedRefreshToken } from '../store/authStore';
 
 /**
@@ -21,6 +22,14 @@ export async function performLogout(): Promise<void> {
     // está activo (no uno ya rotado).
     const refreshToken = getPersistedRefreshToken() ?? useAuthStore.getState().refreshToken;
     useAuthStore.getState().logout();
+    // El caché de React Query guarda datos del usuario/tenant saliente y el
+    // QueryClient singleton sobrevive a la navegación SPA logout→login: sin esto,
+    // el usuario siguiente vería datos cacheados del anterior hasta vencer el
+    // staleTime (las queryKeys no discriminan por usuario). Se limpia DESPUÉS de
+    // vaciar el store: si algún observer todavía montado dispara un último
+    // refetch, sale sin token y el 401 resultante no toastea (queryClient.ts lo
+    // silencia sin sesión). Sólo afecta ESTA pestaña, igual que el logout local.
+    queryClient.clear();
 
     if (refreshToken) {
         try {

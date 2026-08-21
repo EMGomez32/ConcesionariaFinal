@@ -1,4 +1,5 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
+import { queryClient } from './queryClient';
 import { useAuthStore, getPersistedRefreshToken } from '../store/authStore';
 
 declare module 'axios' {
@@ -99,6 +100,11 @@ axiosInstance.interceptors.response.use(
                     return axiosInstance(originalRequest);
                 } catch (refreshError) {
                     useAuthStore.getState().logout();
+                    // El href de abajo recarga la página (heap nuevo → caché nuevo),
+                    // así que este clear() es defensa en profundidad: si algún día
+                    // esto pasa a ser navegación SPA, los datos del usuario saliente
+                    // no deben sobrevivir en el QueryClient (ver performLogout).
+                    queryClient.clear();
                     window.location.href = '/login';
                     // Rechazar con la misma forma desempaquetada que el resto del
                     // interceptor (línea de abajo), no el AxiosError crudo.
