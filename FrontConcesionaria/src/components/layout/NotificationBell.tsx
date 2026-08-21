@@ -42,13 +42,16 @@ const NotificationBell = () => {
 
     if (!isAdmin) return null;
 
+    // Mismos tokens que las cards de "Acciones del día" del Dashboard: la misma
+    // señal debe verse del mismo color en ambas superficies (y virar en dark,
+    // cosa que los hex hardcodeados no hacían).
     const items = data ? [
-        { key: 'mora', label: 'Cuotas en mora', count: data.mora, icon: AlertTriangle, color: 'var(--danger, #dc2626)', to: '/reportes?tab=mora' },
+        { key: 'mora', label: 'Cuotas en mora', count: data.mora, icon: AlertTriangle, color: 'var(--danger)', to: '/reportes?tab=mora' },
         { key: 'proximos', label: `Cuotas vencen en ${data.dias} días`, count: data.proximos, icon: Clock, color: 'var(--accent)', to: '/reportes?tab=proximos' },
-        { key: 'reservas', label: `Reservas vencen en ${data.dias} días`, count: data.reservas, icon: Bookmark, color: '#8b5cf6', to: '/reservas' },
+        { key: 'reservas', label: `Reservas vencen en ${data.dias} días`, count: data.reservas, icon: Bookmark, color: 'var(--accent-2)', to: '/reservas' },
         { key: 'turnos', label: `Turnos de taller (${data.dias} días)`, count: data.turnos, icon: Wrench, color: 'var(--info)', to: '/postventa?tab=agenda' },
-        { key: 'seguimientos', label: `Seguimientos CRM (${data.dias} días)`, count: data.seguimientos, icon: CalendarClock, color: '#0ea5e9', to: '/seguimientos' },
-        { key: 'documentacion', label: 'Documentación por vencer (VTV/seguro)', count: data.documentacion, icon: ShieldCheck, color: '#ea580c', to: '/reportes?tab=documentacion' },
+        { key: 'seguimientos', label: `Seguimientos CRM (${data.dias} días)`, count: data.seguimientos, icon: CalendarClock, color: 'var(--info)', to: '/seguimientos' },
+        { key: 'documentacion', label: 'Documentación por vencer (VTV/seguro)', count: data.documentacion, icon: ShieldCheck, color: 'var(--warning)', to: '/reportes?tab=documentacion' },
         { key: 'estancados', label: `Unidades estancadas (+${data.umbral} días)`, count: data.estancados, icon: Car, color: 'var(--warning)', to: '/vehiculos' },
     ].filter(i => i.count > 0) : [];
     const total = data?.total ?? 0;

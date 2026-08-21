@@ -219,10 +219,15 @@ const DashboardPage = () => {
     if (alertKeys.length > 0) jobs.push(refetchAlertas());
     if (esVendedor) jobs.push(refetchMiObjetivo());
     try {
-      await Promise.all(jobs);
+      // refetch() en v5 nunca rechaza: resuelve con { status: 'error' } si falló.
+      // El sello de frescura sólo se actualiza si TODO lo pedido terminó bien; si
+      // algo falló quedan las cards de error y el "Actualizado hace X" viejo
+      // (decir "recién" con el backend caído sería mentir).
+      const results = await Promise.all(jobs);
+      const anyError = results.some((r) => (r as { status?: string } | null | undefined)?.status === 'error');
+      if (!anyError) setLastSyncAt(new Date());
     } finally {
       setIsSyncing(false);
-      setLastSyncAt(new Date());
     }
   };
 
@@ -234,7 +239,9 @@ const DashboardPage = () => {
           <p>Un vistazo al estado de tu concesionaria.</p>
         </div>
         <div className="header-actions">
-          <span className="text-xs text-muted" aria-live="polite">Actualizado {haceCuanto(lastSyncAt, ahora)}</span>
+          {/* Sin aria-live: el reloj relativo muta solo (~cada minuto) y una live
+              region lo anunciaría por lector de pantalla indefinidamente. */}
+          <span className="text-xs text-muted">Actualizado {haceCuanto(lastSyncAt, ahora)}</span>
           <button
             className="btn btn-secondary"
             onClick={onSync}
@@ -257,7 +264,10 @@ const DashboardPage = () => {
         {stats.map((stat) => (
           <div key={stat.label} className="card stat-card">
             <div className="flex justify-between items-start mb-4">
-              <div className="stat-icon-wrapper" style={{ backgroundColor: `${stat.color}10`, color: stat.color }}>
+              {/* color-mix (no `${color}10`): el truco del alfa-hex sólo era CSS
+                  válido con un hex literal; con tokens var() la declaración caía
+                  y el chip quedaba transparente. */}
+              <div className="stat-icon-wrapper" style={{ backgroundColor: `color-mix(in srgb, ${stat.color} 10%, transparent)`, color: stat.color }}>
                 <stat.icon size={20} />
               </div>
             </div>
@@ -375,7 +385,7 @@ const DashboardPage = () => {
                 return (
                   <Link key={a.key} to={a.to} className="card stat-card" style={{ textDecoration: 'none', borderLeft: `3px solid ${color}` }}>
                     <div className="flex justify-between items-start mb-3">
-                      <div className="stat-icon-wrapper" style={{ backgroundColor: `${color}10`, color }}>
+                      <div className="stat-icon-wrapper" style={{ backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`, color }}>
                         <a.icon size={20} />
                       </div>
                       <span className="text-3xl font-black tabular-nums" style={{ color: 'var(--text-primary)' }}>{a.count}</span>
@@ -424,7 +434,7 @@ const DashboardPage = () => {
                 : financeCards.map((c) => (
                   <div key={c.label} className="card stat-card">
                     <div className="flex justify-between items-start mb-4">
-                      <div className="stat-icon-wrapper" style={{ backgroundColor: `${c.color}10`, color: c.color }}>
+                      <div className="stat-icon-wrapper" style={{ backgroundColor: `color-mix(in srgb, ${c.color} 10%, transparent)`, color: c.color }}>
                         <c.icon size={20} />
                       </div>
                     </div>
