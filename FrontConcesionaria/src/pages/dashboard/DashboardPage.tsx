@@ -21,6 +21,15 @@ const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', '
 const money = (n: number, moneda = 'ARS') =>
   `${moneda === 'USD' ? 'US$' : '$'}${Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
 
+// "Actualizado hace X": tiempo relativo desde la última sincronización.
+const haceCuanto = (desde: Date, ahora: Date): string => {
+  const s = Math.max(0, Math.round((ahora.getTime() - desde.getTime()) / 1000));
+  if (s < 45) return 'recién';
+  const m = Math.round(s / 60);
+  if (m < 60) return `hace ${m} min`;
+  return `hace ${Math.round(m / 60)} h`;
+};
+
 // El KPI muestra el total consolidado en ARS si hay cotización; si no, el
 // desglose por moneda ("$X · US$Y"): nunca se suma ARS con USD sin cotización.
 const kpiValue = (kpi: FinanzaKpi) =>
@@ -61,23 +70,34 @@ const DashboardPage = () => {
   // del tenant más arriba, así que esto apunta al equipo comercial.
   const esVendedor = !!user?.roles?.includes('vendedor');
 
-  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useDashboardStats();
-  const { data: stockData, isLoading: stockLoading, refetch: refetchStock } = useStockDistribution();
-  const { data: auditsData, isLoading: auditsLoading } = useAuditLogs({}, { limit: 5 }, { enabled: isAdmin });
+  const { data: statsData, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useDashboardStats();
+  const { data: stockData, isLoading: stockLoading, isError: stockError, refetch: refetchStock } = useStockDistribution();
+  const { data: auditsData, isLoading: auditsLoading, refetch: refetchAudits } = useAuditLogs({}, { limit: 5 }, { enabled: isAdmin });
   // Finanzas del mes: dato de dueño, solo admin (igual criterio que Actividad Reciente).
   const { data: finanzas, isLoading: finanzasLoading, isError: finanzasError, refetch: refetchFinanzas } = useDashboardFinanzas(isAdmin);
   // Acciones del día: alertas accionables (estancados / por vencer / mora), solo admin.
   const { data: alertas, isLoading: alertasLoading, isError: alertasError, refetch: refetchAlertas } = useDashboardAlertas(isAdmin);
   // Tendencia de ventas (últimos 6 meses), solo admin.
-  const { data: tendencia, isLoading: tendenciaLoading } = useDashboardTendencia(isAdmin);
+  const { data: tendencia, isLoading: tendenciaLoading, isError: tendenciaError, refetch: refetchTendencia } = useDashboardTendencia(isAdmin);
 
   // ── Objetivo del mes (meta de ventas), solo admin ──
-  const { data: meta, isLoading: metaLoading } = useDashboardMeta(isAdmin);
+  const { data: meta, isLoading: metaLoading, refetch: refetchMeta } = useDashboardMeta(isAdmin);
   // ── Mi objetivo del mes (self-view del vendedor) ──
-  const { data: miObjetivoData, isLoading: miObjetivoLoading } = useMiObjetivo(esVendedor);
+  const { data: miObjetivoData, isLoading: miObjetivoLoading, refetch: refetchMiObjetivo } = useMiObjetivo(esVendedor);
   const miObjetivo = miObjetivoData?.objetivo ?? null;
   const queryClient = useQueryClient();
   const { addToast } = useUIStore();
+
+  // Sincronización manual: refetchea TODO lo visible por rol y marca cuándo se
+  // actualizó. Antes "Sincronizar" refrescaba sólo stats/stock y el resto (tendencia,
+  // objetivo, actividad) quedaba viejo sin ninguna señal.
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<Date>(() => new Date());
+  const [ahora, setAhora] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setAhora(new Date()), 30000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // Tour de bienvenida: se auto-inicia UNA vez al entrar (si el usuario no lo
   // desactivó y no lo vio). Vive acá porque varios pasos se anclan a las tarjetas de
@@ -173,14 +193,18 @@ const DashboardPage = () => {
     return keys.length ? keys.map((k) => money(acc[k], k)).join(' · ') : money(0);
   })();
 
-  const onSync = () => {
-    refetchStats();
-    refetchStock();
-    // refetch dispara la query aunque esté enabled:false; sólo tiene sentido para
-    // admin (es quien ve —y consulta— finanzas y alertas).
-    if (isAdmin) {
-      refetchFinanzas();
-      refetchAlertas();
+  const onSync = async () => {
+    setIsSyncing(true);
+    // refetch dispara la query aunque esté enabled:false; por eso sólo se agregan
+    // las que este rol realmente ve (no le pegamos a endpoints admin como no-admin).
+    const jobs: Promise<unknown>[] = [refetchStats(), refetchStock()];
+    if (isAdmin) jobs.push(refetchFinanzas(), refetchAlertas(), refetchTendencia(), refetchMeta(), refetchAudits());
+    if (esVendedor) jobs.push(refetchMiObjetivo());
+    try {
+      await Promise.all(jobs);
+    } finally {
+      setIsSyncing(false);
+      setLastSyncAt(new Date());
     }
   };
 
@@ -189,21 +213,29 @@ const DashboardPage = () => {
       <header className="page-header">
         <div className="header-title">
           <h1>Resumen Operativo</h1>
-          <p>Indicadores en tiempo real de tu concesionaria.</p>
+          <p>Un vistazo al estado de tu concesionaria.</p>
         </div>
         <div className="header-actions">
+          <span className="text-xs text-muted" aria-live="polite">Actualizado {haceCuanto(lastSyncAt, ahora)}</span>
           <button
             className="btn btn-secondary"
             onClick={onSync}
-            disabled={statsLoading || stockLoading}
+            disabled={isSyncing}
+            aria-busy={isSyncing}
           >
-            <RefreshCw size={16} className={statsLoading || stockLoading ? 'animate-spin' : ''} />
-            Sincronizar
+            <RefreshCw size={16} className={isSyncing || statsLoading || stockLoading ? 'animate-spin' : ''} />
+            {isSyncing ? 'Sincronizando…' : 'Sincronizar'}
           </button>
         </div>
       </header>
 
-      <div className="stats-grid stagger" data-tour="dashboard-kpis">
+      {statsError && !statsData ? (
+        <div className="card glass" data-tour="dashboard-kpis" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+          No se pudieron cargar los indicadores.{' '}
+          <button className="btn btn-secondary btn-sm" type="button" onClick={() => refetchStats()}>Reintentar</button>
+        </div>
+      ) : (
+      <div className="stats-grid stagger" data-tour="dashboard-kpis" aria-busy={statsLoading}>
         {stats.map((stat) => (
           <div key={stat.label} className="card stat-card">
             <div className="flex justify-between items-start mb-4">
@@ -215,19 +247,20 @@ const DashboardPage = () => {
               <span className="text-muted font-bold text-xs uppercase tracking-wider mb-1">{stat.label}</span>
               <span className="stat-value">
                 {statsLoading
-                  ? <span className="skeleton skeleton-text-lg" style={{ width: '4ch', display: 'inline-block' }} />
+                  ? <span className="skeleton skeleton-text-lg" style={{ width: '4ch', display: 'inline-block' }} role="status" aria-label={`Cargando ${stat.label}`} />
                   : <AnimatedNumber value={stat.value} />}
               </span>
             </div>
           </div>
         ))}
       </div>
+      )}
 
       {esVendedor && (
         <section style={{ marginTop: '1.75rem' }}>
           <div className="flex items-center gap-2" style={{ marginBottom: '1rem' }}>
             <Target size={18} className="text-accent" />
-            <h3 style={{ margin: 0 }}>Mi objetivo de {mesActualLabel}</h3>
+            <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Mi objetivo de {mesActualLabel}</h2>
           </div>
           <div className="card" style={{ padding: '1.5rem' }}>
             {miObjetivoLoading ? (
@@ -265,7 +298,7 @@ const DashboardPage = () => {
           <div className="flex items-center justify-between flex-wrap gap-2" style={{ marginBottom: '1rem' }}>
             <div className="flex items-center gap-2">
               <Target size={18} className="text-accent" />
-              <h3 style={{ margin: 0 }}>Objetivo de {mesActualLabel}</h3>
+              <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Objetivo de {mesActualLabel}</h2>
             </div>
             <button type="button" className="btn btn-secondary btn-sm" onClick={openMetaModal}>
               {meta ? 'Editar objetivo' : 'Fijar objetivo'}
@@ -300,7 +333,7 @@ const DashboardPage = () => {
         <section style={{ marginTop: '1.75rem' }}>
           <div className="flex items-center gap-2" style={{ marginBottom: '1rem' }}>
             <Zap size={18} className="text-accent" />
-            <h3 style={{ margin: 0 }}>Acciones del día</h3>
+            <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Acciones del día</h2>
           </div>
           {alertasError ? (
             <div className="card glass" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
@@ -327,7 +360,7 @@ const DashboardPage = () => {
                       <div className="stat-icon-wrapper" style={{ backgroundColor: `${color}10`, color }}>
                         <a.icon size={20} />
                       </div>
-                      <span className="text-3xl font-black tabular-nums" style={{ color }}>{a.count}</span>
+                      <span className="text-3xl font-black tabular-nums" style={{ color: 'var(--text-primary)' }}>{a.count}</span>
                     </div>
                     <div className="stat-content">
                       <span className="text-muted font-bold text-xs uppercase tracking-wider mb-1">{a.label}</span>
@@ -348,7 +381,7 @@ const DashboardPage = () => {
           <div className="flex items-center justify-between flex-wrap gap-2" style={{ marginBottom: '1rem' }}>
             <div className="flex items-center gap-2">
               <Wallet size={18} className="text-accent" />
-              <h3 style={{ margin: 0 }}>Finanzas de {MESES[(finanzas?.periodo.mes ?? new Date().getMonth() + 1) - 1]}</h3>
+              <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Finanzas de {MESES[(finanzas?.periodo.mes ?? new Date().getMonth() + 1) - 1]}</h2>
             </div>
             {!finanzasLoading && !finanzasError && (finanzas?.cotizacion
               ? <span className="text-xs text-muted">Consolidado en pesos a {money(finanzas.cotizacion.valor)}/US$ del {new Date(finanzas.cotizacion.fecha + 'T00:00:00').toLocaleDateString('es-AR')}</span>
@@ -389,14 +422,14 @@ const DashboardPage = () => {
         </section>
       )}
 
-      {isAdmin && (tendenciaLoading || tendencia) && (
+      {isAdmin && (tendenciaLoading || tendencia || tendenciaError) && (
         <section style={{ marginTop: '1.75rem' }}>
           <div className="flex items-center justify-between flex-wrap gap-2" style={{ marginBottom: '1rem' }}>
             <div className="flex items-center gap-2">
               <TrendingUp size={18} className="text-accent" />
-              <h3 style={{ margin: 0 }}>Tendencia de ventas</h3>
+              <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Tendencia de ventas</h2>
             </div>
-            {!tendenciaLoading && (
+            {!tendenciaLoading && !tendenciaError && (
               <span className="text-xs text-muted">
                 {tTotalUnidades} {tTotalUnidades === 1 ? 'unidad' : 'unidades'} · {tTotalFacturado} · últimos {tendencia?.meses ?? 6} meses
               </span>
@@ -405,6 +438,11 @@ const DashboardPage = () => {
           <div className="card" style={{ padding: '1.5rem' }}>
             {tendenciaLoading ? (
               <span className="skeleton" style={{ display: 'block', height: '180px', width: '100%', borderRadius: '0.75rem' }} />
+            ) : tendenciaError ? (
+              <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-secondary)' }}>
+                No se pudo cargar la tendencia de ventas.{' '}
+                <button className="btn btn-secondary btn-sm" type="button" onClick={() => refetchTendencia()}>Reintentar</button>
+              </div>
             ) : tTotalUnidades === 0 ? (
               <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-secondary)' }}>
                 Sin ventas registradas en los últimos {tendencia?.meses ?? 6} meses.
@@ -417,6 +455,8 @@ const DashboardPage = () => {
                     return (
                       <div
                         key={`${m.anio}-${m.mes}`}
+                        role="img"
+                        aria-label={`${m.label}: ${m.cantidad} ${m.cantidad === 1 ? 'unidad' : 'unidades'} · ${facturadoMes(m)}`}
                         title={`${m.label}: ${m.cantidad} ${m.cantidad === 1 ? 'unidad' : 'unidades'} · ${facturadoMes(m)}`}
                         style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}
                       >
@@ -481,7 +521,7 @@ const DashboardPage = () => {
           <div className="card-header">
             <div className="flex items-center gap-2">
               <PieChart size={18} className="text-accent" />
-              <h3>Distribución de stock</h3>
+              <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Distribución de stock</h2>
             </div>
           </div>
           {stockLoading ? (
@@ -492,6 +532,11 @@ const DashboardPage = () => {
                   <span key={i} className="skeleton skeleton-text" style={{ width: '90%' }} />
                 ))}
               </div>
+            </div>
+          ) : stockError && !stockData ? (
+            <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-secondary)' }}>
+              No se pudo cargar la distribución de stock.{' '}
+              <button className="btn btn-secondary btn-sm" type="button" onClick={() => refetchStock()}>Reintentar</button>
             </div>
           ) : (
             <DonutChart
@@ -507,7 +552,7 @@ const DashboardPage = () => {
           <div className="card-header">
             <div className="flex items-center gap-2">
               <Clock size={18} className="text-accent" />
-              <h3>Actividad Reciente</h3>
+              <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Actividad Reciente</h2>
             </div>
             <ShieldCheck size={18} className="text-muted" />
           </div>
