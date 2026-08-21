@@ -146,6 +146,8 @@ Una base neutra fría iluminada por un trío de acentos neón de rol fijo; el co
 
 ### Status
 - **success** `#10b981` (= emerald) · **warning** `#f59e0b` · **danger** `#ef4444` · **info** `#06b6d4` (= cyan). Se usan solo por su significado.
+- danger y warning exponen canales `--danger-rgb` / `--warning-rgb` para tonales translúcidos (badges, rings, glows — mismo patrón que `--accent-rgb`), y danger un par oscuro `--danger-hover` (`#dc2626`) que cierra su gradiente, paralelo a `--accent-hover`.
+- El scrim de modales es `--overlay-scrim` (`rgba(15,23,42,0.75)`, tinta slate translúcida): único overlay del sistema.
 
 ### Named Rules
 **The Signal-Not-Wallpaper Rule.** El neón (acentos, glows, gradiente aurora) marca significado —acción, estado, foco, una métrica que importa— y nunca decora un fondo denso de datos. Si un glow no comunica estado, sobra.
@@ -165,7 +167,7 @@ Una base neutra fría iluminada por un trío de acentos neón de rol fijo; el co
 - **Headline** (Space Grotesk, 700, `1.75rem` / `--text-2xl`, lh 1.15, ls -0.02em): encabezados de sección; los `h1..h6` heredan Space Grotesk 700.
 - **Title** (Space Grotesk, 600, `1.125rem` / `--text-lg`, ls -0.01em): headers de card y de modal.
 - **Body** (Inter, 400–500, `0.9375rem` / `--text-base`, lh 1.5): texto general; celdas de tabla en `--text-sm` (0.8125rem) 500.
-- **Label** (Inter, 600–900, `0.75rem`↓ / `--text-xs`, ls 0.04–0.12em, UPPERCASE): etiquetas de input, headers de tabla, etiquetas de métrica (`.stat-tile-label` llega a 900 / 0.625rem).
+- **Label** (Inter, 600–900, `0.75rem`↓, ls 0.08–0.12em, UPPERCASE): etiquetas de input (`--text-xs`), headers de tabla y labels de filtro (**Micro-label** `--text-2xs` = 0.7rem, 700), y etiquetas de métrica (**Nano-label** `--text-3xs` = 0.625rem, 900, `.stat-tile-label`). Los pasos micro son SÓLO para labels con tracking, nunca texto corrido. Las utilidades `.text-xs/.text-sm/.text-xl` son alias exactos de los tokens homónimos.
 
 ### Named Rules
 **The Space-Grotesk-Headlines Rule.** Space Grotesk es solo para titulares, valores de stat y números destacados. Inter carga todo el texto corrido y de controles. No mezclar.
