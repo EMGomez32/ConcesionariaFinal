@@ -430,7 +430,7 @@ const DashboardPage = () => {
               )}
               {alertasAlDia.length > 0 && (
                 <div className="flex items-center flex-wrap gap-2" style={{ marginTop: '1rem' }}>
-                  <span className="text-xs text-muted font-bold uppercase tracking-wider">Al día:</span>
+                  <span className="text-xs text-muted font-bold uppercase tracking-wider" style={{ whiteSpace: 'nowrap' }}>Al día:</span>
                   {alertasAlDia.map((a) => (
                     <Link
                       key={a.key}
@@ -440,12 +440,15 @@ const DashboardPage = () => {
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '0.3rem',
-                        padding: '0.25rem 0.625rem',
+                        padding: '0.35rem 0.7rem',
                         borderRadius: 'var(--radius-pill)',
                         border: '1px solid var(--border)',
                         background: 'var(--bg-card)',
                         color: 'var(--text-secondary)',
                         textDecoration: 'none',
+                        // nowrap: el chip envuelve como unidad a la línea siguiente,
+                        // nunca quiebra su propio texto en varios renglones.
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       <Check size={12} style={{ color: 'var(--success)' }} aria-hidden="true" />

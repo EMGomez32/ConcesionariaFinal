@@ -1269,6 +1269,13 @@ button {
   flex-direction: column;
 }
 
+/* Varios componentes ya usaban esta clase (headers de sección, la línea "Al
+   día" del dashboard) pero nunca estuvo definida: los flex quedaban en nowrap
+   y en anchos angostos comprimían o recortaban a sus hijos. */
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
 .items-center {
   align-items: center;
 }
