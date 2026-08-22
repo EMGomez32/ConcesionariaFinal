@@ -228,6 +228,7 @@ Lenguaje de dos radios: **píldora** (`999px`) para todo lo accionable —botone
 - **Style:** `--radius-md` (12px), fondo card, borde hairline, Inter `--text-base`. Etiqueta en micro-mayúsculas (`.input-label`). Soporta ícono a la izquierda y botón "revelar" a la derecha; selects con chevron SVG propio.
 - **Focus:** borde emerald + `box-shadow: 0 0 0 3px var(--ring)`; el ícono vira a emerald.
 - **Error / Disabled:** borde danger + halo rojo (`.has-error`); disabled con fondo rebajado y cursor `not-allowed`.
+- **Las dos familias (canon y legacy):** `.input-*` es el CANON y lo que usa código nuevo — idealmente vía los componentes `<Input>`, `<Select>` y `<Textarea>` (`src/components/ui`), que ya lo envuelven: control a `--text-base` (15px), etiqueta micro-caps `.input-label`. `.form-*` (`.form-label` sentence-case + `.form-input`/`.form-input-select` a `--text-sm`, 13px) es la capa LEGACY de los formularios densos operativos (~20 páginas): sus valores están anclados a la rampa para que no vuelva a derivar, se mantiene pero no se extiende. Regla al convivir: en una misma vista no mezclar los dos estilos de etiqueta — si un form legacy necesita etiqueta nueva, va `.input-label` (micro-caps, el canon). Las copias locales de `.form-*` en bloques `<style>` de páginas son redundantes con la capa global: eliminarlas al tocar esas páginas. Migración de fondo: gradual, página por página, hacia los componentes de `ui/`.
 
 ### Data Table
 - **Header:** fondo `--bg-secondary`, texto muted UPPERCASE `0.7rem` ls 0.12em.
