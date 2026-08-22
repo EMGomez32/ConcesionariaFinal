@@ -107,7 +107,7 @@ const DonutChart = ({ data, size = 180, thickness = 22, centerLabel, centerValue
                 }
                 .donut-chart-value {
                     font-family: var(--font-display);
-                    font-size: 1.875rem;
+                    font-size: var(--text-2xl);
                     font-weight: 700;
                     color: var(--text-primary);
                     line-height: 1;
@@ -115,7 +115,7 @@ const DonutChart = ({ data, size = 180, thickness = 22, centerLabel, centerValue
                 }
                 .donut-chart-label {
                     font-family: var(--font-sans);
-                    font-size: 0.65rem;
+                    font-size: var(--text-2xs);
                     color: var(--text-muted);
                     text-transform: uppercase;
                     letter-spacing: 0.16em;

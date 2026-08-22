@@ -226,27 +226,27 @@ const ComparadorPage = () => {
                 .cmp-container { display: flex; flex-direction: column; gap: 1.5rem; animation: fadeIn 0.4s ease-out; }
                 .cmp-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
                 .cmp-title { display: flex; align-items: center; gap: 1rem; }
-                .cmp-badge { width: 48px; height: 48px; border-radius: 0.9rem; background: linear-gradient(135deg, #6366f1, #818cf8); color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-                .cmp-title h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
-                .cmp-title p { color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.15rem; }
+                .cmp-badge { width: 48px; height: 48px; border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--accent-2), rgba(var(--accent-2-rgb), 0.75)); color: var(--text-white); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+                .cmp-title h1 { font-size: var(--text-xl); font-weight: 800; letter-spacing: -0.02em; }
+                .cmp-title p { color: var(--text-secondary); font-size: var(--text-sm); margin-top: 0.15rem; }
                 .cmp-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-                .cmp-slot-lbl { display: block; font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; }
-                .cmp-select { width: 100%; padding: 0.65rem 0.875rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.625rem; color: var(--text-primary); font-size: 0.875rem; outline: none; }
+                .cmp-slot-lbl { display: block; font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; }
+                .cmp-select { width: 100%; padding: 0.65rem 0.875rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--text-sm); outline: none; }
                 .cmp-select:focus { border-color: var(--accent); }
-                .cmp-empty { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; padding: 3.5rem; color: var(--text-muted); text-align: center; border: 1px dashed var(--border); border-radius: 1rem; }
-                .cmp-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 1rem; }
+                .cmp-empty { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; padding: 3.5rem; color: var(--text-muted); text-align: center; border: 1px dashed var(--border); border-radius: var(--radius-lg); }
+                .cmp-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); }
                 .cmp-table { width: 100%; border-collapse: collapse; min-width: 560px; }
-                .cmp-table th, .cmp-table td { padding: 0.85rem 1rem; text-align: center; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-                .cmp-attr { text-align: left !important; font-weight: 600; color: var(--text-secondary); font-size: 0.8125rem; background: var(--bg-secondary); white-space: nowrap; position: sticky; left: 0; }
+                .cmp-table th, .cmp-table td { padding: 0.85rem 1rem; text-align: center; border-bottom: 1px solid var(--border); font-size: var(--text-base); }
+                .cmp-attr { text-align: left !important; font-weight: 600; color: var(--text-secondary); font-size: var(--text-sm); background: var(--bg-secondary); white-space: nowrap; position: sticky; left: 0; }
                 .cmp-col-head { vertical-align: top; }
-                .cmp-foto { width: 100%; aspect-ratio: 16/10; border-radius: 0.6rem; overflow: hidden; background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem; }
+                .cmp-foto { width: 100%; aspect-ratio: 16/10; border-radius: var(--radius-sm); overflow: hidden; background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem; }
                 .cmp-foto img { width: 100%; height: 100%; object-fit: cover; }
                 .cmp-foto-ph { color: var(--text-muted); }
-                .cmp-col-title { font-weight: 800; font-size: 0.95rem; }
-                .cmp-col-sub { font-size: 0.78rem; color: var(--text-muted); }
+                .cmp-col-title { font-weight: 800; font-size: var(--text-base); }
+                .cmp-col-sub { font-size: var(--text-sm); color: var(--text-muted); }
                 .cmp-precio { font-weight: 800; }
-                .cmp-chip { padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; background: var(--bg-secondary); color: var(--text-secondary); }
-                .cmp-best { position: relative; color: var(--success, #10b981); font-weight: 800; background: color-mix(in srgb, var(--success, #10b981) 10%, transparent); }
+                .cmp-chip { padding: 0.15rem 0.6rem; border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: 700; background: var(--bg-secondary); color: var(--text-secondary); }
+                .cmp-best { position: relative; color: var(--success); font-weight: 800; background: color-mix(in srgb, var(--success) 10%, transparent); }
                 .spin { animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

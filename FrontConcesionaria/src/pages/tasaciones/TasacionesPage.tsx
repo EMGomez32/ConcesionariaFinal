@@ -283,16 +283,16 @@ const TasacionesPage = () => {
                 .tas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
                 .tas-card { padding: 1.1rem; display: flex; flex-direction: column; gap: 0.5rem; }
                 .tas-card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-                .tas-veh { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 700; color: var(--text-primary); font-size: 0.95rem; }
-                .tas-valor { font-size: 1.4rem; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
-                .tas-meta { display: flex; flex-wrap: wrap; gap: 0.6rem; font-size: 0.78rem; color: var(--text-muted); }
-                .tas-cliente { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.82rem; color: var(--text-secondary); }
-                .tas-obs { font-size: 0.82rem; color: var(--text-secondary); margin: 0; white-space: pre-wrap; word-break: break-word; }
+                .tas-veh { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 700; color: var(--text-primary); font-size: var(--text-base); }
+                .tas-valor { font-size: var(--text-xl); font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+                .tas-meta { display: flex; flex-wrap: wrap; gap: 0.6rem; font-size: var(--text-sm); color: var(--text-muted); }
+                .tas-cliente { display: inline-flex; align-items: center; gap: 0.3rem; font-size: var(--text-sm); color: var(--text-secondary); }
+                .tas-obs { font-size: var(--text-sm); color: var(--text-secondary); margin: 0; white-space: pre-wrap; word-break: break-word; }
                 .tas-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
                 .tas-empty { text-align: center; padding: 2.5rem 1.5rem; color: var(--text-secondary); }
                 .tas-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
                 .tas-field { display: flex; flex-direction: column; gap: 0.3rem; }
-                .tas-field > span { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); font-weight: 700; }
+                .tas-field > span { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); font-weight: 700; }
                 @media (max-width: 560px) { .tas-form-grid { grid-template-columns: 1fr; } }
             `}</style>
         </div>

@@ -187,7 +187,7 @@ const ReservasPage = () => {
             </div>
 
             {/* Filters */}
-            <div className="glass filter-bar" data-tour="res-filtros" style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap', padding: '1rem 1.5rem', borderRadius: '1rem', marginBottom: '1.5rem' }}>
+            <div className="glass filter-bar" data-tour="res-filtros" style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap', padding: '1rem 1.5rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem' }}>
                 <div className="filter-group">
                     <label className="filter-label"><Filter size={12} /> Estado</label>
                     <select className="form-input" value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }} style={{ minWidth: '140px' }}>
@@ -250,7 +250,7 @@ const ReservasPage = () => {
                                                 {r.vehiculo ? `${r.vehiculo.marca} ${r.vehiculo.modelo}` : `ID ${r.vehiculoId}`}
                                             </span>
                                             {r.vehiculo?.dominio && (
-                                                <span className="dominio-tag" style={{ marginLeft: '0.5rem', fontSize: '0.72rem' }}>
+                                                <span className="dominio-tag" style={{ marginLeft: '0.5rem', fontSize: 'var(--text-xs)' }}>
                                                     {r.vehiculo.dominio}
                                                 </span>
                                             )}
@@ -261,7 +261,7 @@ const ReservasPage = () => {
                                             {r.moneda} ${Number(r.monto).toLocaleString('es-AR')}
                                         </td>
                                         <td>
-                                            <span style={{ color: proximo ? '#f59e0b' : 'inherit', fontWeight: proximo ? 700 : undefined }}>
+                                            <span style={{ color: proximo ? 'var(--warning)' : 'inherit', fontWeight: proximo ? 700 : undefined }}>
                                                 {r.fechaVencimiento ? new Date(r.fechaVencimiento).toLocaleDateString('es-AR') : '-'}
                                                 {proximo && ' ⚠️'}
                                             </span>
@@ -305,7 +305,7 @@ const ReservasPage = () => {
                     <Button variant="ghost" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
                         <ChevronLeft size={16} />
                     </Button>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Página {page} de {totalPages}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Página {page} de {totalPages}</span>
                     <Button variant="ghost" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
                         <ChevronRight size={16} />
                     </Button>
@@ -409,7 +409,7 @@ const ReservasPage = () => {
 
             <style>{`
                 .filter-group { display: flex; flex-direction: column; gap: 0.3rem; }
-                .filter-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem; }
+                .filter-label { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem; }
                 .modal-footer { display: flex; justify-content: flex-end; gap: 0.75rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border); }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 .spin { animation: spin 0.8s linear infinite; }

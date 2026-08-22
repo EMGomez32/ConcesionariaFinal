@@ -300,7 +300,7 @@ const CommandPalette = ({ sections = NAV_SECTIONS, enableGlobalSearch = true }: 
                     flex-direction: column;
                     max-height: 70vh;
                     overflow: hidden;
-                    animation: cmdk-pop 0.22s var(--easing-out);
+                    animation: cmdk-pop var(--duration-base) var(--easing-out);
                 }
 
                 .cmdk-search {
@@ -351,7 +351,7 @@ const CommandPalette = ({ sections = NAV_SECTIONS, enableGlobalSearch = true }: 
 
                 .cmdk-group-title {
                     font-family: var(--font-sans);
-                    font-size: 0.65rem;
+                    font-size: var(--text-2xs);
                     font-weight: 700;
                     color: var(--text-muted);
                     text-transform: uppercase;
@@ -403,7 +403,7 @@ const CommandPalette = ({ sections = NAV_SECTIONS, enableGlobalSearch = true }: 
 
                 .cmdk-item-path {
                     font-family: var(--font-mono);
-                    font-size: 0.7rem;
+                    font-size: var(--text-2xs);
                     color: var(--text-muted);
                     max-width: 45%;
                     overflow: hidden;
@@ -454,7 +454,7 @@ const CommandPalette = ({ sections = NAV_SECTIONS, enableGlobalSearch = true }: 
                     background: var(--bg-card);
                     border: 1px solid var(--border);
                     font-family: var(--font-mono);
-                    font-size: 0.7rem;
+                    font-size: var(--text-2xs);
                     color: var(--text-secondary);
                 }
 

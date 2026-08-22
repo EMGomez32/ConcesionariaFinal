@@ -263,9 +263,9 @@ const UsuarioForm: React.FC<UsuarioFormProps> = ({ usuario, onSave, onCancel, lo
                     padding: 0.8125rem 1rem;
                     background: var(--bg-primary);
                     border: 1.5px solid var(--border);
-                    border-radius: 1rem;
+                    border-radius: var(--radius-lg);
                     color: var(--text-primary);
-                    font-size: 0.9375rem;
+                    font-size: var(--text-base);
                     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
                     box-shadow: var(--shadow-sm);
                     cursor: pointer;
@@ -293,7 +293,7 @@ const UsuarioForm: React.FC<UsuarioFormProps> = ({ usuario, onSave, onCancel, lo
                     padding: 1rem;
                     background: var(--bg-secondary);
                     border: 1.5px solid var(--border);
-                    border-radius: 1rem;
+                    border-radius: var(--radius-lg);
                 }
                 .role-checkbox {
                     display: flex;
@@ -301,7 +301,7 @@ const UsuarioForm: React.FC<UsuarioFormProps> = ({ usuario, onSave, onCancel, lo
                     gap: 0.625rem;
                     padding: 0.625rem 0.875rem;
                     background: var(--bg-primary);
-                    border-radius: 0.75rem;
+                    border-radius: var(--radius-md);
                     cursor: pointer;
                     transition: all 0.2s;
                     border: 1px solid transparent;
@@ -317,7 +317,7 @@ const UsuarioForm: React.FC<UsuarioFormProps> = ({ usuario, onSave, onCancel, lo
                     accent-color: var(--accent);
                 }
                 .role-checkbox span {
-                    font-size: 0.875rem;
+                    font-size: var(--text-sm);
                     font-weight: 600;
                     color: var(--text-primary);
                     text-transform: capitalize;

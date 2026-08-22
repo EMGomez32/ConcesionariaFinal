@@ -223,7 +223,7 @@ const ConcesionariasPage = () => {
                     width: 40px; height: 40px;
                     border-radius: var(--radius-md);
                     background: var(--accent-gradient);
-                    color: white;
+                    color: var(--text-white);
                     display: flex; align-items: center; justify-content: center;
                     box-shadow: 0 4px 12px -4px rgba(var(--accent-rgb), 0.4);
                 }

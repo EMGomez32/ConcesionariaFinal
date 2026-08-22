@@ -169,9 +169,9 @@ const SucursalForm: React.FC<SucursalFormProps> = ({ onSubmit, initialData, onCa
                     padding: 0.8125rem 1rem;
                     background: var(--bg-primary);
                     border: 1.5px solid var(--border);
-                    border-radius: 1rem;
+                    border-radius: var(--radius-lg);
                     color: var(--text-primary);
-                    font-size: 0.9375rem;
+                    font-size: var(--text-base);
                     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
                     box-shadow: var(--shadow-sm);
                     cursor: pointer;

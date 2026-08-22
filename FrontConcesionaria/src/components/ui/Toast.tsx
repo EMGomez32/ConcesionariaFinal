@@ -75,9 +75,9 @@ const Toast = () => {
         }
 
         .toast-success { color: var(--success); box-shadow: 0 18px 32px -16px rgba(var(--accent-rgb), 0.35); }
-        .toast-error   { color: var(--danger);  box-shadow: 0 18px 32px -16px rgba(239, 68, 68, 0.35); }
+        .toast-error   { color: var(--danger);  box-shadow: 0 18px 32px -16px rgba(var(--danger-rgb), 0.35); }
         .toast-info    { color: var(--info);    box-shadow: 0 18px 32px -16px rgba(var(--accent-3-rgb), 0.35); }
-        .toast-warning { color: var(--warning); box-shadow: 0 18px 32px -16px rgba(245, 158, 11, 0.35); }
+        .toast-warning { color: var(--warning); box-shadow: 0 18px 32px -16px rgba(var(--warning-rgb), 0.35); }
 
         .toast-icon {
           flex-shrink: 0;

@@ -319,22 +319,22 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
                         width: 80px;
                         height: 80px;
                         border-radius: 50%;
-                        background: var(--accent-light, rgba(139, 92, 246, 0.1));
+                        background: var(--accent-light);
                         display: flex;
                         align-items: center;
                         justify-content: center;
                     }
 
                     .dni-check-title {
-                        font-size: 1.5rem;
+                        font-size: var(--text-xl);
                         font-weight: 700;
-                        color: var(--text-primary, #1e293b);
+                        color: var(--text-primary);
                         margin: 0;
                     }
 
                     .dni-check-description {
-                        color: var(--text-secondary, #64748b);
-                        font-size: 0.9375rem;
+                        color: var(--text-secondary);
+                        font-size: var(--text-base);
                         max-width: 500px;
                         margin: 0;
                         line-height: 1.6;
@@ -357,7 +357,7 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
                         gap: 1rem;
                         justify-content: center;
                         padding-top: 1rem;
-                        border-top: 1px solid var(--border, #e2e8f0);
+                        border-top: 1px solid var(--border);
                         flex-wrap: wrap;
                     }
 
@@ -379,59 +379,59 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
                     }
 
                     .alert-icon.warning {
-                        background: rgba(245, 158, 11, 0.1);
-                        color: rgb(245, 158, 11);
+                        background: rgba(var(--warning-rgb), 0.1);
+                        color: var(--warning);
                     }
 
                     .alert-title {
-                        font-size: 1.5rem;
+                        font-size: var(--text-xl);
                         font-weight: 700;
-                        color: var(--text-primary, #1e293b);
+                        color: var(--text-primary);
                         margin: 0;
                     }
 
                     .alert-message {
-                        color: var(--text-secondary, #64748b);
-                        font-size: 1rem;
+                        color: var(--text-secondary);
+                        font-size: var(--text-md);
                         margin: 0;
                         text-align: center;
                     }
 
                     .alert-message strong {
-                        color: var(--accent, #8b5cf6);
+                        color: var(--accent);
                         font-weight: 700;
                     }
 
                     .existing-client-info {
                         width: 100%;
                         max-width: 400px;
-                        background: var(--bg-secondary, #f8fafc);
-                        border-radius: 1rem;
+                        background: var(--bg-secondary);
+                        border-radius: var(--radius-lg);
                         padding: 1.5rem;
                         display: flex;
                         flex-direction: column;
                         gap: 1rem;
-                        border: 1px solid var(--border, #e2e8f0);
+                        border: 1px solid var(--border);
                     }
 
                     .info-row {
                         display: flex;
                         align-items: center;
                         gap: 0.75rem;
-                        color: var(--text-primary, #1e293b);
-                        font-size: 0.9375rem;
+                        color: var(--text-primary);
+                        font-size: var(--text-base);
                     }
 
                     .info-row.highlight {
-                        background: var(--accent-light, rgba(139, 92, 246, 0.1));
+                        background: var(--accent-light);
                         padding: 0.75rem;
-                        border-radius: 0.5rem;
+                        border-radius: var(--radius-sm);
                         margin: -0.25rem;
                         font-weight: 600;
                     }
 
                     .info-row svg {
-                        color: var(--accent, #8b5cf6);
+                        color: var(--accent);
                         flex-shrink: 0;
                     }
 
@@ -441,7 +441,7 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
                         justify-content: center;
                         flex-wrap: wrap;
                         padding-top: 1rem;
-                        border-top: 1px solid var(--border, #e2e8f0);
+                        border-top: 1px solid var(--border);
                         width: 100%;
                     }
                 `}</style>
@@ -503,7 +503,7 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
                     <FileText size={18} className="section-icon" />
                     <h3 className="section-title">Datos Fiscales (AFIP)</h3>
                 </div>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 0.75rem', lineHeight: 1.5 }}>
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 0.75rem', lineHeight: 1.5 }}>
                     Determinan el comprobante que se emite al facturar: un cliente Responsable Inscripto con CUIT recibe
                     <strong> Factura A</strong> (IVA discriminado); el resto, <strong>Factura B</strong>. Si lo dejás sin definir,
                     se trata como consumidor final.
@@ -621,16 +621,16 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
                 }
 
                 .form-section {
-                    background: var(--bg-secondary, #f8fafc);
-                    border-radius: 1rem;
+                    background: var(--bg-secondary);
+                    border-radius: var(--radius-lg);
                     padding: 1.5rem;
-                    border: 1px solid var(--border, #e2e8f0);
+                    border: 1px solid var(--border);
                     transition: all 0.2s ease;
                 }
 
                 .form-section:hover {
-                    border-color: var(--accent-light, #ddd6fe);
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+                    border-color: var(--accent-light);
+                    box-shadow: var(--shadow-md);
                 }
 
                 .section-header {
@@ -639,18 +639,18 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
                     gap: 0.75rem;
                     margin-bottom: 1.25rem;
                     padding-bottom: 0.75rem;
-                    border-bottom: 2px solid var(--border, #e2e8f0);
+                    border-bottom: 2px solid var(--border);
                 }
 
                 .section-icon {
-                    color: var(--accent, #8b5cf6);
+                    color: var(--accent);
                     flex-shrink: 0;
                 }
 
                 .section-title {
-                    font-size: 0.95rem;
+                    font-size: var(--text-base);
                     font-weight: 700;
-                    color: var(--text-primary, #1e293b);
+                    color: var(--text-primary);
                     text-transform: uppercase;
                     letter-spacing: 0.05em;
                     margin: 0;
@@ -673,11 +673,11 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
                 .custom-textarea {
                     width: 100%;
                     padding: 1rem;
-                    background: var(--bg-primary, #ffffff);
-                    border: 1.5px solid var(--border, #e2e8f0);
-                    border-radius: 0.875rem;
-                    color: var(--text-primary, #1e293b);
-                    font-size: 0.9375rem;
+                    background: var(--bg-primary);
+                    border: 1.5px solid var(--border);
+                    border-radius: var(--radius-lg);
+                    color: var(--text-primary);
+                    font-size: var(--text-base);
                     font-family: inherit;
                     resize: vertical;
                     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -686,13 +686,15 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
 
                 .custom-textarea:focus {
                     outline: none;
-                    border-color: var(--accent, #8b5cf6);
-                    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
-                    background: var(--bg-card, #ffffff);
+                    border-color: var(--accent);
+                    /* Foco canónico del sistema (DESIGN.md): anillo emerald, no el halo
+                       violeta que quedó de cuando el acento era violet. */
+                    box-shadow: 0 0 0 3px var(--ring);
+                    background: var(--bg-card);
                 }
 
                 .custom-textarea::placeholder {
-                    color: var(--text-muted, #94a3b8);
+                    color: var(--text-muted);
                 }
 
                 .form-actions {
@@ -700,7 +702,7 @@ const ClienteForm: React.FC<ClienteFormProps> = ({ onSubmit, initialData, onCanc
                     gap: 1rem;
                     justify-content: flex-end;
                     padding-top: 1rem;
-                    border-top: 1px solid var(--border, #e2e8f0);
+                    border-top: 1px solid var(--border);
                     margin-top: 0.5rem;
                 }
 

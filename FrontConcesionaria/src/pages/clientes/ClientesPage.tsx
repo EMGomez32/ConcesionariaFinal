@@ -390,11 +390,11 @@ const ClientesPage: React.FC = () => {
 
             <style>{`
                 .lead-funnel { display: flex; gap: 0.6rem; flex-wrap: wrap; }
-                .funnel-chip { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 0.7rem 1rem; min-width: 100px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.8rem; cursor: pointer; transition: border-color .15s, transform .15s; }
+                .funnel-chip { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 0.7rem 1rem; min-width: 100px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; transition: border-color .15s, transform .15s; }
                 .funnel-chip:hover { border-color: var(--accent); transform: translateY(-1px); }
                 .funnel-chip.is-active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-                .funnel-count { font-size: 1.5rem; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
-                .funnel-tag { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+                .funnel-count { font-size: var(--text-xl); font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
+                .funnel-tag { font-size: var(--text-2xs); font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
             `}</style>
 
             <div data-tour="cli-tabla">

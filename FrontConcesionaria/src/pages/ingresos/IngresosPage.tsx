@@ -301,21 +301,21 @@ const IngresosPage = () => {
                 .icon-badge {
                     width: 44px;
                     height: 44px;
-                    border-radius: 14px;
+                    border-radius: var(--radius-md);
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background: rgba(59, 130, 246, 0.1);
-                    color: #3b82f6;
+                    background: rgba(var(--accent-3-rgb), 0.1);
+                    color: var(--info);
                 }
-                .shadow-glow-primary { box-shadow: 0 0 20px rgba(59, 130, 246, 0.2); }
+                .shadow-glow-primary { box-shadow: 0 0 20px rgba(var(--accent-3-rgb), 0.2); }
                 
                 /* .form-label-xs: la define index.css (capa global). El
                    .form-input-select local es la variante protagónica de estos
                    filtros y gana la cascada a propósito. */
                 .form-input-select {
                     padding: 0.75rem 2.5rem 0.75rem 1rem;
-                    border-radius: 1rem;
+                    border-radius: var(--radius-lg);
                     border: 1px solid var(--border);
                     background: var(--bg-primary);
                     font-size: var(--text-sm);
@@ -334,7 +334,7 @@ const IngresosPage = () => {
                 }
                 .icon-btn {
                     padding: 0.6rem;
-                    border-radius: 12px;
+                    border-radius: var(--radius-md);
                     background: var(--bg-secondary);
                     color: var(--text-secondary);
                     display: inline-flex;
@@ -344,9 +344,9 @@ const IngresosPage = () => {
                     border: 1px solid var(--border);
                 }
                 .icon-btn:hover {
-                    background: #ef4444;
-                    color: white;
-                    border-color: #ef4444;
+                    background: var(--danger);
+                    color: var(--text-white);
+                    border-color: var(--danger);
                     transform: scale(1.05);
                 }
             `}</style>

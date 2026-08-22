@@ -104,15 +104,15 @@ const NotificationBell = () => {
                 .notif-badge {
                     position: absolute; top: 3px; right: 2px;
                     min-width: 16px; height: 16px; padding: 0 3px;
-                    background: var(--accent-2); color: #fff;
-                    font-size: 0.625rem; font-weight: 800; line-height: 16px;
-                    text-align: center; border-radius: 999px;
+                    background: var(--accent-2); color: var(--text-white);
+                    font-size: var(--text-3xs); font-weight: 800; line-height: 16px;
+                    text-align: center; border-radius: var(--radius-pill);
                     border: 2px solid var(--bg-card);
                 }
                 .notif-panel {
                     width: 330px; max-width: calc(100vw - 24px);
                     background: var(--bg-card); border: 1px solid var(--border);
-                    border-radius: var(--radius-lg, 0.75rem);
+                    border-radius: var(--radius-lg);
                     box-shadow: var(--shadow-xl);
                     overflow: hidden;
                 }
@@ -128,13 +128,13 @@ const NotificationBell = () => {
                 .notif-item {
                     display: flex; align-items: center; gap: 0.75rem;
                     padding: 0.6rem 1rem; text-decoration: none; color: var(--text-primary);
-                    border-bottom: 1px solid var(--border); transition: background 0.15s;
+                    border-bottom: 1px solid var(--border); transition: background var(--duration-fast);
                 }
                 .notif-item:hover { background: var(--bg-secondary); }
-                .notif-item-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+                .notif-item-icon { width: 30px; height: 30px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
                 .notif-item-label { flex: 1; font-size: var(--text-sm); }
-                .notif-item-count { font-weight: 800; font-size: 0.95rem; }
-                .notif-foot { display: block; text-align: center; padding: 0.6rem; font-size: 0.78rem; color: var(--accent); text-decoration: none; }
+                .notif-item-count { font-weight: 800; font-size: var(--text-base); }
+                .notif-foot { display: block; text-align: center; padding: 0.6rem; font-size: var(--text-sm); color: var(--accent); text-decoration: none; }
                 .notif-foot:hover { background: var(--bg-secondary); }
             `}</style>
         </>

@@ -100,7 +100,7 @@ const InvoiceDetailModal = ({ invoice, onClose, onAddPayment }: PaymentListProps
         </div>
         <div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: 2 }}>Saldo pendiente</div>
-          <div style={{ fontWeight: 600, color: pending > 0 ? 'var(--color-danger, #ef4444)' : 'inherit' }}>
+          <div style={{ fontWeight: 600, color: pending > 0 ? 'var(--danger)' : 'inherit' }}>
             {invoice.moneda} {pending.toLocaleString('es-AR')}
           </div>
         </div>
@@ -480,7 +480,7 @@ export default function BillingPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)' }}>
         {tabs.map(t => (
           <button
             key={t.id}
@@ -871,7 +871,7 @@ export default function BillingPage() {
             {concesionarias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
           {invFormSubLoading && <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 4 }}>Buscando suscripción...</div>}
-          {invForm.subscriptionId > 0 && <div style={{ fontSize: '0.75rem', color: 'var(--color-success, #22c55e)', marginTop: 4 }}>✓ Suscripción #{invForm.subscriptionId} encontrada</div>}
+          {invForm.subscriptionId > 0 && <div style={{ fontSize: '0.75rem', color: 'var(--success)', marginTop: 4 }}>✓ Suscripción #{invForm.subscriptionId} encontrada</div>}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
           <div className="form-group">

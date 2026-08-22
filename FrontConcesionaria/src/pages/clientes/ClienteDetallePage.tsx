@@ -40,11 +40,11 @@ const today = () => {
 
 // Etiqueta e ícono por tipo de contacto (bitácora de seguimiento).
 const TIPO_SEG: Record<TipoSeguimiento, { label: string; icon: LucideIcon; color: string }> = {
-    llamada: { label: 'Llamada', icon: Phone, color: '#10b981' },
+    llamada: { label: 'Llamada', icon: Phone, color: 'var(--accent)' },
     whatsapp: { label: 'WhatsApp', icon: MessageCircle, color: '#22c55e' },
-    email: { label: 'Email', icon: Mail, color: '#60a5fa' },
-    visita: { label: 'Visita', icon: MapPin, color: '#8b5cf6' },
-    otro: { label: 'Otro', icon: FileText, color: '#94a3b8' },
+    email: { label: 'Email', icon: Mail, color: 'var(--info)' },
+    visita: { label: 'Visita', icon: MapPin, color: 'var(--accent-2)' },
+    otro: { label: 'Otro', icon: FileText, color: 'var(--text-muted)' },
 };
 
 type AnyRow = Record<string, unknown>;
@@ -363,7 +363,7 @@ const ClienteDetallePage = () => {
                                 </select>
                             )}
                         </div>
-                        <p className="text-muted" style={{ marginTop: '0.45rem', fontSize: '0.8125rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <p className="text-muted" style={{ marginTop: '0.45rem', fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
                             <UserCheck size={13} /> Vendedor:&nbsp;
                             <strong style={{ color: 'var(--text-secondary)' }}>{cliente.vendedorAsignado?.nombre ?? 'sin asignar'}</strong>
                         </p>
@@ -381,21 +381,21 @@ const ClienteDetallePage = () => {
 
             <div className="stats-bar">
                 <div className="stat-card glass">
-                    <ShoppingCart size={20} style={{ color: '#6366f1' }} />
+                    <ShoppingCart size={20} style={{ color: 'var(--accent-2)' }} />
                     <div>
                         <div className="stat-value">{ventas.length}</div>
                         <div className="stat-label">Ventas realizadas</div>
                     </div>
                 </div>
                 <div className="stat-card glass">
-                    <FileBarChart size={20} style={{ color: '#f59e0b' }} />
+                    <FileBarChart size={20} style={{ color: 'var(--warning)' }} />
                     <div>
                         <div className="stat-value">{presupuestos.length}</div>
                         <div className="stat-label">Presupuestos</div>
                     </div>
                 </div>
                 <div className="stat-card glass">
-                    <DollarSign size={20} style={{ color: '#10b981' }} />
+                    <DollarSign size={20} style={{ color: 'var(--accent)' }} />
                     <div>
                         <div className="stat-value">
                             {ventas.length > 0
@@ -407,7 +407,7 @@ const ClienteDetallePage = () => {
                 </div>
                 {estadoCuenta && estadoCuenta.resumen.financiaciones > 0 && (
                     <div className="stat-card glass">
-                        <Banknote size={20} style={{ color: estadoCuenta.resumen.cuotasVencidas > 0 ? '#ef4444' : '#10b981' }} />
+                        <Banknote size={20} style={{ color: estadoCuenta.resumen.cuotasVencidas > 0 ? 'var(--danger)' : 'var(--accent)' }} />
                         <div>
                             <div className="stat-value">{porMonedaStr(estadoCuenta.resumen.porMoneda, 'saldoPendiente')}</div>
                             <div className="stat-label">
@@ -571,7 +571,7 @@ const ClienteDetallePage = () => {
                             <div className="ec-banner">
                                 <div className="ec-item">
                                     <span className="ec-label">Saldo pendiente</span>
-                                    <span className="ec-value" style={{ color: '#ef4444' }}>{porMonedaStr(estadoCuenta.resumen.porMoneda, 'saldoPendiente')}</span>
+                                    <span className="ec-value" style={{ color: 'var(--danger)' }}>{porMonedaStr(estadoCuenta.resumen.porMoneda, 'saldoPendiente')}</span>
                                 </div>
                                 <div className="ec-item">
                                     <span className="ec-label">Cuotas vencidas</span>
@@ -600,7 +600,7 @@ const ClienteDetallePage = () => {
                                             <td><div className="flex-cell"><Calendar size={14} />{fmtDate(f.fechaInicio)}</div></td>
                                             <td><div className="flex-cell"><DollarSign size={14} />{money(f.montoFinanciado, f.moneda)}</div></td>
                                             <td>{f.cuotasPagadas}/{f.cuotasTotal} <span className="text-muted-sm">pagas</span></td>
-                                            <td><span className="fw-bold" style={{ color: f.saldoPendiente > 0 ? '#ef4444' : '#10b981' }}>{money(f.saldoPendiente, f.moneda)}</span></td>
+                                            <td><span className="fw-bold" style={{ color: f.saldoPendiente > 0 ? 'var(--danger)' : 'var(--accent)' }}>{money(f.saldoPendiente, f.moneda)}</span></td>
                                             <td>{f.cuotasVencidas > 0 ? <span className="badge badge-danger">{f.cuotasVencidas}</span> : <span className="text-muted-sm">—</span>}</td>
                                             <td className="text-muted-sm">{f.proximaCuota ? fmtDate(f.proximaCuota.vencimiento) : '—'}</td>
                                             <td><span className={`badge badge-${f.estado === 'activa' ? 'emerald' : 'warning'}`}>{f.estado}</span></td>
@@ -809,7 +809,7 @@ const ClienteDetallePage = () => {
                                     const v = i.vehiculo;
                                     return (
                                         <div key={i.id} className="seg-item">
-                                            <span className="seg-item-icon" style={{ background: 'color-mix(in srgb, #f59e0b 14%, transparent)', color: '#f59e0b' }}><Car size={16} /></span>
+                                            <span className="seg-item-icon" style={{ background: 'rgba(var(--warning-rgb), 0.14)', color: 'var(--warning)' }}><Car size={16} /></span>
                                             <div className="seg-item-body">
                                                 <div className="seg-item-head">
                                                     <button
@@ -857,75 +857,75 @@ const ClienteDetallePage = () => {
             <style>{`
                 .detalle-container { display: flex; flex-direction: column; gap: 1.75rem; animation: fadeIn 0.4s ease-out; }
                 .detalle-header { display: flex; align-items: center; gap: 1.5rem; }
-                .back-btn { padding: 0.625rem; border-radius: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary); transition: all 0.15s; }
+                .back-btn { padding: 0.625rem; border-radius: var(--radius-md); background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary); transition: all 0.15s; }
                 .back-btn:hover { background: var(--bg-secondary); color: var(--text-primary); transform: translateX(-2px); }
                 .cliente-hero { display: flex; align-items: center; gap: 1.25rem; }
-                .cliente-avatar-lg { width: 64px; height: 64px; border-radius: 1rem; background: linear-gradient(135deg, #6366f1, #818cf8); color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-                .cliente-hero h1 { font-size: 1.875rem; font-weight: 800; letter-spacing: -0.03em; }
-                .text-muted { color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.25rem; }
+                .cliente-avatar-lg { width: 64px; height: 64px; border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--accent-2), color-mix(in srgb, var(--accent-2) 78%, white)); color: var(--text-white); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+                .cliente-hero h1 { font-size: var(--text-2xl); font-weight: 800; letter-spacing: -0.03em; }
+                .text-muted { color: var(--text-secondary); font-size: var(--text-sm); margin-top: 0.25rem; }
                 .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
-                .stat-card { display: flex; align-items: center; gap: 1rem; padding: 1.25rem 1.5rem; border-radius: 1rem; border: 1px solid var(--border); }
-                .stat-value { font-size: 1.375rem; font-weight: 800; letter-spacing: -0.02em; }
-                .stat-label { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.2rem; }
-                .ec-banner { display: flex; flex-wrap: wrap; gap: 2.5rem; padding: 1rem 1.5rem; margin-bottom: 1.5rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 0.75rem; }
+                .stat-card { display: flex; align-items: center; gap: 1rem; padding: 1.25rem 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+                .stat-value { font-size: var(--text-xl); font-weight: 800; letter-spacing: -0.02em; }
+                .stat-label { font-size: var(--text-xs); color: var(--text-secondary); margin-top: 0.2rem; }
+                .ec-banner { display: flex; flex-wrap: wrap; gap: 2.5rem; padding: 1rem 1.5rem; margin-bottom: 1.5rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); }
                 .ec-item { display: flex; flex-direction: column; gap: 0.25rem; }
-                .ec-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 700; }
-                .ec-value { font-size: 1.05rem; font-weight: 800; color: var(--text-primary); }
-                .tabs-bar { display: flex; gap: 0.5rem; padding: 0.5rem; border-radius: 1rem; border: 1px solid var(--border); flex-wrap: wrap; }
-                .tab-btn { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 1.25rem; border-radius: 0.625rem; font-weight: 600; font-size: 0.875rem; color: var(--text-secondary); transition: all 0.15s; }
+                .ec-label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 700; }
+                .ec-value { font-size: var(--text-md); font-weight: 800; color: var(--text-primary); }
+                .tabs-bar { display: flex; gap: 0.5rem; padding: 0.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); flex-wrap: wrap; }
+                .tab-btn { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 1.25rem; border-radius: var(--radius-md); font-weight: 600; font-size: var(--text-sm); color: var(--text-secondary); transition: all 0.15s; }
                 .tab-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }
-                .tab-btn.active { background: var(--accent); color: white; }
-                .tab-badge { background: color-mix(in srgb, currentColor 25%, transparent); padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
+                .tab-btn.active { background: var(--accent); color: var(--text-white); }
+                .tab-badge { background: color-mix(in srgb, currentColor 25%, transparent); padding: 0.125rem 0.5rem; border-radius: var(--radius-pill); font-size: var(--text-2xs); font-weight: 700; }
                 .tab-btn:not(.active) .tab-badge { background: var(--bg-secondary); color: var(--text-muted); }
-                .tab-content { padding: 2rem; border-radius: 1.25rem; border: 1px solid var(--border); }
+                .tab-content { padding: 2rem; border-radius: var(--radius-lg); border: 1px solid var(--border); }
                 .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
-                .info-section h3 { font-size: 0.875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1.25rem; }
+                .info-section h3 { font-size: var(--text-sm); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1.25rem; }
                 .info-rows { display: flex; flex-direction: column; gap: 0.875rem; }
                 .info-row { display: flex; align-items: center; gap: 0.875rem; }
                 .info-row svg { color: var(--text-muted); flex-shrink: 0; }
-                .info-label { font-size: 0.8125rem; color: var(--text-secondary); width: 130px; flex-shrink: 0; }
-                .info-value { font-weight: 600; font-size: 0.9375rem; color: var(--text-primary); }
+                .info-label { font-size: var(--text-sm); color: var(--text-secondary); width: 130px; flex-shrink: 0; }
+                .info-value { font-weight: 600; font-size: var(--text-base); color: var(--text-primary); }
                 .full-width { grid-column: span 2; }
-                .observaciones-text { color: var(--text-secondary); line-height: 1.6; background: var(--bg-secondary); padding: 1rem; border-radius: 0.75rem; border: 1px solid var(--border); }
+                .observaciones-text { color: var(--text-secondary); line-height: 1.6; background: var(--bg-secondary); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border); }
                 .data-table { width: 100%; border-collapse: collapse; }
-                .data-table th { padding: 0.75rem 1rem; background: var(--bg-secondary); color: var(--text-secondary); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); text-align: left; }
+                .data-table th { padding: 0.75rem 1rem; background: var(--bg-secondary); color: var(--text-secondary); font-weight: 700; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); text-align: left; }
                 .data-table td { padding: 1rem; border-bottom: 1px solid var(--border); }
                 .data-table tr:last-child td { border-bottom: none; }
                 .data-table tr:hover td { background: var(--bg-secondary); }
                 .fw-bold { font-weight: 700; }
-                .text-muted-sm { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
-                .flex-cell { display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; }
+                .text-muted-sm { font-size: var(--text-xs); color: var(--text-muted); margin-top: 0.15rem; }
+                .flex-cell { display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: var(--text-sm); }
                 .empty-state { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 3rem; color: var(--text-muted); text-align: center; }
-                .seg-form { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 0.9rem; padding: 1.25rem; margin-bottom: 1.5rem; }
+                .seg-form { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1.5rem; }
                 .seg-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.9rem; }
-                .seg-lbl { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); font-weight: 700; margin-bottom: 0.35rem; }
-                .seg-input { width: 100%; padding: 0.55rem 0.7rem; border-radius: 0.6rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-size: 0.875rem; }
+                .seg-lbl { display: block; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); font-weight: 700; margin-bottom: 0.35rem; }
+                .seg-input { width: 100%; padding: 0.55rem 0.7rem; border-radius: var(--radius-md); background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-size: var(--text-sm); }
                 .seg-list { display: flex; flex-direction: column; gap: 0.75rem; }
-                .seg-item { display: flex; gap: 0.9rem; align-items: flex-start; padding: 1rem; border: 1px solid var(--border); border-radius: 0.9rem; background: var(--bg-card); }
-                .seg-item-icon { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+                .seg-item { display: flex; gap: 0.9rem; align-items: flex-start; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
+                .seg-item-icon { width: 34px; height: 34px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
                 .seg-item-body { flex: 1; min-width: 0; }
                 .seg-item-head { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
-                .seg-tipo { font-weight: 800; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+                .seg-tipo { font-weight: 800; font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.03em; }
                 .lead-stage-row { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.6rem; flex-wrap: wrap; }
-                .lead-stage-select { padding: 0.3rem 0.55rem; border-radius: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-size: 0.8rem; cursor: pointer; }
+                .lead-stage-select { padding: 0.3rem 0.55rem; border-radius: var(--radius-sm); background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-size: var(--text-sm); cursor: pointer; }
                 .lead-stage-select:disabled { opacity: 0.6; cursor: default; }
-                .seg-next { display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--warning, #f59e0b); font-weight: 600; }
-                .seg-next-done { color: var(--success, #16a34a); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--success, #16a34a) 45%, transparent); }
-                .seg-toggle { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; font-weight: 700; color: var(--accent); background: transparent; border: 1px solid var(--border); border-radius: 999px; padding: 0.12rem 0.55rem; cursor: pointer; transition: background 0.15s, color 0.15s; }
+                .seg-next { display: flex; align-items: center; gap: 0.35rem; font-size: var(--text-sm); color: var(--warning); font-weight: 600; }
+                .seg-next-done { color: var(--success); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--success) 45%, transparent); }
+                .seg-toggle { display: inline-flex; align-items: center; gap: 0.25rem; font-size: var(--text-xs); font-weight: 700; color: var(--accent); background: transparent; border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 0.12rem 0.55rem; cursor: pointer; transition: background 0.15s, color 0.15s; }
                 .seg-toggle:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-                .seg-nota { color: var(--text-primary); font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-                .seg-user { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem; display: inline-block; }
-                .seg-del { color: var(--text-muted); padding: 0.35rem; border-radius: 0.5rem; flex-shrink: 0; transition: all 0.15s; }
-                .seg-del:hover { color: var(--danger, #ef4444); background: rgba(239,68,68,0.1); }
+                .seg-nota { color: var(--text-primary); font-size: var(--text-base); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+                .seg-user { font-size: var(--text-xs); color: var(--text-muted); margin-top: 0.35rem; display: inline-block; }
+                .seg-del { color: var(--text-muted); padding: 0.35rem; border-radius: var(--radius-sm); flex-shrink: 0; transition: all 0.15s; }
+                .seg-del:hover { color: var(--danger); background: rgba(var(--danger-rgb), 0.1); }
                 .int-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.9rem; }
                 .int-veh-link { font-weight: 600; color: var(--text-primary); background: none; border: none; padding: 0; cursor: pointer; transition: color 0.15s; }
-                .int-veh-link:hover:not(:disabled) { color: var(--primary, #6366f1); text-decoration: underline; }
+                .int-veh-link:hover:not(:disabled) { color: var(--accent-2); text-decoration: underline; }
                 .int-veh-link:disabled { cursor: default; }
-                .int-chip { font-size: 0.72rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border); text-transform: capitalize; }
-                .int-precio { font-size: 0.8125rem; font-weight: 600; color: var(--success, #10b981); }
+                .int-chip { font-size: var(--text-xs); padding: 0.1rem 0.5rem; border-radius: var(--radius-pill); background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border); text-transform: capitalize; }
+                .int-precio { font-size: var(--text-sm); font-weight: 600; color: var(--success); }
                 .int-item-actions { display: flex; align-items: flex-start; gap: 0.35rem; flex-shrink: 0; }
-                .int-gen-presu { color: var(--text-muted); padding: 0.35rem; border-radius: 0.5rem; transition: all 0.15s; }
-                .int-gen-presu:hover { color: var(--primary, #6366f1); background: color-mix(in srgb, var(--primary, #6366f1) 12%, transparent); }
+                .int-gen-presu { color: var(--text-muted); padding: 0.35rem; border-radius: var(--radius-sm); transition: all 0.15s; }
+                .int-gen-presu:hover { color: var(--accent-2); background: rgba(var(--accent-2-rgb), 0.12); }
                 .spin { animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

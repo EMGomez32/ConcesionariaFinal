@@ -227,7 +227,7 @@ const SucursalesPage = () => {
                     width: 40px; height: 40px;
                     border-radius: var(--radius-md);
                     background: var(--accent-gradient);
-                    color: white;
+                    color: var(--text-white);
                     display: flex; align-items: center; justify-content: center;
                     box-shadow: 0 4px 12px -4px rgba(var(--accent-rgb), 0.4);
                 }
@@ -248,9 +248,9 @@ const SucursalesPage = () => {
                     border-color: rgba(var(--accent-rgb), 0.20);
                 }
                 .status-badge.inactive {
-                    background: rgba(239, 68, 68, 0.10);
+                    background: rgba(var(--danger-rgb), 0.10);
                     color: var(--danger);
-                    border-color: rgba(239, 68, 68, 0.20);
+                    border-color: rgba(var(--danger-rgb), 0.20);
                 }
 
                 .action-buttons { display: flex; justify-content: flex-end; gap: 0.5rem; }

@@ -1288,30 +1288,30 @@ const FinanciacionesPage = () => {
                 .form-input-premium {
                     background: var(--bg-card);
                     border: 1px solid var(--border);
-                    border-radius: 1rem;
+                    border-radius: var(--radius-lg);
                     color: var(--text-primary);
                     font-weight: 700;
-                    font-size: 0.85rem;
+                    font-size: var(--text-sm);
                     outline: none;
                     transition: all 0.3s;
                 }
                 .form-input-premium:focus {
                     border-color: var(--accent);
                     background: var(--bg-card);
-                    box-shadow: 0 0 15px rgba(79, 70, 229, 0.1);
+                    box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.1);
                 }
                 .icon-badge {
                     width: 44px;
                     height: 44px;
-                    border-radius: 14px;
+                    border-radius: var(--radius-md);
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     background: var(--accent-light);
                     color: var(--accent);
                 }
-                .shadow-glow { box-shadow: 0 0 20px rgba(79, 70, 229, 0.2); }
-                .shadow-glow-sm { box-shadow: 0 0 15px rgba(79, 70, 229, 0.1); }
+                .shadow-glow { box-shadow: 0 0 20px rgba(var(--accent-2-rgb), 0.2); }
+                .shadow-glow-sm { box-shadow: 0 0 15px rgba(var(--accent-2-rgb), 0.1); }
                 
                 /* .form-label-xs: la define index.css (capa global). El
                    .form-input-select de abajo NO se borra: es la variante
@@ -1319,7 +1319,7 @@ const FinanciacionesPage = () => {
                    cascada a propósito sobre la global. */
                 .form-input-select {
                     padding: 0.75rem 2.5rem 0.75rem 1rem;
-                    border-radius: 1rem;
+                    border-radius: var(--radius-lg);
                     border: 1px solid var(--border);
                     background: var(--bg-primary);
                     font-size: var(--text-sm);
@@ -1337,7 +1337,7 @@ const FinanciacionesPage = () => {
                 }
                 .icon-btn {
                     padding: 0.6rem;
-                    border-radius: 12px;
+                    border-radius: var(--radius-md);
                     background: var(--bg-secondary);
                     color: var(--text-secondary);
                     display: inline-flex;
@@ -1348,13 +1348,13 @@ const FinanciacionesPage = () => {
                 }
                 .icon-btn:hover {
                     background: var(--accent);
-                    color: white;
+                    color: var(--text-white);
                     border-color: var(--accent);
                     transform: scale(1.05);
                 }
                 .icon-btn.danger:hover {
-                    background: #ef4444;
-                    border-color: #ef4444;
+                    background: var(--danger);
+                    border-color: var(--danger);
                 }
                 .line-clamp-2 {
                     display: -webkit-box;

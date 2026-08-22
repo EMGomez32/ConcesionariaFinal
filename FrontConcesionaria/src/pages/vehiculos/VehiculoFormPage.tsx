@@ -161,7 +161,7 @@ const VehiculoFormPage = () => {
 
                 <div className="form-section">
                     <h3>Origen del Activo</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '-0.75rem 0 1.25rem' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '-0.75rem 0 1.25rem' }}>
                         De quién se adquirió la unidad. Queda registrado en el ingreso.
                     </p>
                     <div className="form-grid">
@@ -201,14 +201,14 @@ const VehiculoFormPage = () => {
           border: 1px solid var(--border);
           background: var(--bg-card);
           color: var(--text-secondary);
-          font-size: 0.85rem;
+          font-size: var(--text-sm);
           font-weight: 600;
           margin-bottom: 0.85rem;
           transition: color 0.2s, border-color 0.2s, background 0.2s;
         }
         .back-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-light); }
-        .form-card { padding: 2.5rem; border-radius: 1.5rem; display: flex; flex-direction: column; gap: 2.5rem; }
-        .form-section h3 { font-size: 1.125rem; margin-bottom: 1.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+        .form-card { padding: 2.5rem; border-radius: var(--radius-xl); display: flex; flex-direction: column; gap: 2.5rem; }
+        .form-section h3 { font-size: var(--text-lg); margin-bottom: 1.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; }
         .form-footer { display: flex; justify-content: flex-end; gap: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
       `}</style>

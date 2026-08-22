@@ -308,8 +308,8 @@ export function FileUploader({
                 }
 
                 .uploader-clear:hover {
-                    background: rgba(239, 68, 68, 0.10);
-                    border-color: rgba(239, 68, 68, 0.25);
+                    background: rgba(var(--danger-rgb), 0.10);
+                    border-color: rgba(var(--danger-rgb), 0.25);
                     color: var(--danger);
                 }
 
@@ -350,8 +350,8 @@ export function FileUploader({
                 }
 
                 .uploader-alert-error {
-                    background: rgba(239, 68, 68, 0.10);
-                    border: 1px solid rgba(239, 68, 68, 0.25);
+                    background: rgba(var(--danger-rgb), 0.10);
+                    border: 1px solid rgba(var(--danger-rgb), 0.25);
                     color: var(--danger);
                 }
 

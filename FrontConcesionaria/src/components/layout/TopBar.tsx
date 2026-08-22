@@ -155,7 +155,7 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
 
         .cmdk-trigger-kbd {
             font-family: var(--font-mono);
-            font-size: 0.7rem;
+            font-size: var(--text-2xs);
             font-weight: 600;
             color: var(--text-muted);
             padding: 1px 6px;
@@ -221,7 +221,7 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
         }
 
         .user-role {
-          font-size: 0.7rem;
+          font-size: var(--text-2xs);
           color: var(--text-muted);
           text-transform: uppercase;
           font-weight: 600;
@@ -241,7 +241,7 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
           display: flex;
           align-items: center;
           justify-content: center;
-          color: #ffffff;
+          color: var(--text-white);
           box-shadow: var(--glow-accent);
         }
 
@@ -274,8 +274,8 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
         }
 
         .logout-button:hover {
-          background: rgba(239, 68, 68, 0.10);
-          border-color: rgba(239, 68, 68, 0.25);
+          background: rgba(var(--danger-rgb), 0.10);
+          border-color: rgba(var(--danger-rgb), 0.25);
           color: var(--danger);
         }
 

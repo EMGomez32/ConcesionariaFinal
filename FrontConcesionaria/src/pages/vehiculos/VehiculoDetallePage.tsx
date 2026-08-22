@@ -434,7 +434,7 @@ const VehiculoDetallePage = () => {
         },
         {
             header: 'Registrado por',
-            accessor: (m) => <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{m.registradoPor?.nombre || '-'}</span>
+            accessor: (m) => <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>{m.registradoPor?.nombre || '-'}</span>
         }
     ];
 
@@ -579,7 +579,7 @@ const VehiculoDetallePage = () => {
                 const pct = (delta / h.precioAnterior) * 100;
                 const up = delta > 0;
                 // Convención de ticker: sube = verde (más margen), baja = rojo (rebaja).
-                const color = up ? '#10b981' : '#ef4444';
+                const color = up ? 'var(--accent)' : 'var(--danger)';
                 const Icon = up ? TrendingUp : TrendingDown;
                 return (
                     <span style={{ color, display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}>
@@ -594,7 +594,7 @@ const VehiculoDetallePage = () => {
         },
         {
             header: 'Registrado por',
-            accessor: (h) => <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{h.usuario?.nombre ?? '—'}</span>,
+            accessor: (h) => <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>{h.usuario?.nombre ?? '—'}</span>,
         },
     ];
 
@@ -666,7 +666,7 @@ const VehiculoDetallePage = () => {
                                 return d ? <Badge variant={d.variant}>{d.label}</Badge> : null;
                             })()}
                             <span className="tipo-chip">{vehiculo.tipo === 'CERO_KM' ? '0 km' : 'Usado'}</span>
-                            <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{vehiculo.sucursal?.nombre}</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>{vehiculo.sucursal?.nombre}</span>
                         </div>
                     </div>
                 </div>
@@ -686,28 +686,28 @@ const VehiculoDetallePage = () => {
             {/* Stats */}
             <div className="stats-bar">
                 <div className="stat-card glass">
-                    <DollarSign size={20} style={{ color: '#10b981' }} />
+                    <DollarSign size={20} style={{ color: 'var(--accent)' }} />
                     <div>
                         <div className="stat-value">{vehiculo.precioLista ? `$${Number(vehiculo.precioLista).toLocaleString('es-AR')}` : '-'}</div>
                         <div className="stat-label">Precio lista</div>
                     </div>
                 </div>
                 <div className="stat-card glass">
-                    <DollarSign size={20} style={{ color: '#f59e0b' }} />
+                    <DollarSign size={20} style={{ color: 'var(--warning)' }} />
                     <div>
                         <div className="stat-value">{vehiculo.precioCompra ? `$${Number(vehiculo.precioCompra).toLocaleString('es-AR')}` : '-'}</div>
                         <div className="stat-label">Precio compra</div>
                     </div>
                 </div>
                 <div className="stat-card glass">
-                    <Wrench size={20} style={{ color: '#ef4444' }} />
+                    <Wrench size={20} style={{ color: 'var(--danger)' }} />
                     <div>
                         <div className="stat-value">{totalGastosLabel}</div>
                         <div className="stat-label">Total gastos</div>
                     </div>
                 </div>
                 <div className="stat-card glass">
-                    <Hash size={20} style={{ color: '#6366f1' }} />
+                    <Hash size={20} style={{ color: 'var(--accent-2)' }} />
                     <div>
                         <div className="stat-value">{vehiculo.kmIngreso ? `${vehiculo.kmIngreso.toLocaleString('es-AR')} km` : '-'}</div>
                         <div className="stat-label">Kilómetros</div>
@@ -772,7 +772,7 @@ const VehiculoDetallePage = () => {
                     <div>
                         {/* Header actions */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
+                            <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700 }}>
                                 {archivos.length > 0 ? `${archivos.length} archivo${archivos.length !== 1 ? 's' : ''}` : 'Sin archivos'}
                             </h3>
                             <Button variant="primary" size="sm" onClick={() => setShowArchivoForm(v => !v)}>
@@ -782,8 +782,8 @@ const VehiculoDetallePage = () => {
 
                         {/* Upload form */}
                         {showArchivoForm && (
-                            <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '1rem', padding: '1.5rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                <h4 style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.25rem' }}>Nuevo archivo</h4>
+                            <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <h4 style={{ fontWeight: 700, fontSize: 'var(--text-base)', marginBottom: '0.25rem' }}>Nuevo archivo</h4>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                     <div>
                                         <label className="form-label">Tipo</label>
@@ -848,7 +848,7 @@ const VehiculoDetallePage = () => {
                                                 <div key={grupo}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)' }}>
                                                         <IconComp size={15} style={{ color: 'var(--text-muted)' }} />
-                                                        <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
+                                                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
                                                             {grupo.charAt(0).toUpperCase() + grupo.slice(1)} ({items.length})
                                                         </span>
                                                     </div>
@@ -875,7 +875,7 @@ const VehiculoDetallePage = () => {
                                                                     {/* Sólo las fotos pueden ser la principal del vehículo. */}
                                                                     {grupo === 'foto' && (
                                                                         a.esPrincipal ? (
-                                                                            <span className="icon-btn" title="Foto principal" style={{ color: 'var(--warning, #f59e0b)', cursor: 'default' }}>
+                                                                            <span className="icon-btn" title="Foto principal" style={{ color: 'var(--warning)', cursor: 'default' }}>
                                                                                 <Star size={15} fill="currentColor" />
                                                                             </span>
                                                                         ) : (
@@ -916,7 +916,7 @@ const VehiculoDetallePage = () => {
 
                         {/* Create gasto inline form */}
                         {showGastoForm && (
-                            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '0.75rem', padding: '1.25rem', marginBottom: '1rem' }}>
+                            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '1.25rem', marginBottom: '1rem' }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                     <div>
                                         <label className="form-label">Categoría*</label>
@@ -945,7 +945,7 @@ const VehiculoDetallePage = () => {
                                         <input className="form-input" value={gastoForm.descripcion} onChange={e => setGastoForm(f => ({ ...f, descripcion: e.target.value }))} placeholder="Opcional" />
                                     </div>
                                 </div>
-                                {gastoFormError && <p style={{ color: '#ef4444', fontSize: '0.8rem', marginBottom: '0.5rem' }}>{gastoFormError}</p>}
+                                {gastoFormError && <p style={{ color: 'var(--danger)', fontSize: 'var(--text-sm)', marginBottom: '0.5rem' }}>{gastoFormError}</p>}
                                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                                     <Button variant="secondary" size="sm" onClick={() => { setShowGastoForm(false); setGastoFormError(''); }}>Cancelar</Button>
                                     <Button variant="primary" size="sm" onClick={handleAddGasto} disabled={savingGasto}>
@@ -972,7 +972,7 @@ const VehiculoDetallePage = () => {
                         />
 
                         {editGasto && (
-                            <div className="edit-gasto-modal glass" style={{ marginTop: '1rem', padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--accent)' }}>
+                            <div className="edit-gasto-modal glass" style={{ marginTop: '1rem', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--accent)' }}>
                                 <h4 style={{ marginBottom: '1rem', fontWeight: 700 }}>Editar Gasto: {editGasto.categoria?.nombre}</h4>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                                     <div>
@@ -1064,51 +1064,51 @@ const VehiculoDetallePage = () => {
             <style>{`
                 .detalle-container { display: flex; flex-direction: column; gap: 1.75rem; animation: fadeIn 0.4s ease-out; }
                 .detalle-header { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
-                .back-btn { padding: 0.625rem; border-radius: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary); transition: all 0.15s; cursor: pointer; }
+                .back-btn { padding: 0.625rem; border-radius: var(--radius-md); background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary); transition: all 0.15s; cursor: pointer; }
                 .back-btn:hover { background: var(--bg-secondary); color: var(--text-primary); transform: translateX(-2px); }
 
                 .vehiculo-hero { display: flex; align-items: center; gap: 1.25rem; }
-                .vehiculo-avatar-lg { width: 72px; height: 72px; border-radius: 1rem; background: linear-gradient(135deg, #6366f1, #818cf8); color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-                .vehiculo-hero h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.03em; }
+                .vehiculo-avatar-lg { width: 72px; height: 72px; border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--accent-2), rgba(var(--accent-2-rgb), 0.75)); color: var(--text-white); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+                .vehiculo-hero h1 { font-size: var(--text-2xl); font-weight: 800; letter-spacing: -0.03em; }
 
-                .dominio-tag { font-family: monospace; background: #334155; color: white; padding: 3px 10px; border-radius: 6px; font-weight: 700; font-size: 0.875rem; }
-                .tipo-chip { padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; background: var(--bg-secondary); color: var(--text-secondary); }
+                .dominio-tag { font-family: monospace; background: #334155; color: var(--text-white); padding: 3px 10px; border-radius: var(--radius-xs); font-weight: 700; font-size: var(--text-sm); }
+                .tipo-chip { padding: 0.2rem 0.7rem; border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: 700; background: var(--bg-secondary); color: var(--text-secondary); }
 
                 .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
-                .stat-card { display: flex; align-items: center; gap: 1rem; padding: 1.25rem 1.5rem; border-radius: 1rem; border: 1px solid var(--border); }
-                .stat-value { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em; }
-                .stat-label { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.2rem; }
+                .stat-card { display: flex; align-items: center; gap: 1rem; padding: 1.25rem 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+                .stat-value { font-size: var(--text-lg); font-weight: 800; letter-spacing: -0.02em; }
+                .stat-label { font-size: var(--text-xs); color: var(--text-secondary); margin-top: 0.2rem; }
 
-                .tabs-bar { display: flex; gap: 0.4rem; padding: 0.5rem; border-radius: 1rem; border: 1px solid var(--border); width: fit-content; flex-wrap: wrap; }
-                .tab-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 0.625rem; font-weight: 600; font-size: 0.8125rem; color: var(--text-secondary); transition: all 0.15s; cursor: pointer; }
+                .tabs-bar { display: flex; gap: 0.4rem; padding: 0.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); width: fit-content; flex-wrap: wrap; }
+                .tab-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: var(--radius-md); font-weight: 600; font-size: var(--text-sm); color: var(--text-secondary); transition: all 0.15s; cursor: pointer; }
                 .tab-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }
-                .tab-btn.active { background: var(--accent); color: white; }
-                .tab-badge { background: color-mix(in srgb, currentColor 25%, transparent); padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; }
+                .tab-btn.active { background: var(--accent); color: var(--text-white); }
+                .tab-badge { background: color-mix(in srgb, currentColor 25%, transparent); padding: 0.1rem 0.45rem; border-radius: var(--radius-pill); font-size: var(--text-2xs); font-weight: 700; }
                 .tab-btn:not(.active) .tab-badge { background: var(--bg-secondary); color: var(--text-muted); }
 
-                .tab-content { padding: 2rem; border-radius: 1.25rem; border: 1px solid var(--border); }
+                .tab-content { padding: 2rem; border-radius: var(--radius-xl); border: 1px solid var(--border); }
 
                 .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
-                .info-section h3 { font-size: 0.875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1.25rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+                .info-section h3 { font-size: var(--text-sm); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1.25rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
                 .info-rows { display: flex; flex-direction: column; gap: 0.75rem; }
                 .info-row { display: flex; align-items: center; gap: 0.875rem; }
                 .info-row svg { color: var(--text-muted); flex-shrink: 0; }
-                .info-label { font-size: 0.8125rem; color: var(--text-secondary); width: 110px; flex-shrink: 0; }
-                .info-value { font-weight: 600; font-size: 0.9375rem; }
+                .info-label { font-size: var(--text-sm); color: var(--text-secondary); width: 110px; flex-shrink: 0; }
+                .info-value { font-weight: 600; font-size: var(--text-base); }
                 .full-width { grid-column: span 2; }
-                .observaciones-text { color: var(--text-secondary); line-height: 1.6; background: var(--bg-secondary); padding: 1rem; border-radius: 0.75rem; border: 1px solid var(--border); }
+                .observaciones-text { color: var(--text-secondary); line-height: 1.6; background: var(--bg-secondary); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border); }
 
-                .total-bar { display: flex; justify-content: space-between; align-items: center; padding: 0.875rem 1rem; background: var(--bg-secondary); border-radius: 0.75rem; margin-bottom: 1rem; font-size: 0.9rem; }
-                .total-bar strong { font-size: 1.1rem; color: var(--accent); }
+                .total-bar { display: flex; justify-content: space-between; align-items: center; padding: 0.875rem 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); margin-bottom: 1rem; font-size: var(--text-base); }
+                .total-bar strong { font-size: var(--text-lg); color: var(--accent); }
 
                 .archivos-grid { display: flex; flex-direction: column; gap: 0.75rem; }
-                .archivo-card-new { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border: 1px solid var(--border); border-radius: 0.875rem; background: var(--bg-secondary); transition: border-color 0.15s; }
+                .archivo-card-new { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-secondary); transition: border-color 0.15s; }
                 .archivo-card-new:hover { border-color: var(--accent); }
-                .archivo-icon-wrap { width: 44px; height: 44px; border-radius: 0.75rem; background: var(--bg-card); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent); }
+                .archivo-icon-wrap { width: 44px; height: 44px; border-radius: var(--radius-md); background: var(--bg-card); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent); }
                 .archivo-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
-                .archivo-nombre { font-weight: 700; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .archivo-desc { font-size: 0.78rem; color: var(--text-muted); }
-                .archivo-fecha { font-size: 0.72rem; color: var(--text-muted); }
+                .archivo-nombre { font-weight: 700; font-size: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .archivo-desc { font-size: var(--text-sm); color: var(--text-muted); }
+                .archivo-fecha { font-size: var(--text-xs); color: var(--text-muted); }
                 .archivo-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
                 /* .form-label la define index.css (capa global, mismos valores).
                    El .form-input local difiere a propósito apenas (padding/radius

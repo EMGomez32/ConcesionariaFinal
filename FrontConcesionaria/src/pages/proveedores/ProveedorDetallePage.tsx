@@ -156,21 +156,21 @@ const ProveedorDetallePage = () => {
 
             <div className="stats-bar">
                 <div className="stat-card glass">
-                    <Car size={20} style={{ color: '#6366f1' }} />
+                    <Car size={20} style={{ color: 'var(--accent-2)' }} />
                     <div>
                         <div className="stat-value">{vehiculos.length}</div>
                         <div className="stat-label">Vehículos comprados</div>
                     </div>
                 </div>
                 <div className="stat-card glass">
-                    <DollarSign size={20} style={{ color: '#f59e0b' }} />
+                    <DollarSign size={20} style={{ color: 'var(--warning)' }} />
                     <div>
                         <div className="stat-value">{gastos.length}</div>
                         <div className="stat-label">Gastos registrados</div>
                     </div>
                 </div>
                 <div className="stat-card glass">
-                    <Wrench size={20} style={{ color: '#10b981' }} />
+                    <Wrench size={20} style={{ color: 'var(--accent)' }} />
                     <div>
                         <div className="stat-value">{postventaItems.length}</div>
                         <div className="stat-label">Ítems postventa</div>
@@ -330,48 +330,48 @@ const ProveedorDetallePage = () => {
             <style>{`
                 .detalle-container { display: flex; flex-direction: column; gap: 1.75rem; animation: fadeIn 0.4s ease-out; }
                 .detalle-header { display: flex; align-items: center; gap: 1.5rem; }
-                .back-btn { padding: 0.625rem; border-radius: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary); transition: all 0.15s; }
+                .back-btn { padding: 0.625rem; border-radius: var(--radius-md); background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary); transition: all 0.15s; }
                 .back-btn:hover { background: var(--bg-secondary); color: var(--text-primary); transform: translateX(-2px); }
 
                 .proveedor-hero { display: flex; align-items: center; gap: 1.25rem; }
-                .proveedor-avatar-lg { width: 64px; height: 64px; border-radius: 1rem; color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-                .proveedor-hero h1 { font-size: 1.875rem; font-weight: 800; letter-spacing: -0.03em; }
+                .proveedor-avatar-lg { width: 64px; height: 64px; border-radius: var(--radius-lg); color: var(--text-white); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+                .proveedor-hero h1 { font-size: var(--text-2xl); font-weight: 800; letter-spacing: -0.03em; }
 
                 .stats-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-                .stat-card { display: flex; align-items: center; gap: 1rem; padding: 1.25rem 1.5rem; border-radius: 1rem; border: 1px solid var(--border); }
-                .stat-value { font-size: 1.375rem; font-weight: 800; letter-spacing: -0.02em; }
-                .stat-label { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.2rem; }
+                .stat-card { display: flex; align-items: center; gap: 1rem; padding: 1.25rem 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+                .stat-value { font-size: var(--text-xl); font-weight: 800; letter-spacing: -0.02em; }
+                .stat-label { font-size: var(--text-xs); color: var(--text-secondary); margin-top: 0.2rem; }
 
-                .tabs-bar { display: flex; gap: 0.5rem; padding: 0.5rem; border-radius: 1rem; border: 1px solid var(--border); width: fit-content; }
-                .tab-btn { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 1.25rem; border-radius: 0.625rem; font-weight: 600; font-size: 0.875rem; color: var(--text-secondary); transition: all 0.15s; }
+                .tabs-bar { display: flex; gap: 0.5rem; padding: 0.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); width: fit-content; }
+                .tab-btn { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 1.25rem; border-radius: var(--radius-md); font-weight: 600; font-size: var(--text-sm); color: var(--text-secondary); transition: all 0.15s; }
                 .tab-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }
-                .tab-btn.active { background: var(--accent); color: white; }
-                .tab-badge { background: color-mix(in srgb, currentColor 25%, transparent); padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
+                .tab-btn.active { background: var(--accent); color: var(--text-white); }
+                .tab-badge { background: color-mix(in srgb, currentColor 25%, transparent); padding: 0.125rem 0.5rem; border-radius: var(--radius-pill); font-size: var(--text-2xs); font-weight: 700; }
                 .tab-btn:not(.active) .tab-badge { background: var(--bg-secondary); color: var(--text-muted); }
 
-                .tab-content { padding: 2rem; border-radius: 1.25rem; border: 1px solid var(--border); }
+                .tab-content { padding: 2rem; border-radius: var(--radius-lg); border: 1px solid var(--border); }
 
                 .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
-                .info-section h3 { font-size: 0.875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1.25rem; }
+                .info-section h3 { font-size: var(--text-sm); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1.25rem; }
                 .info-rows { display: flex; flex-direction: column; gap: 0.875rem; }
                 .info-row { display: flex; align-items: center; gap: 0.875rem; }
                 .info-row svg { color: var(--text-muted); flex-shrink: 0; }
-                .info-label { font-size: 0.8125rem; color: var(--text-secondary); width: 100px; flex-shrink: 0; }
-                .info-value { font-weight: 600; font-size: 0.9375rem; }
+                .info-label { font-size: var(--text-sm); color: var(--text-secondary); width: 100px; flex-shrink: 0; }
+                .info-value { font-weight: 600; font-size: var(--text-base); }
 
-                .tipo-badge { padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
-                .status-badge { padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+                .tipo-badge { padding: 0.25rem 0.75rem; border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: 700; }
+                .status-badge { padding: 0.25rem 0.75rem; border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
                 .status-badge.active { background: #d1fae5; color: #065f46; }
-                .status-badge.inactive { background: #f1f5f9; color: #64748b; }
-                .estado-badge { padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--bg-secondary); color: var(--text-secondary); }
+                .status-badge.inactive { background: var(--bg-secondary); color: var(--text-secondary); }
+                .estado-badge { padding: 0.2rem 0.6rem; border-radius: var(--radius-pill); font-size: var(--text-2xs); font-weight: 700; background: var(--bg-secondary); color: var(--text-secondary); }
 
                 .data-table { width: 100%; border-collapse: collapse; }
-                .data-table th { padding: 0.75rem 1rem; background: var(--bg-secondary); color: var(--text-secondary); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); text-align: left; }
+                .data-table th { padding: 0.75rem 1rem; background: var(--bg-secondary); color: var(--text-secondary); font-weight: 700; font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); text-align: left; }
                 .data-table td { padding: 1rem; border-bottom: 1px solid var(--border); }
                 .data-table tr:last-child td { border-bottom: none; }
                 .data-table tr:hover td { background: var(--bg-secondary); }
                 .fw-bold { font-weight: 700; }
-                .text-muted-sm { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
+                .text-muted-sm { font-size: var(--text-xs); color: var(--text-muted); margin-top: 0.15rem; }
 
                 .spin { animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }

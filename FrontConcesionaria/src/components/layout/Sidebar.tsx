@@ -91,9 +91,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
           flex-shrink: 0;
           background: var(--bg-sidebar);
           background-image:
-            radial-gradient(circle at 0% 0%, rgba(139, 92, 246, 0.10), transparent 50%),
-            radial-gradient(circle at 100% 100%, rgba(6, 182, 212, 0.08), transparent 50%);
-          color: #f5f7fb;
+            radial-gradient(circle at 0% 0%, rgba(var(--accent-2-rgb), 0.10), transparent 50%),
+            radial-gradient(circle at 100% 100%, rgba(var(--accent-3-rgb), 0.08), transparent 50%);
+          color: #f5f7fb; /* impeccable-disable-line design-system-color: texto sobre navy fijo, no cambia con el tema */
           padding: 1.5rem 0.875rem 0.875rem;
           display: flex;
           flex-direction: column;
@@ -101,7 +101,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
           position: sticky;
           top: 0;
           overflow-y: auto;
-          border-right: 1px solid rgba(255, 255, 255, 0.04);
+          border-right: 1px solid rgba(255, 255, 255, 0.04); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
           transition: width var(--duration-slow) var(--easing-soft),
                       padding var(--duration-slow) var(--easing-soft);
         }
@@ -113,7 +113,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
 
         .sidebar::-webkit-scrollbar { width: 4px; }
         .sidebar::-webkit-scrollbar-track { background: transparent; }
-        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: var(--radius-pill); }
+        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: var(--radius-pill); } /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
 
         .sidebar-header {
           display: flex;
@@ -137,7 +137,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
             align-items: center;
             justify-content: center;
             box-shadow: 0 4px 16px rgba(var(--accent-2-rgb), 0.35),
-                        0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+                        0 0 0 1px rgba(255, 255, 255, 0.08) inset; /* impeccable-disable-line design-system-color: brillo sobre el gradiente neón del isotipo, relativo al contexto */
             position: relative;
             overflow: hidden;
             flex-shrink: 0;
@@ -153,7 +153,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
             content: '';
             position: absolute;
             inset: 0;
-            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.35), transparent 60%);
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.35), transparent 60%); /* impeccable-disable-line design-system-color: brillo sobre el gradiente neón del isotipo, relativo al contexto */
             mix-blend-mode: overlay;
         }
 
@@ -166,7 +166,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
 
         .logo-text {
           font-family: var(--font-display);
-          font-size: 1.25rem;
+          font-size: var(--text-lg);
           font-weight: 700;
           letter-spacing: 0.02em;
           line-height: 1;
@@ -177,8 +177,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
         }
 
         .logo-tag {
-            font-size: 0.65rem;
-            color: rgba(255, 255, 255, 0.45);
+            font-size: var(--text-2xs);
+            color: rgba(255, 255, 255, 0.45); /* impeccable-disable-line design-system-color: texto sobre navy fijo, no cambia con el tema */
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.18em;
@@ -200,15 +200,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
 
         .nav-section-divider {
             height: 1px;
-            background: rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.06); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
             margin: 0 0.5rem;
         }
 
         .section-title {
             font-family: var(--font-sans);
-            font-size: 0.65rem;
+            font-size: var(--text-2xs);
             font-weight: 700;
-            color: rgba(255, 255, 255, 0.32);
+            color: rgba(255, 255, 255, 0.32); /* impeccable-disable-line design-system-color: texto sobre navy fijo, no cambia con el tema */
             text-transform: uppercase;
             letter-spacing: 0.16em;
             padding-left: 1rem;
@@ -227,7 +227,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
           gap: 0.875rem;
           padding: 0.6rem 1rem;
           border-radius: var(--radius-md);
-          color: rgba(255, 255, 255, 0.62);
+          color: rgba(255, 255, 255, 0.62); /* impeccable-disable-line design-system-color: texto sobre navy fijo, no cambia con el tema */
           font-size: var(--text-sm);
           font-weight: 500;
           text-decoration: none;
@@ -269,15 +269,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
         }
 
         .nav-item:hover {
-          background: rgba(255, 255, 255, 0.04);
-          color: #ffffff;
+          background: rgba(255, 255, 255, 0.04); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
+          color: var(--text-white);
         }
 
         .nav-item.active {
           background: linear-gradient(90deg,
               rgba(var(--accent-rgb), 0.18) 0%,
               rgba(var(--accent-2-rgb), 0.08) 100%);
-          color: #ffffff;
+          color: var(--text-white);
           box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.18);
         }
 
@@ -291,7 +291,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
 
         .sidebar-footer {
             padding-top: var(--space-3);
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            border-top: 1px solid rgba(255, 255, 255, 0.05); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
             margin-top: var(--space-3);
         }
 
@@ -303,9 +303,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
             gap: 0.5rem;
             padding: 0.55rem 0.75rem;
             border-radius: var(--radius-md);
-            background: rgba(255, 255, 255, 0.04);
-            color: rgba(255, 255, 255, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.04); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
+            color: rgba(255, 255, 255, 0.6); /* impeccable-disable-line design-system-color: texto sobre navy fijo, no cambia con el tema */
+            border: 1px solid rgba(255, 255, 255, 0.06); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
             font-family: var(--font-sans);
             font-size: var(--text-xs);
             font-weight: 600;
@@ -316,8 +316,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
         }
 
         .sidebar-collapse-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-            color: #ffffff;
+            background: rgba(255, 255, 255, 0.08); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
+            color: var(--text-white);
             border-color: rgba(var(--accent-rgb), 0.3);
         }
 
@@ -325,7 +325,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
             display: none;
             background: none;
             border: none;
-            color: rgba(255, 255, 255, 0.6);
+            color: rgba(255, 255, 255, 0.6); /* impeccable-disable-line design-system-color: texto sobre navy fijo, no cambia con el tema */
             cursor: pointer;
             padding: 0.5rem;
             margin-left: auto;

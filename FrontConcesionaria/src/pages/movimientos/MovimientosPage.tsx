@@ -478,21 +478,21 @@ const MovimientosPage = () => {
                 .icon-badge {
                     width: 44px;
                     height: 44px;
-                    border-radius: 14px;
+                    border-radius: var(--radius-md);
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background: rgba(99, 102, 241, 0.1);
-                    color: #6366f1;
+                    background: rgba(var(--accent-2-rgb), 0.1);
+                    color: var(--accent-2);
                 }
-                .shadow-glow-indigo { box-shadow: 0 0 20px rgba(99, 102, 241, 0.2); }
+                .shadow-glow-indigo { box-shadow: 0 0 20px rgba(var(--accent-2-rgb), 0.2); }
                 
                 /* .form-label-xs: la define index.css (capa global). El
                    .form-input-select local es la variante protagónica de estos
                    filtros y gana la cascada a propósito. */
                 .form-input-select {
                     padding: 0.75rem 2.5rem 0.75rem 1rem;
-                    border-radius: 1rem;
+                    border-radius: var(--radius-lg);
                     border: 1px solid var(--border);
                     background: var(--bg-primary);
                     font-size: var(--text-sm);

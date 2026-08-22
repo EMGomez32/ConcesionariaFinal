@@ -6,7 +6,7 @@ const PageLoader = () => {
             <div className="page-loader-logo">
                 <div className="page-loader-orb"></div>
                 <div className="page-loader-icon">
-                    <Isotipo size={28} color="#ffffff" />
+                    <Isotipo size={28} color="var(--text-white)" />
                 </div>
             </div>
 
@@ -59,7 +59,7 @@ const PageLoader = () => {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+                    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset, /* impeccable-disable-line design-system-color: anillo sobre gradiente neon fijo, relativo al contexto */
                                 0 12px 32px -8px rgba(var(--accent-2-rgb), 0.5);
                 }
 
@@ -72,7 +72,7 @@ const PageLoader = () => {
 
                 .page-loader-brand {
                     font-family: var(--font-display);
-                    font-size: 1.5rem;
+                    font-size: var(--text-xl);
                     font-weight: 700;
                     letter-spacing: 0.18em;
                     background: var(--neon-gradient);
@@ -99,7 +99,7 @@ const PageLoader = () => {
 
                 .page-loader-msg {
                     font-family: var(--font-sans);
-                    font-size: 0.7rem;
+                    font-size: var(--text-2xs);
                     font-weight: 600;
                     color: var(--text-muted);
                     text-transform: uppercase;

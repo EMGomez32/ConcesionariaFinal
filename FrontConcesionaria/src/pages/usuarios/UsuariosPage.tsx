@@ -415,16 +415,16 @@ const UsuariosPage: React.FC = () => {
                     white-space: nowrap;
                 }
                 .cupo-chip.is-full {
-                    background: rgba(239, 68, 68, 0.10);
-                    border-color: rgba(239, 68, 68, 0.30);
+                    background: rgba(var(--danger-rgb), 0.10);
+                    border-color: rgba(var(--danger-rgb), 0.30);
                     color: var(--danger);
                 }
 
                 .cupo-aviso {
                     padding: 0.75rem 1rem;
                     border-radius: var(--radius-md);
-                    background: rgba(239, 68, 68, 0.08);
-                    border: 1px solid rgba(239, 68, 68, 0.22);
+                    background: rgba(var(--danger-rgb), 0.08);
+                    border: 1px solid rgba(var(--danger-rgb), 0.22);
                     color: var(--danger);
                     font-size: var(--text-sm);
                 }
@@ -466,7 +466,7 @@ const UsuariosPage: React.FC = () => {
                     width: 38px; height: 38px;
                     border-radius: var(--radius-md);
                     background: var(--accent-gradient);
-                    color: white;
+                    color: var(--text-white);
                     display: flex; align-items: center; justify-content: center;
                     font-family: var(--font-display);
                     font-weight: 600;

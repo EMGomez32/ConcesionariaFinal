@@ -66,9 +66,9 @@ const SeguimientosPage = () => {
     const hoyStr = hoyLocal();
 
     const estadoDe = (s: ProximoSeguimientoItem): { label: string; color: string } => {
-        if (s.vencido) return { label: 'Vencido', color: 'var(--danger, #dc2626)' };
-        if (s.proximoContacto === hoyStr) return { label: 'Hoy', color: 'var(--warning, #f59e0b)' };
-        return { label: 'Próximo', color: '#0ea5e9' };
+        if (s.vencido) return { label: 'Vencido', color: 'var(--danger)' };
+        if (s.proximoContacto === hoyStr) return { label: 'Hoy', color: 'var(--warning)' };
+        return { label: 'Próximo', color: 'var(--info)' };
     };
 
     const mensajeWa = (s: ProximoSeguimientoItem) =>
@@ -105,10 +105,10 @@ const SeguimientosPage = () => {
             {/* Resumen */}
             {resumen && (
                 <div className="seg-chips">
-                    <span className="seg-chip" style={{ color: 'var(--danger, #dc2626)' }}>
+                    <span className="seg-chip" style={{ color: 'var(--danger)' }}>
                         <strong>{resumen.vencidos}</strong> vencidos
                     </span>
-                    <span className="seg-chip" style={{ color: 'var(--warning, #f59e0b)' }}>
+                    <span className="seg-chip" style={{ color: 'var(--warning)' }}>
                         <strong>{resumen.hoy}</strong> hoy
                     </span>
                     <span className="seg-chip" style={{ color: 'var(--text-secondary)' }}>
@@ -208,35 +208,35 @@ const SeguimientosPage = () => {
             <style>{`
                 .seg-page { max-width: 960px; }
                 .seg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
-                .seg-head-icon { width: 44px; height: 44px; border-radius: var(--radius-md, 0.6rem); display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, #0ea5e9 16%, transparent); color: #0ea5e9; flex-shrink: 0; }
-                .seg-title { margin: 0; font-size: 1.4rem; }
-                .seg-sub { margin: 0.15rem 0 0; color: var(--text-secondary); font-size: 0.86rem; }
-                .seg-dias { display: inline-flex; gap: 0.25rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-pill, 999px); padding: 0.2rem; }
-                .seg-dia-btn { border: none; background: transparent; color: var(--text-secondary); font-size: 0.78rem; font-weight: 700; padding: 0.35rem 0.7rem; border-radius: 999px; cursor: pointer; transition: background .15s, color .15s; }
-                .seg-dia-btn.is-active { background: var(--accent); color: #fff; }
-                .seg-chips { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; margin-bottom: 1rem; font-size: 0.85rem; }
-                .seg-chip strong { font-size: 1.05rem; }
-                .seg-chip-range { color: var(--text-muted); font-size: 0.8rem; }
-                .seg-refresh { margin-left: auto; background: transparent; border: 1px solid var(--border); color: var(--text-secondary); border-radius: 8px; padding: 0.3rem 0.4rem; cursor: pointer; display: inline-flex; }
+                .seg-head-icon { width: 44px; height: 44px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; background: rgba(var(--accent-3-rgb), 0.16); color: var(--accent-3); flex-shrink: 0; }
+                .seg-title { margin: 0; font-size: var(--text-xl); }
+                .seg-sub { margin: 0.15rem 0 0; color: var(--text-secondary); font-size: var(--text-sm); }
+                .seg-dias { display: inline-flex; gap: 0.25rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 0.2rem; }
+                .seg-dia-btn { border: none; background: transparent; color: var(--text-secondary); font-size: var(--text-sm); font-weight: 700; padding: 0.35rem 0.7rem; border-radius: var(--radius-pill); cursor: pointer; transition: background var(--duration-fast), color var(--duration-fast); }
+                .seg-dia-btn.is-active { background: var(--accent); color: var(--text-white); }
+                .seg-chips { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; margin-bottom: 1rem; font-size: var(--text-sm); }
+                .seg-chip strong { font-size: var(--text-md); }
+                .seg-chip-range { color: var(--text-muted); font-size: var(--text-sm); }
+                .seg-refresh { margin-left: auto; background: transparent; border: 1px solid var(--border); color: var(--text-secondary); border-radius: var(--radius-sm); padding: 0.3rem 0.4rem; cursor: pointer; display: inline-flex; }
                 .seg-refresh:hover:not(:disabled) { color: var(--text-primary); }
                 .seg-refresh:disabled { opacity: 0.5; cursor: default; }
                 .seg-spin { animation: seg-rot 0.8s linear infinite; }
                 @keyframes seg-rot { to { transform: rotate(360deg); } }
-                .seg-trunc { color: var(--text-muted); font-size: 0.8rem; margin: 0 0 0.6rem; }
+                .seg-trunc { color: var(--text-muted); font-size: var(--text-sm); margin: 0 0 0.6rem; }
                 .seg-list { display: flex; flex-direction: column; gap: 0.7rem; }
                 .seg-item { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.9rem 1.1rem; flex-wrap: wrap; }
                 .seg-item-main { flex: 1; min-width: 220px; }
                 .seg-item-top { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
-                .seg-estado { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.12rem 0.5rem; border-radius: 999px; }
-                .seg-fecha { font-weight: 700; font-size: 0.9rem; color: var(--text-primary); }
-                .seg-tipo { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.78rem; color: var(--text-secondary); }
-                .seg-cliente { display: inline-flex; align-items: center; gap: 0.15rem; font-weight: 700; color: var(--accent); text-decoration: none; font-size: 0.98rem; }
+                .seg-estado { font-size: var(--text-2xs); font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.12rem 0.5rem; border-radius: var(--radius-pill); }
+                .seg-fecha { font-weight: 700; font-size: var(--text-base); color: var(--text-primary); }
+                .seg-tipo { display: inline-flex; align-items: center; gap: 0.25rem; font-size: var(--text-sm); color: var(--text-secondary); }
+                .seg-cliente { display: inline-flex; align-items: center; gap: 0.15rem; font-weight: 700; color: var(--accent); text-decoration: none; font-size: var(--text-md); }
                 .seg-cliente:hover { text-decoration: underline; }
-                .seg-nota { margin: 0.3rem 0 0; color: var(--text-secondary); font-size: 0.85rem; white-space: pre-wrap; }
-                .seg-vendedor { display: inline-block; margin-top: 0.3rem; font-size: 0.74rem; color: var(--text-muted); }
+                .seg-nota { margin: 0.3rem 0 0; color: var(--text-secondary); font-size: var(--text-sm); white-space: pre-wrap; }
+                .seg-vendedor { display: inline-block; margin-top: 0.3rem; font-size: var(--text-xs); color: var(--text-muted); }
                 .seg-item-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
                 .seg-empty { text-align: center; padding: 2.5rem 1.5rem; color: var(--text-secondary); }
-                .seg-empty-hint { margin: 0.5rem 0 0; font-size: 0.82rem; color: var(--text-muted); }
+                .seg-empty-hint { margin: 0.5rem 0 0; font-size: var(--text-sm); color: var(--text-muted); }
             `}</style>
         </div>
     );

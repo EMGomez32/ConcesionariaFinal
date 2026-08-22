@@ -157,7 +157,7 @@ const LoginPage = () => {
           justify-content: center;
           min-height: 100vh;
           padding: 1.5rem;
-          background: #04060d;
+          background: #04060d; /* impeccable-disable-line design-system-color: escenario navy fijo, no cambia con el tema */
           overflow: hidden;
           isolation: isolate;
         }
@@ -166,8 +166,8 @@ const LoginPage = () => {
           position: absolute;
           inset: 0;
           background-image:
-            linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+            linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px), /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
+            linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
           background-size: 56px 56px;
           mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
           -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
@@ -185,7 +185,7 @@ const LoginPage = () => {
         .login-stage-orb--violet {
           width: 480px;
           height: 480px;
-          background: rgba(139, 92, 246, 0.45);
+          background: rgba(var(--accent-2-rgb), 0.45);
           top: -120px;
           left: -80px;
         }
@@ -193,7 +193,7 @@ const LoginPage = () => {
         .login-stage-orb--cyan {
           width: 420px;
           height: 420px;
-          background: rgba(6, 182, 212, 0.35);
+          background: rgba(var(--accent-3-rgb), 0.35);
           bottom: -120px;
           right: -80px;
           animation-delay: -4s;
@@ -202,7 +202,7 @@ const LoginPage = () => {
         .login-stage-orb--emerald {
           width: 360px;
           height: 360px;
-          background: rgba(16, 185, 129, 0.30);
+          background: rgba(var(--accent-rgb), 0.30);
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%);
@@ -231,14 +231,14 @@ const LoginPage = () => {
           max-width: 440px;
           padding: 2.5rem;
           border-radius: var(--radius-xl);
-          background: rgba(13, 18, 33, 0.72);
+          background: rgba(13, 18, 33, 0.72); /* impeccable-disable-line design-system-color: vidrio navy sobre escenario fijo, relativo al contexto */
           backdrop-filter: blur(24px) saturate(160%);
           -webkit-backdrop-filter: blur(24px) saturate(160%);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.08); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
           box-shadow:
-            0 30px 60px -16px rgba(0, 0, 0, 0.6),
-            0 0 0 1px rgba(255, 255, 255, 0.04) inset;
-          color: #f5f7fb;
+            0 30px 60px -16px rgba(0, 0, 0, 0.6), /* impeccable-disable-line design-system-color: sombra sobre navy fijo; --shadow-xl claro quedaría invisible */
+            0 0 0 1px rgba(255, 255, 255, 0.04) inset; /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
+          color: #f5f7fb; /* impeccable-disable-line design-system-color: texto sobre navy fijo, no sigue el tema */
         }
 
         .login-card::before {
@@ -248,10 +248,10 @@ const LoginPage = () => {
           border-radius: inherit;
           padding: 1px;
           background: linear-gradient(135deg,
-              rgba(139, 92, 246, 0.5) 0%,
-              rgba(16, 185, 129, 0.0) 40%,
-              rgba(6, 182, 212, 0.5) 100%);
-          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+              rgba(var(--accent-2-rgb), 0.5) 0%,
+              rgba(var(--accent-rgb), 0.0) 40%,
+              rgba(var(--accent-3-rgb), 0.5) 100%);
+          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); /* impeccable-disable-line design-system-color: canal de máscara, no es un color de UI */
           -webkit-mask-composite: xor;
           mask-composite: exclude;
           pointer-events: none;
@@ -272,8 +272,8 @@ const LoginPage = () => {
           align-items: center;
           justify-content: center;
           box-shadow:
-            0 0 0 1px rgba(255, 255, 255, 0.15) inset,
-            0 12px 32px -6px rgba(139, 92, 246, 0.55);
+            0 0 0 1px rgba(255, 255, 255, 0.15) inset, /* impeccable-disable-line design-system-color: brillo sobre el gradiente neón, relativo al contexto */
+            0 12px 32px -6px rgba(var(--accent-2-rgb), 0.55);
           position: relative;
           overflow: hidden;
         }
@@ -282,7 +282,7 @@ const LoginPage = () => {
           content: '';
           position: absolute;
           inset: 0;
-          background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), transparent 60%);
+          background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), transparent 60%); /* impeccable-disable-line design-system-color: brillo sobre el gradiente neón, relativo al contexto */
           mix-blend-mode: overlay;
         }
 
@@ -300,8 +300,8 @@ const LoginPage = () => {
 
         .login-tag {
           font-family: var(--font-sans);
-          font-size: 0.7rem;
-          color: rgba(255, 255, 255, 0.45);
+          font-size: var(--text-2xs);
+          color: rgba(255, 255, 255, 0.45); /* impeccable-disable-line design-system-color: texto sobre navy fijo, relativo al contexto */
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.18em;
@@ -313,14 +313,14 @@ const LoginPage = () => {
 
         .login-welcome h2 {
           font-family: var(--font-display);
-          font-size: 1.25rem;
+          font-size: var(--text-lg);
           font-weight: 600;
           margin: 0 0 0.25rem;
-          color: #ffffff;
+          color: var(--text-white);
         }
 
         .login-welcome p {
-          color: rgba(255, 255, 255, 0.55);
+          color: rgba(255, 255, 255, 0.55); /* impeccable-disable-line design-system-color: texto sobre navy fijo, relativo al contexto */
           font-size: var(--text-sm);
         }
 
@@ -331,27 +331,27 @@ const LoginPage = () => {
         }
 
         /* Override input styles dentro del login (sobre fondo dark) */
-        .login-form .input-label { color: rgba(255, 255, 255, 0.7); }
+        .login-form .input-label { color: rgba(255, 255, 255, 0.7); } /* impeccable-disable-line design-system-color: texto sobre navy fijo, relativo al contexto */
         .login-form .input-control {
-          background: rgba(255, 255, 255, 0.04);
-          border-color: rgba(255, 255, 255, 0.10);
-          color: #ffffff;
+          background: rgba(255, 255, 255, 0.04); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
+          border-color: rgba(255, 255, 255, 0.10); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
+          color: var(--text-white);
         }
         .login-form .input-control:hover:not(:focus) {
-          border-color: rgba(255, 255, 255, 0.18);
+          border-color: rgba(255, 255, 255, 0.18); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
         }
         .login-form .input-control:focus {
-          background: rgba(255, 255, 255, 0.06);
+          background: rgba(255, 255, 255, 0.06); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
           border-color: var(--accent);
           box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.25);
         }
-        .login-form .input-control::placeholder { color: rgba(255, 255, 255, 0.3); }
-        .login-form .input-icon { color: rgba(255, 255, 255, 0.4); }
+        .login-form .input-control::placeholder { color: rgba(255, 255, 255, 0.3); } /* impeccable-disable-line design-system-color: texto sobre navy fijo, relativo al contexto */
+        .login-form .input-icon { color: rgba(255, 255, 255, 0.4); } /* impeccable-disable-line design-system-color: ícono sobre navy fijo, relativo al contexto */
         .login-form .input-container:focus-within .input-icon { color: var(--accent); }
-        .login-form .input-reveal { color: rgba(255, 255, 255, 0.5); }
+        .login-form .input-reveal { color: rgba(255, 255, 255, 0.5); } /* impeccable-disable-line design-system-color: ícono sobre navy fijo, relativo al contexto */
         .login-form .input-reveal:hover {
-          color: #ffffff;
-          background: rgba(255, 255, 255, 0.06);
+          color: var(--text-white);
+          background: rgba(255, 255, 255, 0.06); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
         }
 
         .login-error {
@@ -359,10 +359,10 @@ const LoginPage = () => {
           align-items: center;
           gap: 0.625rem;
           padding: 0.75rem 1rem;
-          background: rgba(239, 68, 68, 0.10);
-          color: #fecaca;
+          background: rgba(var(--danger-rgb), 0.10);
+          color: #fecaca; /* impeccable-disable-line design-system-color: tinte danger legible sobre navy fijo; --danger pleno no contrasta */
           border-radius: var(--radius-md);
-          border: 1px solid rgba(239, 68, 68, 0.25);
+          border: 1px solid rgba(var(--danger-rgb), 0.25);
           font-size: var(--text-sm);
         }
 
@@ -375,8 +375,8 @@ const LoginPage = () => {
         .login-submit .loader {
           width: 16px;
           height: 16px;
-          border: 2px solid rgba(255, 255, 255, 0.3);
-          border-top-color: #ffffff;
+          border: 2px solid rgba(255, 255, 255, 0.3); /* impeccable-disable-line design-system-color: pista del spinner sobre el botón emerald, relativa al contexto */
+          border-top-color: var(--text-white);
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
           margin-right: 0.5rem;
@@ -386,9 +386,9 @@ const LoginPage = () => {
           margin-top: 1rem;
           text-align: center;
           padding-top: 1.25rem;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
-          font-size: 0.7rem;
-          color: rgba(255, 255, 255, 0.35);
+          border-top: 1px solid rgba(255, 255, 255, 0.06); /* impeccable-disable-line design-system-color: capa sobre navy fijo, relativa al contexto */
+          font-size: var(--text-2xs);
+          color: rgba(255, 255, 255, 0.35); /* impeccable-disable-line design-system-color: texto sobre navy fijo, relativo al contexto */
         }
       `}</style>
     </div>
