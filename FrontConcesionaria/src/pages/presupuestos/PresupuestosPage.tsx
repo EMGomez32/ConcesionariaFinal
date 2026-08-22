@@ -506,57 +506,57 @@ const PresupuestosPage = () => {
             </header>
 
             {/* Quick Metrics Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="card glass stat-tile border-blue-500/20 bg-blue-500/5 group hover:scale-[1.02] transition-all">
-                    <div className="relative z-10">
-                        <span className="text-[10px] font-black uppercase text-blue-400 tracking-widest block mb-2">En Negociación</span>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="card glass stat-tile">
+                    <div>
+                        <span className="text-3xs font-black uppercase text-info tracking-widest mb-2">En Negociación</span>
                         <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black text-white">{presupuestos.filter(p => p.estado === 'enviado').length}</span>
-                            <span className="text-xs font-bold text-slate-500 italic">COTIZACIONES</span>
+                            <span className="text-3xl font-black">{presupuestos.filter(p => p.estado === 'enviado').length}</span>
+                            <span className="text-xs font-bold text-muted italic">COTIZACIONES</span>
                         </div>
                     </div>
                     <SendHorizonal size={64} className="stat-tile-bg" />
                 </div>
-                <div className="card glass stat-tile border-emerald-500/20 bg-emerald-500/5 group hover:scale-[1.02] transition-all">
-                    <div className="relative z-10">
-                        <span className="text-[10px] font-black uppercase text-emerald-400 tracking-widest block mb-2">Cierre Mes</span>
+                <div className="card glass stat-tile">
+                    <div>
+                        <span className="text-3xs font-black uppercase text-success tracking-widest mb-2">Cierre Mes</span>
                         <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black text-white">{presupuestos.filter(p => p.estado === 'aceptado').length}</span>
-                            <span className="text-xs font-bold text-slate-500 italic">CONVERTIDOS</span>
+                            <span className="text-3xl font-black">{presupuestos.filter(p => p.estado === 'aceptado').length}</span>
+                            <span className="text-xs font-bold text-muted italic">CONVERTIDOS</span>
                         </div>
                     </div>
                     <CheckCircle size={64} className="stat-tile-bg" />
                 </div>
-                <div className="card glass p-6 border-slate-700/30 bg-slate-800/10 relative overflow-hidden group md:col-span-2">
-                    <div className="relative z-10 flex justify-between items-center h-full">
+                <div className="card glass md:col-span-2">
+                    <div className="flex justify-between items-center">
                         <div>
-                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-2">Volumen de Proyección</span>
+                            <span className="text-3xs font-black uppercase text-muted tracking-widest mb-2">Volumen de Proyección</span>
                             <div className="flex items-baseline gap-2">
-                                <span className="text-3xl font-black text-white tabular-nums">
+                                <span className="text-3xl font-black tabular-nums">
                                     ${presupuestos.reduce((s, p) => s + calcTotal(p), 0).toLocaleString('es-AR')}
                                 </span>
                                 <Badge variant="info">PRE-VENTA</Badge>
                             </div>
                         </div>
-                        <Calculator size={50} className="text-accent opacity-20" />
+                        <Calculator size={50} className="text-accent" />
                     </div>
                 </div>
             </div>
 
             {/* Filters */}
             <div className="card glass filters-bar flex flex-wrap items-center justify-between gap-6 mb-6">
-                <div className="flex-1 min-w-[300px] relative">
-                    <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+                <div className="flex-1">
+                    <Search size={18} className="text-muted" />
                     <input
                         type="text"
                         placeholder="BUSCAR POR NRO DE EXPEDIENTE, CLIENTE O RESPONSABLE COMERCIAL..."
-                        className="form-input-premium pl-12 h-12 w-full"
+                        className="form-input-premium w-full"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                     />
                 </div>
                 <div className="flex gap-4 items-center">
-                    <div className="min-w-[170px]">
+                    <div>
                         <label className="form-label-xs">Ambiente Legal</label>
                         <select className="form-input-select w-full" value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }}>
                             <option value="">TODOS LOS ESTADOS</option>
@@ -585,51 +585,51 @@ const PresupuestosPage = () => {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={7} style={{ padding: '8rem', textAlign: 'center' }}><RefreshCw className="animate-spin text-accent mx-auto" size={40} /></td></tr>
+                            <tr><td colSpan={7} style={{ padding: '8rem', textAlign: 'center' }}><RefreshCw className="animate-spin text-accent" size={40} /></td></tr>
                         ) : filtered.length === 0 ? (
                             <tr>
                                 <td colSpan={7}>
-                                    <div className="flex flex-col items-center py-24 text-muted">
-                                        <div className="w-20 h-20 bg-slate-800 rounded-3xl flex items-center justify-center mb-4 ring-1 ring-slate-700">
-                                            <FileText size={40} className="text-slate-600" />
+                                    <div className="flex flex-col items-center text-muted">
+                                        <div className="flex items-center justify-center mb-4">
+                                            <FileText size={40} className="text-secondary" />
                                         </div>
-                                        <p className="text-xl font-black text-slate-400 italic">No se registran cotizaciones activas</p>
+                                        <p className="text-xl font-black text-muted italic">No se registran cotizaciones activas</p>
                                         <p className="text-sm font-medium">Inicie una nueva propuesta con el botón superior.</p>
                                     </div>
                                 </td>
                             </tr>
                         ) : (
                             filtered.map(p => (
-                                <tr key={p.id} onClick={() => setDetailId(p.id)} className="cursor-pointer group">
+                                <tr key={p.id} onClick={() => setDetailId(p.id)} className="cursor-pointer">
                                     <td>
                                         <div className="flex flex-col">
-                                            <span className="font-mono text-xs font-bold text-accent-light tracking-widest">{p.nroPresupuesto}</span>
-                                            <span className="text-[10px] font-black text-slate-500 uppercase">DOC-COM-{p.id}</span>
+                                            <span className="font-mono text-xs font-bold text-accent tracking-widest">{p.nroPresupuesto}</span>
+                                            <span className="text-3xs font-black text-muted uppercase">DOC-COM-{p.id}</span>
                                         </div>
                                     </td>
                                     <td>
-                                        <div className="flex items-center gap-2 text-slate-400">
+                                        <div className="flex items-center gap-2 text-muted">
                                             <Calendar size={14} />
                                             <span className="text-xs font-semibold">{fmt(p.fechaCreacion)}</span>
                                         </div>
                                     </td>
                                     <td>
-                                        <span className={`text-xs font-black ${p.validoHasta && new Date(p.validoHasta) < new Date() ? 'text-red-400' : 'text-slate-300'}`}>
+                                        <span className={`text-xs font-black ${p.validoHasta && new Date(p.validoHasta) < new Date() ? 'text-danger' : 'text-muted'}`}>
                                             {fmt(p.validoHasta)}
                                         </span>
                                     </td>
                                     <td>
                                         <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 border border-slate-700">
+                                            <div className="flex items-center justify-center text-muted">
                                                 <User size={14} />
                                             </div>
-                                            <span className="font-bold text-white uppercase text-xs truncate max-w-[150px]">{p.cliente?.nombre ?? '-'}</span>
+                                            <span className="font-bold uppercase text-xs truncate">{p.cliente?.nombre ?? '-'}</span>
                                         </div>
                                     </td>
                                     <td>
                                         <div className="flex items-center gap-2">
-                                            <Briefcase size={14} className="text-slate-500" />
-                                            <span className="text-[10px] font-black text-slate-500 uppercase">{p.vendedor?.nombre ?? 'NO ASIGN.'}</span>
+                                            <Briefcase size={14} className="text-muted" />
+                                            <span className="text-3xs font-black text-muted uppercase">{p.vendedor?.nombre ?? 'NO ASIGN.'}</span>
                                         </div>
                                     </td>
                                     <td>
@@ -638,7 +638,7 @@ const PresupuestosPage = () => {
                                         </Badge>
                                     </td>
                                     <td style={{ textAlign: 'right' }}>
-                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all" onClick={e => e.stopPropagation()}>
+                                        <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
                                             {(transitions[p.estado] ?? []).map(t => (
                                                 <button key={t.next} className="icon-btn" title={t.label}
                                                     style={{ color: t.clr }} onClick={() => changeEstado(p.id, t.next)}>
@@ -676,12 +676,12 @@ const PresupuestosPage = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-6 mt-8">
+                <div className="flex justify-center items-center gap-6">
                     <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => load(page - 1)}>
                         <ChevronLeft size={16} /> Anterior
                     </Button>
                     <div className="flex items-center gap-2">
-                        <span className="w-9 h-9 bg-accent text-white rounded-xl flex items-center justify-center font-black text-sm shadow-lg shadow-accent/20">{page}</span>
+                        <span className="flex items-center justify-center font-black text-sm">{page}</span>
                     </div>
                     <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => load(page + 1)}>
                         Siguiente <ChevronRight size={16} />
@@ -699,24 +699,24 @@ const PresupuestosPage = () => {
                 footer={(
                     <div className="flex justify-between items-center w-full">
                         <div>
-                            <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1">Impacto Final Neto</p>
-                            <p className="text-3xl font-black text-white">${currentTotal().toLocaleString('es-AR')} <span className="text-sm font-normal text-slate-500 italic">({form.moneda})</span></p>
+                            <p className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Impacto Final Neto</p>
+                            <p className="text-3xl font-black">${currentTotal().toLocaleString('es-AR')} <span className="text-sm font-normal text-muted italic">({form.moneda})</span></p>
                         </div>
                         <div className="flex gap-4">
                             <Button variant="secondary" onClick={() => setCreateOpen(false)}>Cancelar</Button>
-                            <Button variant="primary" className="px-10" onClick={handleCreate} loading={saving}>Instrumentar Propuesta</Button>
+                            <Button variant="primary" onClick={handleCreate} loading={saving}>Instrumentar Propuesta</Button>
                         </div>
                     </div>
                 )}
             >
-                <div className="space-y-8 max-h-[70vh] overflow-y-auto pr-2">
+                <div>
                     {/* Primary Info */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="form-group flex flex-col">
                             <label className="form-label">Nro. de Control *</label>
-                            <div className="relative">
-                                <Hash size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-accent" />
-                                <input className="form-input pl-10 font-bold" value={form.nroPresupuesto} onChange={e => setForm(f => ({ ...f, nroPresupuesto: e.target.value }))} />
+                            <div>
+                                <Hash size={16} className="text-accent" />
+                                <input className="form-input font-bold" value={form.nroPresupuesto} onChange={e => setForm(f => ({ ...f, nroPresupuesto: e.target.value }))} />
                             </div>
                         </div>
                         <div className="form-group">
@@ -754,38 +754,38 @@ const PresupuestosPage = () => {
                     </div>
 
                     {/* Items Section */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <div>
+                        <div className="flex items-center justify-between">
                             <h3 className="text-xs font-black uppercase text-accent tracking-widest flex items-center gap-2">
                                 <Car size={14} /> Unidades Cotizadas
                             </h3>
                             <Button variant="secondary" size="sm" onClick={addItem}>
-                                <Plus size={14} className="mr-1" /> Añadir Unidad
+                                <Plus size={14} /> Añadir Unidad
                             </Button>
                         </div>
                         {form.items.map((item, i) => (
-                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-slate-900/40 p-4 rounded-2xl border border-white/5 group relative transition-all hover:bg-slate-900/60">
+                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4">
                                 <div className="md:col-span-5">
                                     <label className="form-label-xs">Vehículo / Modelo</label>
-                                    <select className="form-input py-2" value={item.vehiculoId} onChange={e => updItem(i, 'vehiculoId', e.target.value)}>
+                                    <select className="form-input" value={item.vehiculoId} onChange={e => updItem(i, 'vehiculoId', e.target.value)}>
                                         <option value="">SELECCIONE UNIDAD EN STOCK...</option>
                                         {vehiculos.map(v => <option key={v.id} value={v.id}>{v.marca} {v.modelo} — {v.dominio ?? v.vin ?? `#${v.id}`}</option>)}
                                     </select>
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="form-label-xs">P. Lista</label>
-                                    <input type="number" className="form-input py-2" value={item.precioLista} onChange={e => updItem(i, 'precioLista', e.target.value)} />
+                                    <input type="number" className="form-input" value={item.precioLista} onChange={e => updItem(i, 'precioLista', e.target.value)} />
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="form-label-xs">Desc.</label>
-                                    <input type="number" className="form-input py-2" value={item.descuento} onChange={e => updItem(i, 'descuento', e.target.value)} />
+                                    <input type="number" className="form-input" value={item.descuento} onChange={e => updItem(i, 'descuento', e.target.value)} />
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="form-label-xs">Final *</label>
-                                    <input type="number" className="form-input py-2 font-bold text-accent" value={item.precioFinal} onChange={e => updItem(i, 'precioFinal', e.target.value)} />
+                                    <input type="number" className="form-input font-bold text-accent" value={item.precioFinal} onChange={e => updItem(i, 'precioFinal', e.target.value)} />
                                 </div>
                                 <div className="md:col-span-1">
-                                    <button className="w-full h-[38px] flex items-center justify-center text-red-500/50 hover:text-red-500 transition-all rounded-lg"
+                                    <button className="w-full flex items-center justify-center text-danger"
                                         onClick={() => removeItem(i)} disabled={form.items.length === 1}>
                                         <Trash2 size={18} />
                                     </button>
@@ -795,21 +795,20 @@ const PresupuestosPage = () => {
                     </div>
 
                     {/* Canje Section */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                            <h3 className="text-xs font-black uppercase text-indigo-400 tracking-widest flex items-center gap-2">
+                    <div>
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-black uppercase text-accent-2 tracking-widest flex items-center gap-2">
                                 <ArrowRightLeft size={14} /> Toma de Usado (Canje)
                             </h3>
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <span className="text-[10px] font-bold text-muted uppercase">{form.conCanje ? 'Incluido' : 'Sin Canje'}</span>
-                                <div className={`w-10 h-5 rounded-full transition-all relative ${form.conCanje ? 'bg-indigo-600' : 'bg-slate-700'}`}
-                                    onClick={() => setForm(f => ({ ...f, conCanje: !f.conCanje }))}>
-                                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${form.conCanje ? 'right-1' : 'left-1'}`} />
+                            <label className="flex items-center gap-3">
+                                <span className="text-3xs font-bold text-muted uppercase">{form.conCanje ? 'Incluido' : 'Sin Canje'}</span>
+                                <div onClick={() => setForm(f => ({ ...f, conCanje: !f.conCanje }))}>
+                                    <div />
                                 </div>
                             </label>
                         </div>
                         {form.conCanje && (
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 bg-indigo-500/5 p-6 rounded-3xl border border-indigo-500/10">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                 <div className="md:col-span-2">
                                     <label className="form-label">Descripción / Marca / Modelo</label>
                                     <input className="form-input" value={form.canje.descripcion} onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, descripcion: e.target.value } }))} />
@@ -820,9 +819,9 @@ const PresupuestosPage = () => {
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Valor de Toma *</label>
-                                    <div className="relative">
-                                        <DollarSign size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-400" />
-                                        <input type="number" className="form-input pl-10 font-bold" value={form.canje.valorTomado} onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, valorTomado: e.target.value } }))} />
+                                    <div>
+                                        <DollarSign size={16} className="text-accent-2" />
+                                        <input type="number" className="form-input font-bold" value={form.canje.valorTomado} onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, valorTomado: e.target.value } }))} />
                                     </div>
                                 </div>
                             </div>
@@ -841,24 +840,24 @@ const PresupuestosPage = () => {
                 footer={detail ? (
                     <div className="flex justify-between items-center w-full">
                         <div>
-                            <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1">Impacto Final de la Operación</p>
+                            <p className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Impacto Final de la Operación</p>
                             <p className="text-2xl font-black text-accent">{currencyFmt(calcTotal(detail), detail.moneda)}</p>
                         </div>
                         <div className="flex gap-4">
                             <Button variant="secondary" onClick={() => setDetailId(null)}>Cerrar Expediente</Button>
-                            <Button variant="primary" className="px-8 shadow-glow" onClick={() => { setDetailId(null); openEdit(detail); }}>
-                                <Pencil size={16} className="mr-2" /> Alterar Parámetros
+                            <Button variant="primary" className="shadow-glow" onClick={() => { setDetailId(null); openEdit(detail); }}>
+                                <Pencil size={16} /> Alterar Parámetros
                             </Button>
                         </div>
                     </div>
                 ) : undefined}
             >
                 {!detail ? (
-                    <div className="p-24 text-center"><RefreshCw className="animate-spin text-accent mx-auto mb-4" size={48} /><p className="text-xs font-black text-muted uppercase tracking-[0.3em]">Consolidando expediente comercial...</p></div>
+                    <div className="text-center"><RefreshCw className="animate-spin text-accent mb-4" size={48} /><p className="text-xs font-black text-muted uppercase tracking-widest">Consolidando expediente comercial...</p></div>
                 ) : (
-                    <div className="space-y-8">
+                    <div>
                         <div className="flex items-center gap-6">
-                            <div className="w-16 h-16 rounded-3xl bg-slate-800 flex items-center justify-center text-accent ring-1 ring-white/10">
+                            <div className="flex items-center justify-center text-accent">
                                 <FileText size={32} />
                             </div>
                             <div>
@@ -867,38 +866,38 @@ const PresupuestosPage = () => {
                                         {STATUS[detail.estado as EstadoPresupuesto]?.label.toUpperCase()}
                                     </Badge>
                                 </div>
-                                <p className="text-slate-400 font-bold flex items-center gap-2 uppercase text-xs">
+                                <p className="text-muted font-bold flex items-center gap-2 uppercase text-xs">
                                     <MapPin size={14} /> SUCURSAL: {detail.sucursal?.nombre ?? 'NO ESPECIFICADA'}
                                 </p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5">
-                                <span className="text-[10px] font-black text-muted uppercase block tracking-widest mb-1">Fecha Emisión</span>
-                                <p className="text-lg font-bold text-white">{fmt(detail.fechaCreacion)}</p>
+                            <div>
+                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Fecha Emisión</span>
+                                <p className="text-lg font-bold">{fmt(detail.fechaCreacion)}</p>
                             </div>
-                            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5">
-                                <span className="text-[10px] font-black text-muted uppercase block tracking-widest mb-1">Validez Hasta</span>
-                                <p className="text-lg font-bold text-white">{fmt(detail.validoHasta)}</p>
+                            <div>
+                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Validez Hasta</span>
+                                <p className="text-lg font-bold">{fmt(detail.validoHasta)}</p>
                             </div>
-                            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5">
-                                <span className="text-[10px] font-black text-muted uppercase block tracking-widest mb-1">Interesado</span>
-                                <p className="text-lg font-bold text-white truncate">{detail.cliente?.nombre ?? '-'}</p>
+                            <div>
+                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Interesado</span>
+                                <p className="text-lg font-bold truncate">{detail.cliente?.nombre ?? '-'}</p>
                             </div>
-                            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5">
-                                <span className="text-[10px] font-black text-muted uppercase block tracking-widest mb-1">Oficial Responsable</span>
-                                <p className="text-lg font-bold text-white truncate">{detail.vendedor?.nombre ?? '-'}</p>
+                            <div>
+                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Oficial Responsable</span>
+                                <p className="text-lg font-bold truncate">{detail.vendedor?.nombre ?? '-'}</p>
                             </div>
                         </div>
 
-                        <div className="space-y-6">
-                            <h3 className="text-sm font-black text-white uppercase tracking-[0.2em] flex items-center gap-2 border-b border-white/5 pb-2">
+                        <div>
+                            <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
                                 <Car size={16} className="text-accent" /> Matriz de Unidades Cotizadas
                             </h3>
-                            <div className="table-container border-white/5 overflow-hidden">
+                            <div className="table-container">
                                 <table className="data-table">
-                                    <thead className="bg-slate-900/60">
+                                    <thead>
                                         <tr>
                                             <th>Activo / Unidad</th>
                                             <th style={{ textAlign: 'right' }}>Precio Lista</th>
@@ -909,10 +908,10 @@ const PresupuestosPage = () => {
                                     <tbody>
                                         {detail.items?.map((it: PresupuestoItem) => (
                                             <tr key={it.id}>
-                                                <td className="font-bold text-white uppercase text-xs">{it.vehiculo ? `${it.vehiculo.marca} ${it.vehiculo.modelo} [${it.vehiculo.dominio || 'S/D'}]` : `#${it.vehiculoId}`}</td>
-                                                <td style={{ textAlign: 'right' }} className="text-slate-400 font-mono italic">{currencyFmt(it.precioLista, String(detail.moneda))}</td>
-                                                <td style={{ textAlign: 'right' }} className="text-red-400 font-mono font-bold">-{currencyFmt(it.descuento ?? 0, String(detail.moneda))}</td>
-                                                <td style={{ textAlign: 'right' }} className="font-black text-white text-lg">{currencyFmt(it.precioFinal, String(detail.moneda))}</td>
+                                                <td className="font-bold uppercase text-xs">{it.vehiculo ? `${it.vehiculo.marca} ${it.vehiculo.modelo} [${it.vehiculo.dominio || 'S/D'}]` : `#${it.vehiculoId}`}</td>
+                                                <td style={{ textAlign: 'right' }} className="text-muted font-mono italic">{currencyFmt(it.precioLista, String(detail.moneda))}</td>
+                                                <td style={{ textAlign: 'right' }} className="text-danger font-mono font-bold">-{currencyFmt(it.descuento ?? 0, String(detail.moneda))}</td>
+                                                <td style={{ textAlign: 'right' }} className="font-black text-lg">{currencyFmt(it.precioFinal, String(detail.moneda))}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -921,22 +920,22 @@ const PresupuestosPage = () => {
                         </div>
 
                         {detail.canje && (
-                            <div className="p-8 bg-indigo-500/5 border border-indigo-500/10 rounded-3xl">
-                                <h3 className="text-xs font-black uppercase text-indigo-400 tracking-widest mb-6 flex items-center gap-2">
+                            <div>
+                                <h3 className="text-xs font-black uppercase text-accent-2 tracking-widest mb-6 flex items-center gap-2">
                                     <ArrowRightLeft size={14} /> Gestión de Toma de Usado
                                 </h3>
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                                     <div className="md:col-span-2">
-                                        <span className="text-[10px] font-black text-muted block mb-1 uppercase">Descripción del Activo</span>
-                                        <p className="font-bold text-white uppercase">{detail.canje.descripcion}</p>
+                                        <span className="text-3xs font-black text-muted mb-1 uppercase">Descripción del Activo</span>
+                                        <p className="font-bold uppercase">{detail.canje.descripcion}</p>
                                     </div>
                                     <div>
-                                        <span className="text-[10px] font-black text-muted block mb-1 uppercase">Dominio</span>
-                                        <p className="font-mono text-white text-lg tracking-widest">{detail.canje.dominio || 'S/D'}</p>
+                                        <span className="text-3xs font-black text-muted mb-1 uppercase">Dominio</span>
+                                        <p className="font-mono text-lg tracking-widest">{detail.canje.dominio || 'S/D'}</p>
                                     </div>
                                     <div className="text-right">
-                                        <span className="text-[10px] font-black text-indigo-400 block mb-1 uppercase">Acreditación Canje</span>
-                                        <p className="text-2xl font-black text-white">-{currencyFmt(detail.canje.valorTomado, detail.moneda)}</p>
+                                        <span className="text-3xs font-black text-accent-2 mb-1 uppercase">Acreditación Canje</span>
+                                        <p className="text-2xl font-black">-{currencyFmt(detail.canje.valorTomado, detail.moneda)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -959,7 +958,7 @@ const PresupuestosPage = () => {
                     </>
                 )}
             >
-                <div className="space-y-8">
+                <div>
                     <div className="form-group">
                         <label className="form-label">Estado del Expediente</label>
                         <select className="form-input text-lg font-bold" value={editForm.estado} onChange={e => setEditForm(f => ({ ...f, estado: e.target.value }))}>
@@ -984,12 +983,12 @@ const PresupuestosPage = () => {
                     <>
                         <Button variant="secondary" onClick={() => setConvertirId(null)}>Cancelar</Button>
                         <Button variant="primary" className="flex-1" onClick={handleConvertirEnVenta} loading={convertirSaving}>
-                            <ArrowRight size={16} className="mr-2" /> Crear venta
+                            <ArrowRight size={16} /> Crear venta
                         </Button>
                     </>
                 )}
             >
-                <div className="space-y-4">
+                <div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="form-group">
                             <label className="form-label">Forma de pago</label>

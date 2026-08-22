@@ -674,7 +674,7 @@ export default function PostventaPage() {
 
             {/* Stats */}
             <div className="stats-grid mb-6" data-tour="pv-stats">
-                <div className="card glass stat-tile border-amber-500/20 bg-amber-500/5">
+                <div className="card glass stat-tile">
                     <span className="stat-tile-label" style={{ color: '#f59e0b' }}>Pendientes</span>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black">{stats.pendiente}</span>
@@ -682,7 +682,7 @@ export default function PostventaPage() {
                     </div>
                     <Clock size={60} className="stat-tile-bg" />
                 </div>
-                <div className="card glass stat-tile border-blue-500/20 bg-blue-500/5">
+                <div className="card glass stat-tile">
                     <span className="stat-tile-label" style={{ color: 'var(--info)' }}>En curso</span>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black">{stats.en_curso}</span>
@@ -690,7 +690,7 @@ export default function PostventaPage() {
                     </div>
                     <Wrench size={60} className="stat-tile-bg" />
                 </div>
-                <div className="card glass stat-tile border-emerald-500/20 bg-emerald-500/5">
+                <div className="card glass stat-tile">
                     <span className="stat-tile-label" style={{ color: 'var(--success)' }}>Resueltos</span>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black">{stats.resuelto}</span>
@@ -701,7 +701,7 @@ export default function PostventaPage() {
             </div>
 
             {/* Tabs */}
-            <div className="card glass p-6 border-slate-700/30 mb-6">
+            <div className="card glass mb-6">
                 <div className="segmented" role="tablist" data-tour="pv-tabs">
                     <button
                         role="tab"
@@ -817,13 +817,13 @@ export default function PostventaPage() {
             {/* Filters */}
             <div className="card glass filters-bar mb-6" data-tour="pv-filtros">
                 <div className="search-box">
-                    <Search size={18} className="text-slate-500" />
+                    <Search size={18} className="text-muted" />
                     <input
                         type="text"
                         placeholder="Buscar cliente, vehículo, descripción..."
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        className="bg-transparent border-none outline-none text-white w-full text-sm font-medium"
+                        className="w-full text-sm font-medium"
                     />
                 </div>
                 <select value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }}>

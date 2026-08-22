@@ -829,7 +829,7 @@ const ReportesPage = () => {
                         {renderConsolidado(cajaQ.data, 'Resultado neto', (c) => c.neto)}
                         {(cajaQ.data?.porMoneda ?? []).map((c) => (
                             <div key={c.moneda}>
-                                <div className="flex items-center gap-2 mb-3">
+                                <div className="flex items-center gap-2">
                                     <span className="badge badge-navy">{c.moneda}</span>
                                     <span className="text-xs text-muted">
                                         Resultado neto: <strong style={{ color: c.neto >= 0 ? 'var(--success)' : 'var(--danger)' }}>
@@ -1077,20 +1077,20 @@ const ReportesPage = () => {
                     </>
                 }
             >
-                <div className="space-y-6">
+                <div>
                     <div className="form-group">
                         <label className="form-label">Fecha</label>
                         <input type="date" className="form-input" value={cotFecha} onChange={(e) => setCotFecha(e.target.value)} max={hoyStr} />
                     </div>
                     <div className="form-group">
                         <label className="form-label">Valor (ARS por 1 USD) *</label>
-                        <div className="relative">
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-accent font-black">$</div>
+                        <div>
+                            <div className="text-accent font-black">$</div>
                             <input
                                 type="number"
                                 min="0"
                                 step="0.01"
-                                className="form-input pl-8 font-black text-xl"
+                                className="form-input font-black text-xl"
                                 value={cotValor}
                                 onChange={(e) => setCotValor(e.target.value)}
                                 placeholder="1450"
@@ -1121,7 +1121,7 @@ const ReportesPage = () => {
                     </>
                 }
             >
-                <div className="space-y-6">
+                <div>
                     <div className="form-group">
                         <label className="form-label">Vencimiento VTV</label>
                         <input type="date" className="form-input" value={renovarVtv} onChange={(e) => setRenovarVtv(e.target.value)} />

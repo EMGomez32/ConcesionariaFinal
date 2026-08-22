@@ -29,11 +29,11 @@ import type { ProveedorFilter } from '../../types/proveedor.types';
 import { getApiErrorMessage } from '../../utils/error';
 
 const TIPO_COLORS: Record<string, string> = {
-    importadora: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-    taller: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    particular: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    financiera: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    otro: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+    importadora: 'text-accent-2',
+    taller: 'text-warning',
+    particular: 'text-accent',
+    financiera: 'text-info',
+    otro: 'text-muted',
 };
 
 const ProveedoresPage: React.FC = () => {
@@ -155,19 +155,19 @@ const ProveedoresPage: React.FC = () => {
 
             <div className="card glass filters-bar mb-6 flex-wrap lg:flex-nowrap gap-4">
                 <div className="search-box flex-1">
-                    <Search size={18} className="text-slate-500" />
+                    <Search size={18} className="text-muted" />
                     <input
                         type="text"
                         placeholder="Buscar por nombre o empresa..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="bg-transparent border-none outline-none text-white w-full text-sm font-medium"
+                        className="w-full text-sm font-medium"
                     />
                 </div>
 
                 <div className="flex gap-3 w-full lg:w-auto">
                     <select
-                        className="bg-slate-900/50 border border-white/5 text-slate-400 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:border-accent/40 transition-all cursor-pointer"
+                        className="text-muted text-xs font-bold"
                         value={filterTipo}
                         onChange={e => setFilterTipo(e.target.value)}
                     >
@@ -178,7 +178,7 @@ const ProveedoresPage: React.FC = () => {
                     </select>
 
                     <select
-                        className="bg-slate-900/50 border border-white/5 text-slate-400 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:border-accent/40 transition-all cursor-pointer"
+                        className="text-muted text-xs font-bold"
                         value={filterActivo}
                         onChange={e => setFilterActivo(e.target.value)}
                     >
@@ -192,32 +192,32 @@ const ProveedoresPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {isLoading && !proveedores.length ? (
                     [1, 2, 3, 4, 5, 6].map(i => (
-                        <div key={i} className="card animate-pulse" style={{ height: '220px', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)' }}></div>
+                        <div key={i} className="card" style={{ height: '220px', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)' }}></div>
                     ))
                 ) : isError ? (
-                    <div className="col-span-full py-20 text-center text-red-400 font-bold">Error al sincronizar proveedores</div>
+                    <div className="col-span-full text-center text-danger font-bold">Error al sincronizar proveedores</div>
                 ) : proveedores.length === 0 ? (
-                    <div className="col-span-full py-32 flex flex-col items-center opacity-40">
+                    <div className="col-span-full flex flex-col items-center">
                         <Truck size={64} className="mb-4" />
                         <p className="text-xl font-black italic">No hay proveedores registrados</p>
                     </div>
                 ) : (
                     proveedores.map((p: Proveedor) => (
-                        <div key={p.id} className="card glass hover:scale-[1.02] transition-all group flex flex-col h-full">
+                        <div key={p.id} className="card glass flex flex-col">
                             <div className="flex justify-between items-start mb-6">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shadow-lg">
+                                    <div className="text-accent-2 flex items-center justify-center">
                                         <Building2 size={24} />
                                     </div>
                                     <div>
                                         <h3 className="cell-heading text-lg leading-tight">{p.nombre}</h3>
-                                        <span className={`inline-block px-2 py-0.5 mt-1 rounded text-[9px] font-black uppercase tracking-wider border ${TIPO_COLORS[p.tipo || 'otro']}`}>
+                                        <span className={`text-3xs font-black uppercase tracking-wider ${TIPO_COLORS[p.tipo || 'otro']}`}>
                                             {p.tipo ? labelTipoProveedor(p.tipo) : 'Sin Tipo'}
                                         </span>
                                     </div>
                                 </div>
 
-                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex gap-1">
                                     <button className="icon-btn small" onClick={() => handleOpenModal(p)}>
                                         <Edit size={14} />
                                     </button>
@@ -227,22 +227,22 @@ const ProveedoresPage: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="space-y-3 flex-1">
-                                <div className="flex items-center gap-3 text-slate-400">
-                                    <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-                                        <Mail size={14} className="text-indigo-400/60" />
+                            <div className="flex-1">
+                                <div className="flex items-center gap-3 text-muted">
+                                    <div className="flex items-center justify-center">
+                                        <Mail size={14} className="text-accent-2" />
                                     </div>
                                     <span className="text-sm font-medium truncate">{p.email || 'Sin Correo'}</span>
                                 </div>
-                                <div className="flex items-center gap-3 text-slate-400">
-                                    <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-                                        <Phone size={14} className="text-indigo-400/60" />
+                                <div className="flex items-center gap-3 text-muted">
+                                    <div className="flex items-center justify-center">
+                                        <Phone size={14} className="text-accent-2" />
                                     </div>
                                     <span className="text-sm font-medium">{p.telefono || 'Sin Teléfono'}</span>
                                 </div>
                                 {p.direccion && (
-                                    <div className="flex items-center gap-3 text-slate-500">
-                                        <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
+                                    <div className="flex items-center gap-3 text-muted">
+                                        <div className="flex items-center justify-center">
                                             <MapPin size={14} />
                                         </div>
                                         <span className="text-xs italic truncate">{p.direccion}</span>
@@ -250,13 +250,13 @@ const ProveedoresPage: React.FC = () => {
                                 )}
                             </div>
 
-                            <div className="mt-8 pt-4 border-t border-white/5 flex justify-between items-center">
-                                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${p.activo ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-500/10 text-slate-500 opacity-60'}`}>
+                            <div className="flex justify-between items-center">
+                                <div className={`flex items-center text-3xs font-black uppercase tracking-widest ${p.activo ? 'text-success' : 'text-muted'}`}>
                                     {p.activo ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
                                     {p.activo ? 'Operativo' : 'Inactivo'}
                                 </div>
                                 <button
-                                    className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all flex items-center gap-1 text-[10px] font-bold uppercase"
+                                    className="text-muted flex items-center gap-1 text-3xs font-bold uppercase"
                                     onClick={() => navigate(`/proveedores/${p.id}`)}
                                 >
                                     Ficha

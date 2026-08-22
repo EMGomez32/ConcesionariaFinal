@@ -218,29 +218,29 @@ const MovimientosPage = () => {
             </header>
 
             {/* Filters Bar */}
-            <div className="card glass filters-bar flex flex-wrap items-end gap-6 bg-slate-900/40">
-                <div className="flex-1 min-w-[200px]">
-                    <label className="form-label-xs text-indigo-400">Filtrar por Unidad</label>
+            <div className="card glass filters-bar flex flex-wrap items-end gap-6">
+                <div className="flex-1">
+                    <label className="form-label-xs text-accent-2">Filtrar por Unidad</label>
                     <select className="form-input-select w-full" value={filterVehiculo} onChange={e => { setFilterVehiculo(e.target.value); setPage(1); }}>
                         <option value="">TODOS LOS VEHÍCULOS</option>
                         {vehiculos.map(v => <option key={v.id} value={v.id}>{`${v.marca} ${v.modelo} ${v.dominio || ''}`.toUpperCase()}</option>)}
                     </select>
                 </div>
-                <div className="min-w-[180px]">
+                <div>
                     <label className="form-label-xs">Origen de Stock</label>
                     <select className="form-input-select w-full" value={filterDesde} onChange={e => { setFilterDesde(e.target.value); setPage(1); }}>
                         <option value="">CUALQUIER PLAZA</option>
                         {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
                     </select>
                 </div>
-                <div className="min-w-[180px]">
+                <div>
                     <label className="form-label-xs">Destino de Stock</label>
                     <select className="form-input-select w-full" value={filterHasta} onChange={e => { setFilterHasta(e.target.value); setPage(1); }}>
                         <option value="">CUALQUIER DESTINO</option>
                         {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
                     </select>
                 </div>
-                <div className="flex items-end mb-[2px]">
+                <div className="flex items-end">
                     <Button variant="secondary" onClick={handleClear} title="Limpiar filtros">
                         <RefreshCw size={18} />
                     </Button>
@@ -263,15 +263,15 @@ const MovimientosPage = () => {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={6} style={{ padding: '8rem', textAlign: 'center' }}><RefreshCw className="animate-spin text-accent mx-auto" size={40} /></td></tr>
+                            <tr><td colSpan={6} style={{ padding: '8rem', textAlign: 'center' }}><RefreshCw className="animate-spin text-accent" size={40} /></td></tr>
                         ) : movimientos.length === 0 ? (
                             <tr>
                                 <td colSpan={7}>
-                                    <div className="flex flex-col items-center py-20 text-muted">
-                                        <div className="w-20 h-20 bg-slate-800 rounded-3xl flex items-center justify-center mb-4 border border-slate-700">
-                                            <ArrowLeftRight size={40} className="text-slate-600" />
+                                    <div className="flex flex-col items-center text-muted">
+                                        <div className="flex items-center justify-center mb-4">
+                                            <ArrowLeftRight size={40} className="text-secondary" />
                                         </div>
-                                        <p className="text-xl font-black text-slate-400 italic">No se registran trazabilidades</p>
+                                        <p className="text-xl font-black text-muted italic">No se registran trazabilidades</p>
                                         <p className="text-sm font-medium">El historial de movimientos está vacío para los filtros seleccionados.</p>
                                     </div>
                                 </td>
@@ -281,14 +281,14 @@ const MovimientosPage = () => {
                                 <tr key={m.id}>
                                     <td>
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-indigo-400 ring-1 ring-slate-700 shadow-inner">
+                                            <div className="flex items-center justify-center text-accent-2">
                                                 <Car size={18} />
                                             </div>
                                             <div className="flex flex-col">
-                                                <span className="font-bold text-white leading-tight">
+                                                <span className="font-bold leading-tight">
                                                     {m.vehiculo ? `${m.vehiculo.marca} ${m.vehiculo.modelo}` : `Vehículo #${m.vehiculoId}`}
                                                 </span>
-                                                <span className="text-[10px] font-black text-indigo-500/80 uppercase tracking-widest">{m.vehiculo?.dominio || 'S/PATENTE'}</span>
+                                                <span className="text-3xs font-black text-accent-2 uppercase tracking-widest">{m.vehiculo?.dominio || 'S/PATENTE'}</span>
                                             </div>
                                         </div>
                                     </td>
@@ -300,15 +300,15 @@ const MovimientosPage = () => {
                                     <td>
                                         <div className="flex items-center gap-2">
                                             <div className="flex flex-col">
-                                                <span className="text-[9px] text-muted uppercase font-black tracking-tighter">DESDE</span>
-                                                <span className="text-xs font-bold text-slate-300">{m.desdeSucursal?.nombre ?? '-'}</span>
+                                                <span className="text-3xs text-muted uppercase font-black tracking-tight">DESDE</span>
+                                                <span className="text-xs font-bold text-muted">{m.desdeSucursal?.nombre ?? '-'}</span>
                                             </div>
-                                            <ArrowRight size={14} className="text-slate-600 mx-1 shrink-0" />
+                                            <ArrowRight size={14} className="text-secondary" />
                                             <div className="flex flex-col text-right">
-                                                <span className="text-[9px] text-indigo-400 uppercase font-black tracking-tighter">
+                                                <span className="text-3xs text-accent-2 uppercase font-black tracking-tight">
                                                     {m.tipo === 'preparacion' ? 'PREPARACIÓN' : 'HASTA'}
                                                 </span>
-                                                <span className="text-xs font-bold text-white">
+                                                <span className="text-xs font-bold">
                                                     {/* `destino` es texto libre de movimientos viejos, previos a que
                                                         el destino pasara a ser un proveedor. */}
                                                     {m.hastaSucursal?.nombre ?? m.proveedorDestino?.nombre ?? m.destino ?? 'VENTA'}
@@ -317,7 +317,7 @@ const MovimientosPage = () => {
                                         </div>
                                     </td>
                                     <td>
-                                        <div className="flex items-center gap-2 text-slate-400">
+                                        <div className="flex items-center gap-2 text-muted">
                                             <Calendar size={14} />
                                             <span className="text-sm font-bold tabular-nums">
                                                 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR') : (m.createdAt ? new Date(m.createdAt).toLocaleDateString('es-AR') : '-')}
@@ -326,25 +326,25 @@ const MovimientosPage = () => {
                                     </td>
                                     <td style={{ maxWidth: '200px' }}>
                                         <div className="flex items-center gap-2">
-                                            <FileText size={14} className="text-slate-600 shrink-0" />
-                                            <span className="text-xs text-slate-400 italic line-clamp-1">{m.motivo || 'Sin detalles registrados'}</span>
+                                            <FileText size={14} className="text-secondary" />
+                                            <span className="text-xs text-muted italic line-clamp-1">{m.motivo || 'Sin detalles registrados'}</span>
                                         </div>
                                     </td>
                                     <td>
                                         <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center text-slate-500 border border-slate-700">
+                                            <div className="flex items-center justify-center text-muted">
                                                 <User size={14} />
                                             </div>
-                                            <span className="text-xs font-black text-slate-400 uppercase">{m.registradoPor?.nombre ?? 'SYSTEM'}</span>
+                                            <span className="text-xs font-black text-muted uppercase">{m.registradoPor?.nombre ?? 'SYSTEM'}</span>
                                         </div>
                                     </td>
                                     <td style={{ textAlign: 'right' }}>
                                         {m.tipo !== 'preparacion' ? (
-                                            <span className="text-xs font-bold text-slate-500">—</span>
+                                            <span className="text-xs font-bold text-muted">—</span>
                                         ) : m.fechaRetorno ? (
                                             <div className="flex flex-col items-end">
                                                 <Badge variant="success">Volvió</Badge>
-                                                <span className="text-[10px] text-muted mt-1">{new Date(m.fechaRetorno).toLocaleDateString('es-AR')}</span>
+                                                <span className="text-3xs text-muted">{new Date(m.fechaRetorno).toLocaleDateString('es-AR')}</span>
                                             </div>
                                         ) : (
                                             <div className="flex flex-col items-end gap-1">
@@ -363,14 +363,14 @@ const MovimientosPage = () => {
             </div>
 
             {/* Pagination */}
-            <div className="flex justify-center items-center gap-6 mt-8">
+            <div className="flex justify-center items-center gap-6">
                 <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
                     <ChevronLeft size={16} /> Anterior
                 </Button>
                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted font-black uppercase tracking-tighter">Página</span>
-                    <span className="w-9 h-9 bg-accent text-white rounded-xl flex items-center justify-center font-black text-sm shadow-lg shadow-accent/20">{page}</span>
-                    <span className="text-[10px] text-muted font-black uppercase tracking-tighter">de {totalPages}</span>
+                    <span className="text-3xs text-muted font-black uppercase tracking-tight">Página</span>
+                    <span className="flex items-center justify-center font-black text-sm">{page}</span>
+                    <span className="text-3xs text-muted font-black uppercase tracking-tight">de {totalPages}</span>
                 </div>
                 <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
                     Siguiente <ChevronRight size={16} />
@@ -393,7 +393,7 @@ const MovimientosPage = () => {
                     </>
                 }
             >
-                <div className="space-y-6">
+                <div>
                     <div className="form-group">
                         <label className="form-label">Unidad Vehicular a Movilizar *</label>
                         <select className="form-input text-lg font-bold" value={form.vehiculoId} onChange={e => setForm(f => ({ ...f, vehiculoId: e.target.value }))}>
@@ -423,9 +423,9 @@ const MovimientosPage = () => {
                     {form.modalidad === 'traslado' ? (
                         <div className="form-group">
                             <label className="form-label">Sucursal de destino *</label>
-                            <div className="relative">
-                                <MapPin size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-accent" />
-                                <select className="form-input pl-11" value={form.hastaSucursalId} onChange={e => setForm(f => ({ ...f, hastaSucursalId: e.target.value }))}>
+                            <div>
+                                <MapPin size={16} className="text-accent" />
+                                <select className="form-input" value={form.hastaSucursalId} onChange={e => setForm(f => ({ ...f, hastaSucursalId: e.target.value }))}>
                                     <option value="">Seleccionar sucursal...</option>
                                     {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
                                 </select>
@@ -434,10 +434,10 @@ const MovimientosPage = () => {
                     ) : (
                         <div className="form-group">
                             <label className="form-label">Proveedor de destino *</label>
-                            <div className="relative">
-                                <MapPin size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-accent" />
+                            <div>
+                                <MapPin size={16} className="text-accent" />
                                 <select
-                                    className="form-input pl-11"
+                                    className="form-input"
                                     value={form.proveedorDestinoId}
                                     onChange={e => setForm(f => ({ ...f, proveedorDestinoId: e.target.value }))}
                                 >
@@ -487,21 +487,15 @@ const MovimientosPage = () => {
                 }
                 .shadow-glow-indigo { box-shadow: 0 0 20px rgba(99, 102, 241, 0.2); }
                 
-                .form-label-xs {
-                    font-size: 0.7rem;
-                    font-weight: 800;
-                    color: var(--text-muted);
-                    text-transform: uppercase;
-                    margin-bottom: 0.5rem;
-                    display: block;
-                    letter-spacing: 0.1em;
-                }
+                /* .form-label-xs: la define index.css (capa global). El
+                   .form-input-select local es la variante protagónica de estos
+                   filtros y gana la cascada a propósito. */
                 .form-input-select {
                     padding: 0.75rem 2.5rem 0.75rem 1rem;
                     border-radius: 1rem;
                     border: 1px solid var(--border);
                     background: var(--bg-primary);
-                    font-size: 0.85rem;
+                    font-size: var(--text-sm);
                     font-weight: 700;
                     color: var(--text-primary);
                     appearance: none;

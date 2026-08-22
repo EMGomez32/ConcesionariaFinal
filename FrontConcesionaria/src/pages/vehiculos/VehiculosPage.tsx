@@ -196,29 +196,29 @@ const VehiculosPage: React.FC = () => {
             accessor: (v) => (
                 <div className="flex flex-col">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-black text-white px-2 py-0.5 bg-accent/20 border border-accent/30 rounded-lg">
+                        <span className="text-3xs font-black">
                             {v.dominio || 'SIN DOMINIO'}
                         </span>
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border ${v.tipo === 'CERO_KM' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
+                        <span className={`text-3xs font-black uppercase ${v.tipo === 'CERO_KM' ? 'text-warning' : 'text-muted'}`}>
                             {v.tipo === 'CERO_KM' ? '0 KM' : 'Usado'}
                         </span>
                     </div>
-                    <span className="font-bold text-white uppercase">{v.marca} {v.modelo}</span>
-                    <span className="text-[10px] text-slate-500 uppercase font-bold">{v.version || '-'}</span>
+                    <span className="font-bold uppercase">{v.marca} {v.modelo}</span>
+                    <span className="text-3xs text-muted uppercase font-bold">{v.version || '-'}</span>
                 </div>
             )
         },
         {
             header: 'Info',
             accessor: (v) => (
-                <div className="flex flex-col gap-1 text-slate-400">
+                <div className="flex flex-col gap-1 text-muted">
                     <div className="flex items-center gap-2">
-                        <Calendar size={12} className="text-accent/60" />
-                        <span className="text-[11px] font-bold uppercase">{v.anio || 'S/A'}</span>
+                        <Calendar size={12} className="text-accent" />
+                        <span className="text-2xs font-bold uppercase">{v.anio || 'S/A'}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Database size={12} className="text-accent/60" />
-                        <span className="text-[11px] font-bold">{v.kmIngreso ? `${v.kmIngreso.toLocaleString()} KM` : '0 KM'}</span>
+                        <Database size={12} className="text-accent" />
+                        <span className="text-2xs font-bold">{v.kmIngreso ? `${v.kmIngreso.toLocaleString()} KM` : '0 KM'}</span>
                     </div>
                 </div>
             )
@@ -226,8 +226,8 @@ const VehiculosPage: React.FC = () => {
         {
             header: 'Ubicación',
             accessor: (v) => (
-                <div className="flex items-center gap-2 text-slate-400">
-                    <MapPin size={14} className="text-accent/60" />
+                <div className="flex items-center gap-2 text-muted">
+                    <MapPin size={14} className="text-accent" />
                     <span className="text-xs font-bold truncate">{v.sucursal?.nombre || 'Sede Central'}</span>
                 </div>
             )
@@ -235,8 +235,8 @@ const VehiculosPage: React.FC = () => {
         {
             header: 'Precio',
             accessor: (v) => (
-                <div className="flex items-center gap-1 text-white">
-                    <DollarSign size={14} className="text-emerald-400" />
+                <div className="flex items-center gap-1">
+                    <DollarSign size={14} className="text-accent" />
                     <span className="text-sm font-black italic">
                         {v.precioLista
                             ? `${v.moneda === 'USD' ? 'US$' : '$'}${Number(v.precioLista).toLocaleString('es-AR')}`
@@ -248,9 +248,9 @@ const VehiculosPage: React.FC = () => {
         {
             header: 'Estado',
             accessor: (v) => (
-                <div className="flex items-center gap-2 group/status cursor-pointer" onClick={(e) => { e.stopPropagation(); openEstadoModal(v); }}>
+                <div className="flex items-center gap-2" onClick={(e) => { e.stopPropagation(); openEstadoModal(v); }}>
                     <Badge variant={STATUS_MAP[v.estado].variant}>{STATUS_MAP[v.estado].label}</Badge>
-                    <ChevronDown size={14} className="text-slate-600 group-hover/status:text-slate-400 transition-colors" />
+                    <ChevronDown size={14} className="text-secondary" />
                 </div>
             )
         },
@@ -258,7 +258,7 @@ const VehiculosPage: React.FC = () => {
             header: 'Antigüedad',
             accessor: (v) => {
                 // Una unidad vendida/devuelta ya no envejece: se muestra "—".
-                if (!EN_STOCK.includes(v.estado)) return <span className="text-slate-600 text-xs">—</span>;
+                if (!EN_STOCK.includes(v.estado)) return <span className="text-secondary text-xs">—</span>;
                 const d = diasEnStock(v.fechaIngreso);
                 return <Badge variant={antiguedadVariant(d)}>{d} {d === 1 ? 'día' : 'días'}</Badge>;
             }
@@ -371,7 +371,7 @@ const VehiculosPage: React.FC = () => {
                 data={vehiculos}
                 isLoading={loading}
                 emptyMessage="No se detectaron unidades registradas"
-                emptyIcon={<Car size={48} className="opacity-20" />}
+                emptyIcon={<Car size={48} />}
                 currentPage={page}
                 totalPages={totalPages}
                 onPageChange={setPage}
@@ -387,15 +387,15 @@ const VehiculosPage: React.FC = () => {
                 maxWidth="440px"
             >
                 {estadoModal && (
-                    <div className="space-y-6">
-                        <div className="p-4 bg-slate-900/50 border border-white/5 rounded-2xl">
-                            <h4 className="text-sm font-black text-white uppercase tracking-tight">{estadoModal.vehiculo.marca} {estadoModal.vehiculo.modelo}</h4>
-                            <p className="text-[10px] font-mono text-accent">ID REGISTRO: #{estadoModal.vehiculo.id.toString().padStart(5, '0')}</p>
+                    <div>
+                        <div className="p-4">
+                            <h4 className="text-sm font-black uppercase tracking-tight">{estadoModal.vehiculo.marca} {estadoModal.vehiculo.modelo}</h4>
+                            <p className="text-3xs font-mono text-accent">ID REGISTRO: #{estadoModal.vehiculo.id.toString().padStart(5, '0')}</p>
                         </div>
                         <div>
-                            <label className="text-sm font-bold text-slate-400 mb-3 block">Transicionar a la siguiente fase:</label>
+                            <label className="text-sm font-bold text-muted">Transicionar a la siguiente fase:</label>
                             <select
-                                className="w-full p-4 bg-slate-900 border border-white/10 rounded-2xl text-white outline-none focus:border-accent transition-all cursor-pointer"
+                                className="w-full p-4"
                                 value={nuevoEstado}
                                 onChange={e => setNuevoEstado(e.target.value as EstadoVehiculo)}
                             >
@@ -405,7 +405,7 @@ const VehiculosPage: React.FC = () => {
                                 ))}
                             </select>
                         </div>
-                        <div className="form-actions pt-4">
+                        <div className="form-actions">
                             <Button variant="secondary" onClick={() => setEstadoModal(null)}>Cancelar</Button>
                             <Button variant="primary" onClick={handleCambiarEstado} loading={changeEstadoMutation.isPending} disabled={!nuevoEstado}>
                                 Confirmar Cambio

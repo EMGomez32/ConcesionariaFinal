@@ -304,7 +304,7 @@ const DashboardPage = () => {
             ) : miObjetivo.unidadesObjetivo == null && miObjetivo.montoObjetivo == null ? (
               <div style={{ color: 'var(--text-secondary)' }}>Tu administrador todavía no te fijó un objetivo para este mes.</div>
             ) : (
-              <div className="flex flex-col gap-5">
+              <div className="flex flex-col">
                 {miObjetivo.unidadesObjetivo != null && (
                   <ProgressRow
                     etiqueta="Unidades vendidas"
@@ -350,7 +350,7 @@ const DashboardPage = () => {
             ) : !finanzas ? (
               <div style={{ color: 'var(--text-secondary)' }}>No se pudieron cargar las ventas del mes para calcular el progreso.</div>
             ) : (
-              <div className="flex flex-col gap-5">
+              <div className="flex flex-col">
                 {meta.unidadesObjetivo != null && (
                   <ProgressRow etiqueta="Unidades vendidas" actual={String(unidadesVendidas)} objetivo={String(meta.unidadesObjetivo)} pct={pctMeta(unidadesVendidas, meta.unidadesObjetivo)} />
                 )}
@@ -412,7 +412,7 @@ const DashboardPage = () => {
                           : {}),
                       }}
                     >
-                      <div className="flex justify-between items-start mb-3">
+                      <div className="flex justify-between items-start">
                         <div className="stat-icon-wrapper" style={{ backgroundColor: `color-mix(in srgb, ${a.color} 10%, transparent)`, color: a.color }}>
                           <a.icon size={20} />
                         </div>
@@ -580,7 +580,7 @@ const DashboardPage = () => {
           </>
         }
       >
-        <div className="space-y-6">
+        <div>
           <div className="form-group">
             <label className="form-label">Unidades a vender</label>
             <input type="number" min="0" className="form-input" value={metaUnidades} onChange={(e) => setMetaUnidades(e.target.value)} placeholder="Ej: 12" />

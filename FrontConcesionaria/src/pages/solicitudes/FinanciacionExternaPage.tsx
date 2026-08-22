@@ -435,7 +435,7 @@ export default function FinanciacionExternaPage() {
                 de la página: si no, con más de 20 solicitudes mostrarían sólo las
                 de la página actual. */}
             <div className="stats-grid mb-6">
-                <div className="card glass stat-tile border-blue-500/20 bg-blue-500/5">
+                <div className="card glass stat-tile">
                     <span className="stat-tile-label" style={{ color: 'var(--info)' }}>En trámite</span>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black">{stats.enTramite}</span>
@@ -443,7 +443,7 @@ export default function FinanciacionExternaPage() {
                     </div>
                     <Clock size={60} className="stat-tile-bg" />
                 </div>
-                <div className="card glass stat-tile border-emerald-500/20 bg-emerald-500/5">
+                <div className="card glass stat-tile">
                     <span className="stat-tile-label" style={{ color: 'var(--success)' }}>Aprobadas</span>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black">{stats.aprobadas}</span>
@@ -451,7 +451,7 @@ export default function FinanciacionExternaPage() {
                     </div>
                     <CheckCircle size={60} className="stat-tile-bg" />
                 </div>
-                <div className="card glass stat-tile border-red-500/20 bg-red-500/5">
+                <div className="card glass stat-tile">
                     <span className="stat-tile-label" style={{ color: 'var(--danger)' }}>Rechazadas</span>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black">{stats.rechazadas}</span>
@@ -459,7 +459,7 @@ export default function FinanciacionExternaPage() {
                     </div>
                     <XCircle size={60} className="stat-tile-bg" />
                 </div>
-                <div className="card glass stat-tile border-violet-500/20 bg-violet-500/5">
+                <div className="card glass stat-tile">
                     <span className="stat-tile-label" style={{ color: '#a78bfa' }}>Entidades activas</span>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black">{financieras.filter(f => f.activo).length}</span>
@@ -470,7 +470,7 @@ export default function FinanciacionExternaPage() {
             </div>
 
             {/* Tabs */}
-            <div className="card glass p-6 border-slate-700/30 mb-6">
+            <div className="card glass mb-6">
                 <div className="segmented" role="tablist">
                     <button
                         role="tab"
@@ -497,13 +497,13 @@ export default function FinanciacionExternaPage() {
                     {/* Filters */}
                     <div className="card glass filters-bar">
                         <div className="search-box">
-                            <Search size={18} className="text-slate-500" />
+                            <Search size={18} className="text-muted" />
                             <input
                                 type="text"
                                 placeholder="Buscar cliente / financiera..."
                                 value={searchSol}
                                 onChange={e => setSearchSol(e.target.value)}
-                                className="bg-transparent border-none outline-none text-white w-full text-sm font-medium"
+                                className="w-full text-sm font-medium"
                             />
                         </div>
                         <select value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }}>

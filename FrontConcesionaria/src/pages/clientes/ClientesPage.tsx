@@ -205,12 +205,12 @@ const ClientesPage: React.FC = () => {
             header: 'Cliente',
             accessor: (c) => (
                 <div className="flex items-center gap-3">
-                    <div className="bg-accent/20 text-accent font-black text-sm w-10 h-10 rounded-xl flex items-center justify-center border border-accent/20">
+                    <div className="text-accent font-black text-sm flex items-center justify-center">
                         {c.nombre.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                        <h3 className="font-bold text-white uppercase text-xs">{c.nombre}</h3>
-                        <div className="flex items-center gap-1.5 text-slate-500 text-[10px] font-black uppercase tracking-wider">
+                        <h3 className="font-bold uppercase text-xs">{c.nombre}</h3>
+                        <div className="flex items-center text-muted text-3xs font-black uppercase tracking-wider">
                             <FileText size={10} />
                             <span>CUIT/CUIL: {c.dni || 'No registrado'}</span>
                         </div>
@@ -222,25 +222,25 @@ const ClientesPage: React.FC = () => {
             header: 'Concesionaria',
             accessor: (c) => (
                 c.concesionaria ? (
-                    <div className="flex items-center gap-2 text-slate-400 text-xs">
-                        <Building2 size={12} className="text-accent/60" />
-                        <span className="truncate max-w-[150px]">{c.concesionaria.nombre}</span>
+                    <div className="flex items-center gap-2 text-muted text-xs">
+                        <Building2 size={12} className="text-accent" />
+                        <span className="truncate">{c.concesionaria.nombre}</span>
                     </div>
                 ) : (
-                    <span className="text-slate-600">-</span>
+                    <span className="text-secondary">-</span>
                 )
             )
         },
         {
             header: 'Contacto',
             accessor: (c) => (
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-slate-400 text-xs">
-                        <Mail size={12} className="text-accent/60" />
-                        <span className="truncate max-w-[150px]">{c.email || 'Sin email'}</span>
+                <div>
+                    <div className="flex items-center gap-2 text-muted text-xs">
+                        <Mail size={12} className="text-accent" />
+                        <span className="truncate">{c.email || 'Sin email'}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-slate-400 text-xs">
-                        <Phone size={12} className="text-accent/60" />
+                    <div className="flex items-center gap-2 text-muted text-xs">
+                        <Phone size={12} className="text-accent" />
                         <span>{c.telefono || 'Sin teléfono'}</span>
                     </div>
                 </div>
@@ -250,11 +250,11 @@ const ClientesPage: React.FC = () => {
             header: 'Localización',
             accessor: (c) => (
                 c.direccion ? (
-                    <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase italic">
+                    <div className="flex items-center gap-2 text-muted text-3xs font-black uppercase italic">
                         <MapPin size={10} />
-                        <span className="truncate max-w-[150px]">{c.direccion}</span>
+                        <span className="truncate">{c.direccion}</span>
                     </div>
-                ) : <span className="text-slate-600">-</span>
+                ) : <span className="text-secondary">-</span>
             )
         },
         {
@@ -268,18 +268,18 @@ const ClientesPage: React.FC = () => {
             header: 'Vendedor',
             accessor: (c) => (
                 c.vendedorAsignado ? (
-                    <div className="flex items-center gap-2 text-slate-300 text-xs">
-                        <UserCheck size={12} className="text-accent/60" />
-                        <span className="truncate max-w-[130px]">{c.vendedorAsignado.nombre}</span>
+                    <div className="flex items-center gap-2 text-muted text-xs">
+                        <UserCheck size={12} className="text-accent" />
+                        <span className="truncate">{c.vendedorAsignado.nombre}</span>
                     </div>
-                ) : <span className="text-slate-600 text-xs italic">Sin asignar</span>
+                ) : <span className="text-secondary text-xs italic">Sin asignar</span>
             )
         },
         {
             header: 'Acciones',
             align: 'right',
             accessor: (c) => (
-                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex justify-end gap-1">
                     <button className="icon-btn" onClick={(e) => { e.stopPropagation(); handleOpenModal(c); }}>
                         <Edit size={14} />
                     </button>
@@ -353,7 +353,7 @@ const ClientesPage: React.FC = () => {
 
             <div className="card glass filters-bar mb-6" data-tour="cli-filtros" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
                 <div className="search-box" style={{ flex: '1 1 240px' }}>
-                    <Search size={18} className="text-slate-500" />
+                    <Search size={18} className="text-muted" />
                     <input
                         type="text"
                         placeholder="Buscar por nombre, CUIT/CUIL o email..."
@@ -362,7 +362,7 @@ const ClientesPage: React.FC = () => {
                             setSearchTerm(e.target.value);
                             setPage(1);
                         }}
-                        className="bg-transparent border-none outline-none text-white w-full text-sm font-medium"
+                        className="w-full text-sm font-medium"
                     />
                 </div>
                 <select
@@ -407,7 +407,7 @@ const ClientesPage: React.FC = () => {
                 totalPages={totalPages}
                 onPageChange={setPage}
                 emptyMessage="No se encontraron registros de clientes"
-                emptyIcon={<Users size={40} className="text-slate-600" />}
+                emptyIcon={<Users size={40} className="text-secondary" />}
             />
             </div>
 

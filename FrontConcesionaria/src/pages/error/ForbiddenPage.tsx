@@ -6,13 +6,25 @@ const ForbiddenPage = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-950 p-6">
-            <div className="card glass max-w-md w-full p-12 text-center animate-fade-in border-red-500/20">
-                <div className="w-24 h-24 bg-red-900/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-8 border border-red-500/30">
+        <div
+            className="flex items-center justify-center"
+            style={{ minHeight: '100vh', padding: 'var(--space-6)' }}
+        >
+            <div
+                className="card glass w-full text-center animate-fade-in"
+                style={{ maxWidth: '28rem', padding: 'var(--space-10)' }}
+            >
+                <div
+                    className="dt-empty-badge is-error"
+                    style={{ margin: '0 auto var(--space-8)' }}
+                >
                     <ShieldAlert size={48} />
                 </div>
-                <h1 className="text-4xl font-black mb-4">Acceso Denegado</h1>
-                <p className="text-slate-400 mb-8 leading-relaxed">
+                <h1 className="text-3xl tracking-tight mb-4">Acceso Denegado</h1>
+                <p
+                    className="text-secondary leading-relaxed"
+                    style={{ marginBottom: 'var(--space-8)' }}
+                >
                     No posee los privilegios necesarios para acceder a este módulo.
                     Si cree que esto es un error, contacte al administrador del sistema.
                 </p>

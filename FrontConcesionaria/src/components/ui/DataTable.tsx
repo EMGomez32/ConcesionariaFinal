@@ -49,8 +49,8 @@ const DataTable = <T extends { id: string | number }>({
     onClearFilters
 }: DataTableProps<T>) => {
     return (
-        <div className="space-y-4">
-            <div className="table-container card overflow-hidden">
+        <div>
+            <div className="table-container card">
                 <table className="data-table">
                     <thead>
                         <tr>
@@ -127,7 +127,7 @@ const DataTable = <T extends { id: string | number }>({
                                 <tr
                                     key={item.id}
                                     onClick={() => onRowClick?.(item)}
-                                    className={onRowClick ? 'cursor-pointer group' : ''}
+                                    className={onRowClick ? 'cursor-pointer' : ''}
                                 >
                                     {columns.map((col, idx) => (
                                         <td

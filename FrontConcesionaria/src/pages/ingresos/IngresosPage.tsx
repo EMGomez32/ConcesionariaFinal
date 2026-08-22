@@ -149,28 +149,28 @@ const IngresosPage = () => {
 
             {/* Filters Bar */}
             <div className="card glass filters-bar flex flex-wrap items-end gap-6">
-                <div className="flex-1 min-w-[200px]">
-                    <label className="form-label-xs text-blue-400">Tipo de Adquisición</label>
+                <div className="flex-1">
+                    <label className="form-label-xs text-info">Tipo de Adquisición</label>
                     <select className="form-input-select w-full" value={filterTipo} onChange={e => { setFilterTipo(e.target.value); setPage(1); }}>
                         <option value="">TODAS LAS MODALIDADES</option>
                         {TIPO_INGRESO_OPTS.map(o => <option key={o.value} value={o.value}>{o.label.toUpperCase()}</option>)}
                     </select>
                 </div>
-                <div className="min-w-[200px]">
+                <div>
                     <label className="form-label-xs">Sucursal Receptora</label>
                     <select className="form-input-select w-full" value={filterSucursal} onChange={e => { setFilterSucursal(e.target.value); setPage(1); }}>
                         <option value="">TODAS LAS SUCURSALES</option>
                         {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
                     </select>
                 </div>
-                <div className="min-w-[220px]">
+                <div>
                     <label className="form-label-xs">Buscar Unidad</label>
                     <select className="form-input-select w-full" value={filterVehiculo} onChange={e => { setFilterVehiculo(e.target.value); setPage(1); }}>
                         <option value="">TODOS LOS VEHÍCULOS</option>
                         {vehiculos.map(v => <option key={v.id} value={v.id}>{`${v.marca} ${v.modelo} ${v.dominio || ''}`.toUpperCase()}</option>)}
                     </select>
                 </div>
-                <div className="flex gap-2 mb-[2px]">
+                <div className="flex gap-2">
                     <Button variant="secondary" onClick={handleClear} title="Limpiar filtros">
                         <RefreshCw size={18} />
                     </Button>
@@ -193,15 +193,15 @@ const IngresosPage = () => {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={7} style={{ padding: '8rem', textAlign: 'center' }}><RefreshCw className="animate-spin text-accent mx-auto" size={40} /></td></tr>
+                            <tr><td colSpan={7} style={{ padding: '8rem', textAlign: 'center' }}><RefreshCw className="animate-spin text-accent" size={40} /></td></tr>
                         ) : ingresos.length === 0 ? (
                             <tr>
                                 <td colSpan={7}>
-                                    <div className="flex flex-col items-center py-20 text-muted">
-                                        <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mb-4 ring-1 ring-slate-700">
-                                            <ArrowDownLeft size={40} className="text-slate-600" />
+                                    <div className="flex flex-col items-center text-muted">
+                                        <div className="flex items-center justify-center mb-4">
+                                            <ArrowDownLeft size={40} className="text-secondary" />
                                         </div>
-                                        <p className="text-xl font-black text-slate-400">Sin ingresos registrados</p>
+                                        <p className="text-xl font-black text-muted">Sin ingresos registrados</p>
                                         <p className="text-sm font-medium">No hay registros que coincidan con los criterios de búsqueda.</p>
                                     </div>
                                 </td>
@@ -210,14 +210,14 @@ const IngresosPage = () => {
                             <tr key={i.id}>
                                 <td>
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-blue-400 shadow-inner ring-1 ring-slate-700">
+                                        <div className="flex items-center justify-center text-info">
                                             <Car size={18} />
                                         </div>
                                         <div className="flex flex-col">
-                                            <span className="font-bold text-white leading-tight">
+                                            <span className="font-bold leading-tight">
                                                 {i.vehiculo ? `${i.vehiculo.marca} ${i.vehiculo.modelo}` : `Vehículo #${i.vehiculoId}`}
                                             </span>
-                                            <span className="text-[10px] font-black text-blue-500/80 uppercase tracking-widest">{i.vehiculo?.dominio || 'S/PATENTE'}</span>
+                                            <span className="text-3xs font-black text-info uppercase tracking-widest">{i.vehiculo?.dominio || 'S/PATENTE'}</span>
                                         </div>
                                     </div>
                                 </td>
@@ -227,11 +227,11 @@ const IngresosPage = () => {
                                 <td>
                                     <div className="flex items-center gap-2">
                                         <Building2 size={12} className="text-muted" />
-                                        <span className="text-xs font-bold text-slate-300">{i.sucursal?.nombre ?? 'ALMACÉN CENTRAL'}</span>
+                                        <span className="text-xs font-bold text-muted">{i.sucursal?.nombre ?? 'ALMACÉN CENTRAL'}</span>
                                     </div>
                                 </td>
                                 <td>
-                                    <div className="flex items-center gap-2 text-slate-400">
+                                    <div className="flex items-center gap-2 text-muted">
                                         <Calendar size={14} />
                                         <span className="text-sm font-bold">
                                             {i.fechaIngreso ? new Date(i.fechaIngreso).toLocaleDateString('es-AR') : '-'}
@@ -240,22 +240,22 @@ const IngresosPage = () => {
                                 </td>
                                 <td>
                                     <div className="flex items-baseline gap-1">
-                                        <span className="text-[10px] font-black text-muted">$</span>
-                                        <span className="font-black text-white text-lg tabular-nums">
+                                        <span className="text-3xs font-black text-muted">$</span>
+                                        <span className="font-black text-lg tabular-nums">
                                             {Number(i.valorTomado || 0).toLocaleString('es-AR')}
                                         </span>
                                     </div>
                                 </td>
                                 <td>
                                     <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center text-slate-500 border border-slate-700">
+                                        <div className="flex items-center justify-center text-muted">
                                             <User size={14} />
                                         </div>
                                         <div className="flex flex-col">
-                                            <span className="text-xs font-black text-slate-200 uppercase truncate max-w-[120px]">
+                                            <span className="text-xs font-black text-muted uppercase truncate">
                                                 {i.clienteOrigen?.nombre ?? i.proveedorOrigen?.nombre ?? 'NOT IDENTIFIED'}
                                             </span>
-                                            <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded w-fit ${i.clienteOrigen ? 'bg-green-900/20 text-green-500' : i.proveedorOrigen ? 'bg-blue-900/20 text-blue-500' : 'bg-slate-800 text-slate-500'}`}>
+                                            <span className={`text-3xs font-black uppercase ${i.clienteOrigen ? 'text-accent' : i.proveedorOrigen ? 'text-info' : 'text-muted'}`}>
                                                 {i.clienteOrigen ? 'Cliente Part.' : i.proveedorOrigen ? 'Proveedor Stock' : '-'}
                                             </span>
                                         </div>
@@ -271,14 +271,14 @@ const IngresosPage = () => {
             </div>
 
             {/* Pagination */}
-            <div className="flex justify-center items-center gap-6 mt-8">
+            <div className="flex justify-center items-center gap-6">
                 <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
                     <ChevronLeft size={16} /> Anterior
                 </Button>
                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted font-black uppercase tracking-tighter">Página</span>
-                    <span className="w-9 h-9 bg-accent text-white rounded-xl flex items-center justify-center font-black text-sm shadow-lg shadow-accent/20">{page}</span>
-                    <span className="text-[10px] text-muted font-black uppercase tracking-tighter">de {totalPages}</span>
+                    <span className="text-3xs text-muted font-black uppercase tracking-tight">Página</span>
+                    <span className="flex items-center justify-center font-black text-sm">{page}</span>
+                    <span className="text-3xs text-muted font-black uppercase tracking-tight">de {totalPages}</span>
                 </div>
                 <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
                     Siguiente <ChevronRight size={16} />
@@ -310,21 +310,15 @@ const IngresosPage = () => {
                 }
                 .shadow-glow-primary { box-shadow: 0 0 20px rgba(59, 130, 246, 0.2); }
                 
-                .form-label-xs {
-                    font-size: 0.7rem;
-                    font-weight: 800;
-                    color: var(--text-muted);
-                    text-transform: uppercase;
-                    margin-bottom: 0.5rem;
-                    display: block;
-                    letter-spacing: 0.1em;
-                }
+                /* .form-label-xs: la define index.css (capa global). El
+                   .form-input-select local es la variante protagónica de estos
+                   filtros y gana la cascada a propósito. */
                 .form-input-select {
                     padding: 0.75rem 2.5rem 0.75rem 1rem;
                     border-radius: 1rem;
                     border: 1px solid var(--border);
                     background: var(--bg-primary);
-                    font-size: 0.85rem;
+                    font-size: var(--text-sm);
                     font-weight: 700;
                     color: var(--text-primary);
                     appearance: none;

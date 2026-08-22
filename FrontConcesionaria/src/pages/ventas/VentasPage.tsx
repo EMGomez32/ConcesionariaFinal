@@ -288,8 +288,8 @@ const VentasPage = () => {
             header: 'Identificador',
             accessor: (v) => (
                 <div className="flex flex-col">
-                    <span className="text-[11px] font-black text-blue-500 tracking-tighter uppercase italic">Operación</span>
-                    <span className="font-mono text-xs font-bold text-white">#{String(v.id).padStart(6, '0')}</span>
+                    <span className="text-2xs font-black text-info tracking-tight uppercase italic">Operación</span>
+                    <span className="font-mono text-xs font-bold">#{String(v.id).padStart(6, '0')}</span>
                 </div>
             )
         },
@@ -297,12 +297,12 @@ const VentasPage = () => {
             header: 'Unidad / Activo',
             accessor: (v) => (
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-accent border border-slate-700 shadow-glow-sm">
+                    <div className="flex items-center justify-center text-accent shadow-glow-sm">
                         <Car size={18} />
                     </div>
                     <div className="flex flex-col">
-                        <span className="font-bold text-white text-xs uppercase">{v.vehiculo?.marca} {v.vehiculo?.modelo}</span>
-                        <span className="text-[10px] font-black text-slate-500 tracking-widest">{v.vehiculo?.dominio || 'S/DOMINIO'}</span>
+                        <span className="font-bold text-xs uppercase">{v.vehiculo?.marca} {v.vehiculo?.modelo}</span>
+                        <span className="text-3xs font-black text-muted tracking-widest">{v.vehiculo?.dominio || 'S/DOMINIO'}</span>
                     </div>
                 </div>
             )
@@ -311,27 +311,27 @@ const VentasPage = () => {
             header: 'Titular Cliente',
             accessor: (v) => (
                 <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500 border border-slate-700">
+                    <div className="flex items-center justify-center text-muted">
                         <User size={12} />
                     </div>
-                    <span className="text-xs font-bold text-slate-300 uppercase truncate max-w-[120px]">{v.cliente?.nombre || 'CLIENTE N/A'}</span>
+                    <span className="text-xs font-bold text-muted uppercase truncate">{v.cliente?.nombre || 'CLIENTE N/A'}</span>
                 </div>
             )
         },
         {
             header: 'Oficial Designado',
             accessor: (v) => (
-                <span className="text-[10px] font-black text-slate-500 uppercase">{v.vendedor?.nombre || 'SIN OFICIAL'}</span>
+                <span className="text-3xs font-black text-muted uppercase">{v.vendedor?.nombre || 'SIN OFICIAL'}</span>
             )
         },
         {
             header: 'Aforo de Venta',
             accessor: (v) => (
                 <div className="flex flex-col">
-                    <span className="font-black text-white text-base tabular-nums">
+                    <span className="font-black text-base tabular-nums">
                         ${Number(v.precioVenta).toLocaleString('es-AR')}
                     </span>
-                    <span className="text-[9px] font-bold text-accent-light uppercase tracking-tighter">
+                    <span className="text-3xs font-bold text-accent uppercase tracking-tight">
                         {formaPagoLabels[v.formaPago] || v.formaPago}
                     </span>
                 </div>
@@ -349,7 +349,7 @@ const VentasPage = () => {
             header: 'Análisis',
             align: 'right',
             accessor: (v) => (
-                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                <div className="flex justify-end gap-2">
                     <button className="icon-btn" title="Auditar Operación" onClick={(e) => { e.stopPropagation(); setSelectedDetailId(v.id); }}><Eye size={16} /></button>
                     <button className="icon-btn" title="Descargar comprobante PDF" onClick={(e) => { e.stopPropagation(); handleComprobante(v.id); }}><Printer size={16} /></button>
                     <button className="icon-btn" title="Emitir / descargar factura AFIP" disabled={facturaEnCurso.has(v.id)} onClick={(e) => { e.stopPropagation(); handleFactura(v.id); }}><FileText size={16} /></button>
@@ -383,7 +383,7 @@ const VentasPage = () => {
             </header>
 
             {/* Metrics Row */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" data-tour="ventas-kpis">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6" data-tour="ventas-kpis">
                 <div className="card glass stat-tile">
                     <div className="stat-tile-body">
                         <span className="text-xs text-muted uppercase font-black tracking-tight">Ventas del Mes</span>
@@ -437,28 +437,28 @@ const VentasPage = () => {
 
             {/* Filters */}
             <div className="card glass filters-bar flex flex-wrap items-center justify-between gap-6 mb-6" data-tour="ventas-filtros">
-                <div className="flex-1 min-w-[300px] relative">
-                    <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                <div className="flex-1">
+                    <Search size={18} className="text-muted" />
                     <input
                         type="text"
                         placeholder="BUSCAR POR CLIENTE, MARCA, MODELO, DOMINIO O RESPONSABLE COMERCIAL..."
-                        className="form-input pl-12 h-12 w-full"
+                        className="form-input w-full"
                         style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '1rem', color: 'var(--text-primary)' }}
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                     />
                 </div>
                 <div className="flex gap-4 items-center">
-                    <div className="min-w-[150px]">
-                        <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Logística</label>
-                        <select className="form-input w-full py-1.5" value={filterEstadoEntrega} onChange={e => { setFilterEstadoEntrega(e.target.value); setPage(1); }}>
+                    <div>
+                        <label className="text-3xs font-black text-muted uppercase mb-1">Logística</label>
+                        <select className="form-input w-full" value={filterEstadoEntrega} onChange={e => { setFilterEstadoEntrega(e.target.value); setPage(1); }}>
                             <option value="">TODAS LAS ENTREGAS</option>
                             {Object.entries(entregaStatusMap).map(([k, v]) => <option key={k} value={k}>{v.label.toUpperCase()}</option>)}
                         </select>
                     </div>
-                    <div className="min-w-[150px]">
-                        <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Modalidad</label>
-                        <select className="form-input w-full py-1.5" value={filterFormaPago} onChange={e => { setFilterFormaPago(e.target.value); setPage(1); }}>
+                    <div>
+                        <label className="text-3xs font-black text-muted uppercase mb-1">Modalidad</label>
+                        <select className="form-input w-full" value={filterFormaPago} onChange={e => { setFilterFormaPago(e.target.value); setPage(1); }}>
                             <option value="">TODOS LOS PAGOS</option>
                             {Object.entries(formaPagoLabels).map(([k, v]) => <option key={k} value={k}>{v.toUpperCase()}</option>)}
                         </select>
@@ -489,7 +489,7 @@ const VentasPage = () => {
                 title="Certificación de Venta Automotriz"
                 maxWidth="940px"
             >
-                <div className="space-y-8 pr-2">
+                <div>
                     {/* Primary IDs */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="form-group flex flex-col">
@@ -532,9 +532,9 @@ const VentasPage = () => {
                         </div>
                         <div className="form-group flex flex-col">
                             <label className="form-label">Precio de Cierre *</label>
-                            <div className="relative">
-                                <DollarSign size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-accent" />
-                                <input type="number" className="form-input pl-10 font-black" value={form.precioVenta || ''}
+                            <div>
+                                <DollarSign size={16} className="text-accent" />
+                                <input type="number" className="form-input font-black" value={form.precioVenta || ''}
                                     onChange={e => setForm(f => ({ ...f, precioVenta: +e.target.value }))} placeholder="0.00" />
                             </div>
                         </div>
@@ -554,20 +554,20 @@ const VentasPage = () => {
                     </div>
 
                     {/* Payment Breakdown */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <div>
+                        <div className="flex items-center justify-between">
                             <h3 className="text-xs font-black uppercase text-accent tracking-widest flex items-center gap-2">
                                 <DollarSign size={14} /> Desglose de Cobros y Entregas
                             </h3>
                             <Button variant="secondary" size="sm" onClick={handleAddPago}>
-                                <Plus size={14} className="mr-1" /> Añadir Pago
+                                <Plus size={14} /> Añadir Pago
                             </Button>
                         </div>
                         {form.pagos.map((p, i) => (
-                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-slate-900/40 p-4 rounded-2xl border border-white/5 group relative transition-all hover:bg-slate-900/60">
+                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4">
                                 <div className="md:col-span-3">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Importe Recibido</label>
-                                    <input type="number" className="form-input py-2 font-bold" value={p.monto || ''}
+                                    <label className="text-3xs font-black text-muted uppercase mb-1">Importe Recibido</label>
+                                    <input type="number" className="form-input font-bold" value={p.monto || ''}
                                         onChange={e => {
                                             const newPagos = [...form.pagos];
                                             newPagos[i].monto = +e.target.value;
@@ -575,8 +575,8 @@ const VentasPage = () => {
                                         }} />
                                 </div>
                                 <div className="md:col-span-3">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Vía Canal</label>
-                                    <select className="form-input py-2" value={p.metodo} onChange={e => {
+                                    <label className="text-3xs font-black text-muted uppercase mb-1">Vía Canal</label>
+                                    <select className="form-input" value={p.metodo} onChange={e => {
                                         const newPagos = [...form.pagos];
                                         newPagos[i].metodo = e.target.value as 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
                                         setForm(f => ({ ...f, pagos: newPagos }));
@@ -585,8 +585,8 @@ const VentasPage = () => {
                                     </select>
                                 </div>
                                 <div className="md:col-span-5">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Certificación / Tracking</label>
-                                    <input type="text" className="form-input py-2 italic" value={p.referencia}
+                                    <label className="text-3xs font-black text-muted uppercase mb-1">Certificación / Tracking</label>
+                                    <input type="text" className="form-input italic" value={p.referencia}
                                         onChange={e => {
                                             const newPagos = [...form.pagos];
                                             newPagos[i].referencia = e.target.value;
@@ -594,7 +594,7 @@ const VentasPage = () => {
                                         }} placeholder="NRO DE RECIBO, CBU, CHEQUE..." />
                                 </div>
                                 <div className="md:col-span-1">
-                                    <button className="w-full h-[38px] flex items-center justify-center text-red-500/50 hover:text-red-500 transition-all rounded-lg" onClick={() => {
+                                    <button className="w-full flex items-center justify-center text-danger" onClick={() => {
                                         setForm(f => ({ ...f, pagos: f.pagos.filter((_, j) => j !== i) }));
                                     }}>
                                         <X size={18} />
@@ -605,20 +605,20 @@ const VentasPage = () => {
                     </div>
 
                     {/* Canjes Section */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                            <h3 className="text-xs font-black uppercase text-amber-500 tracking-widest flex items-center gap-2">
+                    <div>
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-black uppercase text-warning tracking-widest flex items-center gap-2">
                                 <ArrowRightLeft size={14} /> Permuta / Toma de Activos
                             </h3>
                             <Button variant="secondary" size="sm" onClick={handleAddCanje}>
-                                <Plus size={14} className="mr-1" /> Incorporar Unidad
+                                <Plus size={14} /> Incorporar Unidad
                             </Button>
                         </div>
                         {form.canjes.map((c, i) => (
-                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-slate-900/40 p-4 rounded-2xl border border-white/5 group relative transition-all hover:bg-slate-900/60">
+                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4">
                                 <div className="md:col-span-8">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Vehículo para incorporar al Stock</label>
-                                    <select className="form-input py-2" value={c.vehiculoCanjeId || ''} onChange={e => {
+                                    <label className="text-3xs font-black text-muted uppercase mb-1">Vehículo para incorporar al Stock</label>
+                                    <select className="form-input" value={c.vehiculoCanjeId || ''} onChange={e => {
                                         const newCanjes = [...form.canjes];
                                         newCanjes[i].vehiculoCanjeId = +e.target.value;
                                         setForm(f => ({ ...f, canjes: newCanjes }));
@@ -630,8 +630,8 @@ const VentasPage = () => {
                                     </select>
                                 </div>
                                 <div className="md:col-span-3">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Acreditación</label>
-                                    <input type="number" className="form-input py-2 font-black text-red-500" value={c.valorTomado || ''}
+                                    <label className="text-3xs font-black text-muted uppercase mb-1">Acreditación</label>
+                                    <input type="number" className="form-input font-black text-danger" value={c.valorTomado || ''}
                                         onChange={e => {
                                             const newCanjes = [...form.canjes];
                                             newCanjes[i].valorTomado = +e.target.value;
@@ -639,7 +639,7 @@ const VentasPage = () => {
                                         }} />
                                 </div>
                                 <div className="md:col-span-1">
-                                    <button className="w-full h-[38px] flex items-center justify-center text-red-500/50 hover:text-red-500 transition-all rounded-lg" onClick={() => {
+                                    <button className="w-full flex items-center justify-center text-danger" onClick={() => {
                                         setForm(f => ({ ...f, canjes: f.canjes.filter((_, j) => j !== i) }));
                                     }}>
                                         <X size={18} />
@@ -655,14 +655,14 @@ const VentasPage = () => {
                             onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} placeholder="DETALLES DE GESTORÍA, DOCUMENTACIÓN PENDIENTE..." />
                     </div>
 
-                    <div className="sticky bottom-0 bg-slate-900 border-t border-white/10 p-6 -mx-6 -mb-8 rounded-b-3xl flex justify-between items-center shadow-2xl">
+                    <div className="flex justify-between items-center">
                         <div>
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Impacto de Caja Final</p>
-                            <p className="text-3xl font-black text-white">${Number(form.precioVenta || 0).toLocaleString('es-AR')} <span className="text-sm font-normal text-slate-500">({form.moneda})</span></p>
+                            <p className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Impacto de Caja Final</p>
+                            <p className="text-3xl font-black">${Number(form.precioVenta || 0).toLocaleString('es-AR')} <span className="text-sm font-normal text-muted">({form.moneda})</span></p>
                         </div>
                         <div className="flex gap-4">
                             <Button variant="secondary" onClick={() => setCreateOpen(false)}>Abortar</Button>
-                            <Button variant="primary" className="px-10 shadow-glow" onClick={handleCreate} loading={createMutation.isPending}>Acreditar y Cerrar Venta</Button>
+                            <Button variant="primary" className="shadow-glow" onClick={handleCreate} loading={createMutation.isPending}>Acreditar y Cerrar Venta</Button>
                         </div>
                     </div>
                 </div>
@@ -676,12 +676,12 @@ const VentasPage = () => {
                 maxWidth="900px"
             >
                 {loadingDetail || !detail ? (
-                    <div className="p-24 text-center"><RefreshCw className="animate-spin text-accent mx-auto mb-4" size={48} /><p className="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Consolidando expediente de venta...</p></div>
+                    <div className="text-center"><RefreshCw className="animate-spin text-accent mb-4" size={48} /><p className="text-xs font-black text-muted uppercase tracking-widest">Consolidando expediente de venta...</p></div>
                 ) : (
-                    <div className="space-y-8">
-                        <header className="flex justify-between items-start border-b border-white/5 pb-8">
+                    <div>
+                        <header className="flex justify-between items-start">
                             <div className="flex items-center gap-6">
-                                <div className="w-16 h-16 rounded-3xl bg-accent flex items-center justify-center text-white shadow-xl shadow-accent/40 ring-4 ring-accent/10">
+                                <div className="flex items-center justify-center">
                                     <ShoppingBag size={32} />
                                 </div>
                                 <div>
@@ -690,63 +690,63 @@ const VentasPage = () => {
                                             LOGÍSTICA: {entregaStatusMap[detail.estadoEntrega]?.label.toUpperCase()}
                                         </Badge>
                                     </div>
-                                    <p className="text-accent-light font-bold flex items-center gap-2 text-sm">
+                                    <p className="text-accent font-bold flex items-center gap-2 text-sm">
                                         <Car size={16} /> {detail.vehiculo?.marca?.toUpperCase()} {detail.vehiculo?.modelo?.toUpperCase()} [{detail.vehiculo?.dominio || 'S/DOMINIO'}]
                                     </p>
                                 </div>
                             </div>
                             <div className="flex gap-3">
-                                <button className="p-3 bg-slate-800 rounded-2xl hover:bg-slate-700 transition-all text-slate-400" title="Imprimir Recibo">
+                                <button className="text-muted" title="Imprimir Recibo">
                                     <Printer size={20} />
                                 </button>
                             </div>
                         </header>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5">
-                                <span className="text-[10px] font-black text-slate-500 uppercase block tracking-widest mb-1">Fecha Operación</span>
-                                <p className="text-lg font-bold text-white">{new Date(detail.fechaVenta).toLocaleDateString()}</p>
+                            <div>
+                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Fecha Operación</span>
+                                <p className="text-lg font-bold">{new Date(detail.fechaVenta).toLocaleDateString()}</p>
                             </div>
-                            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5">
-                                <span className="text-[10px] font-black text-slate-500 uppercase block tracking-widest mb-1">Sucursal Radicación</span>
-                                <p className="text-lg font-bold text-white truncate">{detail.sucursal?.nombre || 'CENTRAL'}</p>
+                            <div>
+                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Sucursal Radicación</span>
+                                <p className="text-lg font-bold truncate">{detail.sucursal?.nombre || 'CENTRAL'}</p>
                             </div>
-                            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5">
-                                <span className="text-[10px] font-black text-slate-500 uppercase block tracking-widest mb-1">Aforo Venta</span>
+                            <div>
+                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Aforo Venta</span>
                                 <p className="text-xl font-black text-accent">${Number(detail.precioVenta).toLocaleString('es-AR')}</p>
                             </div>
-                            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5">
-                                <span className="text-[10px] font-black text-slate-500 uppercase block tracking-widest mb-1">Modalidad</span>
-                                <p className="text-xs font-black text-white uppercase italic">{formaPagoLabels[detail.formaPago] || detail.formaPago}</p>
+                            <div>
+                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Modalidad</span>
+                                <p className="text-xs font-black uppercase italic">{formaPagoLabels[detail.formaPago] || detail.formaPago}</p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="space-y-4">
-                                <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <div>
+                                <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
                                     <User size={14} className="text-accent" /> Partes Involucradas
                                 </h3>
-                                <div className="bg-slate-900/60 p-6 rounded-3xl border border-white/5 space-y-4">
+                                <div>
                                     <div>
-                                        <span className="text-[10px] font-black text-slate-500 block mb-1 uppercase">Comprador</span>
-                                        <p className="font-bold text-white">{detail.cliente?.nombre?.toUpperCase() || 'N/A'}</p>
-                                        <p className="text-xs text-slate-500">{detail.cliente?.email || 'SIN EMAIL'}</p>
+                                        <span className="text-3xs font-black text-muted mb-1 uppercase">Comprador</span>
+                                        <p className="font-bold">{detail.cliente?.nombre?.toUpperCase() || 'N/A'}</p>
+                                        <p className="text-xs text-muted">{detail.cliente?.email || 'SIN EMAIL'}</p>
                                     </div>
-                                    <div className="pt-4 border-t border-white/5">
-                                        <span className="text-[10px] font-black text-slate-500 block mb-1 uppercase">Responsable Comercial</span>
-                                        <p className="font-bold text-white italic">{detail.vendedor?.nombre?.toUpperCase() || 'NO ASIGNADO'}</p>
+                                    <div>
+                                        <span className="text-3xs font-black text-muted mb-1 uppercase">Responsable Comercial</span>
+                                        <p className="font-bold italic">{detail.vendedor?.nombre?.toUpperCase() || 'NO ASIGNADO'}</p>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
-                                <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                    <MapPin size={14} className="text-amber-500" /> Trazabilidad Logística
+                            <div>
+                                <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
+                                    <MapPin size={14} className="text-warning" /> Trazabilidad Logística
                                 </h3>
-                                <div className="bg-slate-900/60 p-6 rounded-3xl border border-white/5 space-y-4">
+                                <div>
                                     {entregaTransitions[detail.estadoEntrega]?.length > 0 ? (
-                                        <div className="space-y-3">
-                                            <p className="text-xs text-slate-500 italic mb-4">Acciones de auditoría requeridas para el flujo de entrega:</p>
+                                        <div>
+                                            <p className="text-xs text-secondary italic mb-4">Acciones de auditoría requeridas para el flujo de entrega:</p>
                                             <div className="flex flex-wrap gap-2">
                                                 {entregaTransitions[detail.estadoEntrega].map(t => (
                                                     <Button
@@ -763,21 +763,21 @@ const VentasPage = () => {
                                         </div>
                                     ) : (
                                         <div className="flex flex-col items-center justify-center p-4 text-center">
-                                            <CheckCircle2 size={32} className="text-emerald-500 mb-2" />
-                                            <p className="text-xs font-bold text-white uppercase italic">Ciclo operativo concluido</p>
+                                            <CheckCircle2 size={32} className="text-success mb-2" />
+                                            <p className="text-xs font-bold uppercase italic">Ciclo operativo concluido</p>
                                         </div>
                                     )}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="space-y-4">
-                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                <DollarSign size={14} className="text-emerald-500" /> Detalle de Ingresos Conciliados
+                        <div>
+                            <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
+                                <DollarSign size={14} className="text-accent" /> Detalle de Ingresos Conciliados
                             </h3>
-                            <div className="table-container border-white/5 overflow-hidden">
+                            <div className="table-container">
                                 <table className="data-table">
-                                    <thead className="bg-slate-900/60">
+                                    <thead>
                                         <tr>
                                             <th>Identificador</th>
                                             <th>Canal / Vía</th>
@@ -788,20 +788,20 @@ const VentasPage = () => {
                                     <tbody>
                                         {detail.pagos && detail.pagos.length > 0 ? detail.pagos.map((p) => (
                                             <tr key={p.id}>
-                                                <td className="font-mono text-[10px] text-slate-500">PAG-{p.id}</td>
+                                                <td className="font-mono text-3xs text-muted">PAG-{p.id}</td>
                                                 <td><Badge variant="default">{metodoLabels[p.metodo]?.toUpperCase() || p.metodo.toUpperCase()}</Badge></td>
-                                                <td className="text-xs italic text-slate-300">{p.referencia || '-'}</td>
-                                                <td style={{ textAlign: 'right' }} className="font-black text-white">${Number(p.monto).toLocaleString('es-AR')}</td>
+                                                <td className="text-xs italic text-muted">{p.referencia || '-'}</td>
+                                                <td style={{ textAlign: 'right' }} className="font-black">${Number(p.monto).toLocaleString('es-AR')}</td>
                                             </tr>
                                         )) : (
-                                            <tr><td colSpan={4} className="text-center py-4 text-xs italic text-slate-500">No se registran pagos individuales (Ingreso Contado Total)</td></tr>
+                                            <tr><td colSpan={4} className="text-center text-xs italic text-muted">No se registran pagos individuales (Ingreso Contado Total)</td></tr>
                                         )}
                                         {detail.canjes?.map((c) => (
-                                            <tr key={c.id} className="bg-amber-500/5">
-                                                <td className="font-mono text-[10px] text-amber-500">CAN-{c.id}</td>
+                                            <tr key={c.id}>
+                                                <td className="font-mono text-3xs text-warning">CAN-{c.id}</td>
                                                 <td><Badge variant="warning">TOMA UNIDAD</Badge></td>
-                                                <td className="text-xs italic text-amber-200/60 font-bold uppercase">ID-VEHÍCULO: {c.vehiculoCanjeId}</td>
-                                                <td style={{ textAlign: 'right' }} className="font-black text-amber-500">-${Number(c.valorTomado).toLocaleString('es-AR')}</td>
+                                                <td className="text-xs italic font-bold uppercase">ID-VEHÍCULO: {c.vehiculoCanjeId}</td>
+                                                <td style={{ textAlign: 'right' }} className="font-black text-warning">-${Number(c.valorTomado).toLocaleString('es-AR')}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -810,8 +810,8 @@ const VentasPage = () => {
                         </div>
 
                         {detail.observaciones && (
-                            <div className="p-6 bg-slate-900/40 border border-white/5 rounded-3xl italic text-xs text-slate-500">
-                                <span className="font-black text-slate-500 block mb-2 not-italic uppercase tracking-widest">Anotaciones de Auditoría:</span>
+                            <div className="italic text-xs text-secondary">
+                                <span className="font-black text-muted mb-2 uppercase tracking-widest">Anotaciones de Auditoría:</span>
                                 "{detail.observaciones}"
                             </div>
                         )}
@@ -820,8 +820,8 @@ const VentasPage = () => {
                         <VentaFacturaPanel ventaId={detail.id} />
 
                         {/* Sub-recursos: Pagos, Extras, Canjes */}
-                        <div className="space-y-4">
-                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                        <div>
+                            <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
                                 <DollarSign size={14} className="text-accent" /> Gestión de Sub-recursos
                             </h3>
                             <VentaSubResources ventaId={detail.id} />

@@ -341,26 +341,26 @@ const GastosFijosPage = () => {
                     </div>
 
                     {activeTab === 'gastos' && (
-                        <div className="card glass py-3 px-6 flex items-center gap-4 bg-emerald-500/5 border-emerald-500/20">
+                        <div className="card glass flex items-center gap-4">
                             <div className="flex flex-col">
-                                <span className="text-[10px] font-black uppercase text-emerald-500 tracking-tighter">Subtotal en pantalla</span>
+                                <span className="text-3xs font-black uppercase text-accent tracking-tight">Subtotal en pantalla</span>
                                 {monedasOrdenadas.length === 0 ? (
-                                    <span className="text-2xl font-black text-white tabular-nums">$0</span>
+                                    <span className="text-2xl font-black tabular-nums">$0</span>
                                 ) : (
                                     <div className="flex items-baseline gap-3">
                                         {monedasOrdenadas.map(m => (
-                                            <span key={m} className="text-2xl font-black text-white tabular-nums">
+                                            <span key={m} className="text-2xl font-black tabular-nums">
                                                 {money(totalesPorMoneda[m], m)}
-                                                <span className="text-[10px] font-black text-muted"> {m}</span>
+                                                <span className="text-3xs font-black text-muted"> {m}</span>
                                             </span>
                                         ))}
                                     </div>
                                 )}
                             </div>
-                            <div className="h-8 w-[1px] bg-emerald-500/20"></div>
+                            <div></div>
                             <div className="flex flex-col">
-                                <span className="text-[10px] font-black uppercase text-muted tracking-tighter">Período Seleccionado</span>
-                                <span className="text-xl font-black text-slate-400">
+                                <span className="text-3xs font-black uppercase text-muted tracking-tight">Período Seleccionado</span>
+                                <span className="text-xl font-black text-muted">
                                     {filterMes ? MESES[Number(filterMes) - 1].toUpperCase() : 'TODOS'} {filterAnio}
                                 </span>
                             </div>
@@ -372,34 +372,34 @@ const GastosFijosPage = () => {
                     <>
                         {/* Filters Bar */}
                         <div className="card glass filters-bar flex flex-wrap items-center gap-6">
-                            <div className="min-w-[120px]">
+                            <div>
                                 <label className="form-label-xs">Año Fiscal</label>
                                 <select className="form-input-select w-full" value={filterAnio} onChange={e => setFilterAnio(e.target.value)}>
                                     {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                                 </select>
                             </div>
-                            <div className="min-w-[150px]">
+                            <div>
                                 <label className="form-label-xs">Mes Contable</label>
                                 <select className="form-input-select w-full" value={filterMes} onChange={e => setFilterMes(e.target.value)}>
                                     <option value="">TODOS LOS MESES</option>
                                     {MESES.map((m, i) => <option key={i + 1} value={i + 1}>{m.toUpperCase()}</option>)}
                                 </select>
                             </div>
-                            <div className="flex-1 min-w-[200px]">
+                            <div className="flex-1">
                                 <label className="form-label-xs">Tipo de Rubro</label>
                                 <select className="form-input-select w-full" value={filterCategoria} onChange={e => setFilterCategoria(e.target.value)}>
                                     <option value="">TODAS LAS CATEGORÍAS</option>
                                     {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre.toUpperCase()}</option>)}
                                 </select>
                             </div>
-                            <div className="min-w-[180px]">
+                            <div>
                                 <label className="form-label-xs">Sucursal Asignada</label>
                                 <select className="form-input-select w-full" value={filterSucursal} onChange={e => setFilterSucursal(e.target.value)}>
                                     <option value="">CORPORATIVO GLOBAL</option>
                                     {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
                                 </select>
                             </div>
-                            <div className="flex items-end h-full">
+                            <div className="flex items-end">
                                 <Button variant="secondary" onClick={() => { setFilterMes(''); setFilterCategoria(''); setFilterSucursal(''); }}>
                                     <RefreshCw size={18} />
                                 </Button>
@@ -422,12 +422,12 @@ const GastosFijosPage = () => {
                                 </thead>
                                 <tbody>
                                     {loading ? (
-                                        <tr><td colSpan={7} style={{ padding: '8rem', textAlign: 'center' }}><RefreshCw className="animate-spin text-accent mx-auto" size={40} /></td></tr>
+                                        <tr><td colSpan={7} style={{ padding: '8rem', textAlign: 'center' }}><RefreshCw className="animate-spin text-accent" size={40} /></td></tr>
                                     ) : gastos.length === 0 ? (
                                         <tr>
                                             <td colSpan={7}>
-                                                <div className="flex flex-col items-center py-20 text-muted">
-                                                    <FileText size={64} className="opacity-10 mb-4" />
+                                                <div className="flex flex-col items-center text-muted">
+                                                    <FileText size={64} className="mb-4" />
                                                     <p className="text-xl font-bold italic">Sin registros para el período</p>
                                                     <p className="text-sm">Inicie una carga financiera para visualizar datos.</p>
                                                 </div>
@@ -439,31 +439,31 @@ const GastosFijosPage = () => {
                                                 <td><Badge variant="info">{g.categoria?.nombre?.toUpperCase() ?? 'GENERAL'}</Badge></td>
                                                 <td>
                                                     <div className="flex flex-col">
-                                                        <span className="font-bold text-white text-sm">{MESES[g.mes - 1].toUpperCase()}</span>
-                                                        <span className="text-[10px] font-black text-muted tracking-widest">{g.anio}</span>
+                                                        <span className="font-bold text-sm">{MESES[g.mes - 1].toUpperCase()}</span>
+                                                        <span className="text-3xs font-black text-muted tracking-widest">{g.anio}</span>
                                                     </div>
                                                 </td>
                                                 <td style={{ maxWidth: '280px' }}>
-                                                    <span className="text-xs font-semibold text-slate-300 line-clamp-2" title={g.descripcion}>{g.descripcion}</span>
+                                                    <span className="text-xs font-semibold text-muted line-clamp-2" title={g.descripcion}>{g.descripcion}</span>
                                                 </td>
                                                 <td>
-                                                    <div className="flex items-baseline gap-1.5">
-                                                        <span className="text-lg font-black text-white tabular-nums">{money(Number(g.monto), g.moneda)}</span>
-                                                        <span className="text-[10px] font-black text-muted">{g.moneda ?? 'ARS'}</span>
+                                                    <div className="flex items-baseline">
+                                                        <span className="text-lg font-black tabular-nums">{money(Number(g.monto), g.moneda)}</span>
+                                                        <span className="text-3xs font-black text-muted">{g.moneda ?? 'ARS'}</span>
                                                     </div>
                                                 </td>
                                                 <td>
                                                     <div className="flex items-center gap-2">
                                                         <Building2 size={12} className="text-muted" />
-                                                        <span className="text-xs font-bold text-slate-400">{g.sucursal?.nombre ?? 'CORPORATIVO'}</span>
+                                                        <span className="text-xs font-bold text-muted">{g.sucursal?.nombre ?? 'CORPORATIVO'}</span>
                                                     </div>
                                                 </td>
                                                 <td style={{ textAlign: 'center' }}>
                                                     {g.comprobanteUrl ? (
-                                                        <a href={g.comprobanteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500/20 border border-blue-500/20 transition-all text-[10px] font-black uppercase tracking-tighter">
+                                                        <a href={g.comprobanteUrl} target="_blank" rel="noreferrer" className="items-center text-info text-3xs font-black uppercase tracking-tight">
                                                             <ExternalLink size={12} /> Ver PDF
                                                         </a>
-                                                    ) : <span className="text-slate-600 text-[10px] font-black">—</span>}
+                                                    ) : <span className="text-secondary text-3xs font-black">—</span>}
                                                 </td>
                                                 <td>
                                                     <div className="flex justify-end gap-2">
@@ -480,11 +480,11 @@ const GastosFijosPage = () => {
 
                         {/* Pagination */}
                         {totalPages > 1 && (
-                            <div className="flex justify-center gap-4 mt-6">
+                            <div className="flex justify-center gap-4">
                                 <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => loadGastos(page - 1)}>
                                     <ChevronLeft size={16} /> Anterior
                                 </Button>
-                                <div className="flex items-center px-4 bg-slate-900/50 rounded-xl border border-slate-800 text-xs font-black">
+                                <div className="flex items-center text-xs font-black">
                                     {page} / {totalPages}
                                 </div>
                                 <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => loadGastos(page + 1)}>
@@ -495,15 +495,15 @@ const GastosFijosPage = () => {
                     </>
                 ) : (
                     /* Categorias View */
-                    <div className="max-w-4xl mx-auto w-full flex flex-col gap-6">
-                        <div className="card glass p-8 flex justify-between items-center border-emerald-500/20 shadow-glow-sm">
+                    <div className="w-full flex flex-col gap-6">
+                        <div className="card glass flex justify-between items-center shadow-glow-sm">
                             <div className="flex items-center gap-6">
-                                <div className="w-16 h-16 rounded-3xl bg-emerald-500 flex items-center justify-center text-white shadow-xl shadow-emerald-500/40">
+                                <div className="flex items-center justify-center">
                                     <Tag size={32} />
                                 </div>
                                 <div>
-                                    <h2 className="text-2xl font-black text-white">Gestión de Rubros</h2>
-                                    <p className="text-sm text-slate-400">Parámetros de clasificación para gastos mensuales recurrentes.</p>
+                                    <h2 className="text-2xl font-black">Gestión de Rubros</h2>
+                                    <p className="text-sm text-muted">Parámetros de clasificación para gastos mensuales recurrentes.</p>
                                 </div>
                             </div>
                             {!showCatCreate && (
@@ -514,11 +514,11 @@ const GastosFijosPage = () => {
                         </div>
 
                         {showCatCreate && (
-                            <div className="card glass p-8 animate-fade-in border-emerald-500/30 bg-emerald-500/5">
-                                <h3 className="text-lg font-black text-white mb-6 flex items-center gap-2">
-                                    <Plus size={20} className="text-emerald-500" /> Definir Nueva Categoría
+                            <div className="card glass animate-fade-in">
+                                <h3 className="text-lg font-black mb-6 flex items-center gap-2">
+                                    <Plus size={20} className="text-accent" /> Definir Nueva Categoría
                                 </h3>
-                                <div className="flex flex-col sm:flex-row gap-6 mb-8 items-end">
+                                <div className="flex flex-col sm:flex-row gap-6 items-end">
                                     <div className="flex-1 w-full">
                                         <label className="form-label">Nombre del Concepto *</label>
                                         <input className="form-input" placeholder="Ej: Servicios Públicos, Impuestos..." value={catForm.nombre} onChange={e => setCatForm(f => ({ ...f, nombre: e.target.value }))} autoFocus />
@@ -543,15 +543,15 @@ const GastosFijosPage = () => {
                                 <tbody>
                                     {categorias.map(c => (
                                         <tr key={c.id}>
-                                            <td className="font-black text-white text-sm">
+                                            <td className="font-black text-sm">
                                                 {editCat?.id === c.id ? (
-                                                    <input className="form-input h-10" value={editCatForm.nombre} onChange={e => setEditCatForm(f => ({ ...f, nombre: e.target.value }))} />
+                                                    <input className="form-input" value={editCatForm.nombre} onChange={e => setEditCatForm(f => ({ ...f, nombre: e.target.value }))} />
                                                 ) : c.nombre.toUpperCase()}
                                             </td>
                                             <td>
                                                 <div className="flex items-center gap-2">
-                                                    <div className={`w-2 h-2 rounded-full ${c.activo !== false ? 'bg-emerald-500' : 'bg-slate-600'}`}></div>
-                                                    <span className={`text-[10px] font-black uppercase ${c.activo !== false ? 'text-emerald-500' : 'text-slate-500'}`}>
+                                                    <div></div>
+                                                    <span className={`text-3xs font-black uppercase ${c.activo !== false ? 'text-success' : 'text-muted'}`}>
                                                         {c.activo !== false ? 'Visible en Carga' : 'Archivado'}
                                                     </span>
                                                 </div>
@@ -593,7 +593,7 @@ const GastosFijosPage = () => {
                     </>
                 }
             >
-                <div className="space-y-8">
+                <div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="form-group">
                             <label className="form-label">Rubro del Gasto *</label>
@@ -638,9 +638,9 @@ const GastosFijosPage = () => {
                                     <option value="ARS">ARS</option>
                                     <option value="USD">USD</option>
                                 </select>
-                                <div className="relative flex-1">
-                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-accent font-black">{(editTarget ? editForm.moneda : createForm.moneda) === 'USD' ? 'US$' : '$'}</div>
-                                    <input type="number" className="form-input pl-10 font-black text-xl" value={editTarget ? editForm.monto : createForm.monto}
+                                <div className="flex-1">
+                                    <div className="text-accent font-black">{(editTarget ? editForm.moneda : createForm.moneda) === 'USD' ? 'US$' : '$'}</div>
+                                    <input type="number" className="form-input font-black text-xl" value={editTarget ? editForm.monto : createForm.monto}
                                         onChange={e => editTarget ? setEditForm(f => ({ ...f, monto: e.target.value })) : setCreateForm(f => ({ ...f, monto: e.target.value }))} />
                                 </div>
                             </div>
@@ -657,9 +657,9 @@ const GastosFijosPage = () => {
 
                     <div className="form-group">
                         <label className="form-label">Link de Comprobante Digital (PDF/IMG)</label>
-                        <div className="relative">
-                            <ExternalLink size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
-                            <input className="form-input pl-11 text-xs" value={editTarget ? editForm.comprobanteUrl : createForm.comprobanteUrl}
+                        <div>
+                            <ExternalLink size={14} className="text-muted" />
+                            <input className="form-input text-xs" value={editTarget ? editForm.comprobanteUrl : createForm.comprobanteUrl}
                                 onChange={e => editTarget ? setEditForm(f => ({ ...f, comprobanteUrl: e.target.value })) : setCreateForm(f => ({ ...f, comprobanteUrl: e.target.value }))}
                                 placeholder="https://bucket-almacenamiento.com/factura-123.pdf" />
                         </div>

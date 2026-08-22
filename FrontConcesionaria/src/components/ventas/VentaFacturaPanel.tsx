@@ -88,42 +88,42 @@ const VentaFacturaPanel = ({ ventaId }: Props) => {
     };
 
     return (
-        <div className="space-y-4">
-            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+        <div>
+            <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
                 <FileText size={14} className="text-accent" /> Facturación Electrónica (AFIP)
             </h3>
 
             {loading ? (
-                <div className="p-6 bg-slate-900/40 border border-white/5 rounded-3xl text-xs italic text-slate-500 flex items-center gap-2">
+                <div className="text-xs italic text-muted flex items-center gap-2">
                     <RefreshCw size={14} className="animate-spin" /> Consultando comprobante fiscal…
                 </div>
             ) : comp ? (
-                <div className="p-6 bg-slate-900/40 border border-white/5 rounded-3xl space-y-4">
+                <div>
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="flex items-center gap-3">
                             <Badge variant="success">{TIPO_LABEL[comp.tipoComprobante]?.toUpperCase()}</Badge>
-                            <span className="font-mono text-sm font-bold text-white">N° {nroComprobante(comp)}</span>
+                            <span className="font-mono text-sm font-bold">N° {nroComprobante(comp)}</span>
                         </div>
                         {comp.entorno === 'mock' && (
                             <Badge variant="warning">MODO DEMO — CAE SIMULADO</Badge>
                         )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+                    <div className="grid">
                         <div>
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">CAE</p>
-                            <p className="font-mono text-xs font-bold text-white break-all">{comp.cae || '—'}</p>
+                            <p className="text-3xs font-black text-muted uppercase tracking-widest">CAE</p>
+                            <p className="font-mono text-xs font-bold">{comp.cae || '—'}</p>
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Vto. CAE</p>
-                            <p className="text-xs font-bold text-white">{fmtFecha(comp.caeVencimiento)}</p>
+                            <p className="text-3xs font-black text-muted uppercase tracking-widest">Vto. CAE</p>
+                            <p className="text-xs font-bold">{fmtFecha(comp.caeVencimiento)}</p>
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Fecha</p>
-                            <p className="text-xs font-bold text-white">{fmtFecha(comp.fechaComprobante)}</p>
+                            <p className="text-3xs font-black text-muted uppercase tracking-widest">Fecha</p>
+                            <p className="text-xs font-bold">{fmtFecha(comp.fechaComprobante)}</p>
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total</p>
+                            <p className="text-3xs font-black text-muted uppercase tracking-widest">Total</p>
                             <p className="text-xs font-black text-accent">
                                 {comp.moneda === 'DOL' ? 'US$ ' : '$ '}{Number(comp.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                             </p>
@@ -131,12 +131,12 @@ const VentaFacturaPanel = ({ ventaId }: Props) => {
                         {comp.tipoComprobante === 'factura_a' && (
                             <>
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Neto Gravado</p>
-                                    <p className="text-xs font-bold text-white">$ {Number(comp.neto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                                    <p className="text-3xs font-black text-muted uppercase tracking-widest">Neto Gravado</p>
+                                    <p className="text-xs font-bold">$ {Number(comp.neto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">IVA {Number(comp.alicuotaIva)}%</p>
-                                    <p className="text-xs font-bold text-white">$ {Number(comp.iva).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                                    <p className="text-3xs font-black text-muted uppercase tracking-widest">IVA {Number(comp.alicuotaIva)}%</p>
+                                    <p className="text-xs font-bold">$ {Number(comp.iva).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
                                 </div>
                             </>
                         )}
@@ -147,9 +147,9 @@ const VentaFacturaPanel = ({ ventaId }: Props) => {
                     </Button>
                 </div>
             ) : (
-                <div className="p-6 bg-slate-900/40 border border-white/5 rounded-3xl space-y-3">
-                    <p className="text-xs text-slate-400 leading-relaxed flex items-start gap-2">
-                        <ShieldCheck size={16} className="text-slate-500 shrink-0 mt-0.5" />
+                <div>
+                    <p className="text-xs text-muted leading-relaxed flex items-start gap-2">
+                        <ShieldCheck size={16} className="text-muted" />
                         Esta venta todavía no tiene comprobante fiscal. Al emitir se calcula el tipo (A si el cliente es
                         Responsable Inscripto, B si es consumidor final) y se obtiene el CAE. Hoy en <strong>modo demo</strong>:
                         el CAE es simulado, sin validez fiscal.

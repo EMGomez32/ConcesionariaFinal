@@ -33,31 +33,49 @@ class ErrorBoundary extends Component<Props, State> {
     public render() {
         if (this.state.hasError) {
             return (
-                <div className="flex items-center justify-center min-h-screen bg-slate-950 p-6">
-                    <div className="card glass p-8 max-w-md w-full text-center space-y-6">
-                        <div className="mx-auto w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center text-red-500 ring-1 ring-red-500/20 shadow-glow shadow-red-500/5">
+                <div
+                    className="flex items-center justify-center"
+                    style={{ minHeight: '100vh', padding: 'var(--space-6)' }}
+                >
+                    <div
+                        className="card glass flex flex-col w-full text-center"
+                        style={{ maxWidth: '28rem', padding: 'var(--space-8)', gap: 'var(--space-6)' }}
+                    >
+                        <div className="dt-empty-badge is-error" style={{ margin: '0 auto' }}>
                             <AlertCircle size={32} />
                         </div>
 
-                        <div className="space-y-2">
-                            <h1 className="text-2xl font-black text-white italic tracking-tight uppercase">
+                        <div className="flex flex-col gap-2">
+                            <h1 className="text-2xl tracking-tight">
                                 ¡Ups! Algo salió mal
                             </h1>
-                            <p className="text-slate-400 text-sm">
+                            <p className="text-sm text-secondary">
                                 La aplicación encontró un error crítico y no puede continuar.
                             </p>
                         </div>
 
-                        <div className="bg-slate-900/50 border border-white/5 rounded-xl p-4 text-left overflow-hidden">
-                            <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">Detalle Técnico</p>
-                            <p className="text-xs font-mono text-red-400 break-words">
+                        <div
+                            className="p-4 text-left"
+                            style={{
+                                background: 'var(--bg-secondary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 'var(--radius-md)',
+                            }}
+                        >
+                            <p
+                                className="text-3xs font-black uppercase text-muted tracking-widest"
+                                style={{ marginBottom: 'var(--space-1)' }}
+                            >
+                                Detalle Técnico
+                            </p>
+                            <p className="text-xs font-mono text-danger" style={{ overflowWrap: 'break-word' }}>
                                 {this.state.error?.message || 'Error desconocido'}
                             </p>
                         </div>
 
                         <Button
                             variant="primary"
-                            className="w-full flex justify-center gap-2"
+                            className="w-full"
                             onClick={this.handleReset}
                         >
                             <RefreshCw size={18} /> Volver al Inicio

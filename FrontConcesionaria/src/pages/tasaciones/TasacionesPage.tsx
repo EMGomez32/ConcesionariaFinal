@@ -156,13 +156,13 @@ const TasacionesPage = () => {
 
             <div className="card glass filters-bar mb-6">
                 <div className="search-box">
-                    <Search size={18} className="text-slate-500" />
+                    <Search size={18} className="text-muted" />
                     <input
                         type="text"
                         placeholder="Buscar por marca, modelo, dominio o cliente..."
                         value={searchTerm}
                         onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-                        className="bg-transparent border-none outline-none text-white w-full text-sm font-medium"
+                        className="w-full text-sm font-medium"
                     />
                 </div>
             </div>

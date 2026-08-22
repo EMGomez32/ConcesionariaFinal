@@ -575,7 +575,7 @@ const VehiculoDetallePage = () => {
             accessor: (h) => {
                 if (h.precioAnterior == null || h.precioAnterior === 0) return <span style={{ color: 'var(--text-muted)' }}>—</span>;
                 const delta = h.precioNuevo - h.precioAnterior;
-                if (delta === 0) return <span className="flex-cell"><Minus size={13} /> 0%</span>;
+                if (delta === 0) return <span className="flex items-center gap-1"><Minus size={13} /> 0%</span>;
                 const pct = (delta / h.precioAnterior) * 100;
                 const up = delta > 0;
                 // Convención de ticker: sube = verde (más margen), baja = rojo (rebaja).
@@ -968,7 +968,7 @@ const VehiculoDetallePage = () => {
                             data={gastosList}
                             isLoading={loadingGastos}
                             emptyMessage="No hay gastos registrados para este vehículo."
-                            emptyIcon={<Wrench size={40} className="text-slate-600" />}
+                            emptyIcon={<Wrench size={40} className="text-secondary" />}
                         />
 
                         {editGasto && (
@@ -1004,7 +1004,7 @@ const VehiculoDetallePage = () => {
                         data={movList}
                         isLoading={loadingMov}
                         emptyMessage="No hay movimientos registrados para este vehículo."
-                        emptyIcon={<ArrowLeftRight size={40} className="text-slate-600" />}
+                        emptyIcon={<ArrowLeftRight size={40} className="text-secondary" />}
                     />
                 )}
 
@@ -1014,7 +1014,7 @@ const VehiculoDetallePage = () => {
                         columns={presupuestoColumns}
                         data={presupuestos}
                         emptyMessage="No hay presupuestos para este vehículo."
-                        emptyIcon={<FileText size={40} className="text-slate-600" />}
+                        emptyIcon={<FileText size={40} className="text-secondary" />}
                     />
                 )}
 
@@ -1024,7 +1024,7 @@ const VehiculoDetallePage = () => {
                         columns={reservaColumns}
                         data={reservas}
                         emptyMessage="No hay reservas para este vehículo."
-                        emptyIcon={<Bookmark size={40} className="text-slate-600" />}
+                        emptyIcon={<Bookmark size={40} className="text-secondary" />}
                     />
                 )}
 
@@ -1034,7 +1034,7 @@ const VehiculoDetallePage = () => {
                         columns={ventaColumns}
                         data={ventas}
                         emptyMessage="Este vehículo no ha sido vendido aún."
-                        emptyIcon={<ShoppingCart size={40} className="text-slate-600" />}
+                        emptyIcon={<ShoppingCart size={40} className="text-secondary" />}
                     />
                 )}
 
@@ -1045,7 +1045,7 @@ const VehiculoDetallePage = () => {
                         data={interesados}
                         isLoading={loadingInteresados}
                         emptyMessage="Ningún cliente marcó interés en este vehículo todavía."
-                        emptyIcon={<Users size={40} className="text-slate-600" />}
+                        emptyIcon={<Users size={40} className="text-secondary" />}
                     />
                 )}
 
@@ -1056,7 +1056,7 @@ const VehiculoDetallePage = () => {
                         data={precios}
                         isLoading={loadingPrecios}
                         emptyMessage="Sin cambios de precio de lista registrados para este vehículo."
-                        emptyIcon={<TrendingUp size={40} className="text-slate-600" />}
+                        emptyIcon={<TrendingUp size={40} className="text-secondary" />}
                     />
                 )}
             </div>
@@ -1110,8 +1110,10 @@ const VehiculoDetallePage = () => {
                 .archivo-desc { font-size: 0.78rem; color: var(--text-muted); }
                 .archivo-fecha { font-size: 0.72rem; color: var(--text-muted); }
                 .archivo-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
-                .form-label { display: block; font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; }
-                .form-input { display: block; width: 100%; padding: 0.65rem 0.875rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.625rem; color: var(--text-primary); font-size: 0.875rem; outline: none; transition: border-color 0.15s; }
+                /* .form-label la define index.css (capa global, mismos valores).
+                   El .form-input local difiere a propósito apenas (padding/radius
+                   propios de esta ficha) y gana la cascada; se mantiene. */
+                .form-input { display: block; width: 100%; padding: 0.65rem 0.875rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--text-sm); outline: none; transition: border-color 0.15s; }
                 .form-input:focus { border-color: var(--accent); }
                 .fw-bold { font-weight: 700; }
                 .link-cell { font-weight: 600; color: var(--accent); background: none; border: none; padding: 0; cursor: pointer; }
@@ -1138,7 +1140,7 @@ const InfoSection = ({ title, rows }: { title: string; rows: { icon: LucideIcon;
                         <span className="info-value">{r.value}</span>
                     </div>
                 ))}
-                {filtered.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Sin datos disponibles.</p>}
+                {filtered.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Sin datos disponibles.</p>}
             </div>
         </div>
     );

@@ -153,10 +153,10 @@ const GastosPage: React.FC = () => {
             header: 'Activo Vehicular',
             accessor: (g) => (
                 <div className="flex flex-col">
-                    <span className="font-bold text-white uppercase text-xs">
+                    <span className="font-bold uppercase text-xs">
                         {g.vehiculo?.marca} {g.vehiculo?.modelo}
                     </span>
-                    <span className="text-[10px] font-black text-accent tracking-widest">{g.vehiculo?.dominio || 'S/DOMINIO'}</span>
+                    <span className="text-3xs font-black text-accent tracking-widest">{g.vehiculo?.dominio || 'S/DOMINIO'}</span>
                 </div>
             )
         },
@@ -169,14 +169,14 @@ const GastosPage: React.FC = () => {
                     ? <Badge variant="info">{g.proveedor.nombre}</Badge>
                     : g.categoria?.nombre
                         ? <Badge variant="default">{g.categoria.nombre}</Badge>
-                        : <span className="text-slate-600 text-xs">—</span>
+                        : <span className="text-secondary text-xs">—</span>
             )
         },
         {
             header: 'Fecha',
             accessor: (g) => (
-                <div className="flex items-center gap-2 text-slate-400 text-xs font-bold">
-                    <Calendar size={14} className="text-white/20" />
+                <div className="flex items-center gap-2 text-muted text-xs font-bold">
+                    <Calendar size={14} />
                     {formatFecha(g.fechaGasto)}
                 </div>
             )
@@ -184,7 +184,7 @@ const GastosPage: React.FC = () => {
         {
             header: 'Sede',
             accessor: (g) => (
-                <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase">
+                <div className="flex items-center gap-2 text-muted text-3xs font-black uppercase">
                     <Building2 size={12} />
                     {g.sucursal?.nombre || 'Matriz'}
                 </div>
@@ -194,8 +194,8 @@ const GastosPage: React.FC = () => {
             header: 'Monto',
             accessor: (g) => (
                 <div className="flex flex-col">
-                    <span className="font-black text-white text-base">${Number(g.monto).toLocaleString()}</span>
-                    <span className="text-[9px] font-bold text-slate-600 uppercase">{g.moneda}</span>
+                    <span className="font-black text-base">${Number(g.monto).toLocaleString()}</span>
+                    <span className="text-3xs font-bold text-secondary uppercase">{g.moneda}</span>
                 </div>
             )
         },
@@ -203,7 +203,7 @@ const GastosPage: React.FC = () => {
             header: 'Acciones',
             align: 'right',
             accessor: (g) => (
-                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex justify-end gap-1">
                     <button className="icon-btn small" onClick={(e) => {
                         e.stopPropagation();
                         setEditGasto(g);
@@ -245,23 +245,23 @@ const GastosPage: React.FC = () => {
                 </div>
             </header>
 
-            <div className="grid grid-cols-1 gap-6 mb-8">
-                <div className="card glass p-6 border-emerald-500/20 bg-emerald-500/5">
+            <div className="grid grid-cols-1 gap-6">
+                <div className="card glass">
                     <div className="flex justify-between items-start">
                         <div>
-                            <span className="text-[10px] font-black uppercase text-emerald-400 tracking-widest block mb-1">Inversión en Stock (Vista)</span>
-                            <div className="text-3xl font-black text-white italic">
+                            <span className="text-3xs font-black uppercase text-accent tracking-widest mb-1">Inversión en Stock (Vista)</span>
+                            <div className="text-3xl font-black italic">
                                 ${(totalsInView.ARS || 0).toLocaleString('es-AR')}
                                 <span className="text-xs font-bold text-muted" style={{ marginLeft: '0.35rem' }}>ARS</span>
                             </div>
                             {totalsInView.USD ? (
-                                <div className="text-xl font-black text-white/70 italic">
+                                <div className="text-xl font-black italic">
                                     ${totalsInView.USD.toLocaleString('es-AR')}
                                     <span className="text-xs font-bold text-muted" style={{ marginLeft: '0.35rem' }}>USD</span>
                                 </div>
                             ) : null}
                         </div>
-                        <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-400">
+                        <div className="text-accent">
                             <TrendingDown size={24} />
                         </div>
                     </div>
@@ -269,18 +269,18 @@ const GastosPage: React.FC = () => {
             </div>
 
             <div className="card glass filters-bar mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div className="relative">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <div>
+                    <Search size={16} className="text-muted" />
                     <input
                         type="text"
                         placeholder="Buscar descripción..."
-                        className="form-input pl-10 py-2 w-full text-xs"
+                        className="form-input w-full text-xs"
                         value={searchTerm}
                         onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
                     />
                 </div>
                 <select
-                    className="bg-slate-900/50 border border-white/5 text-slate-400 text-xs font-bold rounded-xl px-4 py-2 outline-none"
+                    className="text-muted text-xs font-bold"
                     value={filterVehiculo}
                     onChange={e => { setFilterVehiculo(e.target.value); setPage(1); }}
                 >
@@ -291,7 +291,7 @@ const GastosPage: React.FC = () => {
                 </select>
 
                 <select
-                    className="bg-slate-900/50 border border-white/5 text-slate-400 text-xs font-bold rounded-xl px-4 py-2 outline-none"
+                    className="text-muted text-xs font-bold"
                     value={filterProveedor}
                     onChange={e => { setFilterProveedor(e.target.value); setPage(1); }}
                 >
@@ -300,7 +300,7 @@ const GastosPage: React.FC = () => {
                 </select>
 
                 <select
-                    className="bg-slate-900/50 border border-white/5 text-slate-400 text-xs font-bold rounded-xl px-4 py-2 outline-none"
+                    className="text-muted text-xs font-bold"
                     value={filterSucursal}
                     onChange={e => { setFilterSucursal(e.target.value); setPage(1); }}
                 >
@@ -330,7 +330,7 @@ const GastosPage: React.FC = () => {
                 title={editGasto ? 'Editar Registro de Gasto' : 'Nuevo Egreso Vehicular'}
                 maxWidth="600px"
             >
-                <div className="space-y-6">
+                <div>
                     {!editGasto && (
                         <>
                             <div className="form-group">
@@ -358,7 +358,7 @@ const GastosPage: React.FC = () => {
                                     {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                                 </select>
                                 {proveedores.length === 0 && (
-                                    <p className="text-[11px] text-slate-500 mt-1">
+                                    <p className="text-2xs text-muted">
                                         No hay proveedores cargados. Agregalos en la sección Proveedores.
                                     </p>
                                 )}
@@ -369,11 +369,11 @@ const GastosPage: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="form-group">
                             <label className="form-label">Importe *</label>
-                            <div className="relative">
-                                <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <div>
+                                <DollarSign size={16} className="text-muted" />
                                 <input
                                     type="number"
-                                    className="form-input pl-10"
+                                    className="form-input"
                                     value={editGasto ? editGastoForm.monto : gastoForm.monto}
                                     onChange={e => editGasto ? setEditGastoForm(f => ({ ...f, monto: e.target.value })) : setGastoForm(f => ({ ...f, monto: e.target.value }))}
                                 />
@@ -406,14 +406,14 @@ const GastosPage: React.FC = () => {
                     <div className="form-group">
                         <label className="form-label">Descripción / Justificación</label>
                         <textarea
-                            className="form-input min-h-[100px]"
+                            className="form-input"
                             placeholder="Detalles sobre el mantenimiento, repuestos, etc..."
                             value={editGasto ? editGastoForm.descripcion : gastoForm.descripcion}
                             onChange={e => editGasto ? setEditGastoForm(f => ({ ...f, descripcion: e.target.value })) : setGastoForm(f => ({ ...f, descripcion: e.target.value }))}
                         />
                     </div>
 
-                    <div className="form-actions pt-4">
+                    <div className="form-actions">
                         <Button variant="secondary" onClick={() => { setShowCreateGasto(false); setEditGasto(null); }}>Cancelar</Button>
                         <Button
                             variant="primary"
