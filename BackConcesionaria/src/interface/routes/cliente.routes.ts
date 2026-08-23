@@ -5,7 +5,7 @@ import { authenticate } from '../middlewares/authenticate.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
 
 import { validateBody } from '../middlewares/validate.middleware';
-import { createClienteSchema, updateClienteSchema } from '../validation/cliente.schema';
+import { createClienteSchema, updateClienteSchema, consultaIngresoSchema } from '../validation/cliente.schema';
 const router = Router();
 
 /**
@@ -17,6 +17,10 @@ const router = Router();
  *     parameters:
  *       - { $ref: '#/components/parameters/pageParam' }
  *       - { $ref: '#/components/parameters/limitParam' }
+ *       - { in: query, name: search, schema: { type: string } }
+ *       - { in: query, name: estadoLead, schema: { type: string, enum: [nuevo, contactado, negociando, ganado, perdido] } }
+ *       - { in: query, name: origenLead, schema: { type: string, enum: [deruedas, instagram, facebook, whatsapp, web, mostrador, referido, otro] } }
+ *       - { in: query, name: vendedorAsignadoId, schema: { type: integer } }
  *     responses:
  *       200:
  *         description: Listado paginado
@@ -49,6 +53,48 @@ router.get('/', authenticate, ClienteController.getAll);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
 router.get('/export/csv', authenticate, authorize('admin', 'vendedor'), ClienteController.exportCsv);
+
+/**
+ * @openapi
+ * /clientes/consulta:
+ *   post:
+ *     tags: [Clientes]
+ *     summary: Ingresar una consulta de venta (lead)
+ *     description: admin/vendedor. Dedupe por teléfono/email dentro del tenant, asignación round-robin de vendedor y reapertura de leads ganados/perdidos. No crea seguimiento.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [origen, nombre]
+ *             properties:
+ *               origen: { type: string, enum: [deruedas, instagram, facebook, whatsapp, web, mostrador, referido, otro] }
+ *               nombre: { type: string }
+ *               telefono: { type: string }
+ *               email: { type: string, format: email }
+ *               texto: { type: string }
+ *               vehiculoId: { type: integer }
+ *               vendedorId: { type: integer }
+ *     responses:
+ *       201:
+ *         description: Consulta ingresada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 clienteId: { type: integer }
+ *                 creado: { type: boolean }
+ *                 reabierto: { type: boolean }
+ *                 vendedorAsignadoId: { type: integer, nullable: true }
+ *       400: { $ref: '#/components/responses/ValidationError' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ */
+// OJO: registrada ANTES de las rutas /:id para que Express no matchee "consulta"
+// como un id.
+router.post('/consulta', authenticate, authorize('admin', 'vendedor'), validateBody(consultaIngresoSchema), ClienteController.consulta);
 
 /**
  * @openapi

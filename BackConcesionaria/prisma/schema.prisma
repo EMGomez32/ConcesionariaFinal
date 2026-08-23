@@ -44,6 +44,7 @@ model Concesionaria {
   categoriasGastoFijo     CategoriaGastoFijo[]
   categoriasGastoVehiculo CategoriaGastoVehiculo[]
   tiposPostventa          TipoPostventa[]
+  integracionesCanal      IntegracionCanal[]
   clientes                Cliente[]
   clienteSeguimientos     ClienteSeguimiento[]
   tasaciones              Tasacion[]
@@ -182,6 +183,9 @@ model Cliente {
   observaciones           String?
   /// Etapa del cliente en el embudo comercial (pipeline de leads).
   estadoLead              EstadoLead              @default(nuevo) @map("estado_lead")
+  /// Canal por el que entró la consulta (DeRuedas, redes, mostrador...).
+  /// Nullable: los clientes históricos no registraron origen.
+  origenLead              OrigenLead?             @map("origen_lead")
   /// Vendedor "dueño" del cliente (ownership CRM). Nullable: un cliente puede
   /// no tener vendedor asignado todavía.
   vendedorAsignadoId      Int?                    @map("vendedor_asignado_id")
@@ -993,6 +997,28 @@ model Financiera {
   @@map("financieras")
 }
 
+/// Config de ingesta automática de consultas por tenant: webhook de Meta
+/// (Lead Ads) o casilla IMAP (avisos de DeRuedas). `config` guarda las
+/// credenciales del canal (TODO: cifrar en reposo; hoy protege la RLS).
+model IntegracionCanal {
+  id              Int                  @id @default(autoincrement())
+  concesionariaId Int                  @map("concesionaria_id")
+  tipo            TipoIntegracionCanal
+  nombre          String
+  activo          Boolean              @default(true)
+  config          Json
+  /// Última consulta ingerida OK y último error del canal (diagnóstico en Ajustes).
+  ultimoEvento    DateTime?            @map("ultimo_evento")
+  ultimoError     String?              @map("ultimo_error")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  deletedAt       DateTime?            @map("deleted_at")
+  concesionaria   Concesionaria        @relation(fields: [concesionariaId], references: [id])
+
+  @@index([concesionariaId])
+  @@map("integraciones_canal")
+}
+
 model SolicitudFinanciacion {
   id              Int                            @id @default(autoincrement())
   concesionariaId Int                            @map("concesionaria_id")
@@ -1408,6 +1434,24 @@ enum EstadoLead {
   negociando
   ganado
   perdido
+}
+
+// Canal por el que entró la consulta/lead. `deruedas` y las redes llegan por
+// las integraciones automáticas; el resto por carga manual.
+enum OrigenLead {
+  deruedas
+  instagram
+  facebook
+  whatsapp
+  web
+  mostrador
+  referido
+  otro
+}
+
+enum TipoIntegracionCanal {
+  meta
+  email
 }
 
 enum TipoMovimientoVehiculo {

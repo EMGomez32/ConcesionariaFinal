@@ -243,6 +243,23 @@ router.get('/leads-resumen', authorize('admin', 'vendedor'), ReporteController.l
 
 /**
  * @openapi
+ * /reportes/consultas:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Analítica de consultas entrantes (sin atender, por vendedor, por canal)
+ *     description: Sobre los clientes creados en el rango — leads nuevos sin ningún seguimiento, embudo por vendedor con horas hasta el primer contacto, y conversión por canal de origen. El rol vendedor ve sólo su cartera asignada.
+ *     parameters:
+ *       - { in: query, name: desde, schema: { type: string, format: date } }
+ *       - { in: query, name: hasta, schema: { type: string, format: date } }
+ *     responses:
+ *       200: { description: Consultas sin atender + métricas por vendedor y por canal }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ */
+router.get('/consultas', authorize('admin', 'vendedor'), ReporteController.consultas);
+
+/**
+ * @openapi
  * /reportes/postventa:
  *   get:
  *     tags: [Reportes]

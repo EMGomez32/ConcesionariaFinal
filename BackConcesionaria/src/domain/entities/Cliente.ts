@@ -21,5 +21,7 @@ export class Cliente {
         public readonly tipoDoc?: string | null,
         /** Condición frente al IVA del receptor. Determina A vs B al facturar. */
         public readonly condicionIva?: string | null,
+        /** Canal por el que entró la consulta (deruedas, instagram...). null = histórico. */
+        public readonly origenLead?: string | null,
     ) { }
 }

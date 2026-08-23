@@ -48,6 +48,12 @@ export class PrismaClienteRepository implements IClienteRepository {
         if (filter.estadoLead && ESTADOS_LEAD.includes(String(filter.estadoLead))) {
             whereClause.estadoLead = filter.estadoLead;
         }
+        // Filtro por canal de entrada del lead. Misma whitelist defensiva que
+        // estadoLead: un valor fuera del enum se ignora (evita el 500 de Prisma).
+        const ORIGENES_LEAD = ['deruedas', 'instagram', 'facebook', 'whatsapp', 'web', 'mostrador', 'referido', 'otro'];
+        if (filter.origenLead && ORIGENES_LEAD.includes(String(filter.origenLead))) {
+            whereClause.origenLead = filter.origenLead;
+        }
         // Filtro por vendedor "dueño" (ownership CRM). "Mis clientes" = el id del
         // vendedor logueado. Sólo un entero positivo entra al where (evita el 500 de Prisma).
         if (filter.vendedorAsignadoId !== undefined && Number.isInteger(Number(filter.vendedorAsignadoId)) && Number(filter.vendedorAsignadoId) > 0) {
@@ -103,7 +109,7 @@ export class PrismaClienteRepository implements IClienteRepository {
      * podrían pisar columnas internas (deletedAt, createdAt, concesionariaId).
      */
     private pickEditable(data: any): Record<string, any> {
-        const CAMPOS = ['nombre', 'dni', 'telefono', 'email', 'direccion', 'observaciones', 'estadoLead', 'vendedorAsignadoId', 'tipoDoc', 'condicionIva'];
+        const CAMPOS = ['nombre', 'dni', 'telefono', 'email', 'direccion', 'observaciones', 'estadoLead', 'origenLead', 'vendedorAsignadoId', 'tipoDoc', 'condicionIva'];
         const payload: Record<string, any> = {};
         for (const campo of CAMPOS) {
             if (data[campo] !== undefined) {
@@ -165,6 +171,7 @@ export class PrismaClienteRepository implements IClienteRepository {
             c.vendedorAsignado ? { id: c.vendedorAsignado.id, nombre: c.vendedorAsignado.nombre } : null,
             c.tipoDoc ?? null,
             c.condicionIva ?? null,
+            c.origenLead ?? null,
         );
     }
 }

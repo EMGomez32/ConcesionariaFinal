@@ -19,6 +19,7 @@ import {
     CalendarClock,
     Gauge,
     GitCompare,
+    Inbox,
     // BadgeCheck, // Billing deshabilitado temporalmente (ver ítem comentado abajo)
     BarChart3,
 } from 'lucide-react';
@@ -68,6 +69,7 @@ export const NAV_SECTIONS: NavSection[] = [
     {
         title: 'Operaciones',
         items: [
+            { label: 'Consultas', path: '/consultas', icon: Inbox, keywords: ['leads', 'consultas', 'deruedas', 'instagram'], roles: ['admin', 'super_admin', 'vendedor'] },
             { label: 'Clientes', path: '/clientes', icon: Users, keywords: ['compradores', 'leads'] },
             { label: 'Seguimientos', path: '/seguimientos', icon: CalendarClock, keywords: ['crm', 'contactos', 'agenda', 'próximo contacto', 'llamar'], roles: ['admin', 'super_admin', 'vendedor'] },
             { label: 'Tasaciones', path: '/tasaciones', icon: Gauge, keywords: ['tasación', 'valuación', 'usado', 'permuta', 'cotizar auto'], roles: ['admin', 'super_admin', 'vendedor'] },

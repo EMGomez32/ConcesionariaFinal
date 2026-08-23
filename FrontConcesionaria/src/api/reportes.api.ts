@@ -391,6 +391,52 @@ export interface ReporteProximosSeguimientos {
     items: ProximoSeguimientoItem[];
 }
 
+// ── Panel de consultas (leads entrantes multicanal) ──────────────────────────
+
+/** Un lead 'nuevo' sin ningún seguimiento registrado todavía (nadie lo atendió). */
+export interface ConsultaSinAtenderItem {
+    clienteId: number;
+    nombre: string;
+    telefono: string | null;
+    /** Canal de origen del lead (OrigenLead), o null si no se registró. */
+    origen: string | null;
+    vendedorId: number | null;
+    vendedorNombre: string | null;
+    diasSinAtender: number;
+    vehiculo: string | null;
+}
+
+/** Embudo de un vendedor sobre las consultas del rango. */
+export interface ConsultaPorVendedorItem {
+    vendedorId: number;
+    nombre: string;
+    nuevo: number;
+    contactado: number;
+    negociando: number;
+    ganado: number;
+    perdido: number;
+    total: number;
+    /** Promedio de horas entre el alta del cliente y su primer seguimiento, o null sin datos. */
+    horasPrimerContactoPromedio: number | null;
+}
+
+/** Conversión de un canal de origen (los sin origen vienen como 'sin_registro'). */
+export interface ConsultaPorCanalItem {
+    origen: string;
+    total: number;
+    ganados: number;
+    perdidos: number;
+    enCurso: number;
+    /** ganados / total, como fracción 0..1. */
+    tasaConversion: number;
+}
+
+export interface ReporteConsultas {
+    sinAtender: ConsultaSinAtenderItem[];
+    porVendedor: ConsultaPorVendedorItem[];
+    porCanal: ConsultaPorCanalItem[];
+}
+
 /** Embudo de leads: cantidad de clientes por etapa del pipeline + total. */
 export interface LeadsResumen {
     nuevo: number;
@@ -531,6 +577,14 @@ export const reportesApi = {
     /** Embudo de leads: cantidad de clientes por etapa del pipeline. */
     leadsResumen: () =>
         client.get<LeadsResumen>('/reportes/leads-resumen'),
+
+    /**
+     * Panel de consultas entrantes: sin atender, gestión por vendedor y
+     * conversión por canal. El rango desde/hasta filtra por fecha de alta del
+     * cliente; para el rol vendedor el backend acota a sus propios leads.
+     */
+    consultas: (params: { desde?: string; hasta?: string } = {}) =>
+        client.get<ReporteConsultas>('/reportes/consultas', { params }),
 
     /**
      * Variante CSV. Devuelve el blob y el nombre de archivo que mandó el

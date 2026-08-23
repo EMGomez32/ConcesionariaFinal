@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../../infrastructure/database/prisma';
 import { BaseException } from '../../domain/exceptions/BaseException';
 import { Col, sendCsv } from '../../utils/csv';
+import { context } from '../../infrastructure/security/context';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Reportes: consultas de solo lectura sobre datos ya existentes. Como el resto
@@ -1814,6 +1815,145 @@ export class ReporteController {
                 resumen: { cantidad: items.length, vencidos },
                 items,
             });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // ── 17. Analítica de consultas (leads entrantes) ─────────────────────────
+    // GET /api/reportes/consultas?desde=&hasta=
+    // Tres cortes sobre la MISMA cohorte (clientes creados en el rango, por
+    // cliente.createdAt):
+    //   · sinAtender: leads en 'nuevo' SIN ningún seguimiento vivo — nadie los
+    //     contactó todavía, ordenados del más viejo al más nuevo.
+    //   · porVendedor: embudo por vendedor asignado + horas promedio hasta el
+    //     primer contacto (primer seguimiento.createdAt − cliente.createdAt).
+    //   · porCanal: performance por origen del lead (origen null → 'sin_registro').
+    // Para el rol vendedor (sin admin) se fuerza vendedorAsignadoId = su userId:
+    // ve SU cartera (incluido su sinAtender), no la del resto del equipo.
+    static async consultas(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { desde, hasta } = parseRango(req.query);
+            // createdAt es un DateTime con hora: mismo criterio de día LOCAL
+            // completo que los cobros (ver filtroInstante).
+            const where: any = { ...filtroInstante('createdAt', desde, hasta) };
+
+            // Rol vendedor puro: sólo sus clientes asignados. admin/super_admin
+            // (authorize deja pasar ambos) ven el equipo completo.
+            const usuario = context.getUser();
+            const roles = usuario?.roles ?? [];
+            const esSoloVendedor = roles.includes('vendedor') && !roles.includes('admin') && !roles.includes('super_admin');
+            if (esSoloVendedor && usuario) where.vendedorAsignadoId = usuario.userId;
+
+            const clientes = await prisma.cliente.findMany({
+                where,
+                orderBy: { createdAt: 'asc' },
+                select: {
+                    id: true,
+                    nombre: true,
+                    telefono: true,
+                    estadoLead: true,
+                    origenLead: true,
+                    createdAt: true,
+                    vendedorAsignadoId: true,
+                    vendedorAsignado: { select: { id: true, nombre: true } },
+                    // Sólo el PRIMER seguimiento vivo: alcanza para saber si el lead
+                    // fue atendido y cuánto tardó el primer contacto. El filtro de
+                    // borrados es obligatorio: la extensión no alcanza a los include.
+                    seguimientos: {
+                        where: { deletedAt: null },
+                        orderBy: { createdAt: 'asc' },
+                        take: 1,
+                        select: { createdAt: true },
+                    },
+                    // El interés más reciente, para mostrar QUÉ auto consultó.
+                    vehiculosInteres: {
+                        orderBy: { createdAt: 'desc' },
+                        take: 1,
+                        select: { vehiculo: { select: { marca: true, modelo: true } } },
+                    },
+                },
+            });
+
+            const ahora = Date.now();
+            const MS_HORA = 3600000;
+
+            // ── sinAtender: 'nuevo' sin ningún seguimiento vivo ──────────────
+            const sinAtender = clientes
+                .filter((c) => c.estadoLead === 'nuevo' && c.seguimientos.length === 0)
+                .map((c) => {
+                    const veh = c.vehiculosInteres[0]?.vehiculo;
+                    return {
+                        clienteId: c.id,
+                        nombre: c.nombre,
+                        telefono: c.telefono ?? '',
+                        origen: c.origenLead ?? null,
+                        vendedorId: c.vendedorAsignadoId ?? null,
+                        vendedorNombre: c.vendedorAsignado?.nombre ?? null,
+                        // Días COMPLETOS desde que entró la consulta (createdAt trae hora).
+                        diasSinAtender: Math.max(0, Math.floor((ahora - c.createdAt.getTime()) / 86400000)),
+                        vehiculo: veh ? `${veh.marca ?? ''} ${veh.modelo ?? ''}`.trim() || null : null,
+                    };
+                });
+
+            // ── porVendedor: embudo + horas hasta el primer contacto ─────────
+            // vendedorId 0 = 'Sin asignar', igual que el ranking de vendedores.
+            const porVendedorMap = new Map<number, any>();
+            // ── porCanal: performance por origen del lead ────────────────────
+            const porCanalMap = new Map<string, any>();
+
+            for (const c of clientes) {
+                const vendId = c.vendedorAsignadoId ?? 0;
+                if (!porVendedorMap.has(vendId)) {
+                    porVendedorMap.set(vendId, {
+                        vendedorId: vendId,
+                        nombre: c.vendedorAsignado?.nombre ?? 'Sin asignar',
+                        nuevo: 0, contactado: 0, negociando: 0, ganado: 0, perdido: 0,
+                        total: 0,
+                        _sumHoras: 0,
+                        _conSeguimiento: 0,
+                    });
+                }
+                const pv = porVendedorMap.get(vendId);
+                if (c.estadoLead in pv) pv[c.estadoLead] += 1;
+                pv.total += 1;
+                const primerSeg = c.seguimientos[0];
+                if (primerSeg) {
+                    pv._sumHoras += Math.max(0, (primerSeg.createdAt.getTime() - c.createdAt.getTime()) / MS_HORA);
+                    pv._conSeguimiento += 1;
+                }
+
+                // Origen null (clientes históricos) se reporta como 'sin_registro'.
+                const origen = c.origenLead ?? 'sin_registro';
+                if (!porCanalMap.has(origen)) {
+                    porCanalMap.set(origen, { origen, total: 0, ganados: 0, perdidos: 0, enCurso: 0 });
+                }
+                const pc = porCanalMap.get(origen);
+                pc.total += 1;
+                if (c.estadoLead === 'ganado') pc.ganados += 1;
+                else if (c.estadoLead === 'perdido') pc.perdidos += 1;
+                else pc.enCurso += 1; // nuevo / contactado / negociando
+            }
+
+            const porVendedor = Array.from(porVendedorMap.values())
+                .map(({ _sumHoras, _conSeguimiento, ...pv }) => ({
+                    ...pv,
+                    // Promedio con 1 decimal; null si NINGÚN cliente suyo tiene seguimiento.
+                    horasPrimerContactoPromedio: _conSeguimiento > 0
+                        ? Math.round((_sumHoras / _conSeguimiento) * 10) / 10
+                        : null,
+                }))
+                .sort((a, b) => b.total - a.total);
+
+            const porCanal = Array.from(porCanalMap.values())
+                .map((pc) => ({
+                    ...pc,
+                    // ganados/total con 3 decimales (0 si total 0).
+                    tasaConversion: pc.total > 0 ? Math.round((pc.ganados / pc.total) * 1000) / 1000 : 0,
+                }))
+                .sort((a, b) => b.total - a.total);
+
+            res.json({ sinAtender, porVendedor, porCanal });
         } catch (error) {
             next(error);
         }

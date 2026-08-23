@@ -9,6 +9,9 @@ import { requestLogger } from './interface/middlewares/requestLogger.middleware'
 import { errorHandler } from './interface/middlewares/error.middleware';
 import { notFound } from './interface/middlewares/notFound.middleware';
 import routes from './routes';
+import webhookRoutes from './interface/routes/webhook.routes';
+import integracionRoutes from './interface/routes/integracion.routes';
+import { authenticate } from './interface/middlewares/authenticate.middleware';
 import prisma from './infrastructure/database/prisma';
 import { logger } from './infrastructure/logging/logger';
 
@@ -94,7 +97,17 @@ app.use(cors({
 }));
 
 // Basic Middlewares
-app.use(express.json());
+// verify: el webhook de Meta valida X-Hub-Signature-256 sobre el body CRUDO;
+// se guarda el buffer original SOLO para /api/webhooks (el resto no lo necesita
+// y no vale la pena duplicar cada body en memoria).
+app.use(express.json({
+    verify: (req, _res, buf) => {
+        const url = (req as any).originalUrl || (req as any).url || '';
+        if (url.startsWith('/api/webhooks/')) {
+            (req as any).rawBody = buf;
+        }
+    },
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // Disable caching in development
@@ -136,6 +149,15 @@ app.use('/uploads', express.static(uploadsDir, {
         res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox; frame-ancestors 'none'");
     },
 }));
+
+// Webhooks públicos de integraciones (Meta Lead Ads): SIN JWT — montados ANTES
+// del router /api (que aplica authenticate global). La seguridad es la del
+// canal: verify token en el handshake (GET) y firma HMAC del body en el POST.
+app.use('/api/webhooks', webhookRoutes);
+
+// Integraciones de canal (credenciales de Meta/IMAP): autenticado como el
+// resto de la API; authorize('admin') va dentro del router.
+app.use('/api/integraciones', authenticate, integracionRoutes);
 
 // Rutas de la API
 app.use('/api', routes);

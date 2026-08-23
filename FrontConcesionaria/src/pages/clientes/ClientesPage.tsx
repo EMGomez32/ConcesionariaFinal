@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { clientesApi } from '../../api/clientes.api';
+import { clientesApi, type ConsultaEntrante, type ConsultaResultado } from '../../api/clientes.api';
 import { usuariosApi } from '../../api/usuarios.api';
 import { reportesApi } from '../../api/reportes.api';
-import { ESTADO_LEAD_MAP, ESTADOS_LEAD } from '../../types/cliente.types';
-import type { Cliente, ClienteFilter, EstadoLead } from '../../types/cliente.types';
+import { vehiculosApi } from '../../api/vehiculos.api';
+import { ESTADO_LEAD_MAP, ESTADOS_LEAD, ORIGEN_LEAD_LABEL, ORIGENES_LEAD } from '../../types/cliente.types';
+import type { Cliente, ClienteFilter, EstadoLead, OrigenLead } from '../../types/cliente.types';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import ClienteForm from '../../components/forms/ClienteForm';
 import { useUIStore } from '../../store/uiStore';
 import { useAuthStore } from '../../store/authStore';
@@ -26,7 +30,8 @@ import {
     FileText,
     FileDown,
     Building2,
-    UserCheck
+    UserCheck,
+    MessageSquarePlus
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
 import DataTable, { type Column } from '../../components/ui/DataTable';
@@ -51,6 +56,8 @@ const ClientesPage: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebounce(searchTerm, 500);
     const [filterEstado, setFilterEstado] = useState<'' | EstadoLead>('');
+    // Filtro por canal de entrada del lead: '' (todos) o un OrigenLead.
+    const [filterCanal, setFilterCanal] = useState<'' | OrigenLead>('');
     // Filtro por vendedor "dueño": '' (todos), 'mios' (los del vendedor logueado) o un id.
     const [filterVendedor, setFilterVendedor] = useState<string>('');
     const { data: vendedoresData } = useQuery({
@@ -58,11 +65,29 @@ const ClientesPage: React.FC = () => {
         queryFn: () => usuariosApi.getAll({}, { limit: 200 }),
         staleTime: 5 * 60 * 1000,
     });
-    const vendedores = ((vendedoresData as { results?: { id: number; nombre: string }[] })?.results ?? []);
+    const vendedores = ((vendedoresData as { results?: { id: number; nombre: string; roles?: { rol?: { nombre?: string } }[] }[] })?.results ?? []);
+    // Para asignar una consulta a mano: sólo usuarios con rol vendedor (el listado
+    // incluye los roles). Si ninguno lo trae, degradamos a la lista completa.
+    const soloVendedores = vendedores.filter((u) => u.roles?.some((r) => r.rol?.nombre === 'vendedor'));
+    const vendedoresAsignables = soloVendedores.length > 0 ? soloVendedores : vendedores;
     const [page, setPage] = useState(1);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
     const [exportando, setExportando] = useState(false);
+
+    // ─ Nueva consulta (intake manual de un lead por cualquier canal) ─
+    const consultaVacia = { origen: 'mostrador' as OrigenLead, nombre: '', telefono: '', email: '', vehiculoId: '', vendedorId: '', texto: '' };
+    const [isConsultaOpen, setIsConsultaOpen] = useState(false);
+    const [consultaForm, setConsultaForm] = useState(consultaVacia);
+
+    // Vehículos publicados para "Vehículo consultado": recién al abrir el modal.
+    const { data: vehiculosPublicadosData } = useQuery({
+        queryKey: ['vehiculos', 'publicados-consulta'],
+        queryFn: () => vehiculosApi.getAll({ estado: 'publicado' }, { limit: 200 }),
+        enabled: isConsultaOpen,
+        staleTime: 5 * 60 * 1000,
+    });
+    const vehiculosPublicados = vehiculosPublicadosData?.results ?? [];
 
     // Export CSV de la cartera con el MISMO filtro actual (para Excel/planilla).
     const handleExportCsv = async () => {
@@ -71,6 +96,7 @@ const ClientesPage: React.FC = () => {
             const filters: Record<string, unknown> = {};
             if (debouncedSearch.trim()) filters.search = debouncedSearch;
             if (filterEstado) filters.estadoLead = filterEstado;
+            if (filterCanal) filters.origenLead = filterCanal;
             if (filterVendedor === 'mios' && user?.id) filters.vendedorAsignadoId = user.id;
             else if (filterVendedor) filters.vendedorAsignadoId = Number(filterVendedor);
             const res = await clientesApi.exportCsv(filters);
@@ -94,13 +120,14 @@ const ClientesPage: React.FC = () => {
 
     // Queries
     const { data: response, isLoading, refetch } = useQuery<PaginatedResponse<Cliente>, ApiError>({
-        queryKey: ['clientes', page, debouncedSearch, filterEstado, filterVendedor],
+        queryKey: ['clientes', page, debouncedSearch, filterEstado, filterCanal, filterVendedor],
         queryFn: async () => {
             const filters: ClienteFilter = {};
             // `search` busca en nombre, DNI/CUIT, email y teléfono, que es lo
             // que ofrece el placeholder del buscador.
             if (debouncedSearch.trim()) filters.search = debouncedSearch;
             if (filterEstado) filters.estadoLead = filterEstado;
+            if (filterCanal) filters.origenLead = filterCanal;
             if (filterVendedor === 'mios' && user?.id) filters.vendedorAsignadoId = user.id;
             else if (filterVendedor) filters.vendedorAsignadoId = Number(filterVendedor);
             const res = await clientesApi.getAll(filters, { page, limit: 12 });
@@ -164,6 +191,41 @@ const ClientesPage: React.FC = () => {
             addToast(err?.message || 'Error al eliminar cliente', 'error');
         }
     });
+
+    // Registra la consulta entrante: el backend deduplica, asigna vendedor
+    // (round-robin si no se eligió uno) y reabre leads terminales.
+    const consultaMutation = useMutation<ConsultaResultado, ApiError, ConsultaEntrante>({
+        mutationFn: (data) => clientesApi.crearConsulta(data),
+        onSuccess: (res) => {
+            queryClient.invalidateQueries({ queryKey: ['clientes'] });
+            addToast(res.reabierto ? 'Consulta asignada (reabierta)' : 'Consulta asignada', 'success');
+            handleCloseConsulta();
+        },
+        onError: (err: ApiError) => {
+            addToast(err?.message || 'Error al registrar la consulta', 'error');
+        }
+    });
+
+    const handleCloseConsulta = () => {
+        setIsConsultaOpen(false);
+        setConsultaForm(consultaVacia);
+    };
+
+    const handleSubmitConsulta = () => {
+        if (!consultaForm.nombre.trim()) {
+            addToast('El nombre es obligatorio', 'error');
+            return;
+        }
+        consultaMutation.mutate({
+            origen: consultaForm.origen,
+            nombre: consultaForm.nombre.trim(),
+            telefono: consultaForm.telefono.trim() || undefined,
+            email: consultaForm.email.trim() || undefined,
+            texto: consultaForm.texto.trim() || undefined,
+            vehiculoId: consultaForm.vehiculoId ? Number(consultaForm.vehiculoId) : undefined,
+            vendedorId: consultaForm.vendedorId ? Number(consultaForm.vendedorId) : undefined,
+        });
+    };
 
     const handleOpenModal = (cliente?: Cliente) => {
         setEditingCliente(cliente || null);
@@ -261,7 +323,13 @@ const ClientesPage: React.FC = () => {
             header: 'Etapa',
             accessor: (c) => {
                 const e = ESTADO_LEAD_MAP[c.estadoLead ?? 'nuevo'];
-                return <Badge variant={e.variant}>{e.label}</Badge>;
+                return (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant={e.variant}>{e.label}</Badge>
+                        {/* Canal de entrada del lead (null = sin registrar → nada). */}
+                        {c.origenLead && <Badge variant="default" className="canal-badge">{ORIGEN_LEAD_LABEL[c.origenLead]}</Badge>}
+                    </div>
+                );
             }
         },
         {
@@ -319,6 +387,10 @@ const ClientesPage: React.FC = () => {
                             CSV
                         </Button>
                     )}
+                    <Button variant="secondary" onClick={() => setIsConsultaOpen(true)} title="Registrar una consulta entrante (lead) por cualquier canal">
+                        <MessageSquarePlus size={18} />
+                        Nueva consulta
+                    </Button>
                     <Button data-tour="cli-nuevo" variant="primary" onClick={() => handleOpenModal()}>
                         <Plus size={18} />
                         Nuevo Cliente
@@ -377,6 +449,16 @@ const ClientesPage: React.FC = () => {
                 </select>
                 <select
                     className="form-input"
+                    value={filterCanal}
+                    onChange={(e) => { setFilterCanal(e.target.value as '' | OrigenLead); setPage(1); }}
+                    style={{ minWidth: 170 }}
+                    aria-label="Filtrar por canal de entrada"
+                >
+                    <option value="">Todos los canales</option>
+                    {ORIGENES_LEAD.map((o) => <option key={o} value={o}>{ORIGEN_LEAD_LABEL[o]}</option>)}
+                </select>
+                <select
+                    className="form-input"
                     value={filterVendedor}
                     onChange={(e) => { setFilterVendedor(e.target.value); setPage(1); }}
                     style={{ minWidth: 170 }}
@@ -395,6 +477,7 @@ const ClientesPage: React.FC = () => {
                 .funnel-chip.is-active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
                 .funnel-count { font-size: var(--text-xl); font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
                 .funnel-tag { font-size: var(--text-2xs); font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+                .canal-badge { font-size: var(--text-3xs); padding: 0.1rem 0.45rem; }
             `}</style>
 
             <div data-tour="cli-tabla">
@@ -425,6 +508,91 @@ const ClientesPage: React.FC = () => {
                     onEdit={handleEditFromVerification}
                     loading={createMutation.isPending || updateMutation.isPending}
                 />
+            </Modal>
+
+            {/* Intake manual de una consulta entrante: el backend deduplica por
+                teléfono/email, asigna vendedor (round-robin) y reabre terminales. */}
+            <Modal
+                isOpen={isConsultaOpen}
+                onClose={handleCloseConsulta}
+                title="Nueva Consulta"
+                subtitle="Registra una consulta entrante y asignala a un vendedor."
+                maxWidth="600px"
+            >
+                <div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <Select
+                            dense
+                            label="Canal *"
+                            value={consultaForm.origen}
+                            onChange={(e) => setConsultaForm((f) => ({ ...f, origen: e.target.value as OrigenLead }))}
+                        >
+                            {ORIGENES_LEAD.map((o) => <option key={o} value={o}>{ORIGEN_LEAD_LABEL[o]}</option>)}
+                        </Select>
+                        <Input
+                            dense
+                            label="Nombre *"
+                            placeholder="Nombre del interesado"
+                            value={consultaForm.nombre}
+                            onChange={(e) => setConsultaForm((f) => ({ ...f, nombre: e.target.value }))}
+                        />
+                        <Input
+                            dense
+                            label="Teléfono"
+                            placeholder="Ej: 2611234567"
+                            value={consultaForm.telefono}
+                            onChange={(e) => setConsultaForm((f) => ({ ...f, telefono: e.target.value }))}
+                        />
+                        <Input
+                            dense
+                            label="Email"
+                            type="email"
+                            placeholder="correo@ejemplo.com"
+                            value={consultaForm.email}
+                            onChange={(e) => setConsultaForm((f) => ({ ...f, email: e.target.value }))}
+                        />
+                        <Select
+                            dense
+                            label="Vehículo consultado"
+                            placeholder="Sin vehículo puntual"
+                            value={consultaForm.vehiculoId}
+                            onChange={(e) => setConsultaForm((f) => ({ ...f, vehiculoId: e.target.value }))}
+                        >
+                            {vehiculosPublicados.map((v) => (
+                                <option key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.dominio || 'S/D'})</option>
+                            ))}
+                        </Select>
+                        <Select
+                            dense
+                            label="Vendedor"
+                            placeholder="Asignación automática (round-robin)"
+                            value={consultaForm.vendedorId}
+                            onChange={(e) => setConsultaForm((f) => ({ ...f, vendedorId: e.target.value }))}
+                        >
+                            {vendedoresAsignables.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
+                        </Select>
+                    </div>
+
+                    <Textarea
+                        dense
+                        label="Consulta"
+                        placeholder="¿Qué consultó? Ej: precio, financiación, permuta…"
+                        rows={3}
+                        value={consultaForm.texto}
+                        onChange={(e) => setConsultaForm((f) => ({ ...f, texto: e.target.value }))}
+                    />
+
+                    <div className="form-actions">
+                        <Button variant="secondary" onClick={handleCloseConsulta}>Cancelar</Button>
+                        <Button
+                            variant="primary"
+                            onClick={handleSubmitConsulta}
+                            loading={consultaMutation.isPending}
+                        >
+                            Registrar Consulta
+                        </Button>
+                    </div>
+                </div>
             </Modal>
         </div>
     );

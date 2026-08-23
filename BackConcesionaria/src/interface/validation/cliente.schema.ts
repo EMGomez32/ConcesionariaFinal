@@ -44,6 +44,18 @@ const estadoLeadEnum = z.enum(['nuevo', 'contactado', 'negociando', 'ganado', 'p
     error: 'Estado inválido. Válidos: nuevo, contactado, negociando, ganado, perdido',
 }).optional();
 
+// Canal por el que entró la consulta (espejo del enum OrigenLead de Prisma).
+const ORIGENES_LEAD = ['deruedas', 'instagram', 'facebook', 'whatsapp', 'web', 'mostrador', 'referido', 'otro'] as const;
+const MSG_ORIGEN = 'Origen inválido. Válidos: deruedas, instagram, facebook, whatsapp, web, mostrador, referido, otro';
+
+// origenLead en create/update: nullable en DB (los históricos no lo registraron),
+// así que el '' del form (limpieza) → null; ausente (undefined) → no se toca.
+// Mismo reparto que tipoDoc/condicionIva.
+const origenLeadOpcional = z.preprocess(
+    (v) => (v === '' ? null : v),
+    z.enum(ORIGENES_LEAD, { error: MSG_ORIGEN }).nullable().optional(),
+);
+
 // Datos fiscales del receptor (AFIP). El '' del form (limpieza) → null. Todo
 // opcional: un cliente sin estos datos se factura como consumidor final (B).
 const tipoDocOpcional = z.preprocess(
@@ -70,6 +82,7 @@ export const createClienteSchema = z.object({
     direccion: z.string().optional(),
     observaciones: z.string().optional(),
     estadoLead: estadoLeadEnum,
+    origenLead: origenLeadOpcional,
     vendedorAsignadoId: nullableFk,
     tipoDoc: tipoDocOpcional,
     condicionIva: condicionIvaOpcional,
@@ -84,10 +97,26 @@ export const updateClienteSchema = z.object({
     direccion: z.string().optional(),
     observaciones: z.string().optional(),
     estadoLead: estadoLeadEnum,
+    origenLead: origenLeadOpcional,
     vendedorAsignadoId: nullableFk,
     tipoDoc: tipoDocOpcional,
     condicionIva: condicionIvaOpcional,
     // Sin concesionariaId: el repo (pickEditable) no lo persiste en update, no hay
     // reasignación de tenant para clientes. Si viniera, Zod lo descarta => igual
     // que hoy (el repo lo recortaba).
+});
+
+// Ingesta de una consulta de venta (lead) — POST /clientes/consulta. Cuerpo del
+// keystone consultaIngest (ConsultaEntrante): acá `origen` es OBLIGATORIO (toda
+// consulta entra por algún canal) y el resto del contacto es opcional (el dedupe
+// tolera tel/email faltantes). vehiculoId/vendedorId: FK opcional, 0/''/null =
+// "sin dato" (mismo patrón optionalFk del create).
+export const consultaIngresoSchema = z.object({
+    origen: z.enum(ORIGENES_LEAD, { error: MSG_ORIGEN }),
+    nombre: z.string({ error: 'El nombre es obligatorio' }).min(1, 'El nombre es obligatorio'),
+    telefono: z.string().optional(),
+    email: emailOpcional,
+    texto: z.string().optional(),
+    vehiculoId: optionalFk,
+    vendedorId: optionalFk,
 });

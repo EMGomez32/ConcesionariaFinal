@@ -7,6 +7,7 @@ import { UpdateCliente } from '../../application/use-cases/clientes/UpdateClient
 import { DeleteCliente } from '../../application/use-cases/clientes/DeleteCliente';
 import { cleanFilters } from '../../utils/cleanFilters';
 import parseNumericFields from '../../utils/parseNumericFields';
+import { ingestarConsulta } from '../../application/services/consultaIngest';
 import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import { Col, sendCsv } from '../../utils/csv';
@@ -22,9 +23,11 @@ export class ClienteController {
     static async getAll(req: Request, res: Response, next: NextFunction) {
         try {
             const { limit, page, sortBy, sortOrder, ...filters } = req.query;
-            // Limpiar filtros vacíos y convertir campos numéricos
+            // Limpiar filtros vacíos y convertir campos numéricos. Los filtros CRM
+            // (origenLead / vendedorAsignadoId) viajan igual que estadoLead: el repo
+            // los whitelistea antes de armar el where.
             const cleanedFilters = cleanFilters(filters);
-            const parsedFilters = parseNumericFields(cleanedFilters, ['concesionariaId']);
+            const parsedFilters = parseNumericFields(cleanedFilters, ['concesionariaId', 'vendedorAsignadoId']);
             const result = await getClientesUC.execute(parsedFilters, { limit, page, sortBy, sortOrder } as any);
             res.json(result);
         } catch (error) {
@@ -41,7 +44,7 @@ export class ClienteController {
             const { limit, page, sortBy, sortOrder, ...filters } = req.query;
             void limit; void page; void sortBy; void sortOrder;
             const cleanedFilters = cleanFilters(filters);
-            const parsedFilters = parseNumericFields(cleanedFilters, ['concesionariaId']);
+            const parsedFilters = parseNumericFields(cleanedFilters, ['concesionariaId', 'vendedorAsignadoId']);
             const result: any = await getClientesUC.execute(
                 parsedFilters,
                 { limit: CAP, page: 1, sortBy: 'nombre', sortOrder: 'asc' } as any,
@@ -89,6 +92,26 @@ export class ClienteController {
             const id = parseInt(req.params.id as string, 10);
             const result = await getClienteByIdUC.execute(id);
             res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // Ingesta de una consulta de venta (lead). Camino común de todos los canales
+    // (keystone consultaIngest): dedupe por teléfono/email dentro del tenant,
+    // round-robin de vendedor y reapertura de leads ganados/perdidos. Acá el
+    // request viene autenticado, así que el contexto de tenant ya está y se llama
+    // a ingestarConsulta directo (sin conContextoSistema).
+    static async consulta(req: Request, res: Response, next: NextFunction) {
+        try {
+            const result = await ingestarConsulta(req.body);
+            await audit({
+                entidad: 'Cliente',
+                accion: result.creado ? 'create' : 'update',
+                entidadId: result.clienteId,
+                detalle: `Consulta por ${req.body.origen} ingresada (cliente ${result.clienteId}${result.creado ? ' nuevo' : ' existente'}${result.reabierto ? ', lead reabierto' : ''})`,
+            });
+            res.status(201).json(result);
         } catch (error) {
             next(error);
         }

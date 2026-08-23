@@ -14,7 +14,7 @@ import { seguimientosApi, type Seguimiento, type TipoSeguimiento } from '../../a
 import { vehiculoInteresApi, type VehiculoInteres } from '../../api/vehiculoInteres.api';
 import { vehiculosApi } from '../../api/vehiculos.api';
 import type { Vehiculo } from '../../types/vehiculo.types';
-import { ESTADO_LEAD_MAP, ESTADOS_LEAD } from '../../types/cliente.types';
+import { ESTADO_LEAD_MAP, ESTADOS_LEAD, ORIGEN_LEAD_LABEL } from '../../types/cliente.types';
 import type { Cliente, EstadoLead } from '../../types/cliente.types';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -351,6 +351,10 @@ const ClienteDetallePage = () => {
                             <Badge variant={ESTADO_LEAD_MAP[cliente.estadoLead ?? 'nuevo'].variant}>
                                 {ESTADO_LEAD_MAP[cliente.estadoLead ?? 'nuevo'].label}
                             </Badge>
+                            {/* Canal por el que entró el lead (null = sin registrar → nada). */}
+                            {cliente.origenLead && (
+                                <Badge variant="default">{ORIGEN_LEAD_LABEL[cliente.origenLead]}</Badge>
+                            )}
                             {puedeEditar && (
                                 <select
                                     className="lead-stage-select"

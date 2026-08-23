@@ -31,6 +31,23 @@ export const ESTADO_LEAD_MAP: Record<EstadoLead, { label: string; variant: 'viol
 
 export const ESTADOS_LEAD: EstadoLead[] = ['nuevo', 'contactado', 'negociando', 'ganado', 'perdido'];
 
+/** Canal por el que entró la consulta/lead (null = sin registrar). */
+export type OrigenLead = 'deruedas' | 'instagram' | 'facebook' | 'whatsapp' | 'web' | 'mostrador' | 'referido' | 'otro';
+
+/** Etiqueta legible por canal. El orden del array ES el del select. */
+export const ORIGEN_LEAD_LABEL: Record<OrigenLead, string> = {
+    deruedas: 'DeRuedas',
+    instagram: 'Instagram',
+    facebook: 'Facebook',
+    whatsapp: 'WhatsApp',
+    web: 'Web',
+    mostrador: 'Mostrador',
+    referido: 'Referido',
+    otro: 'Otro',
+};
+
+export const ORIGENES_LEAD: OrigenLead[] = ['deruedas', 'instagram', 'facebook', 'whatsapp', 'web', 'mostrador', 'referido', 'otro'];
+
 export interface Cliente {
     id: number;
     concesionariaId: number;
@@ -42,6 +59,8 @@ export interface Cliente {
     observaciones?: string;
     /** Etapa en el embudo comercial (default `nuevo`). */
     estadoLead?: EstadoLead;
+    /** Canal de entrada del lead. null = sin registrar (altas manuales viejas). */
+    origenLead?: OrigenLead | null;
     /** Vendedor "dueño" del cliente (ownership CRM). null = sin asignar. */
     vendedorAsignadoId?: number | null;
     vendedorAsignado?: { id: number; nombre: string } | null;
@@ -66,6 +85,8 @@ export interface ClienteFilter {
     concesionariaId?: number;
     /** Filtra por etapa del embudo. */
     estadoLead?: EstadoLead;
+    /** Filtra por canal de entrada del lead. */
+    origenLead?: OrigenLead;
     /** Filtra por vendedor "dueño" (ownership). "Mis clientes" = el id del vendedor logueado. */
     vendedorAsignadoId?: number;
 }

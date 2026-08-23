@@ -58,6 +58,7 @@ const SOFT_DELETE_MODELS = [
     'CategoriaGastoFijo',
     'Financiera',
     'SolicitudFinanciacion',
+    'IntegracionCanal',
     'PostventaCaso',
     'PostventaItem',
     'TipoPostventa',

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt, Plug, Plus, Edit, Copy, Link2, ChevronRight, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
@@ -7,14 +7,19 @@ import { useTour } from '../../onboarding/useTour';
 import { useTourStore } from '../../store/tourStore';
 import { concesionariasApi } from '../../api/concesionarias.api';
 import { usuariosApi } from '../../api/usuarios.api';
+import { integracionesApi } from '../../api/integraciones.api';
+import type { Integracion, IntegracionConfig, IntegracionTipo } from '../../api/integraciones.api';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
+import Modal from '../../components/ui/Modal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { FileUploader } from '../../components/ui/FileUploader';
 import type { Concesionaria, UpdateConcesionariaDto } from '../../types/concesionaria.types';
 import { CONDICION_IVA_EMISOR_LABEL } from '../../types/concesionaria.types';
 import { getApiErrorMessage } from '../../utils/error';
+import { formatFecha } from '../../utils/fecha';
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -56,6 +61,497 @@ function ColorField({ label, value, onChange, fallback }: {
                     </button>
                 )}
             </div>
+        </div>
+    );
+}
+
+// ─── Integraciones de consultas (canales que ingresan leads solos) ──────────
+
+const TIPO_INTEGRACION_LABEL: Record<IntegracionTipo, string> = {
+    meta: 'Meta (Instagram/Facebook)',
+    email: 'Casilla de email (DeRuedas)',
+};
+
+const ORIGEN_EMAIL_OPTIONS = [
+    { value: 'deruedas', label: 'DeRuedas' },
+    { value: 'web', label: 'Web' },
+    { value: 'otro', label: 'Otro' },
+];
+
+// Los listados del backend vienen en formas distintas según el módulo
+// ([], {data}, {results}); se cubren todas, como en useSucursales.
+const normalizarListaIntegraciones = (res: unknown): Integracion[] => {
+    if (Array.isArray(res)) return res as Integracion[];
+    const o = (res ?? {}) as { results?: Integracion[]; data?: Integracion[] | { results?: Integracion[] } };
+    if (Array.isArray(o.results)) return o.results;
+    if (Array.isArray(o.data)) return o.data;
+    const dr = (o.data as { results?: Integracion[] } | undefined)?.results;
+    return Array.isArray(dr) ? dr : [];
+};
+
+const unwrapIntegracion = (res: unknown): Integracion | null => {
+    if (res && typeof res === 'object') {
+        if ('id' in res) return res as Integracion;
+        const data = (res as { data?: unknown }).data;
+        if (data && typeof data === 'object' && 'id' in data) return data as Integracion;
+    }
+    return null;
+};
+
+const webhookMetaUrl = (integracionId: number) =>
+    `${window.location.origin}/api/webhooks/meta/${integracionId}`;
+
+interface IntegracionFormState {
+    tipo: IntegracionTipo;
+    nombre: string;
+    // meta
+    metaOrigen: 'instagram' | 'facebook';
+    verifyToken: string;
+    appSecret: string;
+    pageAccessToken: string;
+    // email
+    host: string;
+    port: string;
+    secure: boolean;
+    emailUser: string;
+    pass: string;
+    carpeta: string;
+    emailOrigen: string;
+}
+
+const INTEGRACION_FORM_INICIAL: IntegracionFormState = {
+    tipo: 'meta', nombre: '',
+    metaOrigen: 'instagram', verifyToken: '', appSecret: '', pageAccessToken: '',
+    host: '', port: '993', secure: true, emailUser: '', pass: '', carpeta: 'INBOX', emailOrigen: 'deruedas',
+};
+
+// URL del webhook para pegar en Meta + guía plegable de 4 pasos. Se muestra
+// tras crear una integración meta y al editarla.
+function WebhookMetaInfo({ integracionId }: { integracionId: number }) {
+    const { addToast } = useUIStore();
+    const [pasosVisibles, setPasosVisibles] = useState(false);
+    const url = webhookMetaUrl(integracionId);
+
+    const copiar = () => {
+        navigator.clipboard.writeText(url)
+            .then(() => addToast('URL del webhook copiada', 'success'))
+            .catch(() => addToast('No se pudo copiar la URL', 'error'));
+    };
+
+    return (
+        <div style={{ marginTop: '1rem', padding: '0.85rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.45rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-primary)' }}>
+                <Link2 size={14} /> URL del webhook (pegala en Meta)
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <code style={{ flex: 1, fontSize: '0.75rem', padding: '0.45rem 0.55rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+                    {url}
+                </code>
+                <Button type="button" variant="secondary" size="sm" onClick={copiar}>
+                    <Copy size={14} /> Copiar
+                </Button>
+            </div>
+            <button
+                type="button"
+                onClick={() => setPasosVisibles(v => !v)}
+                style={{ marginTop: '0.6rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'transparent', border: 'none', padding: 0, color: 'var(--accent)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}
+            >
+                {pasosVisibles ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                ¿Cómo la conecto a Meta? (4 pasos)
+            </button>
+            {pasosVisibles && (
+                <ol style={{ margin: '0.5rem 0 0', paddingLeft: '1.2rem', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.65 }}>
+                    <li>Creá una app en <strong>developers.facebook.com</strong> y vinculala a tu página.</li>
+                    <li>Agregale el producto <strong>Webhooks</strong> y conectá la página.</li>
+                    <li>Suscribí el campo <strong>leadgen</strong> usando esta URL de callback y el verify token que inventaste acá.</li>
+                    <li>Generá el token de acceso de la página y pegalo en el campo "Token de página" de esta integración.</li>
+                </ol>
+            )}
+        </div>
+    );
+}
+
+function SwitchActivo({ activo, disabled, onToggle }: { activo: boolean; disabled?: boolean; onToggle: () => void }) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={activo}
+            aria-label={activo ? 'Desactivar integración' : 'Activar integración'}
+            onClick={onToggle}
+            disabled={disabled}
+            style={{
+                flexShrink: 0, width: 40, height: 22, borderRadius: 'var(--radius-pill)',
+                border: '1px solid var(--border)',
+                background: activo ? 'var(--accent-gradient)' : 'var(--bg-secondary)',
+                position: 'relative', cursor: disabled ? 'wait' : 'pointer', transition: 'background 0.2s',
+                opacity: disabled ? 0.6 : 1,
+            }}
+        >
+            <span style={{
+                position: 'absolute', top: 2, left: activo ? 19 : 2,
+                width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                transition: 'left 0.2s var(--easing-out, ease)', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            }} />
+        </button>
+    );
+}
+
+function IntegracionesConsultas() {
+    const { addToast } = useUIStore();
+    const [integraciones, setIntegraciones] = useState<Integracion[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editing, setEditing] = useState<Integracion | null>(null);
+    // Integración meta recién creada: el modal pasa a mostrar la URL del webhook.
+    const [creada, setCreada] = useState<Integracion | null>(null);
+    const [deleting, setDeleting] = useState<Integracion | null>(null);
+    const [deletingBusy, setDeletingBusy] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [togglingId, setTogglingId] = useState<number | null>(null);
+    const [form, setForm] = useState<IntegracionFormState>(INTEGRACION_FORM_INICIAL);
+
+    const cargar = useCallback(() => {
+        integracionesApi.getAll()
+            .then((res: unknown) => setIntegraciones(normalizarListaIntegraciones(res)))
+            .catch(() => addToast('Error al cargar las integraciones', 'error'))
+            .finally(() => setLoading(false));
+    }, [addToast]);
+
+    useEffect(() => { cargar(); }, [cargar]);
+
+    const abrirAlta = () => {
+        setEditing(null);
+        setCreada(null);
+        setForm(INTEGRACION_FORM_INICIAL);
+        setModalOpen(true);
+    };
+
+    const abrirEdicion = (integracion: Integracion) => {
+        const cfg: IntegracionConfig = integracion.config || {};
+        setForm({
+            tipo: integracion.tipo,
+            nombre: integracion.nombre,
+            metaOrigen: cfg.origen === 'facebook' ? 'facebook' : 'instagram',
+            verifyToken: cfg.verifyToken || '',
+            // Los secretos vienen enmascarados: vacío = "no cambiar".
+            appSecret: '',
+            pageAccessToken: '',
+            host: cfg.host || '',
+            port: cfg.port != null ? String(cfg.port) : '993',
+            secure: cfg.secure ?? true,
+            emailUser: cfg.user || '',
+            pass: '',
+            carpeta: cfg.carpeta || 'INBOX',
+            emailOrigen: integracion.tipo === 'email' ? (cfg.origen || 'deruedas') : 'deruedas',
+        });
+        setEditing(integracion);
+        setCreada(null);
+        setModalOpen(true);
+    };
+
+    const cerrarModal = () => {
+        setModalOpen(false);
+        setEditing(null);
+        setCreada(null);
+    };
+
+    const guardar = async () => {
+        if (!form.nombre.trim()) {
+            addToast('El nombre es requerido', 'error');
+            return;
+        }
+        if (form.tipo === 'meta') {
+            if (!form.verifyToken.trim()) {
+                addToast('El verify token es requerido', 'error');
+                return;
+            }
+            if (!editing && (!form.appSecret || !form.pageAccessToken)) {
+                addToast('Completá el app secret y el token de página', 'error');
+                return;
+            }
+        } else {
+            if (!form.host.trim() || !form.emailUser.trim()) {
+                addToast('Completá el servidor y el usuario de la casilla', 'error');
+                return;
+            }
+            if (!editing && !form.pass) {
+                addToast('La contraseña de la casilla es requerida', 'error');
+                return;
+            }
+        }
+
+        // Un secreto vacío no se manda: el backend conserva el guardado.
+        const config: IntegracionConfig = form.tipo === 'meta'
+            ? {
+                origen: form.metaOrigen,
+                verifyToken: form.verifyToken.trim(),
+                ...(form.appSecret ? { appSecret: form.appSecret } : {}),
+                ...(form.pageAccessToken ? { pageAccessToken: form.pageAccessToken } : {}),
+            }
+            : {
+                origen: form.emailOrigen || 'deruedas',
+                host: form.host.trim(),
+                port: Number(form.port) || 993,
+                secure: form.secure,
+                user: form.emailUser.trim(),
+                ...(form.pass ? { pass: form.pass } : {}),
+                carpeta: form.carpeta.trim() || 'INBOX',
+            };
+
+        setSaving(true);
+        try {
+            if (editing) {
+                await integracionesApi.update(editing.id, { nombre: form.nombre.trim(), config });
+                addToast('Integración actualizada', 'success');
+                cerrarModal();
+            } else {
+                const res = await integracionesApi.create({ tipo: form.tipo, nombre: form.nombre.trim(), config });
+                addToast('Integración creada', 'success');
+                const nueva = unwrapIntegracion(res);
+                if (form.tipo === 'meta' && nueva) {
+                    // No cerramos: mostramos la URL del webhook para pegar en Meta.
+                    setEditing(null);
+                    setCreada(nueva);
+                } else {
+                    cerrarModal();
+                }
+            }
+            cargar();
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'Error al guardar la integración'), 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const toggleActivo = async (integracion: Integracion) => {
+        setTogglingId(integracion.id);
+        try {
+            await integracionesApi.update(integracion.id, { activo: !integracion.activo });
+            setIntegraciones(prev => prev.map(i => i.id === integracion.id ? { ...i, activo: !integracion.activo } : i));
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'Error al cambiar el estado'), 'error');
+        } finally {
+            setTogglingId(null);
+        }
+    };
+
+    const confirmarEliminar = async () => {
+        if (!deleting) return;
+        setDeletingBusy(true);
+        try {
+            await integracionesApi.delete(deleting.id);
+            addToast('Integración eliminada', 'success');
+            setDeleting(null);
+            cargar();
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'Error al eliminar la integración'), 'error');
+        } finally {
+            setDeletingBusy(false);
+        }
+    };
+
+    const copiarWebhook = (integracion: Integracion) => {
+        navigator.clipboard.writeText(webhookMetaUrl(integracion.id))
+            .then(() => addToast('URL del webhook copiada', 'success'))
+            .catch(() => addToast('No se pudo copiar la URL', 'error'));
+    };
+
+    return (
+        <div className="card" style={{ marginTop: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                <div>
+                    <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Plug size={18} /> Integraciones de consultas
+                    </h2>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5, maxWidth: 520 }}>
+                        Conectá los canales por donde te llegan consultas (Meta, DeRuedas) y se cargan solas
+                        como clientes con su vendedor asignado.
+                    </p>
+                </div>
+                <Button variant="primary" onClick={abrirAlta}>
+                    <Plus size={16} /> Agregar integración
+                </Button>
+            </div>
+
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                    <RefreshCw size={20} className="animate-spin" style={{ display: 'inline-block', marginRight: '0.5rem' }} /> Cargando...
+                </div>
+            ) : integraciones.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.5rem 0' }}>
+                    Todavía no conectaste ningún canal. Agregá una integración para empezar a recibir consultas automáticamente.
+                </p>
+            ) : (
+                <div className="table-container">
+                    <table className="data-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Tipo</th>
+                                <th>Origen</th>
+                                <th>Activa</th>
+                                <th>Último evento</th>
+                                <th>Último error</th>
+                                <th style={{ textAlign: 'right' }}>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {integraciones.map((i) => (
+                                <tr key={i.id}>
+                                    <td style={{ fontWeight: 600 }}>{i.nombre}</td>
+                                    <td>{i.tipo === 'meta' ? 'Meta' : 'Email'}</td>
+                                    <td>{i.config?.origen || '—'}</td>
+                                    <td>
+                                        <SwitchActivo
+                                            activo={i.activo}
+                                            disabled={togglingId === i.id}
+                                            onToggle={() => toggleActivo(i)}
+                                        />
+                                    </td>
+                                    <td>{i.ultimoEvento ? formatFecha(i.ultimoEvento) : '—'}</td>
+                                    <td>
+                                        {i.ultimoError ? (
+                                            <span
+                                                className="text-danger"
+                                                title={i.ultimoError}
+                                                style={{ display: 'inline-block', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom', fontSize: '0.8rem' }}
+                                            >
+                                                {i.ultimoError}
+                                            </span>
+                                        ) : '—'}
+                                    </td>
+                                    <td style={{ textAlign: 'right' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                            {i.tipo === 'meta' && (
+                                                <button className="icon-btn" onClick={() => copiarWebhook(i)} aria-label="Copiar URL del webhook" title="Copiar URL del webhook">
+                                                    <Link2 size={16} />
+                                                </button>
+                                            )}
+                                            <button className="icon-btn" onClick={() => abrirEdicion(i)} aria-label="Editar" title="Editar">
+                                                <Edit size={16} />
+                                            </button>
+                                            <button className="icon-btn danger" onClick={() => setDeleting(i)} aria-label="Eliminar" title="Eliminar">
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            <Modal
+                isOpen={modalOpen}
+                onClose={cerrarModal}
+                title={creada ? 'Integración creada' : editing ? 'Editar integración' : 'Agregar integración'}
+                subtitle={creada ? 'Último paso: conectala en Meta con esta URL.' : 'Canal por donde entran consultas automáticamente.'}
+                maxWidth="640px"
+                footer={creada ? (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+                        <Button variant="primary" onClick={cerrarModal}>Listo</Button>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
+                        <Button variant="secondary" onClick={cerrarModal} disabled={saving}>Cancelar</Button>
+                        <Button variant="primary" onClick={guardar} loading={saving}>
+                            <Save size={16} /> {editing ? 'Guardar cambios' : 'Crear integración'}
+                        </Button>
+                    </div>
+                )}
+            >
+                {creada ? (
+                    <WebhookMetaInfo integracionId={creada.id} />
+                ) : (
+                    <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <Select dense label="Tipo de canal" containerClassName="col-span-full"
+                                value={form.tipo} disabled={!!editing}
+                                onChange={e => setForm(f => ({ ...f, tipo: e.target.value as IntegracionTipo }))}>
+                                <option value="meta">{TIPO_INTEGRACION_LABEL.meta}</option>
+                                <option value="email">{TIPO_INTEGRACION_LABEL.email}</option>
+                            </Select>
+                            <Input dense label="Nombre *" type="text" containerClassName="col-span-full"
+                                value={form.nombre} placeholder="Ej: Instagram de la agencia"
+                                onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} />
+
+                            {form.tipo === 'meta' ? (
+                                <>
+                                    <Select dense label="Origen" value={form.metaOrigen}
+                                        onChange={e => setForm(f => ({ ...f, metaOrigen: e.target.value as 'instagram' | 'facebook' }))}>
+                                        <option value="instagram">Instagram</option>
+                                        <option value="facebook">Facebook</option>
+                                    </Select>
+                                    <Input dense label="Verify token *" type="text"
+                                        value={form.verifyToken} hint="inventá un token y usalo igual en Meta"
+                                        onChange={e => setForm(f => ({ ...f, verifyToken: e.target.value }))} />
+                                    <Input dense label={editing ? 'App secret' : 'App secret *'} type="password"
+                                        value={form.appSecret} autoComplete="new-password"
+                                        placeholder={editing ? '(sin cambios)' : ''}
+                                        onChange={e => setForm(f => ({ ...f, appSecret: e.target.value }))} />
+                                    <Input dense label={editing ? 'Token de página' : 'Token de página *'} type="password"
+                                        value={form.pageAccessToken} autoComplete="new-password"
+                                        placeholder={editing ? '(sin cambios)' : ''}
+                                        onChange={e => setForm(f => ({ ...f, pageAccessToken: e.target.value }))} />
+                                </>
+                            ) : (
+                                <>
+                                    <p className="col-span-full" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
+                                        Usá la casilla donde te llegan los avisos de DeRuedas; el sistema la revisa cada 5 minutos.
+                                    </p>
+                                    <Input dense label="Servidor IMAP (host) *" type="text"
+                                        value={form.host} placeholder="imap.gmail.com"
+                                        onChange={e => setForm(f => ({ ...f, host: e.target.value }))} />
+                                    <Input dense label="Puerto" type="number" min={1} max={65535}
+                                        value={form.port}
+                                        onChange={e => setForm(f => ({ ...f, port: e.target.value }))} />
+                                    <Input dense label="Usuario (email) *" type="text"
+                                        value={form.emailUser} placeholder="ventas@miconcesionaria.com" autoComplete="off"
+                                        onChange={e => setForm(f => ({ ...f, emailUser: e.target.value }))} />
+                                    <Input dense label={editing ? 'Contraseña' : 'Contraseña *'} type="password"
+                                        value={form.pass} autoComplete="new-password"
+                                        placeholder={editing ? '(sin cambios)' : ''}
+                                        onChange={e => setForm(f => ({ ...f, pass: e.target.value }))} />
+                                    <Input dense label="Carpeta" type="text"
+                                        value={form.carpeta} placeholder="INBOX"
+                                        onChange={e => setForm(f => ({ ...f, carpeta: e.target.value }))} />
+                                    <Select dense label="Origen de los leads" value={form.emailOrigen}
+                                        onChange={e => setForm(f => ({ ...f, emailOrigen: e.target.value }))}>
+                                        {ORIGEN_EMAIL_OPTIONS.map(o => (
+                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                        ))}
+                                    </Select>
+                                    <label className="col-span-full" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                        <input type="checkbox" checked={form.secure}
+                                            onChange={e => setForm(f => ({ ...f, secure: e.target.checked }))} />
+                                        <span>Conexión segura (SSL/TLS)</span>
+                                    </label>
+                                </>
+                            )}
+                        </div>
+                        {editing && editing.tipo === 'meta' && (
+                            <WebhookMetaInfo integracionId={editing.id} />
+                        )}
+                    </>
+                )}
+            </Modal>
+
+            <ConfirmDialog
+                isOpen={!!deleting}
+                title="Eliminar integración"
+                message={deleting
+                    ? `¿Eliminar la integración "${deleting.nombre}"? Dejás de recibir consultas por este canal.`
+                    : ''}
+                confirmLabel="Eliminar integración"
+                cancelLabel="Cancelar"
+                type="danger"
+                onConfirm={confirmarEliminar}
+                onCancel={() => setDeleting(null)}
+                loading={deletingBusy}
+            />
         </div>
     );
 }
@@ -489,6 +985,9 @@ const ConfiguracionPage = () => {
                     </div>
                 </div>
             )}
+
+            {/* Integraciones de consultas: sólo administración (crea/edita credenciales). */}
+            {isAdmin && <IntegracionesConsultas />}
         </div>
     );
 };

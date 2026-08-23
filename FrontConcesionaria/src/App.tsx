@@ -21,6 +21,7 @@ const ComparadorPage = lazy(() => import('./pages/vehiculos/ComparadorPage'));
 const ClientesPage = lazy(() => import('./pages/clientes/ClientesPage'));
 const ClienteDetallePage = lazy(() => import('./pages/clientes/ClienteDetallePage'));
 const SeguimientosPage = lazy(() => import('./pages/seguimientos/SeguimientosPage'));
+const ConsultasPage = lazy(() => import('./pages/consultas/ConsultasPage'));
 const TasacionesPage = lazy(() => import('./pages/tasaciones/TasacionesPage'));
 const VentasPage = lazy(() => import('./pages/ventas/VentasPage'));
 const PresupuestosPage = lazy(() => import('./pages/presupuestos/PresupuestosPage'));
@@ -85,6 +86,9 @@ function App() {
               <Route path="/vehiculos/:id" element={<VehiculoDetallePage />} />
 
               {/* Clientes */}
+              {/* Panel de consultas entrantes (leads multicanal): el backend ya
+                  acota los datos por rol, así que no lleva RequireRole extra. */}
+              <Route path="/consultas" element={<ConsultasPage />} />
               <Route path="/clientes" element={<ClientesPage />} />
               <Route path="/clientes/:id" element={<ClienteDetallePage />} />
               {/* Agenda de seguimientos del CRM: admin y vendedor (no postventa). */}
