@@ -8,6 +8,9 @@ import type { PaginatedResponse } from '../../types/api.types';
 import type { Cliente } from '../../types/cliente.types';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import Modal from '../../components/ui/Modal';
 import PageTitle from '../../components/ui/PageTitle';
 import { useUIStore } from '../../store/uiStore';
@@ -234,48 +237,32 @@ const TasacionesPage = () => {
             >
                 <div className="tas-form">
                     <div className="tas-form-grid">
-                        <label className="tas-field"><span>Cliente (opcional)</span>
-                            <select className="form-input" value={form.clienteId ?? ''} onChange={(e) => set('clienteId', e.target.value ? Number(e.target.value) : undefined)}>
-                                <option value="">Sin cliente</option>
-                                {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                            </select>
-                        </label>
-                        <label className="tas-field"><span>Fecha</span>
-                            <input className="form-input" type="date" value={form.fecha} onChange={(e) => set('fecha', e.target.value)} />
-                        </label>
-                        <label className="tas-field"><span>Marca *</span>
-                            <input className="form-input" value={form.marca} onChange={(e) => set('marca', e.target.value)} placeholder="Toyota" />
-                        </label>
-                        <label className="tas-field"><span>Modelo *</span>
-                            <input className="form-input" value={form.modelo} onChange={(e) => set('modelo', e.target.value)} placeholder="Corolla" />
-                        </label>
-                        <label className="tas-field"><span>Año</span>
-                            <input className="form-input" type="number" value={form.anio ?? ''} onChange={(e) => set('anio', e.target.value ? Number(e.target.value) : undefined)} placeholder="2018" />
-                        </label>
-                        <label className="tas-field"><span>Kilómetros</span>
-                            <input className="form-input" type="number" value={form.km ?? ''} onChange={(e) => set('km', e.target.value ? Number(e.target.value) : undefined)} placeholder="85000" />
-                        </label>
-                        <label className="tas-field"><span>Dominio</span>
-                            <input className="form-input" value={form.dominio ?? ''} onChange={(e) => set('dominio', e.target.value)} placeholder="AB123CD" />
-                        </label>
-                        <label className="tas-field"><span>Condición</span>
-                            <select className="form-input" value={form.condicion} onChange={(e) => set('condicion', e.target.value as CondicionTasacion)}>
-                                {CONDICIONES.map((k) => <option key={k} value={k}>{CONDICION_MAP[k].label}</option>)}
-                            </select>
-                        </label>
-                        <label className="tas-field"><span>Valor estimado</span>
-                            <input className="form-input" type="number" step="0.01" value={form.valorEstimado ?? ''} onChange={(e) => set('valorEstimado', e.target.value ? Number(e.target.value) : undefined)} placeholder="12000000" />
-                        </label>
-                        <label className="tas-field"><span>Moneda</span>
-                            <select className="form-input" value={form.moneda} onChange={(e) => set('moneda', e.target.value as 'ARS' | 'USD')}>
-                                <option value="ARS">Pesos (ARS)</option>
-                                <option value="USD">Dólares (USD)</option>
-                            </select>
-                        </label>
+                        <Select
+                            dense
+                            label="Cliente (opcional)"
+                            placeholder="Sin cliente"
+                            options={clientes.map((c) => ({ value: c.id, label: c.nombre }))}
+                            value={form.clienteId ?? ''}
+                            onChange={(e) => set('clienteId', e.target.value ? Number(e.target.value) : undefined)}
+                        />
+                        <Input dense label="Fecha" type="date" value={form.fecha} onChange={(e) => set('fecha', e.target.value)} />
+                        <Input dense label="Marca *" value={form.marca} onChange={(e) => set('marca', e.target.value)} placeholder="Toyota" />
+                        <Input dense label="Modelo *" value={form.modelo} onChange={(e) => set('modelo', e.target.value)} placeholder="Corolla" />
+                        <Input dense label="Año" type="number" value={form.anio ?? ''} onChange={(e) => set('anio', e.target.value ? Number(e.target.value) : undefined)} placeholder="2018" />
+                        <Input dense label="Kilómetros" type="number" value={form.km ?? ''} onChange={(e) => set('km', e.target.value ? Number(e.target.value) : undefined)} placeholder="85000" />
+                        <Input dense label="Dominio" value={form.dominio ?? ''} onChange={(e) => set('dominio', e.target.value)} placeholder="AB123CD" />
+                        <Select dense label="Condición" value={form.condicion} onChange={(e) => set('condicion', e.target.value as CondicionTasacion)}>
+                            {CONDICIONES.map((k) => <option key={k} value={k}>{CONDICION_MAP[k].label}</option>)}
+                        </Select>
+                        <Input dense label="Valor estimado" type="number" step="0.01" value={form.valorEstimado ?? ''} onChange={(e) => set('valorEstimado', e.target.value ? Number(e.target.value) : undefined)} placeholder="12000000" />
+                        <Select dense label="Moneda" value={form.moneda} onChange={(e) => set('moneda', e.target.value as 'ARS' | 'USD')}>
+                            <option value="ARS">Pesos (ARS)</option>
+                            <option value="USD">Dólares (USD)</option>
+                        </Select>
                     </div>
-                    <label className="tas-field" style={{ marginTop: '0.75rem' }}><span>Observaciones</span>
-                        <textarea className="form-input" rows={2} value={form.observaciones ?? ''} onChange={(e) => set('observaciones', e.target.value)} placeholder="Detalles del estado, detalles a reparar, etc." style={{ resize: 'vertical' }} />
-                    </label>
+                    <div style={{ marginTop: '0.75rem' }}>
+                        <Textarea dense label="Observaciones" rows={2} value={form.observaciones ?? ''} onChange={(e) => set('observaciones', e.target.value)} placeholder="Detalles del estado, detalles a reparar, etc." style={{ resize: 'vertical' }} />
+                    </div>
                 </div>
             </Modal>
 

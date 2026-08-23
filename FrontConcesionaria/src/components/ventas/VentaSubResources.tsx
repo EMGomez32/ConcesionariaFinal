@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { Plus, Trash2, RefreshCw, ChevronDown, ChevronRight, DollarSign, Package, ArrowRightLeft } from 'lucide-react';
 import client from '../../api/client';
 import Button from '../ui/Button';
+import Input from '../ui/Input';
+import Select from '../ui/Select';
 import { useUIStore } from '../../store/uiStore';
 
 type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
@@ -283,15 +285,15 @@ const VentaSubResources = ({ ventaId }: VentaSubResourcesProps) => {
                     <div style={tableContainer}>
                         {showAddPago && (
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: '0.5rem', marginBottom: '0.75rem', padding: '0.75rem', background: 'rgba(99,102,241,0.05)', borderRadius: '0.5rem' }}>
-                                <input type="number" placeholder="Monto" className="form-input" value={pagoForm.monto || ''}
+                                <Input dense type="number" placeholder="Monto" value={pagoForm.monto || ''}
                                     onChange={e => setPagoForm(f => ({ ...f, monto: +e.target.value }))} />
-                                <select className="form-input" value={pagoForm.metodo}
+                                <Select dense value={pagoForm.metodo}
                                     onChange={e => setPagoForm(f => ({ ...f, metodo: e.target.value as MetodoPago }))}>
                                     {Object.entries(METODO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                                </select>
-                                <input type="text" placeholder="Referencia" className="form-input" value={pagoForm.referencia}
+                                </Select>
+                                <Input dense type="text" placeholder="Referencia" value={pagoForm.referencia}
                                     onChange={e => setPagoForm(f => ({ ...f, referencia: e.target.value }))} />
-                                <input type="date" className="form-input" value={pagoForm.fecha}
+                                <Input dense type="date" value={pagoForm.fecha}
                                     onChange={e => setPagoForm(f => ({ ...f, fecha: e.target.value }))} />
                                 <Button variant="primary" size="sm" onClick={handleAddPago} disabled={savingPago}>
                                     {savingPago ? '...' : 'Guardar'}
@@ -355,11 +357,11 @@ const VentaSubResources = ({ ventaId }: VentaSubResourcesProps) => {
                     <div style={tableContainer}>
                         {showAddExtra && (
                             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '0.5rem', marginBottom: '0.75rem', padding: '0.75rem', background: 'rgba(245,158,11,0.05)', borderRadius: '0.5rem' }}>
-                                <input type="text" placeholder="Descripción" className="form-input" value={extraForm.descripcion}
+                                <Input dense type="text" placeholder="Descripción" value={extraForm.descripcion}
                                     onChange={e => setExtraForm(f => ({ ...f, descripcion: e.target.value }))} />
-                                <input type="number" placeholder="Monto" className="form-input" value={extraForm.monto || ''}
+                                <Input dense type="number" placeholder="Monto" value={extraForm.monto || ''}
                                     onChange={e => setExtraForm(f => ({ ...f, monto: +e.target.value }))} />
-                                <input type="text" placeholder="URL Comprobante (opcional)" className="form-input" value={extraForm.comprobanteUrl}
+                                <Input dense type="text" placeholder="URL Comprobante (opcional)" value={extraForm.comprobanteUrl}
                                     onChange={e => setExtraForm(f => ({ ...f, comprobanteUrl: e.target.value }))} />
                                 <Button variant="primary" size="sm" onClick={handleAddExtra} disabled={savingExtra}>
                                     {savingExtra ? '...' : 'Guardar'}
@@ -421,9 +423,9 @@ const VentaSubResources = ({ ventaId }: VentaSubResourcesProps) => {
                     <div style={tableContainer}>
                         {showAddCanje && (
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '0.5rem', marginBottom: '0.75rem', padding: '0.75rem', background: 'rgba(168,85,247,0.05)', borderRadius: '0.5rem' }}>
-                                <input type="number" placeholder="ID Vehículo a tomar" className="form-input" value={canjeForm.vehiculoCanjeId || ''}
+                                <Input dense type="number" placeholder="ID Vehículo a tomar" value={canjeForm.vehiculoCanjeId || ''}
                                     onChange={e => setCanjeForm(f => ({ ...f, vehiculoCanjeId: +e.target.value }))} />
-                                <input type="number" placeholder="Valor tomado" className="form-input" value={canjeForm.valorTomado || ''}
+                                <Input dense type="number" placeholder="Valor tomado" value={canjeForm.valorTomado || ''}
                                     onChange={e => setCanjeForm(f => ({ ...f, valorTomado: +e.target.value }))} />
                                 <Button variant="primary" size="sm" onClick={handleAddCanje} disabled={savingCanje}>
                                     {savingCanje ? '...' : 'Guardar'}

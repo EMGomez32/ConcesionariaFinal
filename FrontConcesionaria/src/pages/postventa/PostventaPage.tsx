@@ -7,6 +7,9 @@ import {
 } from 'lucide-react';
 import { waLink } from '../../utils/whatsapp';
 import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import { postventaApi } from '../../api/postventa.api';
 import { useAuthStore } from '../../store/authStore';
 import type { PostventaCaso, PostventaItem, CreateCasoDto, CreateItemDto, EstadoPostventa, TipoPostventa } from '../../api/postventa.api';
@@ -935,59 +938,42 @@ export default function PostventaPage() {
                     <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.25rem', fontWeight: 700 }}>Nuevo Caso de Postventa</h2>
                     <div style={{ display: 'grid', gap: '1rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <FormField label="Cliente *">
-                                <select className="form-input" value={casoForm.clienteId} onChange={e => setCasoForm(p => ({ ...p, clienteId: Number(e.target.value) }))}>
-                                    <option value={0}>Seleccionar cliente...</option>
-                                    {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                                </select>
-                            </FormField>
-                            <FormField label="Vehículo *">
-                                <select className="form-input" value={casoForm.vehiculoId} onChange={e => setCasoForm(p => ({ ...p, vehiculoId: Number(e.target.value) }))}>
-                                    <option value={0}>Seleccionar vehículo...</option>
-                                    {vehiculos.map(v => <option key={v.id} value={v.id}>{v.marca} {v.modelo}{v.dominio ? ` (${v.dominio})` : ''}</option>)}
-                                </select>
-                            </FormField>
+                            <Select dense label="Cliente *" value={casoForm.clienteId} onChange={e => setCasoForm(p => ({ ...p, clienteId: Number(e.target.value) }))}>
+                                <option value={0}>Seleccionar cliente...</option>
+                                {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                            </Select>
+                            <Select dense label="Vehículo *" value={casoForm.vehiculoId} onChange={e => setCasoForm(p => ({ ...p, vehiculoId: Number(e.target.value) }))}>
+                                <option value={0}>Seleccionar vehículo...</option>
+                                {vehiculos.map(v => <option key={v.id} value={v.id}>{v.marca} {v.modelo}{v.dominio ? ` (${v.dominio})` : ''}</option>)}
+                            </Select>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <FormField label="Sucursal *">
-                                <select className="form-input" value={casoForm.sucursalId} onChange={e => setCasoForm(p => ({ ...p, sucursalId: Number(e.target.value) }))}>
-                                    <option value={0}>Seleccionar sucursal...</option>
-                                    {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                                </select>
-                            </FormField>
-                            <FormField label="Venta vinculada *">
-                                <select className="form-input" value={casoForm.ventaId} onChange={e => setCasoForm(p => ({ ...p, ventaId: Number(e.target.value) }))}>
-                                    <option value={0}>Seleccionar venta...</option>
-                                    {ventas.map(v => <option key={v.id} value={v.id}>Venta #{v.id} — {v.cliente?.nombre ?? ''} {v.vehiculo ? `${v.vehiculo.marca} ${v.vehiculo.modelo}` : ''}</option>)}
-                                </select>
-                            </FormField>
+                            <Select dense label="Sucursal *" value={casoForm.sucursalId} onChange={e => setCasoForm(p => ({ ...p, sucursalId: Number(e.target.value) }))}>
+                                <option value={0}>Seleccionar sucursal...</option>
+                                {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                            </Select>
+                            <Select dense label="Venta vinculada *" value={casoForm.ventaId} onChange={e => setCasoForm(p => ({ ...p, ventaId: Number(e.target.value) }))}>
+                                <option value={0}>Seleccionar venta...</option>
+                                {ventas.map(v => <option key={v.id} value={v.id}>Venta #{v.id} — {v.cliente?.nombre ?? ''} {v.vehiculo ? `${v.vehiculo.marca} ${v.vehiculo.modelo}` : ''}</option>)}
+                            </Select>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <FormField label="Fecha de Reclamo *">
-                                <input className="form-input" type="date" value={casoForm.fechaReclamo} onChange={e => setCasoForm(p => ({ ...p, fechaReclamo: e.target.value }))} />
-                            </FormField>
-                            <FormField label="Tipo">
-                                <select
-                                    className="form-input"
-                                    value={casoForm.tipoId ?? 0}
-                                    onChange={e => setCasoForm(p => ({ ...p, tipoId: Number(e.target.value) || undefined }))}
-                                >
-                                    <option value={0}>Sin definir</option>
-                                    {tiposActivos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-                                </select>
-                            </FormField>
+                            <Input dense label="Fecha de Reclamo *" type="date" value={casoForm.fechaReclamo} onChange={e => setCasoForm(p => ({ ...p, fechaReclamo: e.target.value }))} />
+                            <Select
+                                dense
+                                label="Tipo"
+                                value={casoForm.tipoId ?? 0}
+                                onChange={e => setCasoForm(p => ({ ...p, tipoId: Number(e.target.value) || undefined }))}
+                            >
+                                <option value={0}>Sin definir</option>
+                                {tiposActivos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                            </Select>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <FormField label="Turno de taller (opcional)">
-                                <input className="form-input" type="date" value={casoForm.fechaTurno ?? ''} onChange={e => setCasoForm(p => ({ ...p, fechaTurno: e.target.value, horaTurno: e.target.value ? p.horaTurno : '' }))} />
-                            </FormField>
-                            <FormField label="Hora del turno">
-                                <input className="form-input" type="time" value={casoForm.horaTurno ?? ''} onChange={e => setCasoForm(p => ({ ...p, horaTurno: e.target.value }))} disabled={!casoForm.fechaTurno} />
-                            </FormField>
+                            <Input dense label="Turno de taller (opcional)" type="date" value={casoForm.fechaTurno ?? ''} onChange={e => setCasoForm(p => ({ ...p, fechaTurno: e.target.value, horaTurno: e.target.value ? p.horaTurno : '' }))} />
+                            <Input dense label="Hora del turno" type="time" value={casoForm.horaTurno ?? ''} onChange={e => setCasoForm(p => ({ ...p, horaTurno: e.target.value }))} disabled={!casoForm.fechaTurno} />
                         </div>
-                        <FormField label="Descripción *">
-                            <textarea className="form-input" rows={3} placeholder="Describa el problema o reclamo..." value={casoForm.descripcion} onChange={e => setCasoForm(p => ({ ...p, descripcion: e.target.value }))} style={{ resize: 'vertical' }} />
-                        </FormField>
+                        <Textarea dense label="Descripción *" rows={3} placeholder="Describa el problema o reclamo..." value={casoForm.descripcion} onChange={e => setCasoForm(p => ({ ...p, descripcion: e.target.value }))} style={{ resize: 'vertical' }} />
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                         <Button variant="secondary" onClick={() => setShowCreateModal(false)}>Cancelar</Button>
@@ -1203,25 +1189,19 @@ export default function PostventaPage() {
                     <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.2rem', fontWeight: 700 }}>Agregar Ítem — Caso #{detailCaso.id}</h2>
                     <div style={{ display: 'grid', gap: '1rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <FormField label="Fecha *">
-                                <input className="form-input" type="date" value={itemForm.fecha} onChange={e => setItemForm(p => ({ ...p, fecha: e.target.value }))} />
-                            </FormField>
-                            <FormField label="Monto *">
-                                <input className="form-input" type="number" min="0" step="0.01" placeholder="0.00" value={itemForm.monto || ''} onChange={e => setItemForm(p => ({ ...p, monto: Number(e.target.value) }))} />
-                            </FormField>
+                            <Input dense label="Fecha *" type="date" value={itemForm.fecha} onChange={e => setItemForm(p => ({ ...p, fecha: e.target.value }))} />
+                            <Input dense label="Monto *" type="number" min="0" step="0.01" placeholder="0.00" value={itemForm.monto || ''} onChange={e => setItemForm(p => ({ ...p, monto: Number(e.target.value) }))} />
                         </div>
-                        <FormField label="Descripción *">
-                            <input className="form-input" placeholder="Descripción del trabajo o gasto..." value={itemForm.descripcion} onChange={e => setItemForm(p => ({ ...p, descripcion: e.target.value }))} />
-                        </FormField>
-                        <FormField label="Proveedor">
-                            <select className="form-input" value={itemForm.proveedorId ?? ''} onChange={e => setItemForm(p => ({ ...p, proveedorId: e.target.value ? Number(e.target.value) : undefined }))}>
-                                <option value="">Sin proveedor...</option>
-                                {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                            </select>
-                        </FormField>
-                        <FormField label="URL Comprobante">
-                            <input className="form-input" placeholder="https://..." value={itemForm.comprobanteUrl} onChange={e => setItemForm(p => ({ ...p, comprobanteUrl: e.target.value }))} />
-                        </FormField>
+                        <Input dense label="Descripción *" placeholder="Descripción del trabajo o gasto..." value={itemForm.descripcion} onChange={e => setItemForm(p => ({ ...p, descripcion: e.target.value }))} />
+                        <Select
+                            dense
+                            label="Proveedor"
+                            placeholder="Sin proveedor..."
+                            options={proveedores.map(p => ({ value: p.id, label: p.nombre }))}
+                            value={itemForm.proveedorId ?? ''}
+                            onChange={e => setItemForm(p => ({ ...p, proveedorId: e.target.value ? Number(e.target.value) : undefined }))}
+                        />
+                        <Input dense label="URL Comprobante" placeholder="https://..." value={itemForm.comprobanteUrl} onChange={e => setItemForm(p => ({ ...p, comprobanteUrl: e.target.value }))} />
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                         <Button variant="secondary" onClick={() => setShowAddItem(false)}>Cancelar</Button>
@@ -1246,9 +1226,7 @@ export default function PostventaPage() {
                         </strong>
                     </p>
                     {transicionEstado === 'resuelto' && (
-                        <FormField label="Fecha de Cierre *">
-                            <input className="form-input" type="date" value={fechaCierre} onChange={e => setFechaCierre(e.target.value)} />
-                        </FormField>
+                        <Input dense label="Fecha de Cierre *" type="date" value={fechaCierre} onChange={e => setFechaCierre(e.target.value)} />
                     )}
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                         <Button variant="secondary" onClick={() => setTransicionCaso(null)}>Cancelar</Button>
@@ -1294,15 +1272,14 @@ export default function PostventaPage() {
                         {editingTipo ? 'Editar Tipo de Caso' : 'Nuevo Tipo de Caso'}
                     </h2>
                     <div style={{ display: 'grid', gap: '1rem' }}>
-                        <FormField label="Nombre *">
-                            <input
-                                className="form-input"
-                                value={tipoForm.nombre}
-                                maxLength={60}
-                                placeholder="Ej: Mecánica, Climatización, Chapa y pintura..."
-                                onChange={e => setTipoForm(p => ({ ...p, nombre: e.target.value }))}
-                            />
-                        </FormField>
+                        <Input
+                            dense
+                            label="Nombre *"
+                            value={tipoForm.nombre}
+                            maxLength={60}
+                            placeholder="Ej: Mecánica, Climatización, Chapa y pintura..."
+                            onChange={e => setTipoForm(p => ({ ...p, nombre: e.target.value }))}
+                        />
                         {editingTipo && (editingTipo.casosCount ?? 0) > 0 && (
                             <p className="text-xs text-muted" style={{ margin: 0 }}>
                                 Lo usan {editingTipo.casosCount} caso(s). Si lo renombrás, se actualizan todos.
@@ -1424,15 +1401,6 @@ function ModalOverlay({ children, onClose, wide }: { children: React.ReactNode; 
             <div className="glass" style={{ borderRadius: '1rem', padding: '2rem', width: '100%', maxWidth: wide ? '800px' : '520px', maxHeight: '90vh', overflowY: 'auto' }}>
                 {children}
             </div>
-        </div>
-    );
-}
-
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>{label}</label>
-            {children}
         </div>
     );
 }

@@ -11,6 +11,9 @@ import { useDebounce } from '../../hooks/useDebounce';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import {
     Plus, Search, Eye, Trash2, X, RefreshCw, DollarSign,
@@ -492,65 +495,34 @@ const VentasPage = () => {
                 <div>
                     {/* Primary IDs */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="form-group flex flex-col">
-                            <label className="form-label text-accent">Unidad Transaccionada *</label>
-                            <select className="form-input text-lg font-bold" value={form.vehiculoId || ''} onChange={e => setForm(f => ({ ...f, vehiculoId: +e.target.value }))}>
-                                <option value="">SELECCIONAR UNIDAD EN STOCK...</option>
-                                {vehiculos.map(v => (
-                                    <option key={v.id} value={v.id}>{v.marca} {v.modelo} [{v.dominio || `#${v.id} `}]</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="form-group flex flex-col">
-                            <label className="form-label">Titular Adquirente *</label>
-                            <select className="form-input" value={form.clienteId || ''} onChange={e => setForm(f => ({ ...f, clienteId: +e.target.value }))}>
-                                <option value="">CLIENTE RECEPTOR...</option>
-                                {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre.toUpperCase()}</option>)}
-                            </select>
-                        </div>
-                        <div className="form-group flex flex-col">
-                            <label className="form-label">Oficial de Venta *</label>
-                            <select className="form-input" value={form.vendedorId || ''} onChange={e => setForm(f => ({ ...f, vendedorId: +e.target.value }))}>
-                                <option value="">GESTIONADO POR...</option>
-                                {vendedores.map(u => <option key={u.id} value={u.id}>{u.nombre.toUpperCase()}</option>)}
-                            </select>
-                        </div>
+                        <Select dense label="Unidad Transaccionada *" className="text-lg font-bold" placeholder="SELECCIONAR UNIDAD EN STOCK..." value={form.vehiculoId || ''} onChange={e => setForm(f => ({ ...f, vehiculoId: +e.target.value }))}>
+                            {vehiculos.map(v => (
+                                <option key={v.id} value={v.id}>{v.marca} {v.modelo} [{v.dominio || `#${v.id} `}]</option>
+                            ))}
+                        </Select>
+                        <Select dense label="Titular Adquirente *" placeholder="CLIENTE RECEPTOR..." value={form.clienteId || ''} onChange={e => setForm(f => ({ ...f, clienteId: +e.target.value }))}>
+                            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre.toUpperCase()}</option>)}
+                        </Select>
+                        <Select dense label="Oficial de Venta *" placeholder="GESTIONADO POR..." value={form.vendedorId || ''} onChange={e => setForm(f => ({ ...f, vendedorId: +e.target.value }))}>
+                            {vendedores.map(u => <option key={u.id} value={u.id}>{u.nombre.toUpperCase()}</option>)}
+                        </Select>
                     </div>
 
                     {/* Financial Details */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <div className="form-group flex flex-col">
-                            <label className="form-label">Sucursal de Venta *</label>
-                            <select className="form-input" value={form.sucursalId || ''} onChange={e => setForm(f => ({ ...f, sucursalId: +e.target.value }))}>
-                                <option value="">SELECCIONAR SUCURSAL...</option>
-                                {sucursalesData?.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
-                            </select>
-                        </div>
-                        <div className="form-group flex flex-col">
-                            <label className="form-label">Fecha Contable</label>
-                            <input type="date" className="form-input" value={form.fechaVenta} onChange={e => setForm(f => ({ ...f, fechaVenta: e.target.value }))} />
-                        </div>
-                        <div className="form-group flex flex-col">
-                            <label className="form-label">Precio de Cierre *</label>
-                            <div>
-                                <DollarSign size={16} className="text-accent" />
-                                <input type="number" className="form-input font-black" value={form.precioVenta || ''}
-                                    onChange={e => setForm(f => ({ ...f, precioVenta: +e.target.value }))} placeholder="0.00" />
-                            </div>
-                        </div>
-                        <div className="form-group flex flex-col">
-                            <label className="form-label">Divisa</label>
-                            <select className="form-input" value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
-                                <option value="ARS">PESOS (ARS)</option>
-                                <option value="USD">DÓLARES (USD)</option>
-                            </select>
-                        </div>
-                        <div className="form-group flex flex-col">
-                            <label className="form-label">Modalidad Liquidación</label>
-                            <select className="form-input" value={form.formaPago} onChange={e => setForm(f => ({ ...f, formaPago: e.target.value as FormaPagoVenta }))}>
-                                {Object.entries(formaPagoLabels).map(([k, lbl]) => <option key={k} value={k}>{lbl.toUpperCase()}</option>)}
-                            </select>
-                        </div>
+                        <Select dense label="Sucursal de Venta *" placeholder="SELECCIONAR SUCURSAL..." value={form.sucursalId || ''} onChange={e => setForm(f => ({ ...f, sucursalId: +e.target.value }))}>
+                            {sucursalesData?.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
+                        </Select>
+                        <Input dense label="Fecha Contable" type="date" value={form.fechaVenta} onChange={e => setForm(f => ({ ...f, fechaVenta: e.target.value }))} />
+                        <Input dense label="Precio de Cierre *" type="number" className="font-black" icon={<DollarSign size={16} className="text-accent" />} value={form.precioVenta || ''}
+                            onChange={e => setForm(f => ({ ...f, precioVenta: +e.target.value }))} placeholder="0.00" />
+                        <Select dense label="Divisa" value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
+                            <option value="ARS">PESOS (ARS)</option>
+                            <option value="USD">DÓLARES (USD)</option>
+                        </Select>
+                        <Select dense label="Modalidad Liquidación" value={form.formaPago} onChange={e => setForm(f => ({ ...f, formaPago: e.target.value as FormaPagoVenta }))}>
+                            {Object.entries(formaPagoLabels).map(([k, lbl]) => <option key={k} value={k}>{lbl.toUpperCase()}</option>)}
+                        </Select>
                     </div>
 
                     {/* Payment Breakdown */}
@@ -565,34 +537,25 @@ const VentasPage = () => {
                         </div>
                         {form.pagos.map((p, i) => (
                             <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4">
-                                <div className="md:col-span-3">
-                                    <label className="text-3xs font-black text-muted uppercase mb-1">Importe Recibido</label>
-                                    <input type="number" className="form-input font-bold" value={p.monto || ''}
-                                        onChange={e => {
-                                            const newPagos = [...form.pagos];
-                                            newPagos[i].monto = +e.target.value;
-                                            setForm(f => ({ ...f, pagos: newPagos }));
-                                        }} />
-                                </div>
-                                <div className="md:col-span-3">
-                                    <label className="text-3xs font-black text-muted uppercase mb-1">Vía Canal</label>
-                                    <select className="form-input" value={p.metodo} onChange={e => {
+                                <Input dense containerClassName="md:col-span-3" label="Importe Recibido" type="number" className="font-bold" value={p.monto || ''}
+                                    onChange={e => {
                                         const newPagos = [...form.pagos];
-                                        newPagos[i].metodo = e.target.value as 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
+                                        newPagos[i].monto = +e.target.value;
                                         setForm(f => ({ ...f, pagos: newPagos }));
-                                    }}>
-                                        {Object.entries(metodoLabels).map(([k, lbl]) => <option key={k} value={k}>{lbl.toUpperCase()}</option>)}
-                                    </select>
-                                </div>
-                                <div className="md:col-span-5">
-                                    <label className="text-3xs font-black text-muted uppercase mb-1">Certificación / Tracking</label>
-                                    <input type="text" className="form-input italic" value={p.referencia}
-                                        onChange={e => {
-                                            const newPagos = [...form.pagos];
-                                            newPagos[i].referencia = e.target.value;
-                                            setForm(f => ({ ...f, pagos: newPagos }));
-                                        }} placeholder="NRO DE RECIBO, CBU, CHEQUE..." />
-                                </div>
+                                    }} />
+                                <Select dense containerClassName="md:col-span-3" label="Vía Canal" value={p.metodo} onChange={e => {
+                                    const newPagos = [...form.pagos];
+                                    newPagos[i].metodo = e.target.value as 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
+                                    setForm(f => ({ ...f, pagos: newPagos }));
+                                }}>
+                                    {Object.entries(metodoLabels).map(([k, lbl]) => <option key={k} value={k}>{lbl.toUpperCase()}</option>)}
+                                </Select>
+                                <Input dense containerClassName="md:col-span-5" label="Certificación / Tracking" type="text" className="italic" value={p.referencia}
+                                    onChange={e => {
+                                        const newPagos = [...form.pagos];
+                                        newPagos[i].referencia = e.target.value;
+                                        setForm(f => ({ ...f, pagos: newPagos }));
+                                    }} placeholder="NRO DE RECIBO, CBU, CHEQUE..." />
                                 <div className="md:col-span-1">
                                     <button className="w-full flex items-center justify-center text-danger" onClick={() => {
                                         setForm(f => ({ ...f, pagos: f.pagos.filter((_, j) => j !== i) }));
@@ -616,28 +579,21 @@ const VentasPage = () => {
                         </div>
                         {form.canjes.map((c, i) => (
                             <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4">
-                                <div className="md:col-span-8">
-                                    <label className="text-3xs font-black text-muted uppercase mb-1">Vehículo para incorporar al Stock</label>
-                                    <select className="form-input" value={c.vehiculoCanjeId || ''} onChange={e => {
+                                <Select dense containerClassName="md:col-span-8" label="Vehículo para incorporar al Stock" placeholder="RECONOCIMIENTO DE UNIDAD EXISTENTE..." value={c.vehiculoCanjeId || ''} onChange={e => {
+                                    const newCanjes = [...form.canjes];
+                                    newCanjes[i].vehiculoCanjeId = +e.target.value;
+                                    setForm(f => ({ ...f, canjes: newCanjes }));
+                                }}>
+                                    {todosVehiculos.map(v => (
+                                        <option key={v.id} value={v.id}>{v.marca} {v.modelo} [{v.dominio || `#${v.id}`}]</option>
+                                    ))}
+                                </Select>
+                                <Input dense containerClassName="md:col-span-3" label="Acreditación" type="number" className="font-black text-danger" value={c.valorTomado || ''}
+                                    onChange={e => {
                                         const newCanjes = [...form.canjes];
-                                        newCanjes[i].vehiculoCanjeId = +e.target.value;
+                                        newCanjes[i].valorTomado = +e.target.value;
                                         setForm(f => ({ ...f, canjes: newCanjes }));
-                                    }}>
-                                        <option value="">RECONOCIMIENTO DE UNIDAD EXISTENTE...</option>
-                                        {todosVehiculos.map(v => (
-                                            <option key={v.id} value={v.id}>{v.marca} {v.modelo} [{v.dominio || `#${v.id}`}]</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="md:col-span-3">
-                                    <label className="text-3xs font-black text-muted uppercase mb-1">Acreditación</label>
-                                    <input type="number" className="form-input font-black text-danger" value={c.valorTomado || ''}
-                                        onChange={e => {
-                                            const newCanjes = [...form.canjes];
-                                            newCanjes[i].valorTomado = +e.target.value;
-                                            setForm(f => ({ ...f, canjes: newCanjes }));
-                                        }} />
-                                </div>
+                                    }} />
                                 <div className="md:col-span-1">
                                     <button className="w-full flex items-center justify-center text-danger" onClick={() => {
                                         setForm(f => ({ ...f, canjes: f.canjes.filter((_, j) => j !== i) }));
@@ -649,11 +605,8 @@ const VentasPage = () => {
                         ))}
                     </div>
 
-                    <div className="form-group flex flex-col">
-                        <label className="form-label">Notas Adicionales (Protocolo de Venta)</label>
-                        <textarea className="form-input" rows={2} value={form.observaciones}
-                            onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} placeholder="DETALLES DE GESTORÍA, DOCUMENTACIÓN PENDIENTE..." />
-                    </div>
+                    <Textarea dense label="Notas Adicionales (Protocolo de Venta)" rows={2} value={form.observaciones}
+                        onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} placeholder="DETALLES DE GESTORÍA, DOCUMENTACIÓN PENDIENTE..." />
 
                     <div className="flex justify-between items-center">
                         <div>

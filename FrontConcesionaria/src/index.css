@@ -727,6 +727,7 @@ button {
   margin-bottom: var(--space-2);
 }
 
+
 .input-label {
   font-family: var(--font-sans);
   font-size: var(--text-xs);
@@ -757,6 +758,22 @@ button {
   transition: border-color var(--duration-base) var(--easing-soft),
     box-shadow var(--duration-base) var(--easing-soft),
     background var(--duration-base) var(--easing-soft);
+}
+
+
+/* Variante DENSA de los componentes de formulario (<Input dense> etc.): usa la
+   métrica compacta de la capa legacy .form-* (13px, padding 0.6/0.85, ritmo
+   vertical 1rem) para que la migración de los formularios operativos no cambie
+   la densidad ni la altura de los modales. El .input-control default (15px)
+   queda para formularios protagónicos (auth, alta de usuarios). */
+.input-group--dense {
+  margin-bottom: var(--space-4);
+}
+
+.input-control--dense {
+  padding: 0.6rem 0.85rem;
+  font-size: var(--text-sm);
+  font-weight: 500;
 }
 
 .input-control::placeholder {

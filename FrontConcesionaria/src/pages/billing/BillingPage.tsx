@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit2, RefreshCw, Eye, Receipt, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
 import { billingApi } from '../../api/billing.api';
 import type {
   Plan,
@@ -745,40 +747,19 @@ export default function BillingPage() {
           </>
         )}
       >
-        <div className="form-group">
-          <label className="form-label">Nombre *</label>
-          <input className="form-input" value={planForm.nombre} onChange={e => setPlanForm(f => ({ ...f, nombre: e.target.value }))} placeholder="Ej: Plan Pro" />
-        </div>
+        <Input dense label="Nombre *" value={planForm.nombre} onChange={e => setPlanForm(f => ({ ...f, nombre: e.target.value }))} placeholder="Ej: Plan Pro" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-          <div className="form-group">
-            <label className="form-label">Intervalo *</label>
-            <select className="form-select" value={planForm.interval as string} onChange={e => setPlanForm(f => ({ ...f, interval: e.target.value as PlanInterval }))}>
-              <option value="MONTH">Mensual</option>
-              <option value="YEAR">Anual</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Moneda</label>
-            <input className="form-input" value={planForm.moneda} onChange={e => setPlanForm(f => ({ ...f, moneda: e.target.value }))} placeholder="ARS" />
-          </div>
+          <Select dense label="Intervalo *" value={planForm.interval as string} onChange={e => setPlanForm(f => ({ ...f, interval: e.target.value as PlanInterval }))}>
+            <option value="MONTH">Mensual</option>
+            <option value="YEAR">Anual</option>
+          </Select>
+          <Input dense label="Moneda" value={planForm.moneda} onChange={e => setPlanForm(f => ({ ...f, moneda: e.target.value }))} placeholder="ARS" />
         </div>
-        <div className="form-group">
-          <label className="form-label">Precio *</label>
-          <input className="form-input" type="number" step="0.01" value={planForm.precio as string} onChange={e => setPlanForm(f => ({ ...f, precio: e.target.value }))} placeholder="0.00" />
-        </div>
+        <Input dense label="Precio *" type="number" step="0.01" value={planForm.precio as string} onChange={e => setPlanForm(f => ({ ...f, precio: e.target.value }))} placeholder="0.00" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
-          <div className="form-group">
-            <label className="form-label">Máx. Usuarios</label>
-            <input className="form-input" type="number" value={planForm.maxUsuarios ?? ''} onChange={e => setPlanForm(f => ({ ...f, maxUsuarios: e.target.value ? parseInt(e.target.value) : undefined }))} placeholder="∞" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Máx. Sucursales</label>
-            <input className="form-input" type="number" value={planForm.maxSucursales ?? ''} onChange={e => setPlanForm(f => ({ ...f, maxSucursales: e.target.value ? parseInt(e.target.value) : undefined }))} placeholder="∞" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Máx. Vehículos</label>
-            <input className="form-input" type="number" value={planForm.maxVehiculos ?? ''} onChange={e => setPlanForm(f => ({ ...f, maxVehiculos: e.target.value ? parseInt(e.target.value) : undefined }))} placeholder="∞" />
-          </div>
+          <Input dense label="Máx. Usuarios" type="number" value={planForm.maxUsuarios ?? ''} onChange={e => setPlanForm(f => ({ ...f, maxUsuarios: e.target.value ? parseInt(e.target.value) : undefined }))} placeholder="∞" />
+          <Input dense label="Máx. Sucursales" type="number" value={planForm.maxSucursales ?? ''} onChange={e => setPlanForm(f => ({ ...f, maxSucursales: e.target.value ? parseInt(e.target.value) : undefined }))} placeholder="∞" />
+          <Input dense label="Máx. Vehículos" type="number" value={planForm.maxVehiculos ?? ''} onChange={e => setPlanForm(f => ({ ...f, maxVehiculos: e.target.value ? parseInt(e.target.value) : undefined }))} placeholder="∞" />
         </div>
         <div className="form-group">
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
@@ -810,37 +791,22 @@ export default function BillingPage() {
               Suscripción vencida — se recomienda actualizar el estado
             </div>
           )}
-          <div className="form-group">
-            <label className="form-label">Plan *</label>
-            <select className="form-select" value={subForm.planId} onChange={e => setSubForm(f => ({ ...f, planId: parseInt(e.target.value) }))}>
-              <option value={0}>— Seleccionar plan —</option>
-              {planes.map(p => <option key={p.id} value={p.id}>{p.nombre} ({INTERVAL_LABELS[p.interval]})</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Estado</label>
-            <select className="form-select" value={subForm.status} onChange={e => setSubForm(f => ({ ...f, status: e.target.value as SubscriptionStatus }))}>
-              {(Object.keys(SUB_STATUS_LABELS) as SubscriptionStatus[]).map(s => {
-                const current = subscriptions[selectedConcSub.id]?.status;
-                const allowed = current ? (NEXT_STATUSES[current] ?? []) : Object.keys(SUB_STATUS_LABELS) as SubscriptionStatus[];
-                const isDisabled = current && s !== current && !allowed.includes(s);
-                return <option key={s} value={s} disabled={!!isDisabled}>{SUB_STATUS_LABELS[s]}</option>;
-              })}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Trial hasta</label>
-            <input className="form-input" type="date" value={subForm.trialEndsAt} onChange={e => setSubForm(f => ({ ...f, trialEndsAt: e.target.value }))} />
-          </div>
+          <Select dense label="Plan *" value={subForm.planId} onChange={e => setSubForm(f => ({ ...f, planId: parseInt(e.target.value) }))}>
+            <option value={0}>— Seleccionar plan —</option>
+            {planes.map(p => <option key={p.id} value={p.id}>{p.nombre} ({INTERVAL_LABELS[p.interval]})</option>)}
+          </Select>
+          <Select dense label="Estado" value={subForm.status} onChange={e => setSubForm(f => ({ ...f, status: e.target.value as SubscriptionStatus }))}>
+            {(Object.keys(SUB_STATUS_LABELS) as SubscriptionStatus[]).map(s => {
+              const current = subscriptions[selectedConcSub.id]?.status;
+              const allowed = current ? (NEXT_STATUSES[current] ?? []) : Object.keys(SUB_STATUS_LABELS) as SubscriptionStatus[];
+              const isDisabled = current && s !== current && !allowed.includes(s);
+              return <option key={s} value={s} disabled={!!isDisabled}>{SUB_STATUS_LABELS[s]}</option>;
+            })}
+          </Select>
+          <Input dense label="Trial hasta" type="date" value={subForm.trialEndsAt} onChange={e => setSubForm(f => ({ ...f, trialEndsAt: e.target.value }))} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-            <div className="form-group">
-              <label className="form-label">Período desde</label>
-              <input className="form-input" type="date" value={subForm.currentPeriodStart} onChange={e => setSubForm(f => ({ ...f, currentPeriodStart: e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Período hasta</label>
-              <input className="form-input" type="date" value={subForm.currentPeriodEnd} onChange={e => setSubForm(f => ({ ...f, currentPeriodEnd: e.target.value }))} />
-            </div>
+            <Input dense label="Período desde" type="date" value={subForm.currentPeriodStart} onChange={e => setSubForm(f => ({ ...f, currentPeriodStart: e.target.value }))} />
+            <Input dense label="Período hasta" type="date" value={subForm.currentPeriodEnd} onChange={e => setSubForm(f => ({ ...f, currentPeriodEnd: e.target.value }))} />
           </div>
         </Modal>
       )}
@@ -861,52 +827,28 @@ export default function BillingPage() {
         )}
       >
         <div className="form-group">
-          <label className="form-label">Concesionaria *</label>
-          <select
-            className="form-select"
+          <Select
+            dense
+            label="Concesionaria *"
             value={invForm.concesionariaId}
             onChange={e => handleConcChangeInv(parseInt(e.target.value))}
           >
             <option value={0}>— Seleccionar —</option>
             {concesionarias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-          </select>
+          </Select>
           {invFormSubLoading && <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 4 }}>Buscando suscripción...</div>}
           {invForm.subscriptionId > 0 && <div style={{ fontSize: '0.75rem', color: 'var(--success)', marginTop: 4 }}>✓ Suscripción #{invForm.subscriptionId} encontrada</div>}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-          <div className="form-group">
-            <label className="form-label">Número</label>
-            <input className="form-input" value={invForm.numero} onChange={e => setInvForm(f => ({ ...f, numero: e.target.value }))} placeholder="Auto" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Moneda</label>
-            <input className="form-input" value={invForm.moneda} onChange={e => setInvForm(f => ({ ...f, moneda: e.target.value }))} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Período desde *</label>
-            <input className="form-input" type="date" value={invForm.periodoDesde} onChange={e => setInvForm(f => ({ ...f, periodoDesde: e.target.value }))} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Período hasta *</label>
-            <input className="form-input" type="date" value={invForm.periodoHasta} onChange={e => setInvForm(f => ({ ...f, periodoHasta: e.target.value }))} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Subtotal</label>
-            <input className="form-input" type="number" step="0.01" value={invForm.subtotal} onChange={e => setInvForm(f => ({ ...f, subtotal: e.target.value }))} placeholder="0.00" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Impuestos</label>
-            <input className="form-input" type="number" step="0.01" value={invForm.impuestos} onChange={e => setInvForm(f => ({ ...f, impuestos: e.target.value }))} placeholder="0.00" />
-          </div>
+          <Input dense label="Número" value={invForm.numero} onChange={e => setInvForm(f => ({ ...f, numero: e.target.value }))} placeholder="Auto" />
+          <Input dense label="Moneda" value={invForm.moneda} onChange={e => setInvForm(f => ({ ...f, moneda: e.target.value }))} />
+          <Input dense label="Período desde *" type="date" value={invForm.periodoDesde} onChange={e => setInvForm(f => ({ ...f, periodoDesde: e.target.value }))} />
+          <Input dense label="Período hasta *" type="date" value={invForm.periodoHasta} onChange={e => setInvForm(f => ({ ...f, periodoHasta: e.target.value }))} />
+          <Input dense label="Subtotal" type="number" step="0.01" value={invForm.subtotal} onChange={e => setInvForm(f => ({ ...f, subtotal: e.target.value }))} placeholder="0.00" />
+          <Input dense label="Impuestos" type="number" step="0.01" value={invForm.impuestos} onChange={e => setInvForm(f => ({ ...f, impuestos: e.target.value }))} placeholder="0.00" />
         </div>
-        <div className="form-group">
-          <label className="form-label">Total *</label>
-          <input className="form-input" type="number" step="0.01" value={invForm.total} onChange={e => setInvForm(f => ({ ...f, total: e.target.value }))} placeholder="0.00" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Vencimiento</label>
-          <input className="form-input" type="date" value={invForm.dueDate} onChange={e => setInvForm(f => ({ ...f, dueDate: e.target.value }))} />
-        </div>
+        <Input dense label="Total *" type="number" step="0.01" value={invForm.total} onChange={e => setInvForm(f => ({ ...f, total: e.target.value }))} placeholder="0.00" />
+        <Input dense label="Vencimiento" type="date" value={invForm.dueDate} onChange={e => setInvForm(f => ({ ...f, dueDate: e.target.value }))} />
       </Modal>
 
       {/* ── MODAL: DETALLE FACTURA / PAGOS ── */}
@@ -937,21 +879,12 @@ export default function BillingPage() {
           <div style={{ background: 'var(--bg-secondary)', borderRadius: '0.5rem', padding: '0.75rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
             <div>Total factura: <strong>{payInvoice.moneda} {parseFloat(payInvoice.total).toLocaleString('es-AR')}</strong></div>
           </div>
-          <div className="form-group">
-            <label className="form-label">Monto *</label>
-            <input className="form-input" type="number" step="0.01" value={payForm.monto} onChange={e => setPayForm(f => ({ ...f, monto: e.target.value }))} placeholder="0.00" />
-          </div>
+          <Input dense label="Monto *" type="number" step="0.01" value={payForm.monto} onChange={e => setPayForm(f => ({ ...f, monto: e.target.value }))} placeholder="0.00" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-            <div className="form-group">
-              <label className="form-label">Moneda</label>
-              <input className="form-input" value={payForm.moneda} onChange={e => setPayForm(f => ({ ...f, moneda: e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Método</label>
-              <select className="form-select" value={payForm.metodo} onChange={e => setPayForm(f => ({ ...f, metodo: e.target.value as MetodoPago }))}>
-                {METODOS.map(m => <option key={m} value={m} style={{ textTransform: 'capitalize' }}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
-              </select>
-            </div>
+            <Input dense label="Moneda" value={payForm.moneda} onChange={e => setPayForm(f => ({ ...f, moneda: e.target.value }))} />
+            <Select dense label="Método" value={payForm.metodo} onChange={e => setPayForm(f => ({ ...f, metodo: e.target.value as MetodoPago }))}>
+              {METODOS.map(m => <option key={m} value={m} style={{ textTransform: 'capitalize' }}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
+            </Select>
           </div>
         </Modal>
       )}

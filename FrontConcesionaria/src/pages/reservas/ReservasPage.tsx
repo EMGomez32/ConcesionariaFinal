@@ -11,6 +11,9 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import { getList } from '../../utils/lista';
 import {
     Plus, Search, Filter, RefreshCw,
@@ -329,62 +332,32 @@ const ReservasPage = () => {
             >
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div style={{ gridColumn: '1 / -1' }}>
-                        <label className="form-label">Vehículo * <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(solo publicados)</span></label>
-                        <select className="form-input" value={form.vehiculoId} onChange={e => setForm(f => ({ ...f, vehiculoId: e.target.value }))}>
-                            <option value="">Seleccionar vehículo...</option>
+                        <Select dense label="Vehículo * (solo publicados)" placeholder="Seleccionar vehículo..." value={form.vehiculoId} onChange={e => setForm(f => ({ ...f, vehiculoId: e.target.value }))}>
                             {vehiculos.map(v => (
                                 <option key={v.id} value={v.id}>
                                     {v.marca} {v.modelo} {v.version ? `${v.version} ` : ''}{v.dominio ? `(${v.dominio})` : ''}
                                 </option>
                             ))}
-                        </select>
+                        </Select>
                     </div>
 
-                    <div>
-                        <label className="form-label">Cliente *</label>
-                        <select className="form-input" value={form.clienteId} onChange={e => setForm(f => ({ ...f, clienteId: e.target.value }))}>
-                            <option value="">Seleccionar cliente...</option>
-                            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                        </select>
-                    </div>
+                    <Select dense label="Cliente *" placeholder="Seleccionar cliente..." options={clientes.map(c => ({ value: c.id, label: c.nombre }))} value={form.clienteId} onChange={e => setForm(f => ({ ...f, clienteId: e.target.value }))} />
 
-                    <div>
-                        <label className="form-label">Vendedor *</label>
-                        <select className="form-input" value={form.vendedorId} onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))}>
-                            <option value="">Seleccionar vendedor...</option>
-                            {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
-                        </select>
-                    </div>
+                    <Select dense label="Vendedor *" placeholder="Seleccionar vendedor..." options={usuarios.map(u => ({ value: u.id, label: u.nombre }))} value={form.vendedorId} onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))} />
 
-                    <div>
-                        <label className="form-label">Sucursal *</label>
-                        <select className="form-input" value={form.sucursalId} onChange={e => setForm(f => ({ ...f, sucursalId: e.target.value }))}>
-                            <option value="">Seleccionar sucursal...</option>
-                            {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                        </select>
-                    </div>
+                    <Select dense label="Sucursal *" placeholder="Seleccionar sucursal..." options={sucursales.map(s => ({ value: s.id, label: s.nombre }))} value={form.sucursalId} onChange={e => setForm(f => ({ ...f, sucursalId: e.target.value }))} />
 
-                    <div>
-                        <label className="form-label">Fecha de vencimiento *</label>
-                        <input type="date" className="form-input" value={form.fechaVencimiento} onChange={e => setForm(f => ({ ...f, fechaVencimiento: e.target.value }))} />
-                    </div>
+                    <Input dense label="Fecha de vencimiento *" type="date" value={form.fechaVencimiento} onChange={e => setForm(f => ({ ...f, fechaVencimiento: e.target.value }))} />
 
-                    <div>
-                        <label className="form-label">Monto de seña *</label>
-                        <input type="number" className="form-input" placeholder="0" value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} />
-                    </div>
+                    <Input dense label="Monto de seña *" type="number" placeholder="0" value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} />
 
-                    <div>
-                        <label className="form-label">Moneda *</label>
-                        <select className="form-input" value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
-                            <option value="ARS">ARS</option>
-                            <option value="USD">USD</option>
-                        </select>
-                    </div>
+                    <Select dense label="Moneda *" value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
+                        <option value="ARS">ARS</option>
+                        <option value="USD">USD</option>
+                    </Select>
 
                     <div style={{ gridColumn: '1 / -1' }}>
-                        <label className="form-label">Observaciones</label>
-                        <textarea className="form-input" rows={3} placeholder="Observaciones opcionales..." value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} />
+                        <Textarea dense label="Observaciones" rows={3} placeholder="Observaciones opcionales..." value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} />
                     </div>
 
                     {formError && (

@@ -72,6 +72,9 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import { useUIStore } from '../../store/uiStore';
 import {
     Plus, Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
@@ -712,45 +715,56 @@ const PresupuestosPage = () => {
                 <div>
                     {/* Primary Info */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="form-group flex flex-col">
-                            <label className="form-label">Nro. de Control *</label>
-                            <div>
-                                <Hash size={16} className="text-accent" />
-                                <input className="form-input font-bold" value={form.nroPresupuesto} onChange={e => setForm(f => ({ ...f, nroPresupuesto: e.target.value }))} />
-                            </div>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Divisa de Negociación *</label>
-                            <select className="form-input font-bold" value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
-                                <option value="ARS">PESO ARGENTINO (ARS)</option>
-                                <option value="USD">DÓLAR ESTADOUNIDENSE (USD)</option>
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Sucursal Radicación *</label>
-                            <select className="form-input" value={form.sucursalId} onChange={e => setForm(f => ({ ...f, sucursalId: e.target.value }))}>
-                                <option value="">SELECCIONAR PUNTO DE VENTA...</option>
-                                {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Cliente Potencial *</label>
-                            <select className="form-input" value={form.clienteId} onChange={e => setForm(f => ({ ...f, clienteId: e.target.value }))}>
-                                <option value="">SELECCIONAR PROSPECTO...</option>
-                                {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre.toUpperCase()}</option>)}
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Vendedor Designado *</label>
-                            <select className="form-input" value={form.vendedorId} onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))}>
-                                <option value="">ASIGNAR OFICIAL COMERCIAL...</option>
-                                {vendedores.map(u => <option key={u.id} value={u.id}>{u.nombre.toUpperCase()}</option>)}
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Fecha Límite Validez</label>
-                            <input type="date" className="form-input" value={form.validoHasta} onChange={e => setForm(f => ({ ...f, validoHasta: e.target.value }))} />
-                        </div>
+                        <Input
+                            dense
+                            label="Nro. de Control *"
+                            containerClassName="flex flex-col"
+                            icon={<Hash size={16} className="text-accent" />}
+                            className="font-bold"
+                            value={form.nroPresupuesto}
+                            onChange={e => setForm(f => ({ ...f, nroPresupuesto: e.target.value }))}
+                        />
+                        <Select
+                            dense
+                            label="Divisa de Negociación *"
+                            className="font-bold"
+                            value={form.moneda}
+                            onChange={e => setForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}
+                        >
+                            <option value="ARS">PESO ARGENTINO (ARS)</option>
+                            <option value="USD">DÓLAR ESTADOUNIDENSE (USD)</option>
+                        </Select>
+                        <Select
+                            dense
+                            label="Sucursal Radicación *"
+                            placeholder="SELECCIONAR PUNTO DE VENTA..."
+                            options={sucursales.map(s => ({ value: s.id, label: s.nombre.toUpperCase() }))}
+                            value={form.sucursalId}
+                            onChange={e => setForm(f => ({ ...f, sucursalId: e.target.value }))}
+                        />
+                        <Select
+                            dense
+                            label="Cliente Potencial *"
+                            placeholder="SELECCIONAR PROSPECTO..."
+                            options={clientes.map(c => ({ value: c.id, label: c.nombre.toUpperCase() }))}
+                            value={form.clienteId}
+                            onChange={e => setForm(f => ({ ...f, clienteId: e.target.value }))}
+                        />
+                        <Select
+                            dense
+                            label="Vendedor Designado *"
+                            placeholder="ASIGNAR OFICIAL COMERCIAL..."
+                            options={vendedores.map(u => ({ value: u.id, label: u.nombre.toUpperCase() }))}
+                            value={form.vendedorId}
+                            onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))}
+                        />
+                        <Input
+                            dense
+                            label="Fecha Límite Validez"
+                            type="date"
+                            value={form.validoHasta}
+                            onChange={e => setForm(f => ({ ...f, validoHasta: e.target.value }))}
+                        />
                     </div>
 
                     {/* Items Section */}
@@ -809,21 +823,29 @@ const PresupuestosPage = () => {
                         </div>
                         {form.conCanje && (
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                <div className="md:col-span-2">
-                                    <label className="form-label">Descripción / Marca / Modelo</label>
-                                    <input className="form-input" value={form.canje.descripcion} onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, descripcion: e.target.value } }))} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Dominio</label>
-                                    <input className="form-input font-mono" value={form.canje.dominio} onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, dominio: e.target.value } }))} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Valor de Toma *</label>
-                                    <div>
-                                        <DollarSign size={16} className="text-accent-2" />
-                                        <input type="number" className="form-input font-bold" value={form.canje.valorTomado} onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, valorTomado: e.target.value } }))} />
-                                    </div>
-                                </div>
+                                <Input
+                                    dense
+                                    label="Descripción / Marca / Modelo"
+                                    containerClassName="md:col-span-2"
+                                    value={form.canje.descripcion}
+                                    onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, descripcion: e.target.value } }))}
+                                />
+                                <Input
+                                    dense
+                                    label="Dominio"
+                                    className="font-mono"
+                                    value={form.canje.dominio}
+                                    onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, dominio: e.target.value } }))}
+                                />
+                                <Input
+                                    dense
+                                    label="Valor de Toma *"
+                                    type="number"
+                                    icon={<DollarSign size={16} className="text-accent-2" />}
+                                    className="font-bold"
+                                    value={form.canje.valorTomado}
+                                    onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, valorTomado: e.target.value } }))}
+                                />
                             </div>
                         )}
                     </div>
@@ -959,16 +981,24 @@ const PresupuestosPage = () => {
                 )}
             >
                 <div>
-                    <div className="form-group">
-                        <label className="form-label">Estado del Expediente</label>
-                        <select className="form-input text-lg font-bold" value={editForm.estado} onChange={e => setEditForm(f => ({ ...f, estado: e.target.value }))}>
-                            {Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v.label.toUpperCase()}</option>)}
-                        </select>
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Observaciones de Auditoría</label>
-                        <textarea className="form-input" rows={4} value={editForm.observaciones} onChange={e => setEditForm(f => ({ ...f, observaciones: e.target.value }))} style={{ resize: 'none' }} placeholder="JUSTIFICACIÓN DE CAMBIO DE ESTADO O NOTAS PARA VENDEDORES..." />
-                    </div>
+                    <Select
+                        dense
+                        label="Estado del Expediente"
+                        className="text-lg font-bold"
+                        value={editForm.estado}
+                        onChange={e => setEditForm(f => ({ ...f, estado: e.target.value }))}
+                    >
+                        {Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v.label.toUpperCase()}</option>)}
+                    </Select>
+                    <Textarea
+                        dense
+                        label="Observaciones de Auditoría"
+                        rows={4}
+                        value={editForm.observaciones}
+                        onChange={e => setEditForm(f => ({ ...f, observaciones: e.target.value }))}
+                        style={{ resize: 'none' }}
+                        placeholder="JUSTIFICACIÓN DE CAMBIO DE ESTADO O NOTAS PARA VENDEDORES..."
+                    />
                 </div>
             </Modal>
 
@@ -990,32 +1020,38 @@ const PresupuestosPage = () => {
             >
                 <div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="form-group">
-                            <label className="form-label">Forma de pago</label>
-                            <select className="form-input" value={convertirForm.formaPago}
-                                onChange={e => setConvertirForm(f => ({ ...f, formaPago: e.target.value as FormaPagoVenta }))}>
-                                {FORMA_PAGO_OPTIONS_CONV.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Moneda</label>
-                            <select className="form-input" value={convertirForm.moneda}
-                                onChange={e => setConvertirForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
-                                <option value="ARS">ARS</option>
-                                <option value="USD">USD</option>
-                            </select>
-                        </div>
+                        <Select
+                            dense
+                            label="Forma de pago"
+                            value={convertirForm.formaPago}
+                            onChange={e => setConvertirForm(f => ({ ...f, formaPago: e.target.value as FormaPagoVenta }))}
+                        >
+                            {FORMA_PAGO_OPTIONS_CONV.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </Select>
+                        <Select
+                            dense
+                            label="Moneda"
+                            value={convertirForm.moneda}
+                            onChange={e => setConvertirForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}
+                        >
+                            <option value="ARS">ARS</option>
+                            <option value="USD">USD</option>
+                        </Select>
                     </div>
-                    <div className="form-group">
-                        <label className="form-label">Fecha venta</label>
-                        <input type="date" className="form-input" value={convertirForm.fechaVenta}
-                            onChange={e => setConvertirForm(f => ({ ...f, fechaVenta: e.target.value }))} />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Observaciones</label>
-                        <textarea className="form-input" rows={3} value={convertirForm.observaciones}
-                            onChange={e => setConvertirForm(f => ({ ...f, observaciones: e.target.value }))} />
-                    </div>
+                    <Input
+                        dense
+                        label="Fecha venta"
+                        type="date"
+                        value={convertirForm.fechaVenta}
+                        onChange={e => setConvertirForm(f => ({ ...f, fechaVenta: e.target.value }))}
+                    />
+                    <Textarea
+                        dense
+                        label="Observaciones"
+                        rows={3}
+                        value={convertirForm.observaciones}
+                        onChange={e => setConvertirForm(f => ({ ...f, observaciones: e.target.value }))}
+                    />
                 </div>
             </Modal>
 

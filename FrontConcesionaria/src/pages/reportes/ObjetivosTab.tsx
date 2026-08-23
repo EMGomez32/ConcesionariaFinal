@@ -7,6 +7,8 @@ import { useUIStore } from '../../store/uiStore';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
 import { StatCard } from './StatCard';
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -259,26 +261,25 @@ const ObjetivosTab = () => {
             >
                 <div>
                     {!editing && (
-                        <div className="form-group">
-                            <label className="form-label">Vendedor *</label>
-                            <select className="form-input" value={formVendedorId} onChange={(e) => setFormVendedorId(e.target.value)} autoFocus>
-                                <option value="">Elegí un vendedor…</option>
-                                {candidatos.map((u) => <option key={u.id} value={u.id}>{u.nombre}</option>)}
-                            </select>
-                        </div>
+                        <Select
+                            dense
+                            label="Vendedor *"
+                            placeholder="Elegí un vendedor…"
+                            options={candidatos.map((u) => ({ value: u.id, label: u.nombre }))}
+                            value={formVendedorId}
+                            onChange={(e) => setFormVendedorId(e.target.value)}
+                            autoFocus
+                        />
                     )}
-                    <div className="form-group">
-                        <label className="form-label">Unidades a vender</label>
-                        <input type="number" min="0" className="form-input" value={formUnidades} onChange={(e) => setFormUnidades(e.target.value)} placeholder="Ej: 5" />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Facturado objetivo</label>
+                    <Input dense label="Unidades a vender" type="number" min="0" value={formUnidades} onChange={(e) => setFormUnidades(e.target.value)} placeholder="Ej: 5" />
+                    <div>
+                        <label className="input-label" style={{ display: 'block', marginBottom: '0.4rem' }}>Facturado objetivo</label>
                         <div className="flex gap-3">
-                            <select className="form-input" style={{ maxWidth: '6.5rem' }} value={formMoneda} onChange={(e) => setFormMoneda(e.target.value as 'ARS' | 'USD')}>
+                            <Select dense style={{ maxWidth: '6.5rem' }} value={formMoneda} onChange={(e) => setFormMoneda(e.target.value as 'ARS' | 'USD')}>
                                 <option value="ARS">ARS</option>
                                 <option value="USD">USD</option>
-                            </select>
-                            <input type="number" min="0" className="form-input" value={formMonto} onChange={(e) => setFormMonto(e.target.value)} placeholder="Ej: 30000000" />
+                            </Select>
+                            <Input dense containerClassName="flex-1" type="number" min="0" value={formMonto} onChange={(e) => setFormMonto(e.target.value)} placeholder="Ej: 30000000" />
                         </div>
                     </div>
                     {formError && (

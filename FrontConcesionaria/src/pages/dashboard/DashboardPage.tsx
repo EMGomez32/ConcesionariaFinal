@@ -12,6 +12,8 @@ import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
 import AnimatedNumber from '../../components/ui/AnimatedNumber';
 import DonutChart from '../../components/ui/DonutChart';
 import { useTour } from '../../onboarding/useTour';
@@ -581,18 +583,15 @@ const DashboardPage = () => {
         }
       >
         <div>
-          <div className="form-group">
-            <label className="form-label">Unidades a vender</label>
-            <input type="number" min="0" className="form-input" value={metaUnidades} onChange={(e) => setMetaUnidades(e.target.value)} placeholder="Ej: 12" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Facturado objetivo</label>
+          <Input dense label="Unidades a vender" type="number" min="0" value={metaUnidades} onChange={(e) => setMetaUnidades(e.target.value)} placeholder="Ej: 12" />
+          <div>
+            <label className="input-label" style={{ display: 'block', marginBottom: '0.4rem' }}>Facturado objetivo</label>
             <div className="flex gap-3">
-              <select className="form-input" style={{ maxWidth: '6.5rem' }} value={metaMoneda} onChange={(e) => setMetaMoneda(e.target.value as 'ARS' | 'USD')}>
+              <Select dense style={{ maxWidth: '6.5rem' }} value={metaMoneda} onChange={(e) => setMetaMoneda(e.target.value as 'ARS' | 'USD')}>
                 <option value="ARS">ARS</option>
                 <option value="USD">USD</option>
-              </select>
-              <input type="number" min="0" className="form-input" value={metaMonto} onChange={(e) => setMetaMonto(e.target.value)} placeholder="Ej: 180000000" />
+              </Select>
+              <Input dense containerClassName="flex-1" type="number" min="0" value={metaMonto} onChange={(e) => setMetaMonto(e.target.value)} placeholder="Ej: 180000000" />
             </div>
           </div>
           {metaError && (

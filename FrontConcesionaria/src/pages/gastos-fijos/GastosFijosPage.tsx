@@ -3,6 +3,9 @@ import { gastosFijosApi, type GastoFijo } from '../../api/gastos-fijos.api';
 import { gastosFijosCategoriaApi, type GastoFijoCategoria } from '../../api/gastos-fijos-categorias.api';
 import { sucursalesApi } from '../../api/sucursales.api';
 import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { useUIStore } from '../../store/uiStore';
@@ -519,10 +522,15 @@ const GastosFijosPage = () => {
                                     <Plus size={20} className="text-accent" /> Definir Nueva Categoría
                                 </h3>
                                 <div className="flex flex-col sm:flex-row gap-6 items-end">
-                                    <div className="flex-1 w-full">
-                                        <label className="form-label">Nombre del Concepto *</label>
-                                        <input className="form-input" placeholder="Ej: Servicios Públicos, Impuestos..." value={catForm.nombre} onChange={e => setCatForm(f => ({ ...f, nombre: e.target.value }))} autoFocus />
-                                    </div>
+                                    <Input
+                                        dense
+                                        label="Nombre del Concepto *"
+                                        containerClassName="flex-1 w-full"
+                                        placeholder="Ej: Servicios Públicos, Impuestos..."
+                                        value={catForm.nombre}
+                                        onChange={e => setCatForm(f => ({ ...f, nombre: e.target.value }))}
+                                        autoFocus
+                                    />
                                     <div className="flex gap-4">
                                         <Button variant="secondary" onClick={() => setShowCatCreate(false)}>Cancelar</Button>
                                         <Button variant="primary" onClick={handleCatCreate} loading={savingCat}>Guardar</Button>
@@ -595,75 +603,78 @@ const GastosFijosPage = () => {
             >
                 <div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="form-group">
-                            <label className="form-label">Rubro del Gasto *</label>
-                            <select className="form-input" value={editTarget ? editForm.categoriaId : createForm.categoriaId}
-                                onChange={e => editTarget ? setEditForm(f => ({ ...f, categoriaId: e.target.value })) : setCreateForm(f => ({ ...f, categoriaId: e.target.value }))}>
-                                <option value="">Selección de cuenta...</option>
-                                {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre.toUpperCase()}</option>)}
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Período Fiscal *</label>
+                        <Select
+                            dense
+                            label="Rubro del Gasto *"
+                            placeholder="Selección de cuenta..."
+                            options={categorias.map(c => ({ value: c.id, label: c.nombre.toUpperCase() }))}
+                            value={editTarget ? editForm.categoriaId : createForm.categoriaId}
+                            onChange={e => editTarget ? setEditForm(f => ({ ...f, categoriaId: e.target.value })) : setCreateForm(f => ({ ...f, categoriaId: e.target.value }))}
+                        />
+                        <div className="input-group input-group--dense">
+                            <label className="input-label">Período Fiscal *</label>
                             <div className="flex gap-4">
-                                <select className="form-input" value={editTarget ? editForm.mes : createForm.mes}
+                                <Select dense containerClassName="flex-1" value={editTarget ? editForm.mes : createForm.mes}
                                     onChange={e => editTarget ? setEditForm(f => ({ ...f, mes: e.target.value })) : setCreateForm(f => ({ ...f, mes: e.target.value }))}>
                                     {MESES.map((m, i) => <option key={i + 1} value={i + 1}>{m.toUpperCase()}</option>)}
-                                </select>
-                                <select className="form-input" value={editTarget ? editForm.anio : createForm.anio}
+                                </Select>
+                                <Select dense containerClassName="flex-1" value={editTarget ? editForm.anio : createForm.anio}
                                     onChange={e => editTarget ? setEditForm(f => ({ ...f, anio: e.target.value })) : setCreateForm(f => ({ ...f, anio: e.target.value }))}>
                                     {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
+                                </Select>
                             </div>
                         </div>
                     </div>
 
-                    <div className="form-group">
-                        <label className="form-label">Descripción Detallada *</label>
-                        <textarea className="form-input" rows={3} value={editTarget ? editForm.descripcion : createForm.descripcion}
-                            onChange={e => editTarget ? setEditForm(f => ({ ...f, descripcion: e.target.value })) : setCreateForm(f => ({ ...f, descripcion: e.target.value }))}
-                            placeholder="Justificación y desglose del egreso..." style={{ resize: 'none' }} />
-                    </div>
+                    <Textarea
+                        dense
+                        label="Descripción Detallada *"
+                        rows={3}
+                        value={editTarget ? editForm.descripcion : createForm.descripcion}
+                        onChange={e => editTarget ? setEditForm(f => ({ ...f, descripcion: e.target.value })) : setCreateForm(f => ({ ...f, descripcion: e.target.value }))}
+                        placeholder="Justificación y desglose del egreso..."
+                        style={{ resize: 'none' }}
+                    />
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="form-group">
-                            <label className="form-label">Importe *</label>
+                        <div className="input-group input-group--dense">
+                            <label className="input-label">Importe *</label>
                             <div className="flex gap-3">
-                                <select
-                                    className="form-input"
+                                <Select
+                                    dense
                                     style={{ maxWidth: '6.5rem' }}
                                     value={editTarget ? editForm.moneda : createForm.moneda}
                                     onChange={e => editTarget ? setEditForm(f => ({ ...f, moneda: e.target.value })) : setCreateForm(f => ({ ...f, moneda: e.target.value }))}
                                 >
                                     <option value="ARS">ARS</option>
                                     <option value="USD">USD</option>
-                                </select>
+                                </Select>
                                 <div className="flex-1">
                                     <div className="text-accent font-black">{(editTarget ? editForm.moneda : createForm.moneda) === 'USD' ? 'US$' : '$'}</div>
-                                    <input type="number" className="form-input font-black text-xl" value={editTarget ? editForm.monto : createForm.monto}
+                                    <Input dense type="number" className="font-black text-xl" value={editTarget ? editForm.monto : createForm.monto}
                                         onChange={e => editTarget ? setEditForm(f => ({ ...f, monto: e.target.value })) : setCreateForm(f => ({ ...f, monto: e.target.value }))} />
                                 </div>
                             </div>
                         </div>
-                        <div className="form-group">
-                            <label className="form-label">Plaza / Sucursal</label>
-                            <select className="form-input" value={editTarget ? editForm.sucursalId : createForm.sucursalId}
-                                onChange={e => editTarget ? setEditForm(f => ({ ...f, sucursalId: e.target.value })) : setCreateForm(f => ({ ...f, sucursalId: e.target.value }))}>
-                                <option value="">CENTRALIZADO (CORPORATIVO)</option>
-                                {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
-                            </select>
-                        </div>
+                        <Select
+                            dense
+                            label="Plaza / Sucursal"
+                            placeholder="CENTRALIZADO (CORPORATIVO)"
+                            options={sucursales.map(s => ({ value: s.id, label: s.nombre.toUpperCase() }))}
+                            value={editTarget ? editForm.sucursalId : createForm.sucursalId}
+                            onChange={e => editTarget ? setEditForm(f => ({ ...f, sucursalId: e.target.value })) : setCreateForm(f => ({ ...f, sucursalId: e.target.value }))}
+                        />
                     </div>
 
-                    <div className="form-group">
-                        <label className="form-label">Link de Comprobante Digital (PDF/IMG)</label>
-                        <div>
-                            <ExternalLink size={14} className="text-muted" />
-                            <input className="form-input text-xs" value={editTarget ? editForm.comprobanteUrl : createForm.comprobanteUrl}
-                                onChange={e => editTarget ? setEditForm(f => ({ ...f, comprobanteUrl: e.target.value })) : setCreateForm(f => ({ ...f, comprobanteUrl: e.target.value }))}
-                                placeholder="https://bucket-almacenamiento.com/factura-123.pdf" />
-                        </div>
-                    </div>
+                    <Input
+                        dense
+                        label="Link de Comprobante Digital (PDF/IMG)"
+                        icon={<ExternalLink size={14} />}
+                        className="text-xs"
+                        value={editTarget ? editForm.comprobanteUrl : createForm.comprobanteUrl}
+                        onChange={e => editTarget ? setEditForm(f => ({ ...f, comprobanteUrl: e.target.value })) : setCreateForm(f => ({ ...f, comprobanteUrl: e.target.value }))}
+                        placeholder="https://bucket-almacenamiento.com/factura-123.pdf"
+                    />
 
                     {(createError || editError) && (
                         <div className="uploader-alert uploader-alert-error">

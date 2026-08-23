@@ -12,6 +12,8 @@ import { formatFecha } from '../../utils/fecha';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
 import { FileUploader } from '../../components/ui/FileUploader';
 import { useUIStore } from '../../store/uiStore';
 import { waShareLink } from '../../utils/whatsapp';
@@ -785,28 +787,24 @@ const VehiculoDetallePage = () => {
                             <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1.5rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                 <h4 style={{ fontWeight: 700, fontSize: 'var(--text-base)', marginBottom: '0.25rem' }}>Nuevo archivo</h4>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <div>
-                                        <label className="form-label">Tipo</label>
-                                        <select
-                                            className="form-input"
-                                            value={archivoTipo}
-                                            onChange={e => setArchivoTipo(e.target.value)}
-                                        >
-                                            {TIPO_ARCHIVO_OPTS.map(t => (
-                                                <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="form-label">Descripción</label>
-                                        <input
-                                            type="text"
-                                            className="form-input"
-                                            placeholder="Descripción opcional"
-                                            value={archivoDescripcion}
-                                            onChange={e => setArchivoDescripcion(e.target.value)}
-                                        />
-                                    </div>
+                                    <Select
+                                        dense
+                                        label="Tipo"
+                                        value={archivoTipo}
+                                        onChange={e => setArchivoTipo(e.target.value)}
+                                    >
+                                        {TIPO_ARCHIVO_OPTS.map(t => (
+                                            <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                                        ))}
+                                    </Select>
+                                    <Input
+                                        dense
+                                        label="Descripción"
+                                        type="text"
+                                        placeholder="Descripción opcional"
+                                        value={archivoDescripcion}
+                                        onChange={e => setArchivoDescripcion(e.target.value)}
+                                    />
                                 </div>
                                 <FileUploader
                                     endpoint={vehiculoArchivosApi.uploadEndpoint}
@@ -918,32 +916,14 @@ const VehiculoDetallePage = () => {
                         {showGastoForm && (
                             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '1.25rem', marginBottom: '1rem' }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                                    <div>
-                                        <label className="form-label">Categoría*</label>
-                                        <select className="form-input" value={gastoForm.categoriaId} onChange={e => setGastoForm(f => ({ ...f, categoriaId: e.target.value }))}>
-                                            <option value="">Seleccionar...</option>
-                                            {gastosCat.map((c: GastoCategoria) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="form-label">Monto*</label>
-                                        <input type="number" className="form-input" value={gastoForm.monto} onChange={e => setGastoForm(f => ({ ...f, monto: e.target.value }))} placeholder="0.00" min="0" step="0.01" />
-                                    </div>
-                                    <div>
-                                        <label className="form-label">Moneda*</label>
-                                        <select className="form-input" value={gastoForm.moneda} onChange={e => setGastoForm(f => ({ ...f, moneda: e.target.value }))}>
-                                            <option value="ARS">ARS</option>
-                                            <option value="USD">USD</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="form-label">Fecha*</label>
-                                        <input type="date" className="form-input" value={gastoForm.fechaGasto} onChange={e => setGastoForm(f => ({ ...f, fechaGasto: e.target.value }))} />
-                                    </div>
-                                    <div>
-                                        <label className="form-label">Descripción</label>
-                                        <input className="form-input" value={gastoForm.descripcion} onChange={e => setGastoForm(f => ({ ...f, descripcion: e.target.value }))} placeholder="Opcional" />
-                                    </div>
+                                    <Select dense label="Categoría*" placeholder="Seleccionar..." options={gastosCat.map((c: GastoCategoria) => ({ value: c.id, label: c.nombre }))} value={gastoForm.categoriaId} onChange={e => setGastoForm(f => ({ ...f, categoriaId: e.target.value }))} />
+                                    <Input dense label="Monto*" type="number" value={gastoForm.monto} onChange={e => setGastoForm(f => ({ ...f, monto: e.target.value }))} placeholder="0.00" min="0" step="0.01" />
+                                    <Select dense label="Moneda*" value={gastoForm.moneda} onChange={e => setGastoForm(f => ({ ...f, moneda: e.target.value }))}>
+                                        <option value="ARS">ARS</option>
+                                        <option value="USD">USD</option>
+                                    </Select>
+                                    <Input dense label="Fecha*" type="date" value={gastoForm.fechaGasto} onChange={e => setGastoForm(f => ({ ...f, fechaGasto: e.target.value }))} />
+                                    <Input dense label="Descripción" value={gastoForm.descripcion} onChange={e => setGastoForm(f => ({ ...f, descripcion: e.target.value }))} placeholder="Opcional" />
                                 </div>
                                 {gastoFormError && <p style={{ color: 'var(--danger)', fontSize: 'var(--text-sm)', marginBottom: '0.5rem' }}>{gastoFormError}</p>}
                                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
@@ -975,18 +955,9 @@ const VehiculoDetallePage = () => {
                             <div className="edit-gasto-modal glass" style={{ marginTop: '1rem', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--accent)' }}>
                                 <h4 style={{ marginBottom: '1rem', fontWeight: 700 }}>Editar Gasto: {editGasto.categoria?.nombre}</h4>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                                    <div>
-                                        <label className="form-label">Monto</label>
-                                        <input type="number" className="form-input" value={editGastoForm.monto} onChange={e => setEditGastoForm(f => ({ ...f, monto: e.target.value }))} />
-                                    </div>
-                                    <div>
-                                        <label className="form-label">Fecha</label>
-                                        <input type="date" className="form-input" value={editGastoForm.fechaGasto} onChange={e => setEditGastoForm(f => ({ ...f, fechaGasto: e.target.value }))} />
-                                    </div>
-                                    <div>
-                                        <label className="form-label">Descripción</label>
-                                        <input className="form-input" value={editGastoForm.descripcion} onChange={e => setEditGastoForm(f => ({ ...f, descripcion: e.target.value }))} />
-                                    </div>
+                                    <Input dense label="Monto" type="number" value={editGastoForm.monto} onChange={e => setEditGastoForm(f => ({ ...f, monto: e.target.value }))} />
+                                    <Input dense label="Fecha" type="date" value={editGastoForm.fechaGasto} onChange={e => setEditGastoForm(f => ({ ...f, fechaGasto: e.target.value }))} />
+                                    <Input dense label="Descripción" value={editGastoForm.descripcion} onChange={e => setEditGastoForm(f => ({ ...f, descripcion: e.target.value }))} />
                                 </div>
                                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                                     <Button variant="secondary" size="sm" onClick={() => setEditGasto(null)}>Cancelar</Button>

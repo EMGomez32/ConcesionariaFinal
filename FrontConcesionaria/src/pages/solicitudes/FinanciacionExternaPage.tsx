@@ -5,6 +5,9 @@ import {
     Eye, Trash2, Edit, ArrowRight, ExternalLink, Paperclip
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import financierasApi from '../../api/financieras.api';
 import type { Financiera, CreateFinancieraDto } from '../../api/financieras.api';
 import solicitudesFinanciacionApi from '../../api/solicitudesFinanciacion.api';
@@ -680,27 +683,17 @@ export default function FinanciacionExternaPage() {
                         {editingFinanciera ? 'Editar Financiera' : 'Nueva Financiera'}
                     </h2>
                     <div style={{ display: 'grid', gap: '1rem' }}>
-                        <FormField label="Nombre *">
-                            <input className="form-input" value={finForm.nombre} onChange={e => setFinForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Nombre de la entidad" />
-                        </FormField>
-                        <FormField label="Tipo">
-                            <select className="form-input" value={finForm.tipo} onChange={e => setFinForm(p => ({ ...p, tipo: e.target.value as 'financiera' | 'banco' | 'otra' }))}>
-                                <option value="financiera">Financiera</option>
-                                <option value="banco">Banco</option>
-                                <option value="otra">Otra</option>
-                            </select>
-                        </FormField>
+                        <Input dense label="Nombre *" value={finForm.nombre} onChange={e => setFinForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Nombre de la entidad" />
+                        <Select dense label="Tipo" value={finForm.tipo} onChange={e => setFinForm(p => ({ ...p, tipo: e.target.value as 'financiera' | 'banco' | 'otra' }))}>
+                            <option value="financiera">Financiera</option>
+                            <option value="banco">Banco</option>
+                            <option value="otra">Otra</option>
+                        </Select>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <FormField label="Contacto">
-                                <input className="form-input" value={finForm.contacto} onChange={e => setFinForm(p => ({ ...p, contacto: e.target.value }))} placeholder="Nombre del contacto" />
-                            </FormField>
-                            <FormField label="Teléfono">
-                                <input className="form-input" value={finForm.telefono} onChange={e => setFinForm(p => ({ ...p, telefono: e.target.value }))} placeholder="Teléfono" />
-                            </FormField>
+                            <Input dense label="Contacto" value={finForm.contacto} onChange={e => setFinForm(p => ({ ...p, contacto: e.target.value }))} placeholder="Nombre del contacto" />
+                            <Input dense label="Teléfono" value={finForm.telefono} onChange={e => setFinForm(p => ({ ...p, telefono: e.target.value }))} placeholder="Teléfono" />
                         </div>
-                        <FormField label="Email">
-                            <input className="form-input" type="email" value={finForm.email} onChange={e => setFinForm(p => ({ ...p, email: e.target.value }))} placeholder="email@financiera.com" />
-                        </FormField>
+                        <Input dense label="Email" type="email" value={finForm.email} onChange={e => setFinForm(p => ({ ...p, email: e.target.value }))} placeholder="email@financiera.com" />
                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
                             <input type="checkbox" checked={finForm.activo} onChange={e => setFinForm(p => ({ ...p, activo: e.target.checked }))} />
                             <span>Activa</span>
@@ -735,47 +728,34 @@ export default function FinanciacionExternaPage() {
                     <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.25rem', fontWeight: 700 }}>Nueva Solicitud de Financiación</h2>
                     <div style={{ display: 'grid', gap: '1rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <FormField label="Cliente *">
-                                <select className="form-input" value={solForm.clienteId} onChange={e => setSolForm(p => ({ ...p, clienteId: Number(e.target.value) }))}>
-                                    <option value={0}>Seleccionar cliente...</option>
-                                    {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                                </select>
-                            </FormField>
-                            <FormField label="Financiera *">
-                                <select className="form-input" value={solForm.financieraId} onChange={e => setSolForm(p => ({ ...p, financieraId: Number(e.target.value) }))}>
-                                    <option value={0}>Seleccionar financiera...</option>
-                                    {financierasCatalog.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}
-                                </select>
-                            </FormField>
+                            <Select dense label="Cliente *" value={solForm.clienteId} onChange={e => setSolForm(p => ({ ...p, clienteId: Number(e.target.value) }))}>
+                                <option value={0}>Seleccionar cliente...</option>
+                                {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                            </Select>
+                            <Select dense label="Financiera *" value={solForm.financieraId} onChange={e => setSolForm(p => ({ ...p, financieraId: Number(e.target.value) }))}>
+                                <option value={0}>Seleccionar financiera...</option>
+                                {financierasCatalog.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}
+                            </Select>
                         </div>
-                        <FormField label="Vehículo a financiar">
-                            <select
-                                className="form-input"
-                                value={solForm.vehiculoId ?? 0}
-                                onChange={e => setSolForm(p => ({ ...p, vehiculoId: Number(e.target.value) || undefined }))}
-                            >
-                                <option value={0}>Sin definir (pre-aprobación)</option>
-                                {vehiculos.map(v => (
-                                    <option key={v.id} value={v.id}>
-                                        {etiquetaVehiculo(v)}{v.estado === 'preparacion' ? ' · en preparación' : ''}
-                                    </option>
-                                ))}
-                            </select>
-                        </FormField>
+                        <Select
+                            dense
+                            label="Vehículo a financiar"
+                            value={solForm.vehiculoId ?? 0}
+                            onChange={e => setSolForm(p => ({ ...p, vehiculoId: Number(e.target.value) || undefined }))}
+                        >
+                            <option value={0}>Sin definir (pre-aprobación)</option>
+                            {vehiculos.map(v => (
+                                <option key={v.id} value={v.id}>
+                                    {etiquetaVehiculo(v)}{v.estado === 'preparacion' ? ' · en preparación' : ''}
+                                </option>
+                            ))}
+                        </Select>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <FormField label="Monto Solicitado">
-                                <input className="form-input" type="number" min="0" placeholder="0.00" value={solForm.montoSolicitado ?? ''} onChange={e => setSolForm(p => ({ ...p, montoSolicitado: e.target.value ? Number(e.target.value) : undefined }))} />
-                            </FormField>
-                            <FormField label="Plazo (cuotas)">
-                                <input className="form-input" type="number" min="1" placeholder="Ej: 24" value={solForm.plazoCuotas ?? ''} onChange={e => setSolForm(p => ({ ...p, plazoCuotas: e.target.value ? Number(e.target.value) : undefined }))} />
-                            </FormField>
+                            <Input dense label="Monto Solicitado" type="number" min="0" placeholder="0.00" value={solForm.montoSolicitado ?? ''} onChange={e => setSolForm(p => ({ ...p, montoSolicitado: e.target.value ? Number(e.target.value) : undefined }))} />
+                            <Input dense label="Plazo (cuotas)" type="number" min="1" placeholder="Ej: 24" value={solForm.plazoCuotas ?? ''} onChange={e => setSolForm(p => ({ ...p, plazoCuotas: e.target.value ? Number(e.target.value) : undefined }))} />
                         </div>
-                        <FormField label="Tasa Estimada (% mensual)">
-                            <input className="form-input" type="number" min="0" step="0.01" placeholder="Ej: 3.5" value={solForm.tasaEstimada ?? ''} onChange={e => setSolForm(p => ({ ...p, tasaEstimada: e.target.value ? Number(e.target.value) : undefined }))} />
-                        </FormField>
-                        <FormField label="Observaciones">
-                            <textarea className="form-input" rows={3} placeholder="Notas adicionales..." value={solForm.observaciones} onChange={e => setSolForm(p => ({ ...p, observaciones: e.target.value }))} style={{ resize: 'vertical' }} />
-                        </FormField>
+                        <Input dense label="Tasa Estimada (% mensual)" type="number" min="0" step="0.01" placeholder="Ej: 3.5" value={solForm.tasaEstimada ?? ''} onChange={e => setSolForm(p => ({ ...p, tasaEstimada: e.target.value ? Number(e.target.value) : undefined }))} />
+                        <Textarea dense label="Observaciones" rows={3} placeholder="Notas adicionales..." value={solForm.observaciones} onChange={e => setSolForm(p => ({ ...p, observaciones: e.target.value }))} style={{ resize: 'vertical' }} />
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                         <Button variant="secondary" onClick={() => setShowSolModal(false)}>Cancelar</Button>
@@ -918,14 +898,11 @@ export default function FinanciacionExternaPage() {
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
                         Estado actual: <strong style={{ color: ESTADO_SOL_COLORS[transicionSol.estado] }}>{ESTADO_SOL_LABELS[transicionSol.estado]}</strong>
                     </p>
-                    <FormField label="Nuevo Estado *">
-                        <select className="form-input" value={nuevoEstado} onChange={e => { setNuevoEstado(e.target.value as EstadoSolicitud); setExtraTransicion({}); }}>
-                            <option value="">Seleccionar...</option>
-                            {ESTADO_SOL_TRANSITIONS[transicionSol.estado].map(e => (
-                                <option key={e} value={e}>{ESTADO_SOL_LABELS[e]}</option>
-                            ))}
-                        </select>
-                    </FormField>
+                    <Select dense label="Nuevo Estado *" placeholder="Seleccionar..." value={nuevoEstado} onChange={e => { setNuevoEstado(e.target.value as EstadoSolicitud); setExtraTransicion({}); }}>
+                        {ESTADO_SOL_TRANSITIONS[transicionSol.estado].map(e => (
+                            <option key={e} value={e}>{ESTADO_SOL_LABELS[e]}</option>
+                        ))}
+                    </Select>
 
                     {nuevoEstado === 'aprobada' && (
                         <div style={{ marginTop: '1rem', display: 'grid', gap: '0.75rem' }}>
@@ -933,23 +910,15 @@ export default function FinanciacionExternaPage() {
                                 <CheckCircle size={14} /> Complete los datos de aprobación
                             </p>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                                <FormField label="Monto Aprobado">
-                                    <input className="form-input" type="number" placeholder="0.00" value={extraTransicion.montoAprobado ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, montoAprobado: e.target.value }))} />
-                                </FormField>
-                                <FormField label="Tasa Final (%)">
-                                    <input className="form-input" type="number" step="0.01" placeholder="0.0" value={extraTransicion.tasaFinal ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, tasaFinal: e.target.value }))} />
-                                </FormField>
+                                <Input dense label="Monto Aprobado" type="number" placeholder="0.00" value={extraTransicion.montoAprobado ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, montoAprobado: e.target.value }))} />
+                                <Input dense label="Tasa Final (%)" type="number" step="0.01" placeholder="0.0" value={extraTransicion.tasaFinal ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, tasaFinal: e.target.value }))} />
                             </div>
-                            <FormField label="Fecha de Respuesta">
-                                <input className="form-input" type="date" value={extraTransicion.fechaRespuesta ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, fechaRespuesta: e.target.value }))} />
-                            </FormField>
+                            <Input dense label="Fecha de Respuesta" type="date" value={extraTransicion.fechaRespuesta ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, fechaRespuesta: e.target.value }))} />
                         </div>
                     )}
 
                     <div style={{ marginTop: '1rem' }}>
-                        <FormField label="Observaciones">
-                            <textarea className="form-input" rows={2} placeholder="Notas opcionales..." value={extraTransicion.observaciones ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, observaciones: e.target.value }))} style={{ resize: 'vertical' }} />
-                        </FormField>
+                        <Textarea dense label="Observaciones" rows={2} placeholder="Notas opcionales..." value={extraTransicion.observaciones ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, observaciones: e.target.value }))} style={{ resize: 'vertical' }} />
                     </div>
 
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
@@ -987,15 +956,6 @@ function ModalOverlay({ children, onClose, wide }: { children: React.ReactNode; 
             <div className="glass" style={{ borderRadius: '1rem', padding: '2rem', width: '100%', maxWidth: wide ? '800px' : '520px', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
                 {children}
             </div>
-        </div>
-    );
-}
-
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>{label}</label>
-            {children}
         </div>
     );
 }

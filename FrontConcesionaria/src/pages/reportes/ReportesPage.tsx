@@ -29,6 +29,7 @@ import DataTable, { type Column } from '../../components/ui/DataTable';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
+import Input from '../../components/ui/Input';
 import { StatCard } from './StatCard';
 import ObjetivosTab from './ObjetivosTab';
 
@@ -1078,26 +1079,20 @@ const ReportesPage = () => {
                 }
             >
                 <div>
-                    <div className="form-group">
-                        <label className="form-label">Fecha</label>
-                        <input type="date" className="form-input" value={cotFecha} onChange={(e) => setCotFecha(e.target.value)} max={hoyStr} />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Valor (ARS por 1 USD) *</label>
-                        <div>
-                            <div className="text-accent font-black">$</div>
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                className="form-input font-black text-xl"
-                                value={cotValor}
-                                onChange={(e) => setCotValor(e.target.value)}
-                                placeholder="1450"
-                                autoFocus
-                            />
-                        </div>
-                    </div>
+                    <Input dense label="Fecha" type="date" value={cotFecha} onChange={(e) => setCotFecha(e.target.value)} max={hoyStr} />
+                    <Input
+                        dense
+                        label="Valor (ARS por 1 USD) *"
+                        icon={<span className="text-accent font-black">$</span>}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="font-black text-xl"
+                        value={cotValor}
+                        onChange={(e) => setCotValor(e.target.value)}
+                        placeholder="1450"
+                        autoFocus
+                    />
                     {cotError && (
                         <div className="uploader-alert uploader-alert-error">
                             <AlertTriangle size={14} />
@@ -1122,14 +1117,8 @@ const ReportesPage = () => {
                 }
             >
                 <div>
-                    <div className="form-group">
-                        <label className="form-label">Vencimiento VTV</label>
-                        <input type="date" className="form-input" value={renovarVtv} onChange={(e) => setRenovarVtv(e.target.value)} />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Vencimiento seguro</label>
-                        <input type="date" className="form-input" value={renovarSeguro} onChange={(e) => setRenovarSeguro(e.target.value)} />
-                    </div>
+                    <Input dense label="Vencimiento VTV" type="date" value={renovarVtv} onChange={(e) => setRenovarVtv(e.target.value)} />
+                    <Input dense label="Vencimiento seguro" type="date" value={renovarSeguro} onChange={(e) => setRenovarSeguro(e.target.value)} />
                     <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>Dejá una fecha vacía para borrar ese vencimiento.</p>
                     {renovarError && (
                         <div className="uploader-alert uploader-alert-error">

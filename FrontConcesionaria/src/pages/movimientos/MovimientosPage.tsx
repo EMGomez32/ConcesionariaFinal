@@ -9,6 +9,9 @@ import { useUIStore } from '../../store/uiStore';
 import Badge, { type BadgeVariant } from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import {
     Plus, RefreshCw,
     ArrowLeftRight, ChevronLeft, ChevronRight,
@@ -394,63 +397,57 @@ const MovimientosPage = () => {
                 }
             >
                 <div>
-                    <div className="form-group">
-                        <label className="form-label">Unidad Vehicular a Movilizar *</label>
-                        <select className="form-input text-lg font-bold" value={form.vehiculoId} onChange={e => setForm(f => ({ ...f, vehiculoId: e.target.value }))}>
-                            <option value="">Selección de unidad por Dominio o Modelo...</option>
-                            {vehiculos.map(v => (
-                                <option key={v.id} value={v.id}>
-                                    {`${v.marca} ${v.modelo} ${v.version ? v.version : ''} (${v.dominio || 'SIN PATENTE'})`.toUpperCase()}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                    <Select
+                        dense
+                        label="Unidad Vehicular a Movilizar *"
+                        className="text-lg font-bold"
+                        placeholder="Selección de unidad por Dominio o Modelo..."
+                        options={vehiculos.map(v => ({
+                            value: v.id,
+                            label: `${v.marca} ${v.modelo} ${v.version ? v.version : ''} (${v.dominio || 'SIN PATENTE'})`.toUpperCase(),
+                        }))}
+                        value={form.vehiculoId}
+                        onChange={e => setForm(f => ({ ...f, vehiculoId: e.target.value }))}
+                    />
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="form-group">
-                            <label className="form-label">Tipo de movimiento *</label>
-                            <select className="form-input" value={form.modalidad} onChange={e => setForm(f => ({ ...f, modalidad: e.target.value }))}>
-                                <option value="traslado">Traslado a otra sucursal</option>
-                                <option value="preparacion">Enviar a preparación</option>
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Fecha</label>
-                            <input type="date" className="form-input" value={form.fechaMovimiento} onChange={e => setForm(f => ({ ...f, fechaMovimiento: e.target.value }))} />
-                        </div>
+                        <Select dense label="Tipo de movimiento *" value={form.modalidad} onChange={e => setForm(f => ({ ...f, modalidad: e.target.value }))}>
+                            <option value="traslado">Traslado a otra sucursal</option>
+                            <option value="preparacion">Enviar a preparación</option>
+                        </Select>
+                        <Input dense label="Fecha" type="date" value={form.fechaMovimiento} onChange={e => setForm(f => ({ ...f, fechaMovimiento: e.target.value }))} />
                     </div>
 
                     {form.modalidad === 'traslado' ? (
-                        <div className="form-group">
-                            <label className="form-label">Sucursal de destino *</label>
-                            <div>
-                                <MapPin size={16} className="text-accent" />
-                                <select className="form-input" value={form.hastaSucursalId} onChange={e => setForm(f => ({ ...f, hastaSucursalId: e.target.value }))}>
-                                    <option value="">Seleccionar sucursal...</option>
-                                    {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
-                                </select>
-                            </div>
+                        <div>
+                            <MapPin size={16} className="text-accent" />
+                            <Select
+                                dense
+                                label="Sucursal de destino *"
+                                placeholder="Seleccionar sucursal..."
+                                options={sucursales.map(s => ({ value: s.id, label: s.nombre.toUpperCase() }))}
+                                value={form.hastaSucursalId}
+                                onChange={e => setForm(f => ({ ...f, hastaSucursalId: e.target.value }))}
+                            />
                         </div>
                     ) : (
-                        <div className="form-group">
-                            <label className="form-label">Proveedor de destino *</label>
-                            <div>
-                                <MapPin size={16} className="text-accent" />
-                                <select
-                                    className="form-input"
-                                    value={form.proveedorDestinoId}
-                                    onChange={e => setForm(f => ({ ...f, proveedorDestinoId: e.target.value }))}
-                                >
-                                    <option value="">Seleccionar proveedor...</option>
-                                    {destinosPorTipo.map(grupo => (
-                                        <optgroup key={grupo.tipo} label={grupo.label}>
-                                            {grupo.proveedores.map(p => (
-                                                <option key={p.id} value={p.id}>{p.nombre.toUpperCase()}</option>
-                                            ))}
-                                        </optgroup>
-                                    ))}
-                                </select>
-                            </div>
+                        <div>
+                            <MapPin size={16} className="text-accent" />
+                            <Select
+                                dense
+                                label="Proveedor de destino *"
+                                placeholder="Seleccionar proveedor..."
+                                value={form.proveedorDestinoId}
+                                onChange={e => setForm(f => ({ ...f, proveedorDestinoId: e.target.value }))}
+                            >
+                                {destinosPorTipo.map(grupo => (
+                                    <optgroup key={grupo.tipo} label={grupo.label}>
+                                        {grupo.proveedores.map(p => (
+                                            <option key={p.id} value={p.id}>{p.nombre.toUpperCase()}</option>
+                                        ))}
+                                    </optgroup>
+                                ))}
+                            </Select>
                             {destinosPorTipo.length === 0 && (
                                 <p className="text-xs text-muted" style={{ marginTop: '0.5rem' }}>
                                     No hay proveedores activos a los que enviar la unidad.{' '}
@@ -460,10 +457,7 @@ const MovimientosPage = () => {
                         </div>
                     )}
 
-                    <div className="form-group">
-                        <label className="form-label">Justificación Operacional / Notas</label>
-                        <textarea className="form-input" rows={3} placeholder="Ej: Cumplimiento de reserva en sucursal Norte, rotación de showroom..." value={form.motivo} onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))} style={{ resize: 'none' }} />
-                    </div>
+                    <Textarea dense label="Justificación Operacional / Notas" rows={3} placeholder="Ej: Cumplimiento de reserva en sucursal Norte, rotación de showroom..." value={form.motivo} onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))} style={{ resize: 'none' }} />
 
                     {formError && (
                         <div className="uploader-alert uploader-alert-error">

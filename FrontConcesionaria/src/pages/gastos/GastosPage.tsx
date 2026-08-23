@@ -13,6 +13,9 @@ import type { ApiError } from '../../types/api.types';
 
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import Modal from '../../components/ui/Modal';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 
@@ -333,85 +336,67 @@ const GastosPage: React.FC = () => {
                 <div>
                     {!editGasto && (
                         <>
-                            <div className="form-group">
-                                <label className="form-label">Unidad de Stock *</label>
-                                <select
-                                    className="form-input"
-                                    value={gastoForm.vehiculoId}
-                                    onChange={e => setGastoForm(f => ({ ...f, vehiculoId: e.target.value }))}
-                                >
-                                    <option value="">Seleccionar vehículo...</option>
-                                    {vehiculoData?.results?.map(v => (
-                                        <option key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.dominio || 'S/D'})</option>
-                                    ))}
-                                </select>
-                            </div>
+                            <Select
+                                dense
+                                label="Unidad de Stock *"
+                                placeholder="Seleccionar vehículo..."
+                                value={gastoForm.vehiculoId}
+                                onChange={e => setGastoForm(f => ({ ...f, vehiculoId: e.target.value }))}
+                            >
+                                {vehiculoData?.results?.map(v => (
+                                    <option key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.dominio || 'S/D'})</option>
+                                ))}
+                            </Select>
 
-                            <div className="form-group">
-                                <label className="form-label">Proveedor *</label>
-                                <select
-                                    className="form-input"
-                                    value={gastoForm.proveedorId}
-                                    onChange={e => setGastoForm(f => ({ ...f, proveedorId: e.target.value }))}
-                                >
-                                    <option value="">Seleccionar proveedor...</option>
-                                    {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                                </select>
-                                {proveedores.length === 0 && (
-                                    <p className="text-2xs text-muted">
-                                        No hay proveedores cargados. Agregalos en la sección Proveedores.
-                                    </p>
-                                )}
-                            </div>
+                            <Select
+                                dense
+                                label="Proveedor *"
+                                placeholder="Seleccionar proveedor..."
+                                hint={proveedores.length === 0 ? 'No hay proveedores cargados. Agregalos en la sección Proveedores.' : undefined}
+                                value={gastoForm.proveedorId}
+                                onChange={e => setGastoForm(f => ({ ...f, proveedorId: e.target.value }))}
+                            >
+                                {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                            </Select>
                         </>
                     )}
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="form-group">
-                            <label className="form-label">Importe *</label>
-                            <div>
-                                <DollarSign size={16} className="text-muted" />
-                                <input
-                                    type="number"
-                                    className="form-input"
-                                    value={editGasto ? editGastoForm.monto : gastoForm.monto}
-                                    onChange={e => editGasto ? setEditGastoForm(f => ({ ...f, monto: e.target.value })) : setGastoForm(f => ({ ...f, monto: e.target.value }))}
-                                />
-                            </div>
-                        </div>
+                        <Input
+                            dense
+                            label="Importe *"
+                            icon={<DollarSign size={16} />}
+                            type="number"
+                            value={editGasto ? editGastoForm.monto : gastoForm.monto}
+                            onChange={e => editGasto ? setEditGastoForm(f => ({ ...f, monto: e.target.value })) : setGastoForm(f => ({ ...f, monto: e.target.value }))}
+                        />
                         {!editGasto && (
-                            <div className="form-group">
-                                <label className="form-label">Moneda *</label>
-                                <select
-                                    className="form-input"
-                                    value={gastoForm.moneda}
-                                    onChange={e => setGastoForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}
-                                >
-                                    <option value="ARS">ARS - Pesos</option>
-                                    <option value="USD">USD - Dólares</option>
-                                </select>
-                            </div>
+                            <Select
+                                dense
+                                label="Moneda *"
+                                value={gastoForm.moneda}
+                                onChange={e => setGastoForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}
+                            >
+                                <option value="ARS">ARS - Pesos</option>
+                                <option value="USD">USD - Dólares</option>
+                            </Select>
                         )}
-                        <div className="form-group">
-                            <label className="form-label">Fecha de Ejecución *</label>
-                            <input
-                                type="date"
-                                className="form-input"
-                                value={editGasto ? editGastoForm.fechaGasto : gastoForm.fechaGasto}
-                                onChange={e => editGasto ? setEditGastoForm(f => ({ ...f, fechaGasto: e.target.value })) : setGastoForm(f => ({ ...f, fechaGasto: e.target.value }))}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="form-group">
-                        <label className="form-label">Descripción / Justificación</label>
-                        <textarea
-                            className="form-input"
-                            placeholder="Detalles sobre el mantenimiento, repuestos, etc..."
-                            value={editGasto ? editGastoForm.descripcion : gastoForm.descripcion}
-                            onChange={e => editGasto ? setEditGastoForm(f => ({ ...f, descripcion: e.target.value })) : setGastoForm(f => ({ ...f, descripcion: e.target.value }))}
+                        <Input
+                            dense
+                            label="Fecha de Ejecución *"
+                            type="date"
+                            value={editGasto ? editGastoForm.fechaGasto : gastoForm.fechaGasto}
+                            onChange={e => editGasto ? setEditGastoForm(f => ({ ...f, fechaGasto: e.target.value })) : setGastoForm(f => ({ ...f, fechaGasto: e.target.value }))}
                         />
                     </div>
+
+                    <Textarea
+                        dense
+                        label="Descripción / Justificación"
+                        placeholder="Detalles sobre el mantenimiento, repuestos, etc..."
+                        value={editGasto ? editGastoForm.descripcion : gastoForm.descripcion}
+                        onChange={e => editGasto ? setEditGastoForm(f => ({ ...f, descripcion: e.target.value })) : setGastoForm(f => ({ ...f, descripcion: e.target.value }))}
+                    />
 
                     <div className="form-actions">
                         <Button variant="secondary" onClick={() => { setShowCreateGasto(false); setEditGasto(null); }}>Cancelar</Button>

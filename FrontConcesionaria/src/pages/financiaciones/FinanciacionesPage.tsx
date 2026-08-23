@@ -8,6 +8,9 @@ import Badge, { type BadgeVariant } from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import {
     Plus, Search, Eye, Trash2, RefreshCw,
     CreditCard, DollarSign, ChevronLeft,
@@ -752,86 +755,110 @@ const FinanciacionesPage = () => {
                 )}
             >
                 <div>
-                    <div className="form-group col-span-2">
-                        <label className="form-label text-info">Venta de Origen (Documento Base) *</label>
-                        <select className="form-input text-lg font-bold" value={form.ventaId || ''} onChange={e => setForm(f => ({ ...f, ventaId: +e.target.value }))}>
-                            <option value="">SELECCIONAR CONTRATO DE TRANSFERENCIA...</option>
-                            {ventas.map(v => (
-                                <option key={v.id} value={v.id}>
-                                    {`#${String(v.id).padStart(5, '0')} — CLIENTE: ${v.cliente?.nombre?.toUpperCase()} — VEHÍCULO: ${v.vehiculo?.marca?.toUpperCase()} ${v.vehiculo?.modelo?.toUpperCase()}`}
-                                </option>
-                            ))}
-                        </select>
+                    <Select
+                        dense
+                        label="Venta de Origen (Documento Base) *"
+                        containerClassName="col-span-2"
+                        className="text-lg font-bold"
+                        placeholder="SELECCIONAR CONTRATO DE TRANSFERENCIA..."
+                        value={form.ventaId || ''}
+                        onChange={e => setForm(f => ({ ...f, ventaId: +e.target.value }))}
+                    >
+                        {ventas.map(v => (
+                            <option key={v.id} value={v.id}>
+                                {`#${String(v.id).padStart(5, '0')} — CLIENTE: ${v.cliente?.nombre?.toUpperCase()} — VEHÍCULO: ${v.vehiculo?.marca?.toUpperCase()} ${v.vehiculo?.modelo?.toUpperCase()}`}
+                            </option>
+                        ))}
+                    </Select>
+
+                    <div className="grid grid-cols-1 gap-8">
+                        <Select
+                            dense
+                            label="Titular Exigible *"
+                            placeholder="PERSONA FÍSICA / JURÍDICA..."
+                            value={form.clienteId || ''}
+                            onChange={e => setForm(f => ({ ...f, clienteId: +e.target.value }))}
+                        >
+                            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre.toUpperCase()}</option>)}
+                        </Select>
+                        <Select
+                            dense
+                            label="Oficial Responsable"
+                            placeholder="ASIGNAR GESTOR RECAUDADOR..."
+                            value={form.cobradorId || ''}
+                            onChange={e => setForm(f => ({ ...f, cobradorId: +e.target.value }))}
+                        >
+                            {cobradores.map(u => <option key={u.id} value={u.id}>{u.nombre.toUpperCase()}</option>)}
+                        </Select>
                     </div>
 
                     <div className="grid grid-cols-1 gap-8">
-                        <div className="form-group">
-                            <label className="form-label">Titular Exigible *</label>
-                            <select className="form-input" value={form.clienteId || ''} onChange={e => setForm(f => ({ ...f, clienteId: +e.target.value }))}>
-                                <option value="">PERSONA FÍSICA / JURÍDICA...</option>
-                                {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre.toUpperCase()}</option>)}
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Oficial Responsable</label>
-                            <select className="form-input" value={form.cobradorId || ''} onChange={e => setForm(f => ({ ...f, cobradorId: +e.target.value }))}>
-                                <option value="">ASIGNAR GESTOR RECAUDADOR...</option>
-                                {cobradores.map(u => <option key={u.id} value={u.id}>{u.nombre.toUpperCase()}</option>)}
-                            </select>
-                        </div>
+                        <Input
+                            dense
+                            label="Capital Liquidado *"
+                            icon={<DollarSign size={16} className="text-accent" />}
+                            type="number"
+                            className="font-bold"
+                            value={form.montoFinanciado || ''}
+                            onChange={e => setForm(f => ({ ...f, montoFinanciado: +e.target.value }))}
+                            placeholder="0.00"
+                        />
+                        <Select
+                            dense
+                            label="Moneda"
+                            value={form.moneda}
+                            onChange={e => setForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}
+                        >
+                            <option value="ARS">Pesos (ARS)</option>
+                            <option value="USD">Dólares (USD)</option>
+                        </Select>
+                        <Select
+                            dense
+                            label="Plan de Cuotas *"
+                            value={form.cuotas}
+                            onChange={e => setForm(f => ({ ...f, cuotas: +e.target.value }))}
+                        >
+                            {[1, 3, 6, 12, 18, 24, 36, 48, 60].map(n => <option key={n} value={n}>{n} CUOTAS MENSUALES</option>)}
+                        </Select>
+                        <Input
+                            dense
+                            label="INTERÉS MENSUAL (%)"
+                            icon={<TrendingUp size={16} className="text-info" />}
+                            type="number"
+                            step="0.1"
+                            value={form.tasaMensual}
+                            onChange={e => setForm(f => ({ ...f, tasaMensual: e.target.value }))}
+                            placeholder="0.0"
+                        />
                     </div>
 
                     <div className="grid grid-cols-1 gap-8">
-                        <div className="form-group">
-                            <label className="form-label">Capital Liquidado *</label>
-                            <div>
-                                <DollarSign size={16} className="text-accent" />
-                                <input type="number" className="form-input font-bold" value={form.montoFinanciado || ''}
-                                    onChange={e => setForm(f => ({ ...f, montoFinanciado: +e.target.value }))} placeholder="0.00" />
-                            </div>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Moneda</label>
-                            <select className="form-input" value={form.moneda}
-                                onChange={e => setForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
-                                <option value="ARS">Pesos (ARS)</option>
-                                <option value="USD">Dólares (USD)</option>
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Plan de Cuotas *</label>
-                            <select className="form-input" value={form.cuotas} onChange={e => setForm(f => ({ ...f, cuotas: +e.target.value }))}>
-                                {[1, 3, 6, 12, 18, 24, 36, 48, 60].map(n => <option key={n} value={n}>{n} CUOTAS MENSUALES</option>)}
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">INTERÉS MENSUAL (%)</label>
-                            <div>
-                                <TrendingUp size={16} className="text-info" />
-                                <input type="number" step="0.1" className="form-input" value={form.tasaMensual}
-                                    onChange={e => setForm(f => ({ ...f, tasaMensual: e.target.value }))} placeholder="0.0" />
-                            </div>
-                        </div>
+                        <Input
+                            dense
+                            label="Fecha de Inicio Contable"
+                            type="date"
+                            value={form.fechaInicio}
+                            onChange={e => setForm(f => ({ ...f, fechaInicio: e.target.value }))}
+                        />
+                        <Select
+                            dense
+                            label="Día Fijo de Cobro"
+                            value={form.diaVencimiento}
+                            onChange={e => setForm(f => ({ ...f, diaVencimiento: +e.target.value }))}
+                        >
+                            {[...Array(28)].map((_, i) => <option key={i + 1} value={i + 1}>DÍA {i + 1} DE CADA MES</option>)}
+                        </Select>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-8">
-                        <div className="form-group">
-                            <label className="form-label">Fecha de Inicio Contable</label>
-                            <input type="date" className="form-input" value={form.fechaInicio} onChange={e => setForm(f => ({ ...f, fechaInicio: e.target.value }))} />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Día Fijo de Cobro</label>
-                            <select className="form-input" value={form.diaVencimiento} onChange={e => setForm(f => ({ ...f, diaVencimiento: +e.target.value }))}>
-                                {[...Array(28)].map((_, i) => <option key={i + 1} value={i + 1}>DÍA {i + 1} DE CADA MES</option>)}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="form-group">
-                        <label className="form-label">Notas del Contrato (Observaciones)</label>
-                        <textarea className="form-input" rows={2} value={form.observaciones}
-                            onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} placeholder="ESPECIFIQUE GARANTÍAS O ACUERDOS EXCEPCIONALES..." style={{ resize: 'none' }} />
-                    </div>
+                    <Textarea
+                        dense
+                        label="Notas del Contrato (Observaciones)"
+                        rows={2}
+                        value={form.observaciones}
+                        onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))}
+                        placeholder="ESPECIFIQUE GARANTÍAS O ACUERDOS EXCEPCIONALES..."
+                        style={{ resize: 'none' }}
+                    />
 
                     {form.montoFinanciado > 0 && (
                         <div className="flex justify-between items-center shadow-glow-sm">
@@ -866,45 +893,59 @@ const FinanciacionesPage = () => {
             >
                 <div>
                     <div className="grid grid-cols-1 gap-6">
-                        <div className="form-group">
-                            <label className="form-label">Monto a financiar *</label>
-                            <div>
-                                <DollarSign size={16} className="text-accent" />
-                                <input type="number" className="form-input font-bold" value={simForm.montoFinanciado || ''}
-                                    onChange={e => setSimForm(f => ({ ...f, montoFinanciado: +e.target.value }))} placeholder="0.00" />
-                            </div>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Moneda</label>
-                            <select className="form-input" value={simForm.moneda} onChange={e => setSimForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
-                                <option value="ARS">Pesos (ARS)</option>
-                                <option value="USD">Dólares (USD)</option>
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Cantidad de cuotas *</label>
-                            <select className="form-input" value={simForm.cuotas} onChange={e => setSimForm(f => ({ ...f, cuotas: +e.target.value }))}>
-                                {[1, 3, 6, 12, 18, 24, 36, 48, 60].map(n => <option key={n} value={n}>{n} cuotas</option>)}
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Interés mensual (%)</label>
-                            <div>
-                                <TrendingUp size={16} className="text-info" />
-                                <input type="number" step="0.1" min="0" className="form-input" value={simForm.tasaMensual}
-                                    onChange={e => setSimForm(f => ({ ...f, tasaMensual: e.target.value }))} placeholder="0.0 (sin interés)" />
-                            </div>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Fecha de inicio</label>
-                            <input type="date" className="form-input" value={simForm.fechaInicio} onChange={e => setSimForm(f => ({ ...f, fechaInicio: e.target.value }))} />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Día de cobro</label>
-                            <select className="form-input" value={simForm.diaVencimiento} onChange={e => setSimForm(f => ({ ...f, diaVencimiento: +e.target.value }))}>
-                                {[...Array(28)].map((_, i) => <option key={i + 1} value={i + 1}>Día {i + 1}</option>)}
-                            </select>
-                        </div>
+                        <Input
+                            dense
+                            label="Monto a financiar *"
+                            icon={<DollarSign size={16} className="text-accent" />}
+                            type="number"
+                            className="font-bold"
+                            value={simForm.montoFinanciado || ''}
+                            onChange={e => setSimForm(f => ({ ...f, montoFinanciado: +e.target.value }))}
+                            placeholder="0.00"
+                        />
+                        <Select
+                            dense
+                            label="Moneda"
+                            value={simForm.moneda}
+                            onChange={e => setSimForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}
+                        >
+                            <option value="ARS">Pesos (ARS)</option>
+                            <option value="USD">Dólares (USD)</option>
+                        </Select>
+                        <Select
+                            dense
+                            label="Cantidad de cuotas *"
+                            value={simForm.cuotas}
+                            onChange={e => setSimForm(f => ({ ...f, cuotas: +e.target.value }))}
+                        >
+                            {[1, 3, 6, 12, 18, 24, 36, 48, 60].map(n => <option key={n} value={n}>{n} cuotas</option>)}
+                        </Select>
+                        <Input
+                            dense
+                            label="Interés mensual (%)"
+                            icon={<TrendingUp size={16} className="text-info" />}
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            value={simForm.tasaMensual}
+                            onChange={e => setSimForm(f => ({ ...f, tasaMensual: e.target.value }))}
+                            placeholder="0.0 (sin interés)"
+                        />
+                        <Input
+                            dense
+                            label="Fecha de inicio"
+                            type="date"
+                            value={simForm.fechaInicio}
+                            onChange={e => setSimForm(f => ({ ...f, fechaInicio: e.target.value }))}
+                        />
+                        <Select
+                            dense
+                            label="Día de cobro"
+                            value={simForm.diaVencimiento}
+                            onChange={e => setSimForm(f => ({ ...f, diaVencimiento: +e.target.value }))}
+                        >
+                            {[...Array(28)].map((_, i) => <option key={i + 1} value={i + 1}>Día {i + 1}</option>)}
+                        </Select>
                     </div>
 
                     {simError && (
@@ -1187,31 +1228,40 @@ const FinanciacionesPage = () => {
                         </div>
 
                         <div className="grid grid-cols-1 gap-6">
-                            <div className="form-group col-span-2">
-                                <label className="form-label">Recaudación Efectiva (ARS) *</label>
-                                <div>
-                                    <DollarSign size={16} className="text-accent" />
-                                    <input type="number" className="form-input font-black text-lg" value={pagoForm.monto || ''}
-                                        onChange={e => setPagoForm(f => ({ ...f, monto: +e.target.value }))} />
-                                </div>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Vía de Ingreso *</label>
-                                <select className="form-input" value={pagoForm.metodo} onChange={e => setPagoForm(f => ({ ...f, metodo: e.target.value as PagarCuotaDto['metodo'] }))}>
-                                    {Object.entries(metodoLabels).map(([k, v]) => <option key={k} value={k}>{v.toUpperCase()}</option>)}
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Fecha del Pago</label>
-                                <input type="date" className="form-input" value={pagoForm.fechaPago ?? today()}
-                                    onChange={e => setPagoForm(f => ({ ...f, fechaPago: e.target.value }))} />
-                            </div>
+                            <Input
+                                dense
+                                label="Recaudación Efectiva (ARS) *"
+                                containerClassName="col-span-2"
+                                icon={<DollarSign size={16} className="text-accent" />}
+                                type="number"
+                                className="font-black text-lg"
+                                value={pagoForm.monto || ''}
+                                onChange={e => setPagoForm(f => ({ ...f, monto: +e.target.value }))}
+                            />
+                            <Select
+                                dense
+                                label="Vía de Ingreso *"
+                                value={pagoForm.metodo}
+                                onChange={e => setPagoForm(f => ({ ...f, metodo: e.target.value as PagarCuotaDto['metodo'] }))}
+                            >
+                                {Object.entries(metodoLabels).map(([k, v]) => <option key={k} value={k}>{v.toUpperCase()}</option>)}
+                            </Select>
+                            <Input
+                                dense
+                                label="Fecha del Pago"
+                                type="date"
+                                value={pagoForm.fechaPago ?? today()}
+                                onChange={e => setPagoForm(f => ({ ...f, fechaPago: e.target.value }))}
+                            />
                         </div>
-                        <div className="form-group">
-                            <label className="form-label">Referencia / Tracking Number</label>
-                            <input type="text" className="form-input" value={pagoForm.referencia ?? ''}
-                                onChange={e => setPagoForm(f => ({ ...f, referencia: e.target.value }))} placeholder="NRO DE RECIBO, TRANSFERENCIA..." />
-                        </div>
+                        <Input
+                            dense
+                            label="Referencia / Tracking Number"
+                            type="text"
+                            value={pagoForm.referencia ?? ''}
+                            onChange={e => setPagoForm(f => ({ ...f, referencia: e.target.value }))}
+                            placeholder="NRO DE RECIBO, TRANSFERENCIA..."
+                        />
                     </div>
                 )}
             </Modal>
@@ -1244,26 +1294,40 @@ const FinanciacionesPage = () => {
                     </div>
 
                     <div className="grid grid-cols-1 gap-4">
-                        <div className="form-group">
-                            <label className="form-label">Cantidad de cuotas *</label>
-                            <input type="number" min="1" className="form-input" value={refiForm.cuotas}
-                                onChange={e => setRefiForm(f => ({ ...f, cuotas: e.target.value }))} />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Tasa mensual (%)</label>
-                            <input type="number" min="0" step="0.01" className="form-input" value={refiForm.tasaMensual}
-                                onChange={e => setRefiForm(f => ({ ...f, tasaMensual: e.target.value }))} placeholder="Vacío = sin interés" />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Día de vencimiento</label>
-                            <input type="number" min="1" max="31" className="form-input" value={refiForm.diaVencimiento}
-                                onChange={e => setRefiForm(f => ({ ...f, diaVencimiento: e.target.value }))} />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Fecha de inicio</label>
-                            <input type="date" className="form-input" value={refiForm.fechaInicio}
-                                onChange={e => setRefiForm(f => ({ ...f, fechaInicio: e.target.value }))} />
-                        </div>
+                        <Input
+                            dense
+                            label="Cantidad de cuotas *"
+                            type="number"
+                            min="1"
+                            value={refiForm.cuotas}
+                            onChange={e => setRefiForm(f => ({ ...f, cuotas: e.target.value }))}
+                        />
+                        <Input
+                            dense
+                            label="Tasa mensual (%)"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={refiForm.tasaMensual}
+                            onChange={e => setRefiForm(f => ({ ...f, tasaMensual: e.target.value }))}
+                            placeholder="Vacío = sin interés"
+                        />
+                        <Input
+                            dense
+                            label="Día de vencimiento"
+                            type="number"
+                            min="1"
+                            max="31"
+                            value={refiForm.diaVencimiento}
+                            onChange={e => setRefiForm(f => ({ ...f, diaVencimiento: e.target.value }))}
+                        />
+                        <Input
+                            dense
+                            label="Fecha de inicio"
+                            type="date"
+                            value={refiForm.fechaInicio}
+                            onChange={e => setRefiForm(f => ({ ...f, fechaInicio: e.target.value }))}
+                        />
                     </div>
 
                     <p className="text-xs text-muted">

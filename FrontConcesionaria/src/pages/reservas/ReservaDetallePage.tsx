@@ -8,6 +8,9 @@ import Badge, { type BadgeVariant } from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import {
     ArrowLeft, Bookmark, Calendar, DollarSign,
     Car, Users, MapPin, RefreshCw, XCircle,
@@ -360,39 +363,24 @@ const ReservaDetallePage = () => {
             >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                        <div>
-                            <label className="input-label">Precio venta *</label>
-                            <input type="number" className="form-input" value={convertirForm.precioVenta || ''}
-                                onChange={e => setConvertirForm(f => ({ ...f, precioVenta: +e.target.value }))} />
-                        </div>
-                        <div>
-                            <label className="input-label">Moneda</label>
-                            <select className="form-input" value={convertirForm.moneda}
-                                onChange={e => setConvertirForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
-                                <option value="ARS">ARS</option>
-                                <option value="USD">USD</option>
-                            </select>
-                        </div>
+                        <Input dense label="Precio venta *" type="number" value={convertirForm.precioVenta || ''}
+                            onChange={e => setConvertirForm(f => ({ ...f, precioVenta: +e.target.value }))} />
+                        <Select dense label="Moneda" value={convertirForm.moneda}
+                            onChange={e => setConvertirForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
+                            <option value="ARS">ARS</option>
+                            <option value="USD">USD</option>
+                        </Select>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                        <div>
-                            <label className="input-label">Forma de pago</label>
-                            <select className="form-input" value={convertirForm.formaPago}
-                                onChange={e => setConvertirForm(f => ({ ...f, formaPago: e.target.value as FormaPagoVenta }))}>
-                                {FORMA_PAGO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="input-label">Fecha venta</label>
-                            <input type="date" className="form-input" value={convertirForm.fechaVenta}
-                                onChange={e => setConvertirForm(f => ({ ...f, fechaVenta: e.target.value }))} />
-                        </div>
+                        <Select dense label="Forma de pago" value={convertirForm.formaPago}
+                            onChange={e => setConvertirForm(f => ({ ...f, formaPago: e.target.value as FormaPagoVenta }))}>
+                            {FORMA_PAGO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </Select>
+                        <Input dense label="Fecha venta" type="date" value={convertirForm.fechaVenta}
+                            onChange={e => setConvertirForm(f => ({ ...f, fechaVenta: e.target.value }))} />
                     </div>
-                    <div>
-                        <label className="input-label">Observaciones</label>
-                        <textarea className="form-input" rows={3} value={convertirForm.observaciones}
-                            onChange={e => setConvertirForm(f => ({ ...f, observaciones: e.target.value }))} />
-                    </div>
+                    <Textarea dense label="Observaciones" rows={3} value={convertirForm.observaciones}
+                        onChange={e => setConvertirForm(f => ({ ...f, observaciones: e.target.value }))} />
                 </div>
             </Modal>
 

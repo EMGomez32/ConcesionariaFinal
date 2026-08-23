@@ -8,6 +8,9 @@ import { useTourStore } from '../../store/tourStore';
 import { concesionariasApi } from '../../api/concesionarias.api';
 import { usuariosApi } from '../../api/usuarios.api';
 import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 import { FileUploader } from '../../components/ui/FileUploader';
 import type { Concesionaria, UpdateConcesionariaDto } from '../../types/concesionaria.types';
 import { CONDICION_IVA_EMISOR_LABEL } from '../../types/concesionaria.types';
@@ -293,31 +296,16 @@ const ConfiguracionPage = () => {
                                 {!isAdmin && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>(solo lectura)</span>}
                             </h2>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div className="form-group">
-                                    <label className="form-label-xs">Nombre *</label>
-                                    <input type="text" className="form-input" value={concesionariaForm.nombre} disabled={!isAdmin}
-                                        onChange={e => setConcesionariaForm(f => ({ ...f, nombre: e.target.value }))} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label-xs">CUIT</label>
-                                    <input type="text" className="form-input" value={concesionariaForm.cuit} disabled={!isAdmin}
-                                        onChange={e => setConcesionariaForm(f => ({ ...f, cuit: e.target.value }))} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label-xs">Email</label>
-                                    <input type="email" className="form-input" value={concesionariaForm.email} disabled={!isAdmin}
-                                        onChange={e => setConcesionariaForm(f => ({ ...f, email: e.target.value }))} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label-xs">Teléfono</label>
-                                    <input type="text" className="form-input" value={concesionariaForm.telefono} disabled={!isAdmin}
-                                        onChange={e => setConcesionariaForm(f => ({ ...f, telefono: e.target.value }))} />
-                                </div>
-                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                    <label className="form-label-xs">Dirección</label>
-                                    <input type="text" className="form-input" value={concesionariaForm.direccion} disabled={!isAdmin}
-                                        onChange={e => setConcesionariaForm(f => ({ ...f, direccion: e.target.value }))} />
-                                </div>
+                                <Input dense label="Nombre *" type="text" value={concesionariaForm.nombre} disabled={!isAdmin}
+                                    onChange={e => setConcesionariaForm(f => ({ ...f, nombre: e.target.value }))} />
+                                <Input dense label="CUIT" type="text" value={concesionariaForm.cuit} disabled={!isAdmin}
+                                    onChange={e => setConcesionariaForm(f => ({ ...f, cuit: e.target.value }))} />
+                                <Input dense label="Email" type="email" value={concesionariaForm.email} disabled={!isAdmin}
+                                    onChange={e => setConcesionariaForm(f => ({ ...f, email: e.target.value }))} />
+                                <Input dense label="Teléfono" type="text" value={concesionariaForm.telefono} disabled={!isAdmin}
+                                    onChange={e => setConcesionariaForm(f => ({ ...f, telefono: e.target.value }))} />
+                                <Input dense label="Dirección" type="text" containerClassName="col-span-full" value={concesionariaForm.direccion} disabled={!isAdmin}
+                                    onChange={e => setConcesionariaForm(f => ({ ...f, direccion: e.target.value }))} />
                             </div>
                             {isAdmin && (
                                 <>
@@ -332,28 +320,20 @@ const ConfiguracionPage = () => {
                                             sin validez fiscal) hasta cargar un certificado AFIP.
                                         </p>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                                <label className="form-label-xs">Razón social (denominación fiscal)</label>
-                                                <input type="text" className="form-input" value={concesionariaForm.razonSocial} maxLength={200}
-                                                    placeholder="Ej: Autos del Valle S.A."
-                                                    onChange={e => setConcesionariaForm(f => ({ ...f, razonSocial: e.target.value }))} />
-                                            </div>
-                                            <div className="form-group">
-                                                <label className="form-label-xs">Condición frente al IVA</label>
-                                                <select className="form-input" value={concesionariaForm.condicionIva}
-                                                    onChange={e => setConcesionariaForm(f => ({ ...f, condicionIva: e.target.value }))}>
-                                                    <option value="">— Sin definir —</option>
-                                                    {(Object.keys(CONDICION_IVA_EMISOR_LABEL) as Array<keyof typeof CONDICION_IVA_EMISOR_LABEL>).map((k) => (
-                                                        <option key={k} value={k}>{CONDICION_IVA_EMISOR_LABEL[k]}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div className="form-group">
-                                                <label className="form-label-xs">Punto de venta</label>
-                                                <input type="number" min={1} max={99999} className="form-input" value={concesionariaForm.puntoVenta}
-                                                    placeholder="Ej: 1"
-                                                    onChange={e => setConcesionariaForm(f => ({ ...f, puntoVenta: e.target.value }))} />
-                                            </div>
+                                            <Input dense label="Razón social (denominación fiscal)" type="text" containerClassName="col-span-full"
+                                                value={concesionariaForm.razonSocial} maxLength={200}
+                                                placeholder="Ej: Autos del Valle S.A."
+                                                onChange={e => setConcesionariaForm(f => ({ ...f, razonSocial: e.target.value }))} />
+                                            <Select dense label="Condición frente al IVA" value={concesionariaForm.condicionIva}
+                                                placeholder="— Sin definir —"
+                                                onChange={e => setConcesionariaForm(f => ({ ...f, condicionIva: e.target.value }))}>
+                                                {(Object.keys(CONDICION_IVA_EMISOR_LABEL) as Array<keyof typeof CONDICION_IVA_EMISOR_LABEL>).map((k) => (
+                                                    <option key={k} value={k}>{CONDICION_IVA_EMISOR_LABEL[k]}</option>
+                                                ))}
+                                            </Select>
+                                            <Input dense label="Punto de venta" type="number" min={1} max={99999} value={concesionariaForm.puntoVenta}
+                                                placeholder="Ej: 1"
+                                                onChange={e => setConcesionariaForm(f => ({ ...f, puntoVenta: e.target.value }))} />
                                         </div>
                                     </div>
 
@@ -404,17 +384,13 @@ const ConfiguracionPage = () => {
                                                 onChange={v => setConcesionariaForm(f => ({ ...f, colorPrimario: v }))} fallback="#10b981" />
                                             <ColorField label="Color secundario" value={concesionariaForm.colorSecundario}
                                                 onChange={v => setConcesionariaForm(f => ({ ...f, colorSecundario: v }))} fallback="#06b6d4" />
-                                            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                                <label className="form-label-xs">Sitio web</label>
-                                                <input type="text" className="form-input" value={concesionariaForm.sitioWeb} placeholder="www.miconcesionaria.com" maxLength={200}
-                                                    onChange={e => setConcesionariaForm(f => ({ ...f, sitioWeb: e.target.value }))} />
-                                            </div>
-                                            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                                <label className="form-label-xs">Pie de página de los documentos</label>
-                                                <textarea className="form-input" rows={2} maxLength={500} value={concesionariaForm.pdfPie}
-                                                    placeholder="Datos de contacto, condiciones o leyenda legal al pie del PDF"
-                                                    onChange={e => setConcesionariaForm(f => ({ ...f, pdfPie: e.target.value }))} />
-                                            </div>
+                                            <Input dense label="Sitio web" type="text" containerClassName="col-span-full"
+                                                value={concesionariaForm.sitioWeb} placeholder="www.miconcesionaria.com" maxLength={200}
+                                                onChange={e => setConcesionariaForm(f => ({ ...f, sitioWeb: e.target.value }))} />
+                                            <Textarea dense label="Pie de página de los documentos" containerClassName="col-span-full"
+                                                rows={2} maxLength={500} value={concesionariaForm.pdfPie}
+                                                placeholder="Datos de contacto, condiciones o leyenda legal al pie del PDF"
+                                                onChange={e => setConcesionariaForm(f => ({ ...f, pdfPie: e.target.value }))} />
                                         </div>
                                     </div>
 
@@ -436,16 +412,10 @@ const ConfiguracionPage = () => {
                         <UserIcon size={18} /> Mi perfil
                     </h2>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        <div className="form-group">
-                            <label className="form-label-xs">Nombre *</label>
-                            <input type="text" className="form-input" value={perfilForm.nombre}
-                                onChange={e => setPerfilForm(f => ({ ...f, nombre: e.target.value }))} />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label-xs">Email *</label>
-                            <input type="email" className="form-input" value={perfilForm.email}
-                                onChange={e => setPerfilForm(f => ({ ...f, email: e.target.value }))} />
-                        </div>
+                        <Input dense label="Nombre *" type="text" value={perfilForm.nombre}
+                            onChange={e => setPerfilForm(f => ({ ...f, nombre: e.target.value }))} />
+                        <Input dense label="Email *" type="email" value={perfilForm.email}
+                            onChange={e => setPerfilForm(f => ({ ...f, email: e.target.value }))} />
                     </div>
                     <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
                         <Button variant="primary" onClick={handleSavePerfil} disabled={savingPerfil}>
@@ -461,23 +431,15 @@ const ConfiguracionPage = () => {
                         <Lock size={18} /> Cambiar contraseña
                     </h2>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                            <label className="form-label-xs">Contraseña actual *</label>
-                            <input type="password" className="form-input" value={passForm.current} autoComplete="current-password"
-                                onChange={e => setPassForm(f => ({ ...f, current: e.target.value }))}
-                                placeholder="Tu contraseña actual" />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label-xs">Nueva contraseña *</label>
-                            <input type="password" className="form-input" value={passForm.password} autoComplete="new-password"
-                                onChange={e => setPassForm(f => ({ ...f, password: e.target.value }))}
-                                placeholder="Mínimo 6 caracteres" />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label-xs">Confirmar nueva contraseña *</label>
-                            <input type="password" className="form-input" value={passForm.confirm} autoComplete="new-password"
-                                onChange={e => setPassForm(f => ({ ...f, confirm: e.target.value }))} />
-                        </div>
+                        <Input dense label="Contraseña actual *" type="password" containerClassName="col-span-full"
+                            value={passForm.current} autoComplete="current-password"
+                            onChange={e => setPassForm(f => ({ ...f, current: e.target.value }))}
+                            placeholder="Tu contraseña actual" />
+                        <Input dense label="Nueva contraseña *" type="password" value={passForm.password} autoComplete="new-password"
+                            onChange={e => setPassForm(f => ({ ...f, password: e.target.value }))}
+                            placeholder="Mínimo 6 caracteres" />
+                        <Input dense label="Confirmar nueva contraseña *" type="password" value={passForm.confirm} autoComplete="new-password"
+                            onChange={e => setPassForm(f => ({ ...f, confirm: e.target.value }))} />
                     </div>
                     <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
                         <Button variant="primary" onClick={handleSavePassword} disabled={savingPass}>
