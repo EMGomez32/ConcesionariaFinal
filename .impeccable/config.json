@@ -83,6 +83,15 @@
         ],
         "createdAt": "2026-08-21T15:11:35.213Z",
         "reason": "el colapso del sidebar anima width a proposito: el reflow del contenido es el efecto buscado y no se puede lograr con transform"
+      },
+      {
+        "rule": "codex-grid-background",
+        "value": "*",
+        "files": [
+          "src/pages/auth/LoginPage.tsx"
+        ],
+        "createdAt": "2026-08-23T20:03:01.749Z",
+        "reason": "misma excepcion ya sancionada (escenografia del login, momento de marca): duplicada bajo la ruta relativa a FrontConcesionaria porque los workflows corren con ese cwd y el hook resuelve el path sin prefijo"
       }
     ]
   }
