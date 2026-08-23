@@ -28,12 +28,12 @@ const ESTADO_SOL_LABELS: Record<EstadoSolicitud, string> = {
 };
 
 const ESTADO_SOL_COLORS: Record<EstadoSolicitud, string> = {
-    borrador: '#94a3b8',
-    enviada: '#60a5fa',
-    pendiente: '#f59e0b',
-    aprobada: '#22c55e',
-    rechazada: '#ef4444',
-    cancelada: '#6b7280',
+    borrador: 'var(--text-muted)',
+    enviada: 'var(--info)',
+    pendiente: 'var(--warning)',
+    aprobada: 'var(--success)',
+    rechazada: 'var(--danger)',
+    cancelada: 'var(--text-muted)',
 };
 
 const ESTADO_SOL_TRANSITIONS: Record<EstadoSolicitud, EstadoSolicitud[]> = {
@@ -463,7 +463,7 @@ export default function FinanciacionExternaPage() {
                     <XCircle size={60} className="stat-tile-bg" />
                 </div>
                 <div className="card glass stat-tile">
-                    <span className="stat-tile-label" style={{ color: '#a78bfa' }}>Entidades activas</span>
+                    <span className="stat-tile-label" style={{ color: 'var(--accent-2)' }}>Entidades activas</span>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black">{financieras.filter(f => f.activo).length}</span>
                         <span className="text-xs text-muted font-bold">BANCOS / FIN.</span>
@@ -535,7 +535,7 @@ export default function FinanciacionExternaPage() {
                                 <thead>
                                     <tr style={{ borderBottom: '1px solid var(--border)' }}>
                                         {['#', 'Cliente', 'Vehículo', 'Financiera', 'Monto Sol.', 'Plazo', 'Estado', 'Fecha', 'Acciones'].map(h => (
-                                            <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                                            <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -549,9 +549,9 @@ export default function FinanciacionExternaPage() {
                                             onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--text-primary) 5%, transparent)')}
                                             onMouseLeave={e => (e.currentTarget.style.background = '')}
                                         >
-                                            <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>#{s.id}</td>
+                                            <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>#{s.id}</td>
                                             <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{s.cliente?.nombre ?? '-'}</td>
-                                            <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem' }}>
+                                            <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)' }}>
                                                 {s.vehiculo
                                                     ? etiquetaVehiculo(s.vehiculo)
                                                     : <span className="text-muted">Sin definir</span>}
@@ -561,14 +561,14 @@ export default function FinanciacionExternaPage() {
                                             <td style={{ padding: '0.75rem 1rem' }}>{s.plazoCuotas ? `${s.plazoCuotas} cuotas` : '-'}</td>
                                             <td style={{ padding: '0.75rem 1rem' }}>
                                                 <span style={{
-                                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 600,
+                                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: 'var(--text-xs)', fontWeight: 600,
                                                     background: `${ESTADO_SOL_COLORS[s.estado]}22`,
                                                     color: ESTADO_SOL_COLORS[s.estado],
                                                 }}>
                                                     {ESTADO_SOL_LABELS[s.estado]}
                                                 </span>
                                             </td>
-                                            <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{fmtDate(s.createdAt)}</td>
+                                            <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(s.createdAt)}</td>
                                             <td style={{ padding: '0.75rem 1rem' }}>
                                                 <div className="flex gap-2">
                                                     <button className="icon-btn" title="Ver detalle" onClick={() => setDetailSolicitud(s)}>
@@ -596,7 +596,7 @@ export default function FinanciacionExternaPage() {
                                 <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
                                     <ChevronLeft size={14} /> Anterior
                                 </Button>
-                                <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Página {page} de {totalPages}</span>
+                                <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>Página {page} de {totalPages}</span>
                                 <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>
                                     Siguiente <ChevronRight size={14} />
                                 </Button>
@@ -652,7 +652,7 @@ export default function FinanciacionExternaPage() {
                                             {f.activo ? 'Activa' : 'Inactiva'}
                                         </span>
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
                                         {f.contacto && <div><span style={{ fontWeight: 500 }}>Contacto:</span> {f.contacto}</div>}
                                         {f.telefono && <div><span style={{ fontWeight: 500 }}>Tel:</span> {f.telefono}</div>}
                                         {f.email && <div style={{ gridColumn: '1 / -1' }}><span style={{ fontWeight: 500 }}>Email:</span> {f.email}</div>}
@@ -679,7 +679,7 @@ export default function FinanciacionExternaPage() {
             {/* ─── Modal: Crear/Editar Financiera ─── */}
             {showFinancieraModal && (
                 <ModalOverlay onClose={() => setShowFinancieraModal(false)}>
-                    <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.25rem', fontWeight: 700 }}>
+                    <h2 style={{ margin: '0 0 1.5rem', fontSize: 'var(--text-lg)', fontWeight: 700 }}>
                         {editingFinanciera ? 'Editar Financiera' : 'Nueva Financiera'}
                     </h2>
                     <div style={{ display: 'grid', gap: '1rem' }}>
@@ -711,7 +711,7 @@ export default function FinanciacionExternaPage() {
             {/* ─── Modal: Eliminar Financiera ─── */}
             {deletingFinanciera && (
                 <ModalOverlay onClose={() => setDeletingFinanciera(null)}>
-                    <h2 style={{ margin: '0 0 1rem', fontSize: '1.2rem', fontWeight: 700, color: '#ef4444' }}>Eliminar Financiera</h2>
+                    <h2 style={{ margin: '0 0 1rem', fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--danger)' }}>Eliminar Financiera</h2>
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                         ¿Eliminar <strong>{deletingFinanciera.nombre}</strong>? Esta acción no se puede deshacer.
                     </p>
@@ -725,7 +725,7 @@ export default function FinanciacionExternaPage() {
             {/* ─── Modal: Crear Solicitud ─── */}
             {showSolModal && (
                 <ModalOverlay onClose={() => setShowSolModal(false)}>
-                    <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.25rem', fontWeight: 700 }}>Nueva Solicitud de Financiación</h2>
+                    <h2 style={{ margin: '0 0 1.5rem', fontSize: 'var(--text-lg)', fontWeight: 700 }}>Nueva Solicitud de Financiación</h2>
                     <div style={{ display: 'grid', gap: '1rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                             <Select dense label="Cliente *" value={solForm.clienteId} onChange={e => setSolForm(p => ({ ...p, clienteId: Number(e.target.value) }))}>
@@ -771,12 +771,12 @@ export default function FinanciacionExternaPage() {
                 <ModalOverlay onClose={() => setDetailSolicitud(null)} wide>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
                         <div>
-                            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700 }}>
+                            <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 700 }}>
                                 Solicitud #{detailSolicitud.id}
                             </h2>
                             <span style={{
                                 display: 'inline-block', marginTop: '0.4rem',
-                                padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: '0.8rem', fontWeight: 600,
+                                padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: 'var(--text-sm)', fontWeight: 600,
                                 background: `${ESTADO_SOL_COLORS[detailSolicitud.estado]}22`,
                                 color: ESTADO_SOL_COLORS[detailSolicitud.estado],
                             }}>
@@ -818,7 +818,7 @@ export default function FinanciacionExternaPage() {
                     </div>
 
                     {detailSolicitud.observaciones && (
-                        <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem', fontSize: '0.9rem' }}>
+                        <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem', fontSize: 'var(--text-base)' }}>
                             <strong>Observaciones:</strong> {detailSolicitud.observaciones}
                         </div>
                     )}
@@ -827,25 +827,25 @@ export default function FinanciacionExternaPage() {
                     <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
                             <Paperclip size={16} style={{ color: 'var(--text-secondary)' }} />
-                            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>
+                            <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 700 }}>
                                 Archivos adjuntos {archivosSol.length > 0 && `(${archivosSol.length})`}
                             </h3>
                         </div>
 
                         {loadingArchivosSol ? (
-                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Cargando...</p>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>Cargando...</p>
                         ) : archivosSol.length === 0 ? (
-                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Sin archivos adjuntos.</p>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>Sin archivos adjuntos.</p>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
                                 {archivosSol.map(a => (
                                     <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem' }}>
                                         <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                 {a.originalName ?? a.descripcion ?? `Archivo ${a.id}`}
                                             </div>
-                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                                            <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-secondary)' }}>
                                                 {a.tipo && <>{a.tipo} · </>}
                                                 {a.sizeBytes ? `${(a.sizeBytes / 1024).toFixed(1)} KB · ` : ''}
                                                 {fmtDate(a.createdAt)}
@@ -892,10 +892,10 @@ export default function FinanciacionExternaPage() {
             {/* ─── Modal: Transición Estado Solicitud ─── */}
             {transicionSol && (
                 <ModalOverlay onClose={() => setTransicionSol(null)}>
-                    <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.2rem', fontWeight: 700 }}>
+                    <h2 style={{ margin: '0 0 1.5rem', fontSize: 'var(--text-lg)', fontWeight: 700 }}>
                         Cambiar Estado — Solicitud #{transicionSol.id}
                     </h2>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: 'var(--text-base)' }}>
                         Estado actual: <strong style={{ color: ESTADO_SOL_COLORS[transicionSol.estado] }}>{ESTADO_SOL_LABELS[transicionSol.estado]}</strong>
                     </p>
                     <Select dense label="Nuevo Estado *" placeholder="Seleccionar..." value={nuevoEstado} onChange={e => { setNuevoEstado(e.target.value as EstadoSolicitud); setExtraTransicion({}); }}>
@@ -906,7 +906,7 @@ export default function FinanciacionExternaPage() {
 
                     {nuevoEstado === 'aprobada' && (
                         <div style={{ marginTop: '1rem', display: 'grid', gap: '0.75rem' }}>
-                            <p style={{ color: '#22c55e', fontSize: '0.85rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <p style={{ color: 'var(--success)', fontSize: 'var(--text-sm)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                 <CheckCircle size={14} /> Complete los datos de aprobación
                             </p>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
@@ -933,7 +933,7 @@ export default function FinanciacionExternaPage() {
             {/* ─── Modal: Eliminar Solicitud ─── */}
             {deletingSol && (
                 <ModalOverlay onClose={() => setDeletingSol(null)}>
-                    <h2 style={{ margin: '0 0 1rem', fontSize: '1.2rem', fontWeight: 700, color: '#ef4444' }}>Eliminar Solicitud</h2>
+                    <h2 style={{ margin: '0 0 1rem', fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--danger)' }}>Eliminar Solicitud</h2>
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                         ¿Eliminar la solicitud <strong>#{deletingSol.id}</strong> de <strong>{deletingSol.cliente?.nombre}</strong>? Esta acción no se puede deshacer.
                     </p>
@@ -951,7 +951,7 @@ export default function FinanciacionExternaPage() {
 
 function ModalOverlay({ children, onClose, wide }: { children: React.ReactNode; onClose: () => void; wide?: boolean }) {
     return (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--overlay-scrim)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
             onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
             <div className="glass" style={{ borderRadius: '1rem', padding: '2rem', width: '100%', maxWidth: wide ? '800px' : '520px', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
                 {children}
@@ -963,7 +963,7 @@ function ModalOverlay({ children, onClose, wide }: { children: React.ReactNode; 
 function InfoBlock({ title, children }: { title: string; children: React.ReactNode }) {
     return (
         <div style={{ background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem', padding: '1rem' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>{title}</div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>{title}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>{children}</div>
         </div>
     );
@@ -971,7 +971,7 @@ function InfoBlock({ title, children }: { title: string; children: React.ReactNo
 
 function InfoRow({ label, value }: { label: string; value: string }) {
     return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
             <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
             <span style={{ fontWeight: 500, textAlign: 'right', maxWidth: '60%' }}>{value}</span>
         </div>

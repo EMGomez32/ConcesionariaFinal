@@ -31,9 +31,9 @@ const ESTADO_LABELS: Record<EstadoPostventa, string> = {
 };
 
 const ESTADO_COLORS: Record<EstadoPostventa, string> = {
-    pendiente: '#f59e0b',
-    en_curso: '#60a5fa',
-    resuelto: '#22c55e',
+    pendiente: 'var(--warning)',
+    en_curso: 'var(--info)',
+    resuelto: 'var(--success)',
 };
 
 // Espejo de la máquina de estados del backend (domain/services/stateMachine.ts).
@@ -610,10 +610,10 @@ export default function PostventaPage() {
         const hoy = localISO(new Date());
         const man = new Date(); man.setDate(man.getDate() + 1);
         const f = String(fechaISO).slice(0, 10);
-        if (f < hoy) return { label: 'Vencido', color: '#ef4444' };
-        if (f === hoy) return { label: 'Hoy', color: '#f59e0b' };
-        if (f === localISO(man)) return { label: 'Mañana', color: '#60a5fa' };
-        return { label: fmtDate(f), color: '#22c55e' };
+        if (f < hoy) return { label: 'Vencido', color: 'var(--danger)' };
+        if (f === hoy) return { label: 'Hoy', color: 'var(--warning)' };
+        if (f === localISO(man)) return { label: 'Mañana', color: 'var(--info)' };
+        return { label: fmtDate(f), color: 'var(--success)' };
     };
 
     // Borrador de recordatorio de turno por WhatsApp (el usuario revisa y manda).
@@ -678,7 +678,7 @@ export default function PostventaPage() {
             {/* Stats */}
             <div className="stats-grid mb-6" data-tour="pv-stats">
                 <div className="card glass stat-tile">
-                    <span className="stat-tile-label" style={{ color: '#f59e0b' }}>Pendientes</span>
+                    <span className="stat-tile-label" style={{ color: 'var(--warning)' }}>Pendientes</span>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black">{stats.pendiente}</span>
                         <span className="text-xs text-muted font-bold">CASOS</span>
@@ -748,7 +748,7 @@ export default function PostventaPage() {
                             <thead>
                                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
                                     {['Turno', 'Hora', 'Cliente', 'Vehículo', 'Tipo', 'Estado', 'Acciones'].map(h => (
-                                        <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                                        <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -769,24 +769,24 @@ export default function PostventaPage() {
                                         >
                                             <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
                                                 <span style={{
-                                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 700,
+                                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: 'var(--text-sm)', fontWeight: 700,
                                                     background: `${badge.color}22`, color: badge.color,
                                                 }}>
                                                     {badge.label}
                                                 </span>
                                                 {(badge.label === 'Hoy' || badge.label === 'Mañana' || badge.label === 'Vencido') && (
-                                                    <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{fmtDate(caso.fechaTurno)}</span>
+                                                    <span style={{ marginLeft: '0.5rem', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(caso.fechaTurno)}</span>
                                                 )}
                                             </td>
-                                            <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: '0.85rem' }}>{caso.horaTurno ? `${caso.horaTurno} hs` : '—'}</td>
+                                            <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: 'var(--text-sm)' }}>{caso.horaTurno ? `${caso.horaTurno} hs` : '—'}</td>
                                             <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{caso.cliente?.nombre ?? '-'}</td>
-                                            <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
+                                            <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)' }}>
                                                 {caso.vehiculo ? `${caso.vehiculo.marca} ${caso.vehiculo.modelo}${caso.vehiculo.dominio ? ` (${caso.vehiculo.dominio})` : ''}` : '-'}
                                             </td>
-                                            <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem' }}>{caso.tipo || '-'}</td>
+                                            <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)' }}>{caso.tipo || '-'}</td>
                                             <td style={{ padding: '0.75rem 1rem' }}>
                                                 <span style={{
-                                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 600,
+                                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: 'var(--text-xs)', fontWeight: 600,
                                                     background: `${ESTADO_COLORS[caso.estado]}22`, color: ESTADO_COLORS[caso.estado],
                                                 }}>
                                                     {ESTADO_LABELS[caso.estado]}
@@ -857,7 +857,7 @@ export default function PostventaPage() {
                         <thead>
                             <tr style={{ borderBottom: '1px solid var(--border)' }}>
                                 {['#', 'Cliente', 'Vehículo', 'Tipo', 'Descripción', 'Estado', 'Reclamo', 'Cierre', 'Acciones'].map(h => (
-                                    <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                                    <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -871,26 +871,26 @@ export default function PostventaPage() {
                                     onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--text-primary) 5%, transparent)')}
                                     onMouseLeave={e => (e.currentTarget.style.background = '')}
                                 >
-                                    <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>#{caso.id}</td>
+                                    <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>#{caso.id}</td>
                                     <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{caso.cliente?.nombre ?? '-'}</td>
-                                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
+                                    <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)' }}>
                                         {caso.vehiculo ? `${caso.vehiculo.marca} ${caso.vehiculo.modelo}${caso.vehiculo.dominio ? ` (${caso.vehiculo.dominio})` : ''}` : '-'}
                                     </td>
-                                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem' }}>{caso.tipo || '-'}</td>
-                                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={caso.descripcion}>
+                                    <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)' }}>{caso.tipo || '-'}</td>
+                                    <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={caso.descripcion}>
                                         {caso.descripcion}
                                     </td>
                                     <td style={{ padding: '0.75rem 1rem' }}>
                                         <span style={{
-                                            padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 600,
+                                            padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: 'var(--text-xs)', fontWeight: 600,
                                             background: `${ESTADO_COLORS[caso.estado]}22`,
                                             color: ESTADO_COLORS[caso.estado],
                                         }}>
                                             {ESTADO_LABELS[caso.estado]}
                                         </span>
                                     </td>
-                                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{fmtDate(caso.fechaReclamo)}</td>
-                                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{fmtDate(caso.fechaCierre)}</td>
+                                    <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(caso.fechaReclamo)}</td>
+                                    <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(caso.fechaCierre)}</td>
                                     <td style={{ padding: '0.75rem 1rem' }}>
                                         <div style={{ display: 'flex', gap: '0.35rem' }}>
                                             <button className="icon-btn" title="Ver detalle" onClick={() => handleViewDetail(caso)}>
@@ -918,7 +918,7 @@ export default function PostventaPage() {
                         <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
                             <ChevronLeft size={14} /> Anterior
                         </Button>
-                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Página {page} de {totalPages}</span>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>Página {page} de {totalPages}</span>
                         <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>
                             Siguiente <ChevronRight size={14} />
                         </Button>
@@ -935,7 +935,7 @@ export default function PostventaPage() {
             {/* ─── Modal: Crear Caso ─── */}
             {showCreateModal && (
                 <ModalOverlay onClose={() => setShowCreateModal(false)} wide>
-                    <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.25rem', fontWeight: 700 }}>Nuevo Caso de Postventa</h2>
+                    <h2 style={{ margin: '0 0 1.5rem', fontSize: 'var(--text-lg)', fontWeight: 700 }}>Nuevo Caso de Postventa</h2>
                     <div style={{ display: 'grid', gap: '1rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                             <Select dense label="Cliente *" value={casoForm.clienteId} onChange={e => setCasoForm(p => ({ ...p, clienteId: Number(e.target.value) }))}>
@@ -989,19 +989,19 @@ export default function PostventaPage() {
                 <ModalOverlay onClose={() => setDetailCaso(null)} wide>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
                         <div>
-                            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700 }}>
+                            <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 700 }}>
                                 Caso #{detailCaso.id}
                             </h2>
                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.4rem' }}>
                                 <span style={{
-                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: '0.8rem', fontWeight: 600,
+                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: 'var(--text-sm)', fontWeight: 600,
                                     background: `${ESTADO_COLORS[detailCaso.estado]}22`,
                                     color: ESTADO_COLORS[detailCaso.estado],
                                 }}>
                                     {ESTADO_LABELS[detailCaso.estado]}
                                 </span>
                                 {detailCaso.tipo && (
-                                    <span style={{ padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: '0.8rem', background: 'color-mix(in srgb, var(--text-primary) 8%, transparent)', color: 'var(--text-secondary)' }}>
+                                    <span style={{ padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: 'var(--text-sm)', background: 'color-mix(in srgb, var(--text-primary) 8%, transparent)', color: 'var(--text-secondary)' }}>
                                         {detailCaso.tipo}
                                     </span>
                                 )}
@@ -1034,7 +1034,7 @@ export default function PostventaPage() {
                     {/* Turno de taller: agendar / reprogramar / desagendar (no aplica a resueltos) */}
                     {detailCaso.estado !== 'resuelto' && (
                         <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem' }}>
-                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                 <Calendar size={13} /> Turno de taller
                             </div>
                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -1059,8 +1059,8 @@ export default function PostventaPage() {
                     )}
 
                     {/* Descripción */}
-                    <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem', fontSize: '0.9rem' }}>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Descripción</div>
+                    <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem', fontSize: 'var(--text-base)' }}>
+                        <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Descripción</div>
                         {detailCaso.descripcion}
                     </div>
 
@@ -1076,7 +1076,7 @@ export default function PostventaPage() {
                         </div>
 
                         {(detailCaso.items ?? []).length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'color-mix(in srgb, var(--text-primary) 4%, transparent)', borderRadius: '0.5rem' }}>
+                            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', fontSize: 'var(--text-base)', background: 'color-mix(in srgb, var(--text-primary) 4%, transparent)', borderRadius: '0.5rem' }}>
                                 Sin ítems registrados
                             </div>
                         ) : (
@@ -1085,24 +1085,24 @@ export default function PostventaPage() {
                                     <thead>
                                         <tr style={{ borderBottom: '1px solid var(--border)', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)' }}>
                                             {['Fecha', 'Descripción', 'Proveedor', 'Monto', ''].map(h => (
-                                                <th key={h} style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{h}</th>
+                                                <th key={h} style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', fontWeight: 600 }}>{h}</th>
                                             ))}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {(detailCaso.items ?? []).map(item => (
                                             <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                                                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{fmtDate(item.fecha)}</td>
-                                                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
+                                                <td style={{ padding: '0.5rem 0.75rem', fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}>{fmtDate(item.fecha)}</td>
+                                                <td style={{ padding: '0.5rem 0.75rem', fontSize: 'var(--text-sm)' }}>
                                                     {item.descripcion}
                                                     {item.comprobanteUrl && (
-                                                        <a href={item.comprobanteUrl} target="_blank" rel="noreferrer" style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#818cf8' }}>
+                                                        <a href={item.comprobanteUrl} target="_blank" rel="noreferrer" style={{ marginLeft: '0.5rem', fontSize: 'var(--text-xs)', color: 'var(--accent-2)' }}>
                                                             Ver comprobante
                                                         </a>
                                                     )}
                                                 </td>
-                                                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{item.proveedor?.nombre ?? '-'}</td>
-                                                <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', fontWeight: 600, textAlign: 'right', whiteSpace: 'nowrap' }}>${fmt(item.monto)}</td>
+                                                <td style={{ padding: '0.5rem 0.75rem', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{item.proveedor?.nombre ?? '-'}</td>
+                                                <td style={{ padding: '0.5rem 0.75rem', fontSize: 'var(--text-sm)', fontWeight: 600, textAlign: 'right', whiteSpace: 'nowrap' }}>${fmt(item.monto)}</td>
                                                 <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
                                                     <button className="icon-btn danger" title="Eliminar ítem" onClick={() => setDeletingItem(item)}>
                                                         <Trash2 size={13} />
@@ -1118,9 +1118,9 @@ export default function PostventaPage() {
                         {/* Total */}
                         {(detailCaso.items ?? []).length > 0 && (
                             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
-                                <div style={{ background: 'rgba(129,140,248,0.12)', padding: '0.5rem 1rem', borderRadius: '0.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Total costos:</span>
-                                    <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#818cf8' }}>${fmt(totalItems)}</span>
+                                <div style={{ background: 'rgba(var(--accent-2-rgb), 0.12)', padding: '0.5rem 1rem', borderRadius: '0.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                    <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-base)' }}>Total costos:</span>
+                                    <span style={{ fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--accent-2)' }}>${fmt(totalItems)}</span>
                                 </div>
                             </div>
                         )}
@@ -1128,7 +1128,7 @@ export default function PostventaPage() {
 
                     {/* Facturación al cliente + margen (facturado − costo de los items) */}
                     <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem' }}>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
+                        <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
                             Facturación al cliente
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -1138,17 +1138,17 @@ export default function PostventaPage() {
                             <Button variant="secondary" size="sm" onClick={handleGuardarFacturacion} disabled={savingFactura} loading={savingFactura}>Guardar</Button>
                         </div>
                         {detailCaso.montoFacturado != null && (
-                            <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.75rem', flexWrap: 'wrap', fontSize: '0.9rem' }}>
+                            <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.75rem', flexWrap: 'wrap', fontSize: 'var(--text-base)' }}>
                                 <span style={{ color: 'var(--text-secondary)' }}>Facturado: <strong style={{ color: 'var(--text-primary)' }}>${fmt(detailCaso.montoFacturado)}</strong></span>
                                 <span style={{ color: 'var(--text-secondary)' }}>Costo: <strong style={{ color: 'var(--text-primary)' }}>${fmt(totalItems)}</strong></span>
-                                <span style={{ color: 'var(--text-secondary)' }}>Margen: <strong style={{ color: (Number(detailCaso.montoFacturado) - totalItems) < 0 ? '#ef4444' : '#22c55e' }}>${fmt(Number(detailCaso.montoFacturado) - totalItems)}</strong></span>
+                                <span style={{ color: 'var(--text-secondary)' }}>Margen: <strong style={{ color: (Number(detailCaso.montoFacturado) - totalItems) < 0 ? 'var(--danger)' : 'var(--success)' }}>${fmt(Number(detailCaso.montoFacturado) - totalItems)}</strong></span>
                             </div>
                         )}
                     </div>
 
                     {/* Próximo service (retención): recordatorio para que el cliente vuelva */}
                     <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem' }}>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
+                        <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
                             Próximo service
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -1186,7 +1186,7 @@ export default function PostventaPage() {
             {/* ─── Sub-Modal: Agregar Ítem ─── */}
             {showAddItem && detailCaso && (
                 <ModalOverlay onClose={() => setShowAddItem(false)}>
-                    <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.2rem', fontWeight: 700 }}>Agregar Ítem — Caso #{detailCaso.id}</h2>
+                    <h2 style={{ margin: '0 0 1.5rem', fontSize: 'var(--text-lg)', fontWeight: 700 }}>Agregar Ítem — Caso #{detailCaso.id}</h2>
                     <div style={{ display: 'grid', gap: '1rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                             <Input dense label="Fecha *" type="date" value={itemForm.fecha} onChange={e => setItemForm(p => ({ ...p, fecha: e.target.value }))} />
@@ -1215,10 +1215,10 @@ export default function PostventaPage() {
             {/* ─── Modal: Transición Estado ─── */}
             {transicionCaso && (
                 <ModalOverlay onClose={() => setTransicionCaso(null)}>
-                    <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.2rem', fontWeight: 700 }}>
+                    <h2 style={{ margin: '0 0 1.5rem', fontSize: 'var(--text-lg)', fontWeight: 700 }}>
                         {transicionEstado === 'en_curso' ? 'Iniciar Trabajo' : 'Marcar como Resuelto'} — Caso #{transicionCaso.id}
                     </h2>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: 'var(--text-base)' }}>
                         Estado: <strong style={{ color: ESTADO_COLORS[transicionCaso.estado] }}>{ESTADO_LABELS[transicionCaso.estado]}</strong>
                         {' → '}
                         <strong style={{ color: transicionEstado ? ESTADO_COLORS[transicionEstado as EstadoPostventa] : undefined }}>
@@ -1240,7 +1240,7 @@ export default function PostventaPage() {
             {/* ─── Modal: Eliminar Caso ─── */}
             {deletingCaso && (
                 <ModalOverlay onClose={() => setDeletingCaso(null)}>
-                    <h2 style={{ margin: '0 0 1rem', fontSize: '1.2rem', fontWeight: 700, color: '#ef4444' }}>Eliminar Caso</h2>
+                    <h2 style={{ margin: '0 0 1rem', fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--danger)' }}>Eliminar Caso</h2>
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                         ¿Eliminar el caso <strong>#{deletingCaso.id}</strong> de <strong>{deletingCaso.cliente?.nombre}</strong>? Esta acción no se puede deshacer.
                     </p>
@@ -1254,7 +1254,7 @@ export default function PostventaPage() {
             {/* ─── Modal: Eliminar Ítem ─── */}
             {deletingItem && (
                 <ModalOverlay onClose={() => setDeletingItem(null)}>
-                    <h2 style={{ margin: '0 0 1rem', fontSize: '1.2rem', fontWeight: 700, color: '#ef4444' }}>Eliminar Ítem</h2>
+                    <h2 style={{ margin: '0 0 1rem', fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--danger)' }}>Eliminar Ítem</h2>
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                         ¿Eliminar el ítem <strong>"{deletingItem.descripcion}"</strong>?
                     </p>
@@ -1268,7 +1268,7 @@ export default function PostventaPage() {
             {/* ─── Modal: Alta / Edición de Tipo ─── */}
             {showTipoModal && (
                 <ModalOverlay onClose={() => setShowTipoModal(false)}>
-                    <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.25rem', fontWeight: 700 }}>
+                    <h2 style={{ margin: '0 0 1.5rem', fontSize: 'var(--text-lg)', fontWeight: 700 }}>
                         {editingTipo ? 'Editar Tipo de Caso' : 'Nuevo Tipo de Caso'}
                     </h2>
                     <div style={{ display: 'grid', gap: '1rem' }}>
@@ -1309,7 +1309,7 @@ export default function PostventaPage() {
             {/* ─── Modal: Eliminar Tipo ─── */}
             {deletingTipo && (
                 <ModalOverlay onClose={() => setDeletingTipo(null)}>
-                    <h2 style={{ margin: '0 0 1rem', fontSize: '1.2rem', fontWeight: 700, color: '#ef4444' }}>Eliminar Tipo</h2>
+                    <h2 style={{ margin: '0 0 1rem', fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--danger)' }}>Eliminar Tipo</h2>
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                         ¿Eliminar <strong>"{deletingTipo.nombre}"</strong>?
                         {(deletingTipo.casosCount ?? 0) > 0
@@ -1354,7 +1354,7 @@ function TiposPanel({ tipos, loading, onEdit, onDelete }: {
                     <thead>
                         <tr style={{ borderBottom: '1px solid var(--border)' }}>
                             {['Tipo', 'Estado', 'Casos', 'Acciones'].map(h => (
-                                <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                                <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                             ))}
                         </tr>
                     </thead>
@@ -1367,7 +1367,7 @@ function TiposPanel({ tipos, loading, onEdit, onDelete }: {
                                         {t.activo ? 'Activo' : 'Archivado'}
                                     </span>
                                 </td>
-                                <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                                <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
                                     {t.casosCount ?? 0}
                                 </td>
                                 <td style={{ padding: '0.75rem 1rem' }}>
@@ -1396,7 +1396,7 @@ function TiposPanel({ tipos, loading, onEdit, onDelete }: {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function ModalOverlay({ children, onClose, wide }: { children: React.ReactNode; onClose: () => void; wide?: boolean }) {
     return (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--overlay-scrim)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
             onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
             <div className="glass" style={{ borderRadius: '1rem', padding: '2rem', width: '100%', maxWidth: wide ? '800px' : '520px', maxHeight: '90vh', overflowY: 'auto' }}>
                 {children}
@@ -1408,7 +1408,7 @@ function ModalOverlay({ children, onClose, wide }: { children: React.ReactNode; 
 function InfoBlock({ title, children }: { title: string; children: React.ReactNode }) {
     return (
         <div style={{ background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)', borderRadius: '0.5rem', padding: '1rem' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>{title}</div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>{title}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>{children}</div>
         </div>
     );
@@ -1416,7 +1416,7 @@ function InfoBlock({ title, children }: { title: string; children: React.ReactNo
 
 function InfoRow({ label, value }: { label: string; value: string }) {
     return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
             <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
             <span style={{ fontWeight: 500, textAlign: 'right', maxWidth: '60%' }}>{value}</span>
         </div>
