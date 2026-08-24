@@ -3,6 +3,7 @@ import prisma from '../../infrastructure/database/prisma';
 import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import { BaseException, NotFoundException, ValidationException } from '../../domain/exceptions/BaseException';
+import { cifrarConfig, estaCifrado } from '../../infrastructure/security/secretBox';
 import {
     CAMPOS_SECRETOS,
     metaConfigSchema,
@@ -24,7 +25,8 @@ const enmascararConfig = (config: unknown): Record<string, unknown> => {
     for (const campo of CAMPOS_SECRETOS) {
         const valor = out[campo];
         if (typeof valor === 'string' && valor.length > 0) {
-            out[campo] = '••••' + valor.slice(-4);
+            // Cifrado en reposo: no hay "últimos 4" legibles que mostrar.
+            out[campo] = estaCifrado(valor) ? '••••••••' : '••••' + valor.slice(-4);
         }
     }
     return out;
@@ -66,7 +68,7 @@ export class IntegracionController {
             }
             const { tipo, nombre, activo, config } = req.body;
             const creada = await prisma.integracionCanal.create({
-                data: { concesionariaId, tipo, nombre, activo: activo ?? true, config },
+                data: { concesionariaId, tipo, nombre, activo: activo ?? true, config: cifrarConfig(config) },
             });
             await audit({
                 entidad: 'IntegracionCanal',
@@ -113,7 +115,9 @@ export class IntegracionController {
                 const schemaCompleto = existente.tipo === 'meta' ? metaConfigSchema : emailConfigSchema;
                 const completa = schemaCompleto.safeParse(mergeada);
                 if (!completa.success) lanzarValidacion(completa.error.issues);
-                configFinal = completa.data as Record<string, unknown>;
+                // Cifrar al persistir. Esto también es la migración lazy: una
+                // config legada en claro queda cifrada en su primer update.
+                configFinal = cifrarConfig(completa.data as Record<string, unknown>);
             }
 
             const actualizada = await prisma.integracionCanal.update({

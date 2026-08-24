@@ -5,6 +5,7 @@ import { rawPrisma } from '../database/prisma';
 import { logger } from '../logging/logger';
 import { env } from '../../config/env';
 import { conContextoSistema, ingestarConsulta } from '../../application/services/consultaIngest';
+import { descifrarSecreto } from '../security/secretBox';
 
 /**
  * Worker de ingesta de consultas por email (avisos de DeRuedas y similares):
@@ -114,7 +115,7 @@ async function revisarCasilla(config: ConfigEmail): Promise<{ ingeridas: number;
         host: config.host ?? '',
         port: config.port ?? 993,
         secure: config.secure ?? true,
-        auth: { user: config.user ?? '', pass: config.pass ?? '' },
+        auth: { user: config.user ?? '', pass: config.pass ? descifrarSecreto(config.pass) : '' },
         logger: false,
     });
     let ingeridas = 0;

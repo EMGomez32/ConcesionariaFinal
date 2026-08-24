@@ -999,7 +999,9 @@ model Financiera {
 
 /// Config de ingesta automática de consultas por tenant: webhook de Meta
 /// (Lead Ads) o casilla IMAP (avisos de DeRuedas). `config` guarda las
-/// credenciales del canal (TODO: cifrar en reposo; hoy protege la RLS).
+/// credenciales del canal, cifradas en reposo (AES-256-GCM) cuando
+/// INTEGRACIONES_SECRET_KEY está seteada; sin la clave quedan en claro y las
+/// protege sólo la RLS (ver infrastructure/security/secretBox.ts).
 model IntegracionCanal {
   id              Int                  @id @default(autoincrement())
   concesionariaId Int                  @map("concesionaria_id")

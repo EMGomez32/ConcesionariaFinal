@@ -3,6 +3,7 @@ import { IntegracionCanal, OrigenLead } from '@prisma/client';
 import { rawPrisma } from '../database/prisma';
 import { logger } from '../logging/logger';
 import { conContextoSistema, ingestarConsulta } from '../../application/services/consultaIngest';
+import { descifrarSecreto } from '../security/secretBox';
 
 /**
  * Webhook de Meta Lead Ads (Instagram/Facebook): verificación de suscripción
@@ -93,7 +94,7 @@ export async function procesarNotificacionMeta(integracion: IntegracionCanal, pa
             const leadgenId = change?.value?.leadgen_id;
             if (!leadgenId) continue;
             try {
-                const lead = await obtenerLeadDeGraph(String(leadgenId), config.pageAccessToken ?? '');
+                const lead = await obtenerLeadDeGraph(String(leadgenId), config.pageAccessToken ? descifrarSecreto(config.pageAccessToken) : '');
                 const origen: OrigenLead = config.origen ?? 'facebook';
                 await conContextoSistema(integracion.concesionariaId, () =>
                     ingestarConsulta({ origen, ...lead }));

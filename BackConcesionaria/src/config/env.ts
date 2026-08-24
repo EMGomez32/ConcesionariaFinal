@@ -28,6 +28,13 @@ const envSchema = z.object({
     // presente; el usuario la fija en el .env junto con APP_DATABASE_URL.
     APP_DB_PASSWORD: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
     JWT_SECRET: z.string().min(10),
+    // Clave de cifrado en reposo de los secretos de integraciones (AES-256-GCM).
+    // 64 hex = 32 bytes: `openssl rand -hex 32`. Opcional: sin ella los secretos
+    // se guardan en claro (warning al arranque; los protege sólo la RLS).
+    INTEGRACIONES_SECRET_KEY: z.preprocess(
+        (v) => (v === '' ? undefined : v),
+        z.string().regex(/^[0-9a-fA-F]{64}$/, 'INTEGRACIONES_SECRET_KEY debe ser 64 caracteres hex (openssl rand -hex 32)').optional(),
+    ),
     JWT_REFRESH_SECRET: z.string().min(10),
     JWT_EXPIRES_IN: z.string().default('15m'),
     JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),

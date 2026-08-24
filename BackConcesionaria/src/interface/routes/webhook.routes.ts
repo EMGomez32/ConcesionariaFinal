@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { logger } from '../../infrastructure/logging/logger';
+import { descifrarSecreto } from '../../infrastructure/security/secretBox';
 import {
     buscarIntegracionMeta,
     resolverVerificacionMeta,
@@ -79,7 +80,7 @@ router.post('/meta/:integracionId', async (req: Request, res: Response, next: Ne
         const config = (integracion.config ?? {}) as { appSecret?: string };
         const firma = req.headers['x-hub-signature-256'];
         const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
-        if (!validarFirmaMeta(rawBody, typeof firma === 'string' ? firma : undefined, config.appSecret)) {
+        if (!validarFirmaMeta(rawBody, typeof firma === 'string' ? firma : undefined, config.appSecret ? descifrarSecreto(config.appSecret) : undefined)) {
             logger.warn(`[meta-webhook] integración ${integracionId}: firma inválida o ausente`);
             res.status(403).send('Forbidden');
             return;

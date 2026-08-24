@@ -2,6 +2,7 @@ import app from './app';
 import config from './config';
 import logger from './utils/logger';
 import { iniciarWorkerIngestaEmail } from './infrastructure/integraciones/emailIngest';
+import { hayClaveDeSecretos } from './infrastructure/security/secretBox';
 
 const server = app.listen(config.port, () => {
     logger.info(`--------------------------------------------------`);
@@ -12,6 +13,9 @@ const server = app.listen(config.port, () => {
     // Worker de ingesta de consultas por email (casillas IMAP de las
     // integraciones): NUNCA en tests (además, los tests importan app, no server).
     if (config.env !== 'test') {
+        if (!hayClaveDeSecretos()) {
+            logger.warn('INTEGRACIONES_SECRET_KEY no está seteada: los secretos de integraciones se guardan EN CLARO (los protege sólo la RLS). Generar con openssl rand -hex 32.');
+        }
         iniciarWorkerIngestaEmail();
     }
 });
