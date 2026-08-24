@@ -25,7 +25,11 @@ RUN npm run build
 # contenedor facilita escalar/escapar). La imagen node:alpine ya trae el user
 # `node` (uid 1000). Le damos la propiedad de /app y del dir de uploads (volumen
 # montado) para que el runtime pueda escribir ahí sin privilegios de root.
-RUN mkdir -p /app/uploads && chown -R node:node /app
+# Los directorios de los volúmenes se crean ACÁ y con dueño node: si un volumen
+# nombrado se monta sobre un path que no existe en la imagen, Docker lo crea
+# root:root y el proceso (que corre como node) no puede escribir. Ya pasó con
+# uploads y con wa-auth (las credenciales de WhatsApp).
+RUN mkdir -p /app/uploads /app/wa-auth && chown -R node:node /app
 USER node
 
 EXPOSE 3000
