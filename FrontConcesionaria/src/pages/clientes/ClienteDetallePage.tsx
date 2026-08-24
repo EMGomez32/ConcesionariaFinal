@@ -344,7 +344,7 @@ const ClienteDetallePage = () => {
                     </div>
                     <div>
                         <h1>{cliente.nombre}</h1>
-                        <p className="text-muted">
+                        <p className="cliente-hero-sub">
                             {[cliente.dni && `CUIT/CUIL: ${cliente.dni}`, cliente.email, cliente.telefono].filter(Boolean).join(' · ')}
                         </p>
                         <div className="lead-stage-row">
@@ -866,7 +866,9 @@ const ClienteDetallePage = () => {
                 .cliente-hero { display: flex; align-items: center; gap: 1.25rem; }
                 .cliente-avatar-lg { width: 64px; height: 64px; border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--accent-2), color-mix(in srgb, var(--accent-2) 78%, white)); color: var(--text-white); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
                 .cliente-hero h1 { font-size: var(--text-2xl); font-weight: 800; letter-spacing: -0.03em; }
-                .text-muted { color: var(--text-secondary); font-size: var(--text-sm); margin-top: 0.25rem; }
+                /* Subtítulo del hero. Antes redefinía la clase GLOBAL .text-muted,
+                   así que le cambiaba tamaño y margen a TODA la página. */
+                .cliente-hero-sub { color: var(--text-secondary); font-size: var(--text-sm); margin-top: 0.25rem; }
                 .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
                 .stat-card { display: flex; align-items: center; gap: 1rem; padding: 1.25rem 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); }
                 .stat-value { font-size: var(--text-xl); font-weight: 800; letter-spacing: -0.02em; }

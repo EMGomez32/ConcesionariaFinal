@@ -23,11 +23,14 @@ const Modal: React.FC<ModalProps> = ({
 }) => {
     // Monta al abrir; desmonta 300ms después de cerrar (para la animación de salida).
     const [render, setRender] = useState(isOpen);
+    // El montaje es estado DERIVADO de isOpen: se ajusta durante el render (patrón
+    // recomendado por React) en vez de dentro de un efecto. Así el modal aparece en
+    // el mismo render —sin el frame extra que metía el efecto— y desaparece el
+    // set-state-in-effect que marcaba el linter. El desmontaje SÍ es un efecto:
+    // depende del tiempo, no del render.
+    if (isOpen && !render) setRender(true);
     useEffect(() => {
-        if (isOpen) {
-            setRender(true);
-            return;
-        }
+        if (isOpen) return;
         const timer = setTimeout(() => setRender(false), 300);
         return () => clearTimeout(timer);
     }, [isOpen]);

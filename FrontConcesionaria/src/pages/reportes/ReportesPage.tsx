@@ -630,15 +630,18 @@ const ReportesPage = () => {
         return keys.length ? keys.map((k) => money(acc[k], k)).join(' · ') : money(0);
     };
 
-    // Banda consolidada / aviso, reutilizada por cada tab.
-    const renderConsolidado = (
-        data: { consolidado?: unknown; sinCotizacion?: boolean } | undefined,
+    // Banda consolidada / aviso, reutilizada por cada tab. Genérico: cada reporte
+    // trae su propio consolidado (total, saldo, neto, comisión...) y `getValor`
+    // extrae el número; el tipo sale inferido del `data` de cada tab, así que el
+    // acceso al campo queda chequeado en vez de pasar por `any`.
+    const renderConsolidado = <T extends { moneda: string; valor: number; fechaCotizacion: string }>(
+        data: { consolidado?: T | null; sinCotizacion?: boolean } | undefined,
         etiqueta: string,
-        getValor: (c: any) => number,
+        getValor: (c: T) => number,
     ) => {
         if (!consolidar) return null;
         if (data?.sinCotizacion) return <SinCotizacionCard isAdmin={isAdmin} onCargar={openCotModal} />;
-        const c = data?.consolidado as any;
+        const c = data?.consolidado;
         if (!c) return null;
         return <ConsolidadoCard etiqueta={etiqueta} valor={getValor(c)} cot={c} />;
     };
