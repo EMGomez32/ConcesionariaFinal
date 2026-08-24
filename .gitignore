@@ -13,6 +13,11 @@ build/
 # ── Datos subidos por usuarios (PII: DNI, recibos de sueldo) ─
 uploads/
 
+# ── Sesiones de WhatsApp (credenciales Signal de cada número vinculado) ─
+# Baileys las escribe en WHATSAPP_AUTH_DIR (por default ./wa-auth al correr el
+# backend a mano). Versionarlas sería filtrar el acceso a los WhatsApp reales.
+wa-auth/
+
 # ── Datos de negocio locales (planillas de migración, no es fuente) ─
 Migracion-AUTENZA.xlsx
 

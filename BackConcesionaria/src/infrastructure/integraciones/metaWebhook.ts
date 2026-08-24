@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { IntegracionCanal, OrigenLead } from '@prisma/client';
-import { rawPrisma } from '../database/prisma';
+import { withAuthBypass } from '../database/unitOfWork';
 import { logger } from '../logging/logger';
 import { conContextoSistema, ingestarConsulta } from '../../application/services/consultaIngest';
 import { descifrarSecreto } from '../security/secretBox';
@@ -32,12 +32,15 @@ const mensajeCorto = (err: unknown): string =>
 /** Integración meta viva y activa por id; null si no existe (→ 403 en la ruta). */
 export async function buscarIntegracionMeta(integracionId: number): Promise<IntegracionCanal | null> {
     if (!Number.isInteger(integracionId) || integracionId <= 0) return null;
-    // rawPrisma: query cross-tenant deliberada (el webhook no tiene tenant en
-    // contexto); deletedAt y activo van filtrados explícitos porque la extensión
-    // no aplica acá.
-    return rawPrisma.integracionCanal.findFirst({
+    // Query cross-tenant deliberada (el webhook no tiene tenant en contexto).
+    // VA POR withAuthBypass, no por rawPrisma pelado: el runtime se conecta como
+    // app_rw (sin BYPASSRLS) y la policy tenant_iso exige app.tenant_id o
+    // app.is_super_admin — sin esas GUC este findFirst devuelve null SIEMPRE y
+    // el webhook responde 403 a todos los leads de Meta, en silencio.
+    // deletedAt y activo van filtrados explícitos porque la extensión no aplica.
+    return withAuthBypass((tx) => tx.integracionCanal.findFirst({
         where: { id: integracionId, tipo: 'meta', activo: true, deletedAt: null },
-    });
+    }));
 }
 
 /**
@@ -107,15 +110,15 @@ export async function procesarNotificacionMeta(integracion: IntegracionCanal, pa
     }
 
     try {
-        // rawPrisma con where por id: la fila ya se validó arriba; no hay contexto
-        // de request para la extensión.
-        await rawPrisma.integracionCanal.update({
+        // Mismo motivo que la lectura: con app_rw la policy también aplica a los
+        // UPDATE, así que sin el bypass esto afecta 0 filas en silencio.
+        await withAuthBypass((tx) => tx.integracionCanal.update({
             where: { id: integracion.id },
             data: {
                 ...(ingeridas > 0 ? { ultimoEvento: new Date() } : {}),
                 ultimoError: ultimoErrorMsg,
             },
-        });
+        }));
     } catch (err) {
         logger.error(`[meta-webhook] integración ${integracion.id}: no se pudo actualizar el estado: ${mensajeCorto(err)}`);
     }

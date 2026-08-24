@@ -2,6 +2,7 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { IntegracionCanal, OrigenLead } from '@prisma/client';
 import { rawPrisma } from '../database/prisma';
+import { withAuthBypass } from '../database/unitOfWork';
 import { logger } from '../logging/logger';
 import { env } from '../../config/env';
 import { conContextoSistema, ingestarConsulta } from '../../application/services/consultaIngest';
@@ -62,12 +63,18 @@ async function correrCiclo(): Promise<void> {
     }
     enProceso = true;
     try {
-        // rawPrisma: query cross-tenant deliberada (el worker atiende todas las
-        // concesionarias). Sin la extensión, activo y deletedAt se filtran A MANO.
-        const integraciones = await rawPrisma.integracionCanal.findMany({
+        // Barrido cross-tenant deliberado (el worker atiende todas las
+        // concesionarias). TIENE que ir por withAuthBypass, no por rawPrisma
+        // pelado: en runtime la app se conecta como app_rw (sin BYPASSRLS), y
+        // la policy tenant_iso exige app.tenant_id o app.is_super_admin — sin
+        // esas GUC el findMany devuelve CERO filas EN SILENCIO y el worker no
+        // procesa ninguna casilla. Verificado contra prod: 0 sin bypass vs 5
+        // con bypass sobre la misma tabla. Sin la extensión, activo y deletedAt
+        // se filtran A MANO.
+        const integraciones = await withAuthBypass((tx) => tx.integracionCanal.findMany({
             where: { tipo: 'email', activo: true, deletedAt: null },
             orderBy: { id: 'asc' },
-        });
+        }));
         for (const integracion of integraciones) {
             await procesarIntegracion(integracion);
         }
@@ -93,14 +100,16 @@ async function procesarIntegracion(integracion: IntegracionCanal): Promise<void>
         logger.error(`[email-ingest] integración ${integracion.id} (${integracion.nombre}): ${ultimoErrorMsg}`);
     }
     try {
-        // rawPrisma con where por id: fila ya conocida; no hay request en contexto.
-        await rawPrisma.integracionCanal.update({
+        // Igual que la lectura: con app_rw la policy tenant_iso también aplica a
+        // los UPDATE, así que sin el bypass este update afecta 0 filas en
+        // silencio y el diagnóstico de Ajustes nunca se actualiza.
+        await withAuthBypass((tx) => tx.integracionCanal.update({
             where: { id: integracion.id },
             data: {
                 ...(ingeridas > 0 ? { ultimoEvento: new Date() } : {}),
                 ultimoError: ultimoErrorMsg,
             },
-        });
+        }));
     } catch (err) {
         logger.error(`[email-ingest] integración ${integracion.id}: no se pudo actualizar el estado: ${mensajeCorto(err)}`);
     }

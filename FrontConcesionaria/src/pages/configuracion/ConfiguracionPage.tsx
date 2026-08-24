@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt, Plug, Plus, Edit, Copy, Link2, ChevronRight, ChevronDown } from 'lucide-react';
+import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt, Plug, Plus, Edit, Copy, Link2, ChevronRight, ChevronDown, MessageCircle, QrCode, Unplug, LogOut, Smartphone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
@@ -9,11 +9,15 @@ import { concesionariasApi } from '../../api/concesionarias.api';
 import { usuariosApi } from '../../api/usuarios.api';
 import { integracionesApi } from '../../api/integraciones.api';
 import type { Integracion, IntegracionConfig, IntegracionTipo } from '../../api/integraciones.api';
+import { whatsappApi } from '../../api/whatsapp.api';
+import type { EstadoSesionWhatsapp, EstadoWhatsappCuenta, SaludNumeroWhatsapp, WhatsappCuenta } from '../../api/whatsapp.api';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
 import Modal from '../../components/ui/Modal';
+import Badge from '../../components/ui/Badge';
+import type { BadgeVariant } from '../../components/ui/Badge';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { FileUploader } from '../../components/ui/FileUploader';
 import type { Concesionaria, UpdateConcesionariaDto } from '../../types/concesionaria.types';
@@ -556,6 +560,384 @@ function IntegracionesConsultas() {
     );
 }
 
+// ─── WhatsApp (vinculación del número por QR) ───────────────────────────────
+
+const ESTADO_WA_LABEL: Record<EstadoWhatsappCuenta, string> = {
+    desconectado: 'Desconectado',
+    conectando: 'Conectando…',
+    esperando_qr: 'Esperando QR',
+    conectado: 'Conectado',
+    reconectando: 'Reconectando…',
+    error: 'Error',
+};
+
+const ESTADO_WA_BADGE: Record<EstadoWhatsappCuenta, BadgeVariant> = {
+    conectado: 'success',
+    esperando_qr: 'warning',
+    error: 'danger',
+    desconectado: 'default',
+    conectando: 'default',
+    reconectando: 'default',
+};
+
+// Salud del número frente al anti-ban: la calcula el backend (espaciado de envíos).
+const SALUD_WA_LABEL: Record<SaludNumeroWhatsapp, string> = {
+    normal: 'Normal',
+    ralentizado: 'Ralentizado',
+    pausado: 'Pausado',
+};
+
+// Estados en los que el vínculo todavía se está negociando: el modal del QR
+// sigue polleando hasta que caiga en 'conectado' o 'error'.
+const ESTADOS_WA_EN_VUELO: EstadoWhatsappCuenta[] = ['conectando', 'esperando_qr', 'reconectando'];
+
+// Mismo criterio defensivo que en las integraciones: el listado puede venir
+// pelado o envuelto según el módulo del backend.
+const normalizarListaCuentas = (res: unknown): WhatsappCuenta[] => {
+    if (Array.isArray(res)) return res as WhatsappCuenta[];
+    const o = (res ?? {}) as { results?: WhatsappCuenta[]; data?: WhatsappCuenta[] | { results?: WhatsappCuenta[] } };
+    if (Array.isArray(o.results)) return o.results;
+    if (Array.isArray(o.data)) return o.data;
+    const dr = (o.data as { results?: WhatsappCuenta[] } | undefined)?.results;
+    return Array.isArray(dr) ? dr : [];
+};
+
+function CuentasWhatsapp() {
+    const { addToast } = useUIStore();
+    const [cuentas, setCuentas] = useState<WhatsappCuenta[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [alias, setAlias] = useState('');
+    const [creando, setCreando] = useState(false);
+    // Cuenta con una acción (conectar/desconectar) en curso: bloquea sus botones.
+    const [accionId, setAccionId] = useState<number | null>(null);
+    // Cuenta cuyo QR se está mostrando + último estado polleado del backend.
+    const [qrCuenta, setQrCuenta] = useState<WhatsappCuenta | null>(null);
+    const [sesion, setSesion] = useState<EstadoSesionWhatsapp | null>(null);
+    const [cerrandoSesion, setCerrandoSesion] = useState<WhatsappCuenta | null>(null);
+    const [cerrandoBusy, setCerrandoBusy] = useState(false);
+
+    const cargar = useCallback(() => {
+        whatsappApi.getCuentas()
+            .then((res: unknown) => setCuentas(normalizarListaCuentas(res)))
+            .catch(() => addToast('Error al cargar las cuentas de WhatsApp', 'error'))
+            .finally(() => setLoading(false));
+    }, [addToast]);
+
+    useEffect(() => { cargar(); }, [cargar]);
+
+    const cerrarQr = useCallback(() => {
+        setQrCuenta(null);
+        setSesion(null);
+    }, []);
+
+    // El vínculo se completa en el celular, no acá: mientras el modal del QR está
+    // abierto se pregunta el estado cada 2s (y una vez ya mismo, para que "Ver
+    // código QR" no espere el primer tick). Al conectar, cierra y avisa.
+    const qrCuentaId = qrCuenta?.id ?? null;
+    useEffect(() => {
+        if (qrCuentaId == null) return;
+        let cancelado = false;
+        const consultar = async () => {
+            try {
+                const res = await whatsappApi.getEstado(qrCuentaId);
+                if (cancelado) return;
+                setSesion(res);
+                if (res.estado === 'conectado') {
+                    cerrarQr();
+                    addToast('WhatsApp vinculado con éxito', 'success');
+                    cargar();
+                }
+            } catch (err) {
+                // Un tick fallido no cierra el modal: el siguiente puede recuperarse.
+                if (cancelado) return;
+                setSesion({
+                    estado: 'error', qr: null, numero: null,
+                    error: getApiErrorMessage(err, 'No se pudo consultar el estado de la vinculación'),
+                });
+            }
+        };
+        void consultar();
+        const timer = window.setInterval(consultar, 2000);
+        return () => { cancelado = true; window.clearInterval(timer); };
+    }, [qrCuentaId, addToast, cargar, cerrarQr]);
+
+    const crear = async () => {
+        if (!alias.trim()) {
+            addToast('Poné un alias para identificar el número', 'error');
+            return;
+        }
+        setCreando(true);
+        try {
+            await whatsappApi.createCuenta({ alias: alias.trim() });
+            addToast('Cuenta creada. Ahora vinculá el número escaneando el QR.', 'success');
+            setAlias('');
+            cargar();
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'No se pudo crear la cuenta'), 'error');
+        } finally {
+            setCreando(false);
+        }
+    };
+
+    const vincular = async (cuenta: WhatsappCuenta) => {
+        setAccionId(cuenta.id);
+        try {
+            const res = await whatsappApi.conectar(cuenta.id);
+            if (res?.estado === 'conectado') {
+                // Tenía la sesión guardada: reconectó sin pedir QR. (También cubre
+                // el "Reintentar" del modal, que en ese caso ya no tiene sentido.)
+                if (qrCuenta?.id === cuenta.id) cerrarQr();
+                addToast('WhatsApp reconectado', 'success');
+            } else {
+                setSesion(res ?? null);
+                setQrCuenta(cuenta);
+            }
+            cargar();
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'No se pudo iniciar la vinculación'), 'error');
+        } finally {
+            setAccionId(null);
+        }
+    };
+
+    const verQr = (cuenta: WhatsappCuenta) => {
+        setSesion(null);
+        setQrCuenta(cuenta);
+    };
+
+    const desconectar = async (cuenta: WhatsappCuenta) => {
+        setAccionId(cuenta.id);
+        try {
+            await whatsappApi.desconectar(cuenta.id);
+            addToast('WhatsApp desconectado', 'success');
+            if (qrCuenta?.id === cuenta.id) cerrarQr();
+            cargar();
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'No se pudo desconectar'), 'error');
+        } finally {
+            setAccionId(null);
+        }
+    };
+
+    const confirmarCerrarSesion = async () => {
+        if (!cerrandoSesion) return;
+        setCerrandoBusy(true);
+        try {
+            await whatsappApi.cerrarSesion(cerrandoSesion.id);
+            addToast('Sesión cerrada. Para volver a usarlo hay que vincularlo de nuevo.', 'success');
+            if (qrCuenta?.id === cerrandoSesion.id) cerrarQr();
+            setCerrandoSesion(null);
+            cargar();
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'No se pudo cerrar la sesión'), 'error');
+        } finally {
+            setCerrandoBusy(false);
+        }
+    };
+
+    const estadoModal = sesion?.estado ?? qrCuenta?.estado ?? 'conectando';
+    const errorModal = sesion?.error ?? null;
+
+    return (
+        <div className="card" style={{ marginTop: 'var(--space-6)' }}>
+            <div style={{ marginBottom: 'var(--space-4)' }}>
+                <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <MessageCircle size={18} /> WhatsApp
+                </h2>
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 'var(--space-1)', lineHeight: 1.5, maxWidth: 560 }}>
+                    Vinculá el WhatsApp de la concesionaria para atender las consultas desde el sistema.
+                    El número <strong>sigue funcionando igual en el celular</strong>: esto es un dispositivo
+                    vinculado, como WhatsApp Web.
+                </p>
+            </div>
+
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--text-muted)' }}>
+                    <RefreshCw size={20} className="animate-spin" style={{ display: 'inline-block', marginRight: 'var(--space-2)' }} /> Cargando...
+                </div>
+            ) : cuentas.length === 0 ? (
+                <div>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', lineHeight: 1.5, marginBottom: 'var(--space-4)', maxWidth: 560 }}>
+                        Todavía no hay ningún número. Creá la cuenta con un alias para reconocerla
+                        (el número se toma solo al escanear el QR).
+                    </p>
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', flexWrap: 'wrap', maxWidth: 460 }}>
+                        <div style={{ flex: 1, minWidth: 220 }}>
+                            <Input
+                                dense
+                                label="Alias"
+                                type="text"
+                                value={alias}
+                                placeholder="Ej: Ventas"
+                                maxLength={60}
+                                onChange={e => setAlias(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); crear(); } }}
+                            />
+                        </div>
+                        <Button variant="primary" onClick={crear} loading={creando}>
+                            <Plus size={16} /> Crear
+                        </Button>
+                    </div>
+                </div>
+            ) : (
+                <div className="table-container">
+                    <table className="data-table">
+                        <thead>
+                            <tr>
+                                <th>Alias</th>
+                                <th>Número</th>
+                                <th>Estado</th>
+                                <th>Envíos</th>
+                                <th>Último error</th>
+                                <th style={{ textAlign: 'right' }}>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {cuentas.map((c) => {
+                                const ocupada = accionId === c.id;
+                                const enVuelo = ESTADOS_WA_EN_VUELO.includes(c.estado);
+                                return (
+                                    <tr key={c.id}>
+                                        <td style={{ fontWeight: 600 }}>{c.alias}</td>
+                                        <td>{c.numero || '—'}</td>
+                                        <td>
+                                            <Badge variant={ESTADO_WA_BADGE[c.estado]}>{ESTADO_WA_LABEL[c.estado]}</Badge>
+                                        </td>
+                                        <td>
+                                            {c.saludEstado === 'normal'
+                                                ? <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Normal</span>
+                                                : <Badge variant={c.saludEstado === 'pausado' ? 'danger' : 'warning'}>{SALUD_WA_LABEL[c.saludEstado]}</Badge>}
+                                        </td>
+                                        <td>
+                                            {c.ultimoError ? (
+                                                <span
+                                                    className="text-danger"
+                                                    title={c.ultimoError}
+                                                    style={{ display: 'inline-block', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom', fontSize: 'var(--text-sm)' }}
+                                                >
+                                                    {c.ultimoError}
+                                                </span>
+                                            ) : '—'}
+                                        </td>
+                                        <td style={{ textAlign: 'right' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                                                {c.estado === 'conectado' ? (
+                                                    <Button variant="secondary" size="sm" onClick={() => desconectar(c)} loading={ocupada}>
+                                                        <Unplug size={14} /> Desconectar
+                                                    </Button>
+                                                ) : enVuelo ? (
+                                                    <>
+                                                        <Button variant="primary" size="sm" onClick={() => verQr(c)} disabled={ocupada}>
+                                                            <QrCode size={14} /> Ver código QR
+                                                        </Button>
+                                                        <Button variant="secondary" size="sm" onClick={() => desconectar(c)} loading={ocupada}>
+                                                            <Unplug size={14} /> Cancelar
+                                                        </Button>
+                                                    </>
+                                                ) : (
+                                                    <Button variant="primary" size="sm" onClick={() => vincular(c)} loading={ocupada}>
+                                                        <QrCode size={14} /> {c.tieneSesion ? 'Reconectar' : 'Vincular'}
+                                                    </Button>
+                                                )}
+                                                {c.tieneSesion && (
+                                                    <Button variant="ghost" size="sm" onClick={() => setCerrandoSesion(c)} disabled={ocupada}>
+                                                        <LogOut size={14} /> Cerrar sesión
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            <Modal
+                isOpen={!!qrCuenta}
+                onClose={cerrarQr}
+                title={qrCuenta ? `Vincular "${qrCuenta.alias}"` : 'Vincular WhatsApp'}
+                subtitle="Escaneá el código con el celular del número que querés usar."
+                maxWidth="520px"
+                footer={(
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', width: '100%' }}>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                            Estado: {ESTADO_WA_LABEL[estadoModal]}
+                        </span>
+                        <Button variant="secondary" onClick={cerrarQr}>Cerrar</Button>
+                    </div>
+                )}
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-4)' }}>
+                    {/* El QR va SIEMPRE sobre blanco (incluso en tema oscuro): un código
+                        invertido no lo lee la cámara. */}
+                    <div style={{
+                        width: 248, height: 248, borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
+                        background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: 'var(--space-2)', flexShrink: 0,
+                    }}>
+                        {sesion?.qr ? (
+                            <img src={sesion.qr} alt="Código QR para vincular WhatsApp" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                        ) : (
+                            <span style={{ color: '#8a93a6', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                <RefreshCw size={16} className="animate-spin" /> Generando el código...
+                            </span>
+                        )}
+                    </div>
+
+                    {errorModal && (
+                        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)' }}>
+                            <p className="text-danger" style={{ margin: 0, fontSize: 'var(--text-sm)', textAlign: 'center', lineHeight: 1.5 }}>
+                                {errorModal}
+                            </p>
+                            {qrCuenta && (
+                                <Button variant="secondary" size="sm" onClick={() => vincular(qrCuenta)} loading={accionId === qrCuenta.id}>
+                                    <RefreshCw size={14} /> Reintentar
+                                </Button>
+                            )}
+                        </div>
+                    )}
+
+                    <ol style={{ margin: 0, paddingLeft: 'var(--space-5)', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.7, alignSelf: 'stretch' }}>
+                        <li>Abrí <strong>WhatsApp</strong> en el celular.</li>
+                        <li>Entrá a <strong>Dispositivos vinculados</strong>.</li>
+                        <li>Tocá <strong>Vincular un dispositivo</strong>.</li>
+                        <li>Escaneá este código con la cámara.</li>
+                    </ol>
+
+                    <div style={{
+                        alignSelf: 'stretch', display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start',
+                        padding: 'var(--space-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+                        background: 'var(--bg-secondary)',
+                    }}>
+                        <Smartphone size={16} style={{ color: 'var(--text-muted)', flexShrink: 0, marginTop: 2 }} />
+                        <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                            El número <strong>sigue funcionando en el celular</strong> como siempre: WhatsApp queda
+                            vinculado a este sistema igual que WhatsApp Web. Si alguna vez cerrás la sesión desde el
+                            teléfono (Dispositivos vinculados → cerrar sesión), hay que volver a vincularlo acá.
+                        </p>
+                    </div>
+                </div>
+            </Modal>
+
+            <ConfirmDialog
+                isOpen={!!cerrandoSesion}
+                title="Cerrar sesión de WhatsApp"
+                message={cerrandoSesion
+                    ? `¿Cerrar la sesión de "${cerrandoSesion.alias}"? Se borra la vinculación y, para volver a usarlo, vas a tener que escanear el QR de nuevo desde el celular.`
+                    : ''}
+                confirmLabel="Cerrar sesión"
+                cancelLabel="Cancelar"
+                type="warning"
+                onConfirm={confirmarCerrarSesion}
+                onCancel={() => setCerrandoSesion(null)}
+                loading={cerrandoBusy}
+            />
+        </div>
+    );
+}
+
 const ConfiguracionPage = () => {
     const { user, setUser } = useAuthStore();
     const { addToast } = useUIStore();
@@ -988,6 +1370,9 @@ const ConfiguracionPage = () => {
 
             {/* Integraciones de consultas: sólo administración (crea/edita credenciales). */}
             {isAdmin && <IntegracionesConsultas />}
+
+            {/* WhatsApp: sólo administración (vincula el número de la concesionaria). */}
+            {isAdmin && <CuentasWhatsapp />}
         </div>
     );
 };

@@ -28,6 +28,8 @@ import tipoPostventaRoutes from '../interface/routes/tipo-postventa.routes';
 import financieraRoutes from '../interface/routes/financiera.routes';
 import financiacionRoutes from '../interface/routes/financiacion.routes';
 import solicitudRoutes from '../interface/routes/solicitud-financiacion.routes';
+import whatsappRoutes from '../interface/routes/whatsapp.routes';
+import conversacionRoutes from '../interface/routes/conversacion.routes';
 import auditoriaRoutes from '../interface/routes/audit-log.routes';
 import billingRoutes from '../interface/routes/billing.routes';
 import reporteRoutes from '../interface/routes/reporte.routes';
@@ -102,6 +104,12 @@ router.use('/postventa-tipos', tipoPostventaRoutes);
 router.use('/financieras', financieraRoutes);
 router.use('/financiaciones', financiacionRoutes);
 router.use('/financiacion-solicitudes', solicitudRoutes);
+
+// WhatsApp — vinculación de números (admin, gating en el router) y bandeja de
+// conversaciones (admin + vendedor; el vendedor puro sólo ve las suyas o las sin
+// asignar, recorte que aplica el service).
+router.use('/whatsapp', whatsappRoutes);
+router.use('/conversaciones', conversacionRoutes);
 
 // Auditoría — el log expone IP, user-agent y el detalle de cada operación de
 // TODOS los usuarios del tenant. Es dato sensible: sólo admin (super_admin

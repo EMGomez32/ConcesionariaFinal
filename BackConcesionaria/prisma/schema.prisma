@@ -45,6 +45,8 @@ model Concesionaria {
   categoriasGastoVehiculo CategoriaGastoVehiculo[]
   tiposPostventa          TipoPostventa[]
   integracionesCanal      IntegracionCanal[]
+  whatsappCuentas         WhatsappCuenta[]
+  conversaciones          Conversacion[]
   clientes                Cliente[]
   clienteSeguimientos     ClienteSeguimiento[]
   tasaciones              Tasacion[]
@@ -147,6 +149,8 @@ model Usuario {
   tasaciones             Tasacion[]           @relation("TasacionTasador")
   historialPreciosVehiculo VehiculoPrecioHistorial[] @relation("PrecioHistorialUsuario")
   clientesAsignados      Cliente[]            @relation("ClienteVendedorAsignado")
+  conversacionesAsignadas Conversacion[]     @relation("ConversacionAsignada")
+  mensajesWhatsapp       MensajeWhatsapp[]    @relation("MensajeEnviadoPor")
   refreshTokens          RefreshToken[]
 
   @@index([concesionariaId])
@@ -203,6 +207,7 @@ model Cliente {
   tasaciones              Tasacion[]
   vehiculosInteres        VehiculoInteres[]
   solicitudesFinanciacion SolicitudFinanciacion[]
+  conversaciones          Conversacion[]
   ventas                  Venta[]
 
   @@index([concesionariaId])
@@ -995,6 +1000,162 @@ model Financiera {
   @@unique([concesionariaId, nombre])
   @@index([concesionariaId])
   @@map("financieras")
+}
+
+/// Estado del socket de WhatsApp de una cuenta vinculada.
+enum EstadoWhatsappCuenta {
+  desconectado
+  conectando
+  esperando_qr
+  conectado
+  reconectando
+  error
+}
+
+/// Quién opera el número. `baileys` se vincula por QR como un WhatsApp Web
+/// (el número SIGUE funcionando en el celular); `cloud_api` es la API oficial
+/// de Meta (sin socket, sin riesgo de ban, pero captura el número). Hoy sólo
+/// está implementado baileys; el enum deja el camino abierto.
+enum ProveedorWhatsapp {
+  baileys
+  cloud_api
+}
+
+/// Circuit breaker por salud de entrega del número (anti-ban): normal (verde),
+/// ralentizado (envía más lento), pausado (no envía).
+enum SaludNumeroWhatsapp {
+  normal
+  ralentizado
+  pausado
+}
+
+enum EstadoConversacion {
+  abierta
+  cerrada
+  archivada
+}
+
+enum DireccionMensaje {
+  entrante
+  saliente
+}
+
+enum EstadoMensajeWhatsapp {
+  pendiente
+  enviando
+  enviado
+  entregado
+  leido
+  fallido
+  recibido
+}
+
+enum TipoMensajeWhatsapp {
+  texto
+  imagen
+  audio
+  video
+  documento
+  ubicacion
+  contacto
+  sistema
+}
+
+/// Número de WhatsApp vinculado a la concesionaria. La sesión de Baileys vive
+/// en disco (WHATSAPP_AUTH_DIR/<id>), no acá: este registro es el estado y la
+/// configuración del número.
+model WhatsappCuenta {
+  id                 Int                   @id @default(autoincrement())
+  concesionariaId    Int                   @map("concesionaria_id")
+  alias              String
+  numero             String?
+  estado             EstadoWhatsappCuenta  @default(desconectado)
+  proveedor          ProveedorWhatsapp     @default(baileys)
+  activa             Boolean               @default(true)
+  ultimoError        String?               @map("ultimo_error")
+  /// Circuit breaker de entrega (ver salud-numero): fuente de verdad del ritmo.
+  saludEstado        SaludNumeroWhatsapp   @default(normal) @map("salud_estado")
+  saludMotivo        String?               @map("salud_motivo")
+  saludDesde         DateTime?             @map("salud_desde")
+  /// Anti-ban: instante del próximo envío permitido. Cada envío avanza el slot
+  /// un gap aleatorio, calculado atómicamente en SQL (evita ráfagas).
+  proximoEnvioAt     DateTime?             @map("proximo_envio_at")
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+  deletedAt          DateTime?             @map("deleted_at")
+  concesionaria      Concesionaria         @relation(fields: [concesionariaId], references: [id])
+  conversaciones     Conversacion[]
+
+  @@unique([concesionariaId, alias])
+  @@index([concesionariaId])
+  @@map("whatsapp_cuentas")
+}
+
+/// Hilo de WhatsApp con un contacto. Se vincula al Cliente por teléfono cuando
+/// existe; si no, queda suelta y se puede registrar como consulta desde la
+/// bandeja (reusa la ingesta de leads).
+model Conversacion {
+  id               Int                @id @default(autoincrement())
+  concesionariaId  Int                @map("concesionaria_id")
+  whatsappCuentaId Int                @map("whatsapp_cuenta_id")
+  clienteId        Int?               @map("cliente_id")
+  telefono         String
+  jid              String?
+  nombreContacto   String?            @map("nombre_contacto")
+  estado           EstadoConversacion @default(abierta)
+  /// Vendedor que atiende el hilo (null = sin asignar).
+  asignadoAId      Int?               @map("asignado_a_id")
+  ultimoMensajeAt  DateTime           @default(now()) @map("ultimo_mensaje_at")
+  /// Dirección del último mensaje. Denormalizado para filtrar "sin responder"
+  /// en la bandeja sin subconsulta por conversación.
+  ultimoMensajeDir DireccionMensaje   @default(entrante) @map("ultimo_mensaje_dir")
+  noLeidos         Int                @default(0) @map("no_leidos")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  deletedAt        DateTime?          @map("deleted_at")
+  concesionaria    Concesionaria      @relation(fields: [concesionariaId], references: [id])
+  whatsappCuenta   WhatsappCuenta     @relation(fields: [whatsappCuentaId], references: [id])
+  cliente          Cliente?           @relation(fields: [clienteId], references: [id])
+  asignadoA        Usuario?           @relation("ConversacionAsignada", fields: [asignadoAId], references: [id])
+  mensajes         MensajeWhatsapp[]
+
+  @@unique([whatsappCuentaId, telefono])
+  @@index([concesionariaId, estado, ultimoMensajeAt])
+  @@index([concesionariaId, ultimoMensajeDir, noLeidos])
+  @@index([clienteId])
+  @@map("conversaciones")
+}
+
+model MensajeWhatsapp {
+  id             Int                   @id @default(autoincrement())
+  concesionariaId Int                  @map("concesionaria_id")
+  conversacionId Int                   @map("conversacion_id")
+  direccion      DireccionMensaje
+  tipo           TipoMensajeWhatsapp   @default(texto)
+  contenido      String
+  estado         EstadoMensajeWhatsapp @default(pendiente)
+  /// Id que asigna WhatsApp. Único POR conversación (se repite entre chats).
+  waMessageId    String?               @map("wa_message_id")
+  mediaUrl       String?               @map("media_url")
+  mediaMimeType  String?               @map("media_mime_type")
+  /// Usuario que lo envió desde el panel (null = entrante o automático).
+  enviadoPorId   Int?                  @map("enviado_por_id")
+  errorMensaje   String?               @map("error_mensaje")
+  /// Instante en que el worker puede despacharlo (espaciado anti-ban).
+  enviarAt       DateTime?             @map("enviar_at")
+  intentos       Int                   @default(0)
+  createdAt      DateTime              @default(now()) @map("created_at")
+  enviadoEn      DateTime?             @map("enviado_en")
+  entregadoEn    DateTime?             @map("entregado_en")
+  leidoEn        DateTime?             @map("leido_en")
+  deletedAt      DateTime?             @map("deleted_at")
+  conversacion   Conversacion          @relation(fields: [conversacionId], references: [id])
+  enviadoPor     Usuario?              @relation("MensajeEnviadoPor", fields: [enviadoPorId], references: [id])
+
+  @@unique([conversacionId, waMessageId])
+  @@index([conversacionId, createdAt])
+  @@index([estado, enviarAt])
+  @@map("mensajes_whatsapp")
 }
 
 /// Config de ingesta automática de consultas por tenant: webhook de Meta

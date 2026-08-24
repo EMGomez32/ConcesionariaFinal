@@ -77,6 +77,18 @@ services:
       # OJO: el contenedor SÓLO ve las vars listadas acá (tomadas del .env de la
       # RAÍZ) — un valor puesto en BackConcesionaria/.env no llega al runtime.
       - INTEGRACIONES_SECRET_KEY=${INTEGRACIONES_SECRET_KEY:-}
+      # --- WhatsApp (Baileys) ---
+      # Dónde guarda Baileys las credenciales de cada número vinculado (una
+      # subcarpeta por cuenta). TIENE que caer en el volumen wa-auth: si el
+      # directorio se pierde, cada deploy vuelve a pedir el QR de todos los
+      # números.
+      - WHATSAPP_AUTH_DIR=/app/wa-auth
+      # Espaciado anti-ban entre envíos consecutivos del MISMO número: cada
+      # mensaje se agenda a un gap aleatorio entre min y max del anterior.
+      # Baileys no es la API oficial: mandar en ráfaga es la forma más rápida
+      # de que Meta banee el número. Subilos si vas a mandar mucho volumen.
+      - WHATSAPP_DELAY_MIN_MS=${WHATSAPP_DELAY_MIN_MS:-5000}
+      - WHATSAPP_DELAY_MAX_MS=${WHATSAPP_DELAY_MAX_MS:-15000}
     # 'migrate deploy' aplica las migraciones versionadas pendientes (prisma/migrations)
     # y las registra en _prisma_migrations; nunca cambia el schema fuera de una migración.
     # Idempotente: sin pendientes es no-op. El cutover desde 'db push' requirió baselinear
@@ -85,6 +97,9 @@ services:
     command: sh -c "npx prisma migrate deploy && npm run init-rls && npm run setup-app-role && npm start"
     volumes:
       - uploads:/app/uploads
+      # Sesiones de WhatsApp: sin este volumen, las credenciales de Baileys se
+      # van con el contenedor y hay que re-escanear el QR en cada deploy.
+      - wa-auth:/app/wa-auth
     healthcheck:
       # node en vez de curl (la imagen alpine no trae curl por defecto).
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
@@ -162,3 +177,6 @@ volumes:
   pgdata:
   uploads:
   backups:
+  # Credenciales de los números de WhatsApp vinculados (Baileys). Borrarlo
+  # equivale a desvincular todos los números: hay que escanear los QR de nuevo.
+  wa-auth:
