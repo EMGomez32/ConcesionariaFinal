@@ -779,25 +779,41 @@ const PresupuestosPage = () => {
                         </div>
                         {form.items.map((item, i) => (
                             <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4">
-                                <div className="md:col-span-5">
-                                    <label className="form-label-xs">Vehículo / Modelo</label>
-                                    <select className="form-input" value={item.vehiculoId} onChange={e => updItem(i, 'vehiculoId', e.target.value)}>
-                                        <option value="">SELECCIONE UNIDAD EN STOCK...</option>
-                                        {vehiculos.map(v => <option key={v.id} value={v.id}>{v.marca} {v.modelo} — {v.dominio ?? v.vin ?? `#${v.id}`}</option>)}
-                                    </select>
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className="form-label-xs">P. Lista</label>
-                                    <input type="number" className="form-input" value={item.precioLista} onChange={e => updItem(i, 'precioLista', e.target.value)} />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className="form-label-xs">Desc.</label>
-                                    <input type="number" className="form-input" value={item.descuento} onChange={e => updItem(i, 'descuento', e.target.value)} />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className="form-label-xs">Final *</label>
-                                    <input type="number" className="form-input font-bold text-accent" value={item.precioFinal} onChange={e => updItem(i, 'precioFinal', e.target.value)} />
-                                </div>
+                                <Select
+                                    dense
+                                    containerClassName="md:col-span-5 mb-0"
+                                    label="Vehículo / Modelo"
+                                    placeholder="SELECCIONE UNIDAD EN STOCK..."
+                                    value={item.vehiculoId}
+                                    onChange={e => updItem(i, 'vehiculoId', e.target.value)}
+                                >
+                                    {vehiculos.map(v => <option key={v.id} value={v.id}>{v.marca} {v.modelo} — {v.dominio ?? v.vin ?? `#${v.id}`}</option>)}
+                                </Select>
+                                <Input
+                                    dense
+                                    containerClassName="md:col-span-2 mb-0"
+                                    label="P. Lista"
+                                    type="number"
+                                    value={item.precioLista}
+                                    onChange={e => updItem(i, 'precioLista', e.target.value)}
+                                />
+                                <Input
+                                    dense
+                                    containerClassName="md:col-span-2 mb-0"
+                                    label="Desc."
+                                    type="number"
+                                    value={item.descuento}
+                                    onChange={e => updItem(i, 'descuento', e.target.value)}
+                                />
+                                <Input
+                                    dense
+                                    containerClassName="md:col-span-2 mb-0"
+                                    label="Final *"
+                                    type="number"
+                                    className="font-bold text-accent"
+                                    value={item.precioFinal}
+                                    onChange={e => updItem(i, 'precioFinal', e.target.value)}
+                                />
                                 <div className="md:col-span-1">
                                     <button className="w-full flex items-center justify-center text-danger"
                                         onClick={() => removeItem(i)} disabled={form.items.length === 1}>

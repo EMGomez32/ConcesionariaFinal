@@ -537,20 +537,20 @@ const VentasPage = () => {
                         </div>
                         {form.pagos.map((p, i) => (
                             <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4">
-                                <Input dense containerClassName="md:col-span-3" label="Importe Recibido" type="number" className="font-bold" value={p.monto || ''}
+                                <Input dense containerClassName="mb-0 md:col-span-3" label="Importe Recibido" type="number" className="font-bold" value={p.monto || ''}
                                     onChange={e => {
                                         const newPagos = [...form.pagos];
                                         newPagos[i].monto = +e.target.value;
                                         setForm(f => ({ ...f, pagos: newPagos }));
                                     }} />
-                                <Select dense containerClassName="md:col-span-3" label="Vía Canal" value={p.metodo} onChange={e => {
+                                <Select dense containerClassName="mb-0 md:col-span-3" label="Vía Canal" value={p.metodo} onChange={e => {
                                     const newPagos = [...form.pagos];
                                     newPagos[i].metodo = e.target.value as 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
                                     setForm(f => ({ ...f, pagos: newPagos }));
                                 }}>
                                     {Object.entries(metodoLabels).map(([k, lbl]) => <option key={k} value={k}>{lbl.toUpperCase()}</option>)}
                                 </Select>
-                                <Input dense containerClassName="md:col-span-5" label="Certificación / Tracking" type="text" className="italic" value={p.referencia}
+                                <Input dense containerClassName="mb-0 md:col-span-5" label="Certificación / Tracking" type="text" className="italic" value={p.referencia}
                                     onChange={e => {
                                         const newPagos = [...form.pagos];
                                         newPagos[i].referencia = e.target.value;
@@ -579,7 +579,7 @@ const VentasPage = () => {
                         </div>
                         {form.canjes.map((c, i) => (
                             <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4">
-                                <Select dense containerClassName="md:col-span-8" label="Vehículo para incorporar al Stock" placeholder="RECONOCIMIENTO DE UNIDAD EXISTENTE..." value={c.vehiculoCanjeId || ''} onChange={e => {
+                                <Select dense containerClassName="mb-0 md:col-span-8" label="Vehículo para incorporar al Stock" placeholder="RECONOCIMIENTO DE UNIDAD EXISTENTE..." value={c.vehiculoCanjeId || ''} onChange={e => {
                                     const newCanjes = [...form.canjes];
                                     newCanjes[i].vehiculoCanjeId = +e.target.value;
                                     setForm(f => ({ ...f, canjes: newCanjes }));
@@ -588,7 +588,7 @@ const VentasPage = () => {
                                         <option key={v.id} value={v.id}>{v.marca} {v.modelo} [{v.dominio || `#${v.id}`}]</option>
                                     ))}
                                 </Select>
-                                <Input dense containerClassName="md:col-span-3" label="Acreditación" type="number" className="font-black text-danger" value={c.valorTomado || ''}
+                                <Input dense containerClassName="mb-0 md:col-span-3" label="Acreditación" type="number" className="font-black text-danger" value={c.valorTomado || ''}
                                     onChange={e => {
                                         const newCanjes = [...form.canjes];
                                         newCanjes[i].valorTomado = +e.target.value;

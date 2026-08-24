@@ -15,6 +15,7 @@ import {
     RefreshCw, Car, ChevronDown, Calendar, Database, MapPin, DollarSign, FileText, FileDown
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
+import Select from '../../components/ui/Select';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import PageTitle from '../../components/ui/PageTitle';
 import type { ApiError } from '../../types/api.types';
@@ -392,19 +393,17 @@ const VehiculosPage: React.FC = () => {
                             <h4 className="text-sm font-black uppercase tracking-tight">{estadoModal.vehiculo.marca} {estadoModal.vehiculo.modelo}</h4>
                             <p className="text-3xs font-mono text-accent">ID REGISTRO: #{estadoModal.vehiculo.id.toString().padStart(5, '0')}</p>
                         </div>
-                        <div>
-                            <label className="text-sm font-bold text-muted">Transicionar a la siguiente fase:</label>
-                            <select
-                                className="w-full p-4"
-                                value={nuevoEstado}
-                                onChange={e => setNuevoEstado(e.target.value as EstadoVehiculo)}
-                            >
-                                <option value="">Seleccionar nuevo estado...</option>
-                                {NEXT_ESTADOS[estadoModal.vehiculo.estado as EstadoVehiculo]?.map((e: EstadoVehiculo) => (
-                                    <option key={e} value={e}>{STATUS_MAP[e].label}</option>
-                                ))}
-                            </select>
-                        </div>
+                        <Select
+                            dense
+                            label="Transicionar a la siguiente fase:"
+                            placeholder="Seleccionar nuevo estado..."
+                            value={nuevoEstado}
+                            onChange={e => setNuevoEstado(e.target.value as EstadoVehiculo)}
+                        >
+                            {NEXT_ESTADOS[estadoModal.vehiculo.estado as EstadoVehiculo]?.map((e: EstadoVehiculo) => (
+                                <option key={e} value={e}>{STATUS_MAP[e].label}</option>
+                            ))}
+                        </Select>
                         <div className="form-actions">
                             <Button variant="secondary" onClick={() => setEstadoModal(null)}>Cancelar</Button>
                             <Button variant="primary" onClick={handleCambiarEstado} loading={changeEstadoMutation.isPending} disabled={!nuevoEstado}>

@@ -1356,6 +1356,14 @@ button {
   flex: 1;
 }
 
+/* Anula el ritmo vertical del wrapper. Se usa sobre todo como
+   containerClassName de <Input/Select/Textarea dense> cuando el control vive en
+   una fila horizontal control+botón: ahí el margin-bottom del .input-group
+   levantaría el control por encima de la línea de base del botón. */
+.mb-0 {
+  margin-bottom: 0;
+}
+
 .mb-1 {
   margin-bottom: 0.25rem;
 }

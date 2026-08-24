@@ -1041,10 +1041,10 @@ export default function PostventaPage() {
                                 <div style={{ flex: '1 1 160px' }}>
                                     {/* Al vaciar la fecha se limpia la hora: si no, quedaba una hora
                                         colgada en un input deshabilitado y no se podía desagendar. */}
-                                    <input className="form-input" type="date" value={turnoForm.fechaTurno} onChange={e => setTurnoForm(p => ({ ...p, fechaTurno: e.target.value, horaTurno: e.target.value ? p.horaTurno : '' }))} />
+                                    <Input dense containerClassName="mb-0" type="date" value={turnoForm.fechaTurno} onChange={e => setTurnoForm(p => ({ ...p, fechaTurno: e.target.value, horaTurno: e.target.value ? p.horaTurno : '' }))} />
                                 </div>
                                 <div style={{ flex: '0 1 120px' }}>
-                                    <input className="form-input" type="time" value={turnoForm.horaTurno} onChange={e => setTurnoForm(p => ({ ...p, horaTurno: e.target.value }))} disabled={!turnoForm.fechaTurno} />
+                                    <Input dense containerClassName="mb-0" type="time" value={turnoForm.horaTurno} onChange={e => setTurnoForm(p => ({ ...p, horaTurno: e.target.value }))} disabled={!turnoForm.fechaTurno} />
                                 </div>
                                 <Button variant="secondary" size="sm" onClick={handleGuardarTurno} disabled={submitting} loading={submitting}>
                                     {detailCaso.fechaTurno ? (turnoForm.fechaTurno ? 'Reprogramar' : 'Desagendar') : 'Agendar'}
@@ -1133,7 +1133,7 @@ export default function PostventaPage() {
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                             <div style={{ flex: '1 1 160px' }}>
-                                <input className="form-input" type="number" step="0.01" min="0" placeholder="Monto facturado" value={facturaForm} onChange={e => setFacturaForm(e.target.value)} />
+                                <Input dense containerClassName="mb-0" type="number" step="0.01" min="0" placeholder="Monto facturado" value={facturaForm} onChange={e => setFacturaForm(e.target.value)} />
                             </div>
                             <Button variant="secondary" size="sm" onClick={handleGuardarFacturacion} disabled={savingFactura} loading={savingFactura}>Guardar</Button>
                         </div>
@@ -1153,7 +1153,7 @@ export default function PostventaPage() {
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                             <div style={{ flex: '1 1 160px' }}>
-                                <input className="form-input" type="date" value={serviceForm} onChange={e => setServiceForm(e.target.value)} />
+                                <Input dense containerClassName="mb-0" type="date" value={serviceForm} onChange={e => setServiceForm(e.target.value)} />
                             </div>
                             <Button variant="secondary" size="sm" onClick={handleGuardarService} disabled={savingService} loading={savingService}>Guardar</Button>
                             {detailCaso.proximoServiceFecha && serviceWaHref(detailCaso) && (
