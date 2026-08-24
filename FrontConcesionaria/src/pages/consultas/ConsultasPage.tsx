@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Inbox, Phone, RefreshCw, Users, TrendingUp } from 'lucide-react';
+import { Inbox, Phone, RefreshCw, Users, TrendingUp, MessageCircle, Check } from 'lucide-react';
 import {
     reportesApi,
     type ConsultaSinAtenderItem,
@@ -9,6 +9,8 @@ import {
     type ConsultaPorCanalItem,
 } from '../../api/reportes.api';
 import { clientesApi } from '../../api/clientes.api';
+import { seguimientosApi } from '../../api/seguimientos.api';
+import { waLink } from '../../utils/whatsapp';
 import { usuariosApi } from '../../api/usuarios.api';
 import { useUIStore } from '../../store/uiStore';
 import { getErrorMessage } from '../../utils/getErrorMessage';
@@ -82,6 +84,45 @@ const ConsultasPage = () => {
             setReasignando((s) => { const n = new Set(s); n.delete(clienteId); return n; }),
     });
 
+    // ── Contacto en un click ────────────────────────────────────────────────
+    // "Contactado" registra el seguimiento (alimenta la métrica de primer
+    // contacto) y mueve el lead a 'contactado': sale de esta lista solo.
+    const hoyISO = () => {
+        const d = new Date();
+        const p2 = (n: number) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+    };
+    const [contactando, setContactando] = useState<Set<number>>(new Set());
+    const contactar = useMutation({
+        mutationFn: async ({ clienteId, porWhatsapp }: { clienteId: number; porWhatsapp: boolean }) => {
+            await seguimientosApi.create({
+                clienteId,
+                tipo: porWhatsapp ? 'whatsapp' : 'otro',
+                fecha: hoyISO(),
+                nota: 'Primer contacto desde el panel de consultas',
+            });
+            await clientesApi.update(clienteId, { estadoLead: 'contactado' });
+        },
+        onMutate: ({ clienteId }) => setContactando((s) => new Set(s).add(clienteId)),
+        onSuccess: () => {
+            addToast('Contacto registrado: el lead pasó a "contactado"', 'success');
+            qc.invalidateQueries({ queryKey: ['reportes', 'consultas'] });
+            qc.invalidateQueries({ queryKey: ['clientes'] });
+            qc.invalidateQueries({ queryKey: ['dashboard'] });
+        },
+        onError: (e) => addToast(getErrorMessage(e, 'No se pudo registrar el contacto'), 'error'),
+        onSettled: (_d, _e, { clienteId }) =>
+            setContactando((s) => { const n = new Set(s); n.delete(clienteId); return n; }),
+    });
+
+    // Borrador de WhatsApp plantillado (waLink NO envía nada: abre el chat con
+    // el mensaje redactado y el vendedor revisa y manda).
+    const plantillaWa = (c: ConsultaSinAtenderItem) => {
+        const nombre = (c.nombre || '').trim().split(/\s+/)[0] || 'Hola';
+        const veh = c.vehiculo ? ` sobre el ${c.vehiculo}` : '';
+        return `Hola ${nombre}! Recibimos tu consulta${veh}. ¿Seguís interesado/a? Quedo a disposición para coordinar. `;
+    };
+
     // ── Columnas ────────────────────────────────────────────────────────────
 
     const sinAtenderCols: Column<ConsultaSinAtenderItem & { id: number }>[] = [
@@ -143,6 +184,37 @@ const ConsultasPage = () => {
                     }}
                 />
             ),
+        },
+        {
+            header: 'Contacto',
+            align: 'right',
+            accessor: (c) => {
+                const link = waLink(c.telefono, plantillaWa(c));
+                return (
+                    <div className="flex items-center justify-end gap-2">
+                        {link ? (
+                            <a
+                                href={link}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn btn-secondary btn-sm"
+                                title={`Abrir WhatsApp con el mensaje redactado para ${c.nombre}`}
+                            >
+                                <MessageCircle size={14} /> WhatsApp
+                            </a>
+                        ) : null}
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            loading={contactando.has(c.clienteId)}
+                            title="Registra el primer contacto y pasa el lead a 'contactado'"
+                            onClick={() => contactar.mutate({ clienteId: c.clienteId, porWhatsapp: !!link })}
+                        >
+                            <Check size={14} /> Contactado
+                        </Button>
+                    </div>
+                );
+            },
         },
     ];
 

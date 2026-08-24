@@ -1522,7 +1522,7 @@ export class ReporteController {
 
             // Documentación: vehículos EN STOCK con VTV o seguro ya vencido o por vencer
             // dentro de la ventana (misma ventana DIAS que el resto de la campanita).
-            const [mora, proximos, reservas, estancados, turnos, turnosHoy, seguimientos, documentacion] = await Promise.all([
+            const [mora, proximos, reservas, estancados, turnos, turnosHoy, seguimientos, documentacion, consultas] = await Promise.all([
                 prisma.cuota.count({ where: { vencimiento: { lt: inicioHoy }, saldoCuota: { gt: 0 }, estado: { not: 'pagada' }, financiacion: { deletedAt: null } } }),
                 prisma.cuota.count({ where: { vencimiento: { gte: inicioHoy, lt: finVentana }, saldoCuota: { gt: 0 }, estado: { notIn: ['pagada', 'refinanciada'] }, financiacion: { deletedAt: null } } }),
                 prisma.reserva.count({ where: { estado: 'activa', venceEl: { gte: inicioHoy, lt: finVentana } } }),
@@ -1531,13 +1531,15 @@ export class ReporteController {
                 prisma.postventaCaso.count({ where: { fechaTurno: inicioHoy, estado: { not: 'resuelto' } } }),
                 prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desdeSeg, lt: finVentana }, proximoContactoHecho: false } }),
                 prisma.vehiculo.count({ where: { estado: { in: ['preparacion', 'publicado', 'reservado'] }, OR: [{ vencimientoVtv: { lt: finVentanaDoc } }, { vencimientoSeguro: { lt: finVentanaDoc } }] } }),
+                // Consultas sin atender: leads en 'nuevo' sin ningún contacto registrado.
+                prisma.cliente.count({ where: { estadoLead: 'nuevo', seguimientos: { none: { deletedAt: null } } } }),
             ]);
 
             res.json({
                 dias: DIAS,
                 umbral: UMBRAL,
-                mora, proximos, reservas, estancados, turnos, turnosHoy, seguimientos, documentacion,
-                total: mora + proximos + reservas + estancados + turnos + seguimientos + documentacion,
+                mora, proximos, reservas, estancados, turnos, turnosHoy, seguimientos, documentacion, consultas,
+                total: mora + proximos + reservas + estancados + turnos + seguimientos + documentacion + consultas,
             });
         } catch (error) {
             next(error);
@@ -1831,6 +1833,29 @@ export class ReporteController {
     //   · porCanal: performance por origen del lead (origen null → 'sin_registro').
     // Para el rol vendedor (sin admin) se fuerza vendedorAsignadoId = su userId:
     // ve SU cartera (incluido su sinAtender), no la del resto del equipo.
+    // Resumen liviano de consultas sin atender para la señal del dashboard:
+    // sólo el conteo y la antigüedad de la más vieja, con el mismo scoping por
+    // rol que el reporte completo (vendedor puro ve sólo su cartera).
+    static async consultasResumen(req: Request, res: Response, next: NextFunction) {
+        try {
+            const usuario = context.getUser();
+            const roles = usuario?.roles ?? [];
+            const esSoloVendedor = roles.includes('vendedor') && !roles.includes('admin') && !roles.includes('super_admin');
+            const where: any = { estadoLead: 'nuevo', seguimientos: { none: { deletedAt: null } } };
+            if (esSoloVendedor && usuario) where.vendedorAsignadoId = usuario.userId;
+            const [sinAtender, masVieja] = await Promise.all([
+                prisma.cliente.count({ where }),
+                prisma.cliente.findFirst({ where, orderBy: { createdAt: 'asc' }, select: { createdAt: true } }),
+            ]);
+            const maxDias = masVieja
+                ? Math.floor((Date.now() - masVieja.createdAt.getTime()) / 86400000)
+                : 0;
+            res.json({ sinAtender, maxDias });
+        } catch (error) {
+            next(error);
+        }
+    }
+
     static async consultas(req: Request, res: Response, next: NextFunction) {
         try {
             const { desde, hasta } = parseRango(req.query);

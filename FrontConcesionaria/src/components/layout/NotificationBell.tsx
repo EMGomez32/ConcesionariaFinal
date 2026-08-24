@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, AlertTriangle, Clock, Bookmark, Wrench, Car, CalendarClock, ShieldCheck, X } from 'lucide-react';
+import { Bell, AlertTriangle, Clock, Bookmark, Wrench, Car, CalendarClock, ShieldCheck, Inbox, X } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { reportesApi } from '../../api/reportes.api';
 import { dashboardKeys } from '../../hooks/useDashboard';
@@ -46,6 +46,7 @@ const NotificationBell = () => {
     // señal debe verse del mismo color en ambas superficies (y virar en dark,
     // cosa que los hex hardcodeados no hacían).
     const items = data ? [
+        { key: 'consultas', label: 'Consultas sin atender', count: data.consultas ?? 0, icon: Inbox, color: 'var(--danger)', to: '/consultas' },
         { key: 'mora', label: 'Cuotas en mora', count: data.mora, icon: AlertTriangle, color: 'var(--danger)', to: '/reportes?tab=mora' },
         { key: 'proximos', label: `Cuotas vencen en ${data.dias} días`, count: data.proximos, icon: Clock, color: 'var(--warning)', to: '/reportes?tab=proximos' },
         { key: 'reservas', label: `Reservas vencen en ${data.dias} días`, count: data.reservas, icon: Bookmark, color: 'var(--warning)', to: '/reservas' },

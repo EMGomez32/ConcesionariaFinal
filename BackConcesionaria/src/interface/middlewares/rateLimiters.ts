@@ -21,9 +21,24 @@ export const apiLimiter = rateLimit({
     keyGenerator: ipKey,
     skip: (req) => {
         if (req.path === '/health') return true;
+        // Los webhooks de integraciones tienen su propio limiter (webhookLimiter):
+        // un retry-storm de Meta desde una misma IP no debe comerse 429 acá.
+        if (req.path.startsWith('/api/webhooks/')) return true;
         // En tests no queremos que el rate limit interfiera.
         return isTest;
     },
+});
+
+// Limiter propio de los webhooks públicos: mucho más holgado que el global
+// (Meta reintenta en ráfagas ante fallas) pero con techo contra abuso, ya que
+// la ruta no pide JWT (la protege la firma HMAC).
+export const webhookLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 1200,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: ipKey,
+    skip: () => isTest,
 });
 
 // Limiter estricto para el login. Cuenta SOLO los intentos fallidos

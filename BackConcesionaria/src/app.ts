@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
-import { apiLimiter } from './interface/middlewares/rateLimiters';
+import { apiLimiter, webhookLimiter } from './interface/middlewares/rateLimiters';
 import { env } from './config/env';
 import { contextMiddleware } from './interface/middlewares/context.middleware';
 import { requestLogger } from './interface/middlewares/requestLogger.middleware';
@@ -153,7 +153,7 @@ app.use('/uploads', express.static(uploadsDir, {
 // Webhooks públicos de integraciones (Meta Lead Ads): SIN JWT — montados ANTES
 // del router /api (que aplica authenticate global). La seguridad es la del
 // canal: verify token en el handshake (GET) y firma HMAC del body en el POST.
-app.use('/api/webhooks', webhookRoutes);
+app.use('/api/webhooks', webhookLimiter, webhookRoutes);
 
 // Integraciones de canal (credenciales de Meta/IMAP): autenticado como el
 // resto de la API; authorize('admin') va dentro del router.

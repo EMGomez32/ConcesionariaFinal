@@ -256,6 +256,16 @@ router.get('/leads-resumen', authorize('admin', 'vendedor'), ReporteController.l
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
+/**
+ * @openapi
+ * /reportes/consultas-resumen:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Resumen de consultas sin atender (señal del dashboard)
+ *     description: Conteo y antigüedad máxima de las consultas en 'nuevo' sin contacto. El rol vendedor ve sólo su cartera.
+ */
+router.get('/consultas-resumen', authorize('admin', 'vendedor'), ReporteController.consultasResumen);
+
 router.get('/consultas', authorize('admin', 'vendedor'), ReporteController.consultas);
 
 /**

@@ -172,7 +172,7 @@ export interface AlertaItem {
 }
 
 /** Cada señal de "Acciones del día"; el llamador pide las que su rol puede ver. */
-export type AlertaKey = 'estancados' | 'porVencer' | 'mora' | 'reservas' | 'turnos' | 'seguimientos' | 'documentacion';
+export type AlertaKey = 'consultas' | 'estancados' | 'porVencer' | 'mora' | 'reservas' | 'turnos' | 'seguimientos' | 'documentacion';
 
 export interface DashboardAlertas {
     cotizacion: { valor: number; fecha: string } | null;
@@ -187,6 +187,8 @@ export interface DashboardAlertas {
     seguimientos: { count: number; vencidos: number; hoy: number; dias: number } | null;
     /** Documentación (VTV/seguro) de vehículos en stock: con subconteo de "vencidos". */
     documentacion: { count: number; vencidos: number; dias: number } | null;
+    /** Consultas de venta sin atender (CRM): con la antigüedad de la más vieja. */
+    consultas: { count: number; maxDias: number } | null;
 }
 
 export const useDashboardAlertas = (keys: AlertaKey[]) => {
@@ -203,7 +205,7 @@ export const useDashboardAlertas = (keys: AlertaKey[]) => {
             const DIAS_DOC = 30; // documentación: ventana más larga (misma que el backend)
             // Se pide consolidar en ARS: con cotización cargada da un monto en pesos;
             // si no, cada endpoint devuelve consolidado:null + el desglose por moneda.
-            const [stock, proximos, mora, reservas, turnos, seguimientos, documentacion] = await Promise.all([
+            const [stock, proximos, mora, reservas, turnos, seguimientos, documentacion, consultasResumen] = await Promise.all([
                 want('estancados') ? reportesApi.stockAntiguedad({ umbral: 60, consolidar: 'ARS' }) : null,
                 want('porVencer') ? reportesApi.proximosVencimientos({ dias: DIAS_POR_VENCER, consolidar: 'ARS' }) : null,
                 want('mora') ? reportesApi.mora({ consolidar: 'ARS' }) : null,
@@ -211,6 +213,7 @@ export const useDashboardAlertas = (keys: AlertaKey[]) => {
                 want('turnos') ? reportesApi.turnosTaller({ dias: DIAS_POR_VENCER }) : null,
                 want('seguimientos') ? reportesApi.proximosSeguimientos({ dias: DIAS_POR_VENCER }) : null,
                 want('documentacion') ? reportesApi.vencimientosDocumentacion({ dias: DIAS_DOC }) : null,
+                want('consultas') ? reportesApi.consultasResumen() : null,
             ]);
             const cot = stock?.consolidado || proximos?.consolidado || mora?.consolidado || reservas?.consolidado || null;
             return {
@@ -253,6 +256,10 @@ export const useDashboardAlertas = (keys: AlertaKey[]) => {
                     dias: DIAS_DOC,
                     count: documentacion.resumen?.cantidad ?? 0,
                     vencidos: documentacion.resumen?.vencidos ?? 0,
+                } : null,
+                consultas: consultasResumen ? {
+                    count: consultasResumen.sinAtender,
+                    maxDias: consultasResumen.maxDias,
                 } : null,
             };
         },

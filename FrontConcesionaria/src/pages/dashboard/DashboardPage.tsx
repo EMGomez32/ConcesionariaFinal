@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle, Bookmark, Target, Wrench, CalendarClock, Check } from 'lucide-react';
+import { Car, Users, RefreshCw, Clock, Zap, ShieldCheck, PieChart, TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, AlertTriangle, Bookmark, Target, Wrench, CalendarClock, Check, Inbox } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { useDashboardStats, useStockDistribution, useDashboardFinanzas, useDashboardAlertas, useDashboardTendencia, useDashboardMeta, useMiObjetivo, dashboardKeys, type FinanzaKpi, type AlertaItem, type AlertaKey } from '../../hooks/useDashboard';
@@ -87,10 +87,11 @@ const DashboardPage = () => {
   // comercial; postventa su taller y la documentación. Espejo del authorize de
   // cada reporte en el backend (los roles acá deben poder consultar su endpoint).
   const alertKeys: AlertaKey[] = isAdmin
-    ? ['estancados', 'porVencer', 'mora', 'reservas', 'turnos', 'seguimientos', 'documentacion']
+    ? ['consultas', 'estancados', 'porVencer', 'mora', 'reservas', 'turnos', 'seguimientos', 'documentacion']
     : Array.from(new Set<AlertaKey>([
         ...(esCobrador ? (['porVencer', 'mora'] as AlertaKey[]) : []),
-        ...(esVendedor ? (['reservas', 'seguimientos'] as AlertaKey[]) : []),
+        // El vendedor ve SUS consultas sin atender (el backend scopea por rol).
+        ...(esVendedor ? (['consultas', 'reservas', 'seguimientos'] as AlertaKey[]) : []),
         ...(esPostventa ? (['turnos', 'documentacion'] as AlertaKey[]) : []),
       ]));
   const { data: alertas, isLoading: alertasLoading, isError: alertasError, refetch: refetchAlertas } = useDashboardAlertas(alertKeys);
@@ -191,6 +192,9 @@ const DashboardPage = () => {
   // la línea "Al día" (menos ruido, jerarquía por urgencia; fix P2 de la crítica).
   type AlertCard = { key: AlertaKey; label: string; corto: string; count: number; monto: string; montoLabel: string; icon: LucideIcon; color: string; to: string };
   const alertCards: AlertCard[] = [];
+  // Consultas sin atender: la señal más urgente del CRM — un lead que espera
+  // pierde valor por hora. Danger si la más vieja lleva 2+ días, warning si no.
+  if (alertas?.consultas) alertCards.push({ key: 'consultas', label: 'Consultas sin atender', corto: 'Consultas', count: alertas.consultas.count, monto: String(alertas.consultas.maxDias), montoLabel: alertas.consultas.maxDias === 1 ? 'día la más vieja' : 'días la más vieja', icon: Inbox, color: alertas.consultas.maxDias >= 2 ? 'var(--danger)' : 'var(--warning)', to: '/consultas' });
   if (alertas?.mora) alertCards.push({ key: 'mora', label: 'Cuotas en mora', corto: 'Mora', count: alertas.mora.count, monto: alertaMonto(alertas.mora), montoLabel: 'saldo adeudado', icon: AlertTriangle, color: 'var(--danger)', to: '/reportes?tab=mora' });
   if (alertas?.porVencer) alertCards.push({ key: 'porVencer', label: `Cuotas vencen en ${alertas.porVencer.dias} días`, corto: 'Cuotas por vencer', count: alertas.porVencer.count, monto: alertaMonto(alertas.porVencer), montoLabel: 'a cobrar', icon: Clock, color: 'var(--warning)', to: '/reportes?tab=proximos' });
   if (alertas?.reservas) alertCards.push({ key: 'reservas', label: `Reservas vencen en ${alertas.reservas.dias} días`, corto: 'Reservas', count: alertas.reservas.count, monto: alertaMonto(alertas.reservas), montoLabel: 'en señas', icon: Bookmark, color: 'var(--warning)', to: '/reservas' });

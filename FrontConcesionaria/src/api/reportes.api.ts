@@ -461,6 +461,8 @@ export interface AlertasResumen {
     seguimientos: number;
     /** Vehículos en stock con VTV/seguro vencido o por vencer. */
     documentacion: number;
+    /** Consultas de venta en 'nuevo' sin ningún contacto registrado. */
+    consultas: number;
     total: number;
 }
 
@@ -573,6 +575,10 @@ export const reportesApi = {
     /** Casos de postventa con un próximo service por venir (retención). */
     proximosService: (params: { dias?: number } = {}) =>
         client.get<ReporteProximosService>('/reportes/proximos-service', { params }),
+
+    /** Consultas sin atender (señal del dashboard): conteo + antigüedad máxima. */
+    consultasResumen: () =>
+        client.get<{ sinAtender: number; maxDias: number }>('/reportes/consultas-resumen'),
 
     /** Embudo de leads: cantidad de clientes por etapa del pipeline. */
     leadsResumen: () =>
