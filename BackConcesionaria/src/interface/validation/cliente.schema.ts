@@ -120,3 +120,27 @@ export const consultaIngresoSchema = z.object({
     vehiculoId: optionalFk,
     vendedorId: optionalFk,
 });
+
+// Import masivo de clientes — POST /clientes/import. Schema LAXO a propósito a
+// nivel fila (strings sueltos, sin formato de email ni enum de origen): la
+// validación fina es POR FILA en el servicio (clienteImport), que reporta cada
+// error con su índice dentro del lote en vez de rechazar el lote entero con un
+// 400. Acá sólo se valida la FORMA del sobre: 1..300 filas y las opciones.
+export const importClientesSchema = z.object({
+    filas: z.array(z.object({
+        nombre: z.string().optional(),
+        telefono: z.string().optional(),
+        email: z.string().optional(),
+        dni: z.string().optional(),
+        observaciones: z.string().optional(),
+        origenLead: z.string().optional(),
+        vendedorAsignadoId: z.number({ error: 'vendedorAsignadoId debe ser un número' }).int().optional(),
+    }))
+        .min(1, 'El lote debe traer al menos una fila')
+        .max(300, 'Máximo 300 filas por lote'),
+    opciones: z.object({
+        estadoInicial: z.enum(['contactado', 'nuevo'], { error: 'Estado inicial inválido. Válidos: contactado, nuevo' }),
+        origenDefault: z.string().optional(),
+        actualizarExistentes: z.boolean({ error: 'actualizarExistentes debe ser booleano' }),
+    }),
+});

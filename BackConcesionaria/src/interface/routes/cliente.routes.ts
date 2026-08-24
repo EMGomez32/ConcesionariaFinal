@@ -5,7 +5,7 @@ import { authenticate } from '../middlewares/authenticate.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
 
 import { validateBody } from '../middlewares/validate.middleware';
-import { createClienteSchema, updateClienteSchema, consultaIngresoSchema } from '../validation/cliente.schema';
+import { createClienteSchema, updateClienteSchema, consultaIngresoSchema, importClientesSchema } from '../validation/cliente.schema';
 const router = Router();
 
 /**
@@ -95,6 +95,68 @@ router.get('/export/csv', authenticate, authorize('admin', 'vendedor'), ClienteC
 // OJO: registrada ANTES de las rutas /:id para que Express no matchee "consulta"
 // como un id.
 router.post('/consulta', authenticate, authorize('admin', 'vendedor'), validateBody(consultaIngresoSchema), ClienteController.consulta);
+
+/**
+ * @openapi
+ * /clientes/import:
+ *   post:
+ *     tags: [Clientes]
+ *     summary: Import masivo de clientes (carga de cartera)
+ *     description: Sólo admin. Lote de hasta 300 filas en una pasada secuencial. Validación fina POR FILA (errores con índice 0-based dentro del lote, la fila mala no aborta el resto). Dedupe por teléfono/email dentro del tenant; con actualizarExistentes sólo completa campos vacíos del existente. Sin round-robin de vendedor.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [filas, opciones]
+ *             properties:
+ *               filas:
+ *                 type: array
+ *                 minItems: 1
+ *                 maxItems: 300
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     nombre: { type: string }
+ *                     telefono: { type: string }
+ *                     email: { type: string }
+ *                     dni: { type: string }
+ *                     observaciones: { type: string }
+ *                     origenLead: { type: string, enum: [deruedas, instagram, facebook, whatsapp, web, mostrador, referido, otro] }
+ *                     vendedorAsignadoId: { type: integer }
+ *               opciones:
+ *                 type: object
+ *                 required: [estadoInicial, actualizarExistentes]
+ *                 properties:
+ *                   estadoInicial: { type: string, enum: [contactado, nuevo] }
+ *                   origenDefault: { type: string }
+ *                   actualizarExistentes: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: Resumen del lote procesado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 creados: { type: integer }
+ *                 actualizados: { type: integer }
+ *                 salteados: { type: integer }
+ *                 errores:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       indice: { type: integer, description: 'Posición 0-based de la fila dentro del lote' }
+ *                       motivo: { type: string }
+ *       400: { $ref: '#/components/responses/ValidationError' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ */
+// OJO: también ANTES de las rutas /:id para que Express no matchee "import"
+// como un id.
+router.post('/import', authenticate, authorize('admin'), validateBody(importClientesSchema), ClienteController.importar);
 
 /**
  * @openapi

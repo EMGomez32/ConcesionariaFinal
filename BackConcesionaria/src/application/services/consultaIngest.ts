@@ -73,6 +73,20 @@ export async function elegirVendedorRoundRobin(): Promise<number | null> {
     return elegido;
 }
 
+/**
+ * Dedupe compartido (consultas + import masivo): busca un cliente del tenant
+ * por teléfono o email exactos (el que esté presente). Null si no hay match.
+ */
+export async function buscarClientePorContacto(telefono?: string | null, email?: string | null) {
+    const tel = telefono?.trim() || null;
+    const mail = email?.trim().toLowerCase() || null;
+    const or: object[] = [];
+    if (tel) or.push({ telefono: tel });
+    if (mail) or.push({ email: mail });
+    if (!or.length) return null;
+    return prisma.cliente.findFirst({ where: { OR: or }, orderBy: { id: 'asc' } });
+}
+
 const lineaConsulta = (c: ConsultaEntrante): string => {
     const fecha = new Date().toISOString().slice(0, 10);
     const texto = (c.texto ?? '').trim().slice(0, 600);
@@ -84,12 +98,7 @@ export async function ingestarConsulta(consulta: ConsultaEntrante): Promise<Resu
     const email = consulta.email?.trim().toLowerCase() || null;
 
     // Dedupe: mismo teléfono o email en el tenant (la extensión filtra tenant).
-    const or: object[] = [];
-    if (telefono) or.push({ telefono });
-    if (email) or.push({ email });
-    const existente = or.length
-        ? await prisma.cliente.findFirst({ where: { OR: or }, orderBy: { id: 'asc' } })
-        : null;
+    const existente = await buscarClientePorContacto(telefono, email);
 
     if (existente) {
         const reabierto = existente.estadoLead === 'ganado' || existente.estadoLead === 'perdido';

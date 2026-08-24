@@ -8,6 +8,7 @@ import { DeleteCliente } from '../../application/use-cases/clientes/DeleteClient
 import { cleanFilters } from '../../utils/cleanFilters';
 import parseNumericFields from '../../utils/parseNumericFields';
 import { ingestarConsulta } from '../../application/services/consultaIngest';
+import { importarClientes } from '../../application/services/clienteImport';
 import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import { Col, sendCsv } from '../../utils/csv';
@@ -112,6 +113,24 @@ export class ClienteController {
                 detalle: `Consulta por ${req.body.origen} ingresada (cliente ${result.clienteId}${result.creado ? ' nuevo' : ' existente'}${result.reabierto ? ', lead reabierto' : ''})`,
             });
             res.status(201).json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // Import masivo de clientes (carga de cartera). El servicio procesa el lote
+    // en una pasada secuencial y reporta errores POR FILA (índice 0-based dentro
+    // del lote): una fila mala no aborta a las demás, por eso siempre es 200.
+    static async importar(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { filas, opciones } = req.body;
+            const result = await importarClientes(filas, opciones);
+            await audit({
+                entidad: 'Cliente',
+                accion: 'create',
+                detalle: `import masivo: ${result.creados} creados, ${result.actualizados} actualizados`,
+            });
+            res.json(result);
         } catch (error) {
             next(error);
         }

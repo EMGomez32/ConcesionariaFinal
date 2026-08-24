@@ -29,6 +29,35 @@ export interface ConsultaResultado {
     vendedorAsignadoId: number | null;
 }
 
+/** Fila cruda de la importación masiva (planilla Excel/CSV ya mapeada en el front). */
+export interface ImportClienteFila {
+    nombre?: string;
+    telefono?: string;
+    email?: string;
+    dni?: string;
+    observaciones?: string;
+    /** Canal ya normalizado a un OrigenLead; un valor fuera del enum es error de fila. */
+    origenLead?: string;
+    vendedorAsignadoId?: number;
+}
+
+export interface ImportClientesOpciones {
+    /** Etapa de los clientes nuevos: cartera histórica ('contactado') o leads a trabajar ('nuevo'). */
+    estadoInicial: 'contactado' | 'nuevo';
+    /** Canal aplicado a las filas que no traen canal propio. */
+    origenDefault?: string;
+    /** true = completar SOLO los campos vacíos de clientes ya existentes (nunca pisa datos). */
+    actualizarExistentes: boolean;
+}
+
+export interface ImportClientesResultado {
+    creados: number;
+    actualizados: number;
+    salteados: number;
+    /** `indice` = posición 0-based de la fila DENTRO del lote enviado. */
+    errores: { indice: number; motivo: string }[];
+}
+
 export const clientesApi = {
     getAll: (filters: ClienteFilter = {}, options: PaginationOptions = {}) => {
         return client.get<PaginatedResponse<Cliente>>('/clientes', {
@@ -57,6 +86,11 @@ export const clientesApi = {
     delete: (id: number) => {
         return client.delete<void>(`/clientes/${id}`);
     },
+
+    // Importación masiva desde planilla (lotes de 1 a 300 filas). Sólo admin.
+    // La validación fina es POR FILA en el backend: una fila mala no aborta el lote.
+    importar: (body: { filas: ImportClienteFila[]; opciones: ImportClientesOpciones }) =>
+        client.post<ImportClientesResultado>('/clientes/import', body),
 
     // Estado de cuenta del cliente en PDF (Blob descargable). admin/vendedor.
     estadoCuentaPdf: (id: number) =>

@@ -31,8 +31,10 @@ import {
     FileDown,
     Building2,
     UserCheck,
-    MessageSquarePlus
+    MessageSquarePlus,
+    Upload
 } from 'lucide-react';
+import ImportClientesModal from '../../components/clientes/ImportClientesModal';
 import Modal from '../../components/ui/Modal';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import PageTitle from '../../components/ui/PageTitle';
@@ -52,6 +54,8 @@ const ClientesPage: React.FC = () => {
     // Export CSV: admin/vendedor en el backend → ocultamos el botón para el resto
     // (evita un botón muerto que siempre daría 403).
     const puedeExportar = puedeVerFunnel;
+    // Importación masiva desde planilla: endpoint sólo admin → mismo gate acá.
+    const isAdmin = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin');
 
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebounce(searchTerm, 500);
@@ -79,6 +83,9 @@ const ClientesPage: React.FC = () => {
     const consultaVacia = { origen: 'mostrador' as OrigenLead, nombre: '', telefono: '', email: '', vehiculoId: '', vendedorId: '', texto: '' };
     const [isConsultaOpen, setIsConsultaOpen] = useState(false);
     const [consultaForm, setConsultaForm] = useState(consultaVacia);
+
+    // ─ Importación masiva de clientes desde una planilla (sólo admin) ─
+    const [isImportOpen, setIsImportOpen] = useState(false);
 
     // Vehículos publicados para "Vehículo consultado": recién al abrir el modal.
     const { data: vehiculosPublicadosData } = useQuery({
@@ -387,6 +394,13 @@ const ClientesPage: React.FC = () => {
                             CSV
                         </Button>
                     )}
+                    {/* Importación masiva desde Excel/CSV. Endpoint sólo admin. */}
+                    {isAdmin && (
+                        <Button variant="secondary" onClick={() => setIsImportOpen(true)} title="Importar clientes desde una planilla Excel o CSV">
+                            <Upload size={18} />
+                            Importar
+                        </Button>
+                    )}
                     <Button variant="secondary" onClick={() => setIsConsultaOpen(true)} title="Registrar una consulta entrante (lead) por cualquier canal">
                         <MessageSquarePlus size={18} />
                         Nueva consulta
@@ -594,6 +608,13 @@ const ClientesPage: React.FC = () => {
                     </div>
                 </div>
             </Modal>
+
+            {/* Wizard de importación masiva desde planilla (subir → mapear → confirmar). */}
+            <ImportClientesModal
+                isOpen={isImportOpen}
+                onClose={() => setIsImportOpen(false)}
+                vendedores={vendedoresAsignables}
+            />
         </div>
     );
 };
