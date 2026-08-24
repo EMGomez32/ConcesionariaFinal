@@ -72,6 +72,11 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
+      # Cifrado en reposo de los secretos de integraciones (Meta / IMAP).
+      # Opcional: sin ella el backend arranca igual, en claro y con warning.
+      # OJO: el contenedor SÓLO ve las vars listadas acá (tomadas del .env de la
+      # RAÍZ) — un valor puesto en BackConcesionaria/.env no llega al runtime.
+      - INTEGRACIONES_SECRET_KEY=${INTEGRACIONES_SECRET_KEY:-}
     # 'migrate deploy' aplica las migraciones versionadas pendientes (prisma/migrations)
     # y las registra en _prisma_migrations; nunca cambia el schema fuera de una migración.
     # Idempotente: sin pendientes es no-op. El cutover desde 'db push' requirió baselinear
