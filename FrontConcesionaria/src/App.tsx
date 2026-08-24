@@ -23,6 +23,7 @@ const ClienteDetallePage = lazy(() => import('./pages/clientes/ClienteDetallePag
 const SeguimientosPage = lazy(() => import('./pages/seguimientos/SeguimientosPage'));
 const ConsultasPage = lazy(() => import('./pages/consultas/ConsultasPage'));
 const BandejaPage = lazy(() => import('./pages/conversaciones/BandejaPage'));
+const PreguntasMlPage = lazy(() => import('./pages/mercadolibre/PreguntasPage'));
 const TasacionesPage = lazy(() => import('./pages/tasaciones/TasacionesPage'));
 const VentasPage = lazy(() => import('./pages/ventas/VentasPage'));
 const PresupuestosPage = lazy(() => import('./pages/presupuestos/PresupuestosPage'));
@@ -93,6 +94,14 @@ function App() {
               {/* Bandeja de WhatsApp: igual que consultas, el backend acota los
                   hilos por rol (el vendedor puro sólo ve los suyos o los libres). */}
               <Route path="/conversaciones" element={<BandejaPage />} />
+              {/* Preguntas de Mercado Libre: la atienden admin y vendedor. El
+                  backend además acota por rol adentro de la bandeja. */}
+              {/* /mercadolibre no tiene página propia: es el prefijo de la sección
+                  (mañana cuelga /publicaciones). Sin este redirect el primer
+                  breadcrumb de /mercadolibre/preguntas apunta a una ruta muerta y
+                  cae en el catch-all. Mismo recurso que /plataforma. */}
+              <Route path="/mercadolibre" element={<Navigate to="/mercadolibre/preguntas" replace />} />
+              <Route path="/mercadolibre/preguntas" element={<RequireRole allowedRoles={['admin', 'super_admin', 'vendedor']}><PreguntasMlPage /></RequireRole>} />
               <Route path="/clientes" element={<ClientesPage />} />
               <Route path="/clientes/:id" element={<ClienteDetallePage />} />
               {/* Agenda de seguimientos del CRM: admin y vendedor (no postventa). */}

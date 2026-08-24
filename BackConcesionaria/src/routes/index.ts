@@ -30,6 +30,7 @@ import financiacionRoutes from '../interface/routes/financiacion.routes';
 import solicitudRoutes from '../interface/routes/solicitud-financiacion.routes';
 import whatsappRoutes from '../interface/routes/whatsapp.routes';
 import conversacionRoutes from '../interface/routes/conversacion.routes';
+import mercadolibreRoutes from '../interface/routes/mercadolibre.routes';
 import auditoriaRoutes from '../interface/routes/audit-log.routes';
 import billingRoutes from '../interface/routes/billing.routes';
 import reporteRoutes from '../interface/routes/reporte.routes';
@@ -110,6 +111,14 @@ router.use('/financiacion-solicitudes', solicitudRoutes);
 // asignar, recorte que aplica el service).
 router.use('/whatsapp', whatsappRoutes);
 router.use('/conversaciones', conversacionRoutes);
+
+// Mercado Libre — vinculación OAuth y publicación de unidades (admin), bandeja
+// de preguntas (admin + vendedor; el vendedor puro sólo ve las suyas o las sin
+// asignar). SIN authorize a nivel de montaje: el gating es por-ruta dentro del
+// router, porque leer la publicación de un vehículo la ve todo el equipo. El
+// callback de OAuth y las notificaciones de ML son PÚBLICOS y viven en
+// webhook.routes.ts (montado fuera de este router, que exige JWT).
+router.use('/mercadolibre', mercadolibreRoutes);
 
 // Auditoría — el log expone IP, user-agent y el detalle de cada operación de
 // TODOS los usuarios del tenant. Es dato sensible: sólo admin (super_admin

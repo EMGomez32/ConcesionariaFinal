@@ -3,6 +3,7 @@ import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { context } from '../../../infrastructure/security/context';
 import { assertValidTransition } from '../../../domain/services/stateMachine';
+import { sincronizarEnSegundoPlano } from '../../services/meliPublicacion';
 
 export class UpdateReserva {
     constructor(private readonly reservaRepository: IReservaRepository) { }
@@ -31,7 +32,8 @@ export class UpdateReserva {
 
         // Unit of Work: el update de la reserva + (si libera) el vehículo + el
         // movimiento commitean JUNTOS (antes: prisma.$transaction extendido, ilusorio).
-        return withTenantTransaction(async (tx) => {
+        let liberoVehiculo = false;
+        const reserva = await withTenantTransaction(async (tx) => {
             const updated = await tx.reserva.update({
                 where: { id, ...tenantWhere, deletedAt: null },
                 data: updateData,
@@ -42,6 +44,7 @@ export class UpdateReserva {
                 current.estado === 'activa';
 
             if (liberaVehiculo) {
+                liberoVehiculo = true;
                 await tx.vehiculo.update({
                     where: { id: current.vehiculoId, ...tenantWhere },
                     data: { estado: 'publicado' },
@@ -60,5 +63,11 @@ export class UpdateReserva {
 
             return updated;
         });
+
+        // Si la reserva liberó el vehículo, volvió a 'publicado': la publicación
+        // pausada de Mercado Libre se reactiva acá, después del commit.
+        if (liberoVehiculo) sincronizarEnSegundoPlano(current.vehiculoId);
+
+        return reserva;
     }
 }

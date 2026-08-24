@@ -89,6 +89,25 @@ services:
       # de que Meta banee el número. Subilos si vas a mandar mucho volumen.
       - WHATSAPP_DELAY_MIN_MS=${WHATSAPP_DELAY_MIN_MS:-5000}
       - WHATSAPP_DELAY_MAX_MS=${WHATSAPP_DELAY_MAX_MS:-15000}
+      # --- Mercado Libre ---
+      # Credenciales de la app de developers.mercadolibre.com.ar. Opcionales:
+      # sin ellas el backend arranca igual y la integración queda apagada (el
+      # worker no corre y Configuración muestra "no configurada"). Van juntas o
+      # ninguna. MISMA TRAMPA que INTEGRACIONES_SECRET_KEY: el contenedor SÓLO
+      # ve las vars listadas acá, tomadas del .env de la RAÍZ — ponerlas en
+      # BackConcesionaria/.env no llega al runtime.
+      - ML_CLIENT_ID=${ML_CLIENT_ID:-}
+      - ML_CLIENT_SECRET=${ML_CLIENT_SECRET:-}
+      # Redirect URI del OAuth: tiene que coincidir EXACTO con la cargada en la
+      # app de Mercado Libre. Si se deja vacía se arma sola como
+      # <APP_URL>/api/webhooks/mercadolibre/callback, que es lo normal en prod.
+      - ML_REDIRECT_URI=${ML_REDIRECT_URI:-}
+      # Sitio: MLA = Argentina, MLU = Uruguay, MLC = Chile.
+      - ML_SITE_ID=${ML_SITE_ID:-MLA}
+      # Cada cuánto barre el worker de sincronización (preguntas perdidas del
+      # webhook + reconciliación de precio/estado). La cuota de la API de ML es
+      # por aplicación, no por vendedor: bajarlo la quema para todos los tenants.
+      - ML_SYNC_INTERVAL_MS=${ML_SYNC_INTERVAL_MS:-300000}
     # 'migrate deploy' aplica las migraciones versionadas pendientes (prisma/migrations)
     # y las registra en _prisma_migrations; nunca cambia el schema fuera de una migración.
     # Idempotente: sin pendientes es no-op. El cutover desde 'db push' requirió baselinear

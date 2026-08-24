@@ -54,7 +54,40 @@ const envSchema = z.object({
     // Necesario para que req.ip lea el X-Forwarded-For real y el rate limit
     // no vea a todos como la IP interna del proxy. Con 1 nginx delante: 1.
     TRUST_PROXY: z.preprocess((val) => (val === undefined ? 1 : Number(val)), z.number().int().min(0).default(1)),
+    // --- Mercado Libre ---
+    // Credenciales de la app creada en developers.mercadolibre.com.ar. Las dos
+    // son OPCIONALES: sin ellas el backend arranca igual y la integración queda
+    // simplemente APAGADA (hayCredencialesMeli() da false, el worker no corre y
+    // la pantalla de Configuración muestra "no configurada"). Nunca rompen el
+    // arranque, para no dejar sin sistema a las concesionarias que no publican
+    // en Mercado Libre.
+    ML_CLIENT_ID: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+    ML_CLIENT_SECRET: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+    // Redirect URI del OAuth. Tiene que coincidir EXACTO (protocolo, host, path,
+    // sin barra de más) con la cargada en la app de Mercado Libre, o el canje
+    // del code falla con invalid_grant. Si no se setea, se arma sola como
+    // <APP_URL>/api/webhooks/mercadolibre/callback.
+    ML_REDIRECT_URI: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+    // Sitio de Mercado Libre: MLA = Argentina, MLU = Uruguay, MLC = Chile.
+    // Define el host de autorización y el de las categorías/tipos de publicación.
+    ML_SITE_ID: z.string().default('MLA'),
+    // Cada cuánto barre el worker de sincronización (preguntas perdidas del
+    // webhook + reconciliación de precio/estado de los items). Bajarlo mucho
+    // quema la cuota de la API, que es por aplicación y no por vendedor.
+    ML_SYNC_INTERVAL_MS: z.preprocess(
+        (v) => (v === undefined || v === '' ? undefined : Number(v)),
+        z.number().int().min(30_000).default(300_000),
+    ),
 }).superRefine((data, ctx) => {
+    // ML_CLIENT_ID y ML_CLIENT_SECRET van juntas o ninguna: con una sola el
+    // OAuth falla recién al canjear el code, muy lejos del error real.
+    if (!!data.ML_CLIENT_ID !== !!data.ML_CLIENT_SECRET) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [data.ML_CLIENT_ID ? 'ML_CLIENT_SECRET' : 'ML_CLIENT_ID'],
+            message: 'ML_CLIENT_ID y ML_CLIENT_SECRET deben setearse juntas (o ninguna): con una sola la integración de Mercado Libre no puede canjear el token.',
+        });
+    }
     // Cutover al rol app_rw: APP_DATABASE_URL y APP_DB_PASSWORD van juntas o
     // ninguna (setear sólo una es misconfiguración). Aplica en todo entorno.
     if (!!data.APP_DATABASE_URL !== !!data.APP_DB_PASSWORD) {

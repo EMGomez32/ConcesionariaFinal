@@ -5,6 +5,7 @@ import { BaseException, NotFoundException } from '../../../domain/exceptions/Bas
 import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { context } from '../../../infrastructure/security/context';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
+import { sincronizarEnSegundoPlano } from '../../services/meliPublicacion';
 
 export class CreateReserva {
     constructor(
@@ -39,7 +40,7 @@ export class CreateReserva {
         // Antes era prisma.$transaction del cliente EXTENDIDO (atomicidad ilusoria): si
         // fallaba el update del vehículo, quedaba la reserva con seña pero el auto
         // seguía disponible → se podía reservar/vender dos veces.
-        return withTenantTransaction(async (tx) => {
+        const reserva = await withTenantTransaction(async (tx) => {
             // Lock del vehículo acotado al tenant + revalidación de disponibilidad bajo
             // lock: serializa dos reservas concurrentes del mismo auto.
             const rows = await tx.$queryRaw<Array<{ estado: string }>>(Prisma.sql`
@@ -87,5 +88,12 @@ export class CreateReserva {
 
             return reserva;
         });
+
+        // El vehículo quedó 'reservado': la publicación de Mercado Libre se
+        // pausa acá, después del commit. Reservar tampoco pasa por
+        // UpdateVehiculo, así que sin esto el aviso seguía activo.
+        sincronizarEnSegundoPlano(vehiculoId);
+
+        return reserva;
     }
 }

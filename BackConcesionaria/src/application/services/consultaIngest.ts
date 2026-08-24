@@ -1,6 +1,7 @@
 import { OrigenLead } from '@prisma/client';
 import prisma from '../../infrastructure/database/prisma';
 import { context } from '../../infrastructure/security/context';
+import { assertMismoTenant } from '../../infrastructure/security/tenantGuard';
 
 /**
  * Ingesta de consultas de venta (leads) — el camino COMÚN de todos los canales:
@@ -96,6 +97,15 @@ const lineaConsulta = (c: ConsultaEntrante): string => {
 export async function ingestarConsulta(consulta: ConsultaEntrante): Promise<ResultadoIngesta> {
     const telefono = consulta.telefono?.trim() || null;
     const email = consulta.email?.trim().toLowerCase() || null;
+
+    // `vendedorId` llega del body (modal de consulta, lead de Mercado Libre) y
+    // termina en cliente.vendedorAsignadoId. La RLS valida el concesionaria_id
+    // de la FILA que se escribe, NO el de sus FKs, y la integridad referencial
+    // de Postgres saltea RLS por diseño: sin este chequeo un id de otro tenant
+    // pasaba y el lead quedaba asignado a alguien que para esta concesionaria no
+    // existe — invisible en toda vista por vendedor y desbalanceando el
+    // round-robin. Mismo candado que CreateCliente/UpdateCliente.
+    await assertMismoTenant('usuario', consulta.vendedorId, context.getTenantId() ?? null);
 
     // Dedupe: mismo teléfono o email en el tenant (la extensión filtra tenant).
     const existente = await buscarClientePorContacto(telefono, email);

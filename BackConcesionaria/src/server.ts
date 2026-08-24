@@ -3,6 +3,7 @@ import config from './config';
 import logger from './utils/logger';
 import { iniciarWorkerIngestaEmail } from './infrastructure/integraciones/emailIngest';
 import { iniciarWorkerEnvioWhatsapp } from './infrastructure/whatsapp/envioWorker';
+import { iniciarWorkerMercadoLibre } from './infrastructure/mercadolibre/meliSyncWorker';
 import { iniciarCuentasActivas } from './application/services/whatsappManager';
 import { hayClaveDeSecretos } from './infrastructure/security/secretBox';
 
@@ -23,6 +24,13 @@ const server = app.listen(config.port, () => {
         // Cola de salida de WhatsApp: despacha los mensajes pendientes con el
         // espaciado anti-ban (reemplaza a BullMQ; AUTENZA no tiene Redis).
         iniciarWorkerEnvioWhatsapp();
+
+        // Red de seguridad de Mercado Libre: cada ML_SYNC_INTERVAL_MS recorre
+        // las cuentas vinculadas de todos los tenants para levantar preguntas
+        // cuya notificación de webhook se haya perdido y reconciliar el precio y
+        // el estado de las publicaciones que quedaron desincronizadas del stock.
+        // Sin ML_CLIENT_ID/ML_CLIENT_SECRET no hace nada (avisa una vez).
+        iniciarWorkerMercadoLibre();
 
         // Reconecta los sockets de Baileys de las cuentas activas. Las
         // credenciales viven en WHATSAPP_AUTH_DIR (volumen persistente en

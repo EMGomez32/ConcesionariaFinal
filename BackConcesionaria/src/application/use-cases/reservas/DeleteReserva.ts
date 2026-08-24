@@ -2,6 +2,7 @@ import { IReservaRepository } from '../../../domain/repositories/IReservaReposit
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { context } from '../../../infrastructure/security/context';
+import { sincronizarEnSegundoPlano } from '../../services/meliPublicacion';
 
 // DELETE /reservas/:id ejecuta una CANCELACIÓN: cambia el estado a 'cancelada',
 // libera el vehículo (estado 'publicado') y registra un VehiculoMovimiento de
@@ -26,7 +27,7 @@ export class DeleteReserva {
         // movimiento commitean JUNTOS (antes: prisma.$transaction del cliente
         // EXTENDIDO, atomicidad ilusoria). Filtros tenant/deletedAt a mano: el tx raw
         // no pasa por la extensión.
-        return withTenantTransaction(async (tx) => {
+        const cancelada = await withTenantTransaction(async (tx) => {
             const reserva = await tx.reserva.update({
                 where: { id, ...tenantWhere, deletedAt: null },
                 data: { estado: 'cancelada' },
@@ -51,5 +52,11 @@ export class DeleteReserva {
 
             return reserva;
         });
+
+        // Cancelar la reserva devolvió el vehículo a 'publicado': la publicación
+        // pausada de Mercado Libre se reactiva acá, después del commit.
+        if (current.estado === 'activa') sincronizarEnSegundoPlano(current.vehiculoId);
+
+        return cancelada;
     }
 }

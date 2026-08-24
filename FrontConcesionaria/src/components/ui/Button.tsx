@@ -13,6 +13,7 @@ const Button = ({
     loading,
     className = '',
     style,
+    disabled,
     ...props
 }: ButtonProps) => {
     const sizeClass = size === 'md' ? '' : `btn-${size}`;
@@ -23,7 +24,12 @@ const Button = ({
     return (
         <button
             className={composed}
-            disabled={loading || props.disabled}
+            // `disabled` se desestructura arriba a propósito: dejándolo dentro de
+            // props, el spread de abajo pisaba el valor calculado con el crudo, y
+            // un botón con loading pero sin disabled explícito quedaba clickeable
+            // durante todo el round-trip. En "Publicar en Mercado Libre" eso era
+            // un doble clic = dos avisos publicados y cobrados.
+            disabled={loading || disabled}
             style={style}
             {...props}
         >

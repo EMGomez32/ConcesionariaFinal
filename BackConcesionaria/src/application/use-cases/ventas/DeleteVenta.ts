@@ -2,6 +2,7 @@ import { IVentaRepository } from '../../../domain/repositories/IVentaRepository'
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { context } from '../../../infrastructure/security/context';
+import { sincronizarEnSegundoPlano } from '../../services/meliPublicacion';
 
 export class DeleteVenta {
     constructor(private readonly ventaRepository: IVentaRepository) { }
@@ -18,7 +19,7 @@ export class DeleteVenta {
         // Antes era prisma.$transaction del cliente EXTENDIDO (atomicidad ilusoria): si
         // fallaba el borrado tras liberar el auto, quedaba el vehículo re-vendible con la
         // venta viva → doble venta.
-        return withTenantTransaction(async (tx) => {
+        const venta = await withTenantTransaction(async (tx) => {
             // Sólo filtro de tenant (como la extensión, que NO agrega deletedAt en
             // updates): si el vehículo estuviera soft-deleted, igual se libera en vez
             // de abortar la cancelación con un P2025.
@@ -35,5 +36,12 @@ export class DeleteVenta {
                 data: { deletedAt: new Date() }
             });
         });
+
+        // El vehículo volvió a 'publicado': si la publicación de Mercado Libre
+        // había quedado pausada, se reactiva. (Una CERRADA no vuelve: en ML el
+        // cierre es definitivo y hay que publicar de nuevo.)
+        sincronizarEnSegundoPlano(current.vehiculoId);
+
+        return venta;
     }
 }

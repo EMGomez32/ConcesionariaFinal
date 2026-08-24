@@ -3,6 +3,7 @@ import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertValidTransition } from '../../../domain/services/stateMachine';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 import { recordPrecioVehiculo } from '../../../infrastructure/pricing/recordPrecioVehiculo';
+import { sincronizarEnSegundoPlano } from '../../services/meliPublicacion';
 
 export class UpdateVehiculo {
     constructor(private readonly vehiculoRepository: IVehiculoRepository) { }
@@ -49,6 +50,7 @@ export class UpdateVehiculo {
         // append-only, best-effort). Sólo cuando el body trae precioLista con un
         // valor numérico distinto al actual: un PATCH que no lo toca no registra
         // nada, y limpiarlo a null tampoco es "un precio nuevo".
+        let cambioPrecio = false;
         if (vehiculoData.precioLista !== undefined) {
             const anterior = exists.precioLista == null ? null : Number(exists.precioLista);
             const nuevo =
@@ -56,6 +58,7 @@ export class UpdateVehiculo {
                     ? null
                     : Number(vehiculoData.precioLista);
             if (nuevo != null && !Number.isNaN(nuevo) && nuevo !== anterior) {
+                cambioPrecio = true;
                 await recordPrecioVehiculo({
                     concesionariaId: exists.concesionariaId,
                     vehiculoId: id,
@@ -64,6 +67,16 @@ export class UpdateVehiculo {
                     moneda: updated?.moneda ?? exists.moneda,
                 });
             }
+        }
+
+        // Espejo en Mercado Libre: precio nuevo ⇒ se actualiza el item;
+        // reservado ⇒ se pausa; vendido ⇒ se cierra; vuelta a publicado ⇒ se
+        // reactiva. Va DESPUÉS del commit (el repositorio ya cerró su
+        // transacción). Lo que se pierda acá lo repara el worker de
+        // reconciliación (meliSyncWorker), que reintenta el empuje.
+        const cambioEstado = !!updated && updated.estado !== exists.estado;
+        if (cambioPrecio || cambioEstado) {
+            sincronizarEnSegundoPlano(id);
         }
 
         return updated;

@@ -7,14 +7,24 @@ import { gastosApi, type GastoVehiculo } from '../../api/gastos.api';
 import { gastosCategoriaApi, type GastoCategoria } from '../../api/gastos-categorias.api';
 import { vehiculoInteresApi, type VehiculoInteres } from '../../api/vehiculoInteres.api';
 import { vehiculoPreciosApi, type VehiculoPrecioHistorial } from '../../api/vehiculoPrecios.api';
+import mercadolibreApi from '../../api/mercadolibre.api';
+import type {
+    EstadoCuentaMl,
+    EstadoPublicacionMl,
+    OpcionesPublicacion,
+    PublicacionMl,
+} from '../../api/mercadolibre.api';
 import type { Vehiculo, EstadoVehiculo } from '../../types/vehiculo.types';
 import { formatFecha } from '../../utils/fecha';
+import { getApiErrorMessage } from '../../utils/error';
 import DataTable, { type Column } from '../../components/ui/DataTable';
-import Badge from '../../components/ui/Badge';
+import Badge, { type BadgeVariant } from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
+import Modal from '../../components/ui/Modal';
 import { FileUploader } from '../../components/ui/FileUploader';
+import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
 import { waShareLink } from '../../utils/whatsapp';
 import {
@@ -22,7 +32,7 @@ import {
     FileImage, Wrench, ArrowLeftRight, FileText,
     ShoppingCart, Bookmark, RefreshCw, Hash,
     Plus, Trash2, ExternalLink, Upload, X, Image, FileText as FileIcon, Edit, MessageCircle, Star, Users,
-    TrendingUp, TrendingDown, Minus
+    TrendingUp, TrendingDown, Minus, ShoppingBag, AlertTriangle, Pause, Play, Ban
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { PaginatedResponse, ApiError } from '../../types/api.types';
@@ -80,6 +90,11 @@ const VehiculoDetallePage = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { addToast } = useUIStore();
+    // Publicar en Mercado Libre (y consultar la cuenta vinculada) es admin-only en
+    // el backend: se oculta la tarjeta entera para el resto de los roles, si no
+    // serían botones muertos que siempre dan 403.
+    const user = useAuthStore((s) => s.user);
+    const puedePublicarMl = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin');
 
     const [activeTab, setActiveTab] = useState<Tab>('info');
     const [vehiculo, setVehiculo] = useState<VehiculoFull | null>(null);
@@ -717,6 +732,9 @@ const VehiculoDetallePage = () => {
                 </div>
             </div>
 
+            {/* Mercado Libre: publicación de esta unidad (alta manual, una por vez) */}
+            {puedePublicarMl && <TarjetaMercadoLibre vehiculoId={vehiculo.id} estadoVehiculo={vehiculo.estado} />}
+
             {/* Tabs */}
             <div className="tabs-bar glass">
                 {tabs.map(t => (
@@ -1090,10 +1108,432 @@ const VehiculoDetallePage = () => {
                 .link-cell { font-weight: 600; color: var(--accent); background: none; border: none; padding: 0; cursor: pointer; }
                 .link-cell:hover { text-decoration: underline; }
 
+                /* Mercado Libre */
+                .ml-card { display: flex; flex-direction: column; gap: 1.25rem; }
+                .ml-card-titulo { display: flex; align-items: center; gap: 0.5rem; font-size: var(--text-lg); font-weight: 700; }
+                .ml-card-nota { font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin-top: 0.25rem; max-width: 68ch; }
+                .ml-fila { display: flex; align-items: center; gap: 1.75rem; flex-wrap: wrap; }
+                .ml-dato { display: flex; flex-direction: column; gap: 0.15rem; }
+                .ml-dato-label { font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+                .ml-dato-valor { font-size: var(--text-sm); font-weight: 600; }
+                .ml-acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-left: auto; }
+                .ml-hint { font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; max-width: 68ch; margin: 0; }
+                /* El texto de Mercado Libre (qué atributo falta) se muestra tal cual:
+                   es la única pista accionable que devuelve la API. */
+                .ml-error { margin: 0; padding: 0.75rem 0.9rem; border: 1px solid var(--danger); border-radius: var(--radius-md); background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); font-size: var(--text-sm); white-space: pre-wrap; word-break: break-word; }
+                .ml-aviso { display: flex; gap: 0.6rem; padding: 0.75rem 0.9rem; border: 1px solid var(--warning); border-radius: var(--radius-md); background: color-mix(in srgb, var(--warning) 10%, transparent); color: var(--warning); font-size: var(--text-sm); }
+                .ml-aviso svg { flex-shrink: 0; margin-top: 0.15rem; }
+                .ml-aviso ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.25rem; }
+                .ml-tipos { display: flex; flex-direction: column; gap: 0.6rem; }
+                .ml-tipo { display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.75rem 0.9rem; border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+                .ml-tipo:hover { border-color: var(--accent); }
+                .ml-tipo.is-elegido { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+                .ml-tipo-datos { display: flex; flex-direction: column; gap: 0.2rem; }
+                .ml-tipo-nombre { font-weight: 700; font-size: var(--text-sm); }
+                .ml-tipo-costos { font-size: var(--text-xs); color: var(--text-secondary); }
+                .ml-campo-cuenta { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+
                 .spin { animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
             `}</style>
+        </div>
+    );
+};
+
+// ─── Mercado Libre (publicación de la unidad) ───────────────────────────────
+
+/** Mercado Libre corta el título de los ítems en 60 caracteres. */
+const MAX_TITULO_ML = 60;
+
+const ESTADO_ML_LABEL: Record<EstadoPublicacionMl, string> = {
+    borrador: 'Borrador',
+    activa: 'Activa',
+    pausada: 'Pausada',
+    cerrada: 'Cerrada',
+    error: 'Con error',
+};
+
+const ESTADO_ML_BADGE: Record<EstadoPublicacionMl, BadgeVariant> = {
+    borrador: 'default',
+    activa: 'success',
+    pausada: 'warning',
+    cerrada: 'default',
+    error: 'danger',
+};
+
+// El precio publicado puede llegar como string (Decimal de Prisma serializado).
+const montoMl = (n: number | string | null | undefined, moneda?: string | null): string => {
+    if (n === null || n === undefined || n === '') return '—';
+    const valor = Number(n);
+    if (Number.isNaN(valor)) return '—';
+    return `${moneda === 'USD' ? 'US$' : '$'}${valor.toLocaleString('es-AR')}`;
+};
+
+const fechaHoraMl = (iso?: string | null): string => {
+    if (!iso) return 'Nunca';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return 'Nunca';
+    return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
+
+/**
+ * Costo de un tipo de publicación. `null` NO es gratis: es DESCONOCIDO (ML no
+ * devolvió la grilla de tarifas y el backend cayó a los tipos básicos). Decir
+ * "sin costo" sobre un botón que cobra plata es la peor de las tres opciones.
+ */
+const costoMl = (valor: number | null, moneda: string | null | undefined, cero: string): string => {
+    if (valor === null || valor === undefined) return 'no informado por Mercado Libre';
+    if (valor === 0) return cero;
+    return montoMl(valor, moneda);
+};
+
+/** Estados en los que el vehículo no está disponible: el backend no los publica. */
+const ESTADOS_NO_PUBLICABLES_ML: EstadoVehiculo[] = ['reservado', 'vendido', 'devuelto'];
+
+type AccionMl = 'pausar' | 'reactivar' | 'cerrar' | 'sincronizar';
+
+const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: number; estadoVehiculo: EstadoVehiculo }) => {
+    const { addToast } = useUIStore();
+
+    const [cargando, setCargando] = useState(true);
+    const [errorCarga, setErrorCarga] = useState<string | null>(null);
+    const [cuenta, setCuenta] = useState<EstadoCuentaMl | null>(null);
+    const [publicacion, setPublicacion] = useState<PublicacionMl | null>(null);
+    // Acción de publicación en curso: bloquea la botonera mientras viaja.
+    const [accion, setAccion] = useState<AccionMl | null>(null);
+
+    // Modal de publicación: las opciones (categoría, tipos y sus costos) se traen
+    // EN VIVO de Mercado Libre al abrirlo, porque las tarifas cambian.
+    const [modalAbierto, setModalAbierto] = useState(false);
+    const [opciones, setOpciones] = useState<OpcionesPublicacion | null>(null);
+    const [cargandoOpciones, setCargandoOpciones] = useState(false);
+    const [titulo, setTitulo] = useState('');
+    const [listingTypeId, setListingTypeId] = useState('');
+    const [publicando, setPublicando] = useState(false);
+    const [errorMl, setErrorMl] = useState<string | null>(null);
+
+    const cargar = useCallback(async () => {
+        setCargando(true);
+        try {
+            const [est, pub] = await Promise.all([
+                mercadolibreApi.getCuenta(),
+                mercadolibreApi.getPublicacion(vehiculoId),
+            ]);
+            setCuenta(est);
+            setPublicacion(pub);
+            setErrorCarga(null);
+        } catch (err: unknown) {
+            setErrorCarga(getApiErrorMessage(err, 'No se pudo consultar el estado de Mercado Libre.'));
+        } finally {
+            setCargando(false);
+        }
+    }, [vehiculoId]);
+
+    useEffect(() => { cargar(); }, [cargar]);
+
+    const abrirModal = async () => {
+        setModalAbierto(true);
+        setOpciones(null);
+        setErrorMl(null);
+        setListingTypeId('');
+        setCargandoOpciones(true);
+        try {
+            const res = await mercadolibreApi.opciones(vehiculoId);
+            setOpciones(res);
+            setTitulo(res.titulo.slice(0, MAX_TITULO_ML));
+            // Con un solo tipo disponible no hay nada que elegir: viene preseleccionado.
+            if (res.tipos.length === 1) setListingTypeId(res.tipos[0].listingTypeId);
+        } catch (err: unknown) {
+            setErrorMl(getApiErrorMessage(err, 'No se pudieron traer las opciones de publicación.'));
+        } finally {
+            setCargandoOpciones(false);
+        }
+    };
+
+    const publicar = async () => {
+        // Guarda contra el doble envío: publicar cobra un cargo por cada aviso.
+        if (publicando || !listingTypeId || !titulo.trim()) return;
+        setPublicando(true);
+        setErrorMl(null);
+        try {
+            const pub = await mercadolibreApi.publicar(vehiculoId, {
+                listingTypeId,
+                titulo: titulo.trim(),
+                ...(opciones?.categoriaId ? { categoriaId: opciones.categoriaId } : {}),
+            });
+            setPublicacion(pub);
+            setModalAbierto(false);
+            addToast('Vehículo publicado en Mercado Libre', 'success');
+        } catch (err: unknown) {
+            // El mensaje es el de Mercado Libre y dice qué atributo falta: va TEXTUAL.
+            setErrorMl(getApiErrorMessage(err, 'Mercado Libre rechazó la publicación.'));
+        } finally {
+            setPublicando(false);
+        }
+    };
+
+    const ejecutar = async (cual: AccionMl) => {
+        if (!publicacion) return;
+        // Cerrar es definitivo del lado de Mercado Libre: no hay reapertura del ítem.
+        if (cual === 'cerrar' && !window.confirm('Cerrar la publicación es definitivo en Mercado Libre: para volver a ofrecer la unidad hay que publicarla de nuevo. ¿Cerrarla?')) return;
+        setAccion(cual);
+        try {
+            const fn = {
+                pausar: mercadolibreApi.pausar,
+                reactivar: mercadolibreApi.reactivar,
+                cerrar: mercadolibreApi.cerrar,
+                sincronizar: mercadolibreApi.sincronizar,
+            }[cual];
+            const pub = await fn(publicacion.id);
+            setPublicacion(pub);
+            addToast({
+                pausar: 'Publicación pausada',
+                reactivar: 'Publicación reactivada',
+                cerrar: 'Publicación cerrada',
+                sincronizar: 'Publicación sincronizada con Mercado Libre',
+            }[cual], 'success');
+        } catch (err: unknown) {
+            addToast(getApiErrorMessage(err, 'Mercado Libre rechazó la operación.'), 'error');
+        } finally {
+            setAccion(null);
+        }
+    };
+
+    const conectada = !!cuenta?.conectada;
+    const estado = publicacion?.estado;
+
+    // Un aviso EXISTE en Mercado Libre sólo si tiene itemId. Sin él la fila es un
+    // intento local (borrador o error) que nunca llegó, y pausar/reactivar/cerrar/
+    // sincronizar dan 409 garantizado: se ofrecen sólo con item.
+    const enMercadoLibre = !!publicacion?.itemId;
+
+    // Se puede publicar si no hay aviso vivo: nunca se publicó, el intento
+    // anterior no llegó a ML (borrador/error sin itemId) o la publicación está
+    // cerrada — en ML cerrar es definitivo y la unidad se ofrece publicándola de
+    // nuevo, que es exactamente lo que hace el backend. Antes, cualquier fila
+    // hacía desaparecer el botón para siempre y el vehículo quedaba imposible de
+    // publicar desde el panel.
+    const noPublicable = ESTADOS_NO_PUBLICABLES_ML.includes(estadoVehiculo);
+    const puedePublicar = !noPublicable && (!publicacion || estado === 'cerrada' || !enMercadoLibre);
+    const esReintento = !!publicacion && puedePublicar;
+
+    const botonPublicar = (
+        <Button variant="primary" size="sm" onClick={abrirModal}>
+            <ShoppingBag size={15} /> {esReintento ? 'Volver a publicar' : 'Publicar en Mercado Libre'}
+        </Button>
+    );
+
+    return (
+        <div className="card ml-card">
+            <div>
+                <h3 className="ml-card-titulo"><ShoppingBag size={18} /> Mercado Libre</h3>
+                <p className="ml-card-nota">
+                    El precio y la baja se sincronizan solos: si cambiás el precio del vehículo o lo pasás a
+                    reservado o vendido, la publicación se actualiza sola.
+                </p>
+            </div>
+
+            {cargando ? (
+                <p className="ml-hint"><RefreshCw size={15} className="spin" style={{ verticalAlign: 'text-bottom', marginRight: '0.4rem' }} />Consultando Mercado Libre…</p>
+            ) : errorCarga ? (
+                <div className="ml-fila">
+                    <p className="ml-error">{errorCarga}</p>
+                    <Button variant="secondary" size="sm" onClick={cargar}>Reintentar</Button>
+                </div>
+            ) : !conectada ? (
+                <p className="ml-hint">
+                    {cuenta?.configurada === false
+                        ? 'La integración con Mercado Libre no está configurada en el servidor: faltan las credenciales de la aplicación (ML_CLIENT_ID / ML_CLIENT_SECRET) o la clave de cifrado de secretos (INTEGRACIONES_SECRET_KEY).'
+                        : 'Todavía no hay una cuenta de Mercado Libre vinculada. Vinculala desde Ajustes para poder publicar esta unidad.'}
+                </p>
+            ) : !publicacion ? (
+                <div className="ml-fila">
+                    <p className="ml-hint">
+                        {noPublicable
+                            ? `Esta unidad está en estado "${estadoVehiculo}": no se publica en Mercado Libre stock que no está disponible.`
+                            : 'Esta unidad todavía no está publicada.'}
+                    </p>
+                    {puedePublicar && <div className="ml-acciones">{botonPublicar}</div>}
+                </div>
+            ) : (
+                <>
+                    <div className="ml-fila">
+                        <div className="ml-dato">
+                            <span className="ml-dato-label">Estado</span>
+                            <span className="ml-dato-valor">
+                                <Badge variant={ESTADO_ML_BADGE[publicacion.estado]}>{ESTADO_ML_LABEL[publicacion.estado]}</Badge>
+                            </span>
+                        </div>
+                        <div className="ml-dato">
+                            <span className="ml-dato-label">Precio publicado</span>
+                            <span className="ml-dato-valor">{montoMl(publicacion.precioPublicado, publicacion.monedaPublicada)}</span>
+                        </div>
+                        <div className="ml-dato">
+                            <span className="ml-dato-label">Última sincronización</span>
+                            <span className="ml-dato-valor">{fechaHoraMl(publicacion.ultimaSyncAt)}</span>
+                        </div>
+                        {publicacion.permalink && (
+                            <div className="ml-dato">
+                                <span className="ml-dato-label">Publicación</span>
+                                <span className="ml-dato-valor">
+                                    <a href={publicacion.permalink} target="_blank" rel="noopener noreferrer" className="link-cell">
+                                        Ver en Mercado Libre <ExternalLink size={13} style={{ verticalAlign: 'text-bottom' }} />
+                                    </a>
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Todo lo que toca el aviso exige que el aviso exista. */}
+                        <div className="ml-acciones">
+                            {enMercadoLibre && estado === 'activa' && (
+                                <Button variant="secondary" size="sm" loading={accion === 'pausar'} disabled={!!accion} onClick={() => ejecutar('pausar')}>
+                                    <Pause size={14} /> Pausar
+                                </Button>
+                            )}
+                            {enMercadoLibre && estado === 'pausada' && (
+                                <Button variant="secondary" size="sm" loading={accion === 'reactivar'} disabled={!!accion} onClick={() => ejecutar('reactivar')}>
+                                    <Play size={14} /> Reactivar
+                                </Button>
+                            )}
+                            {enMercadoLibre && estado !== 'cerrada' && (
+                                <Button variant="secondary" size="sm" loading={accion === 'cerrar'} disabled={!!accion} onClick={() => ejecutar('cerrar')}>
+                                    <Ban size={14} /> Cerrar
+                                </Button>
+                            )}
+                            {enMercadoLibre && (
+                                <Button variant="outline" size="sm" loading={accion === 'sincronizar'} disabled={!!accion} onClick={() => ejecutar('sincronizar')}>
+                                    <RefreshCw size={14} /> Sincronizar
+                                </Button>
+                            )}
+                            {puedePublicar && botonPublicar}
+                        </div>
+                    </div>
+
+                    {/* Sin itemId no hay nada en Mercado Libre: se dice, porque el
+                        badge "Borrador"/"Con error" no lo deja claro solo. */}
+                    {!enMercadoLibre && estado !== 'cerrada' && (
+                        <p className="ml-hint">
+                            Este intento no llegó a Mercado Libre: no hay ningún aviso publicado.
+                            {puedePublicar ? ' Corregí lo que haga falta y volvé a publicar.' : ''}
+                        </p>
+                    )}
+                    {noPublicable && estado !== 'cerrada' && (
+                        <p className="ml-hint">
+                            El vehículo está en estado "{estadoVehiculo}": la publicación se cierra o se pausa sola.
+                        </p>
+                    )}
+
+                    {publicacion.ultimoError && (
+                        <p className="ml-error">{publicacion.ultimoError}</p>
+                    )}
+                </>
+            )}
+
+            <Modal
+                isOpen={modalAbierto}
+                onClose={() => setModalAbierto(false)}
+                title="Publicar en Mercado Libre"
+                subtitle="Elegí el tipo de publicación: cada uno cobra distinto."
+                maxWidth="640px"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setModalAbierto(false)}>Cancelar</Button>
+                        <Button
+                            variant="primary"
+                            loading={publicando}
+                            disabled={!opciones || !listingTypeId || !titulo.trim()}
+                            onClick={publicar}
+                        >
+                            <ShoppingBag size={16} /> Publicar
+                        </Button>
+                    </>
+                }
+            >
+                {cargandoOpciones ? (
+                    <p className="ml-hint"><RefreshCw size={15} className="spin" style={{ verticalAlign: 'text-bottom', marginRight: '0.4rem' }} />Consultando categorías y tarifas…</p>
+                ) : !opciones ? (
+                    errorMl ? <p className="ml-error">{errorMl}</p> : null
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        <Input
+                            dense
+                            label="Título de la publicación"
+                            type="text"
+                            value={titulo}
+                            maxLength={MAX_TITULO_ML}
+                            hint={`${titulo.length}/${MAX_TITULO_ML} caracteres`}
+                            onChange={(e) => setTitulo(e.target.value)}
+                        />
+
+                        <div className="ml-fila">
+                            <div className="ml-dato">
+                                <span className="ml-dato-label">Categoría detectada</span>
+                                <span className="ml-dato-valor">{opciones.categoriaNombre ?? opciones.categoriaId ?? 'Sin detectar'}</span>
+                            </div>
+                            <div className="ml-dato">
+                                <span className="ml-dato-label">Precio</span>
+                                <span className="ml-dato-valor">{montoMl(opciones.precio, opciones.moneda)}</span>
+                            </div>
+                            <div className="ml-dato">
+                                <span className="ml-dato-label">Fotos</span>
+                                <span className="ml-dato-valor">{opciones.fotos}</span>
+                            </div>
+                        </div>
+
+                        {opciones.advertencias.length > 0 && (
+                            <div className="ml-aviso">
+                                <AlertTriangle size={16} />
+                                <ul>
+                                    {opciones.advertencias.map((a) => <li key={a}>{a}</li>)}
+                                </ul>
+                            </div>
+                        )}
+
+                        {opciones.atributosFaltantes.length > 0 && (
+                            <div className="ml-aviso">
+                                <AlertTriangle size={16} />
+                                <div>
+                                    Mercado Libre pide estos datos obligatorios para la categoría y el vehículo no los tiene cargados:{' '}
+                                    <strong>{opciones.atributosFaltantes.map((a) => a.nombre).join(', ')}</strong>.
+                                    Si los rechaza, cargalos en la ficha del vehículo y volvé a intentar.
+                                </div>
+                            </div>
+                        )}
+
+                        <div>
+                            <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, marginBottom: '0.6rem' }}>Tipo de publicación</h4>
+                            {opciones.tipos.length === 0 ? (
+                                <p className="ml-hint">Mercado Libre no devolvió tipos de publicación para esta categoría y precio.</p>
+                            ) : (
+                                <div className="ml-tipos">
+                                    {opciones.tipos.map((t) => (
+                                        <label key={t.listingTypeId} className={`ml-tipo ${listingTypeId === t.listingTypeId ? 'is-elegido' : ''}`}>
+                                            <input
+                                                type="radio"
+                                                name="ml-listing-type"
+                                                value={t.listingTypeId}
+                                                checked={listingTypeId === t.listingTypeId}
+                                                onChange={() => setListingTypeId(t.listingTypeId)}
+                                            />
+                                            <span className="ml-tipo-datos">
+                                                <span className="ml-tipo-nombre">{t.nombre}</span>
+                                                <span className="ml-tipo-costos">
+                                                    Costo de publicación: {costoMl(t.costoPublicacion, t.moneda, 'sin costo')}
+                                                    {' · '}
+                                                    Comisión por venta: {costoMl(t.comisionVenta, t.moneda, 'sin comisión')}
+                                                </span>
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {errorMl && <p className="ml-error">{errorMl}</p>}
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 };

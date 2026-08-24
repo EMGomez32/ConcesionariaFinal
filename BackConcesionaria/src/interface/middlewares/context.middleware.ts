@@ -16,8 +16,15 @@ export const contextMiddleware = (req: Request, res: Response, next: NextFunctio
         try {
             // algorithms pinneado: sólo HS256, para cerrar la confusión de algoritmo.
             const decoded = jwt.verify(token, env.JWT_SECRET, { algorithms: JWT_ALGORITHMS }) as any;
+            const userId = Number(decoded.userId ?? decoded.sub ?? decoded.id);
+            // Una firma válida no alcanza para ser una SESIÓN: un token de otro
+            // propósito firmado con el mismo secreto armaba acá un principal
+            // vacío (sin userId, sin tenant y sin roles) que `authenticate`
+            // daba por autenticado, y de ahí en más lo único que lo frenaba era
+            // la RLS. Sin usuario identificable no hay sesión.
+            if (!Number.isInteger(userId) || userId <= 0) throw new Error('token sin usuario');
             user = {
-                userId: decoded.userId || decoded.sub || decoded.id,
+                userId,
                 concesionariaId: decoded.concesionariaId || null,
                 sucursalId: decoded.sucursalId || null,
                 roles: decoded.roles || [],

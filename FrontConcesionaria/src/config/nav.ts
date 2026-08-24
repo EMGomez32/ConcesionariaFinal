@@ -21,6 +21,7 @@ import {
     GitCompare,
     Inbox,
     MessageCircle,
+    ShoppingBag,
     // BadgeCheck, // Billing deshabilitado temporalmente (ver ítem comentado abajo)
     BarChart3,
 } from 'lucide-react';
@@ -30,6 +31,12 @@ export interface NavItem {
     label: string;
     path: string;
     icon: LucideIcon;
+    /**
+     * Label para el breadcrumb, cuando repetir `label` sonaría redundante. Pasa
+     * en las rutas de dos segmentos cuyo prefijo ya nombra la sección:
+     * /mercadolibre/preguntas sería "Mercado Libre › Mercado Libre".
+     */
+    crumb?: string;
     keywords?: string[];
     superAdminOnly?: boolean;
     /** Visible sólo para admin/super_admin (gestión administrativa del tenant). */
@@ -72,6 +79,8 @@ export const NAV_SECTIONS: NavSection[] = [
         items: [
             { label: 'Consultas', path: '/consultas', icon: Inbox, keywords: ['leads', 'consultas', 'deruedas', 'instagram'], roles: ['admin', 'super_admin', 'vendedor'] },
             { label: 'WhatsApp', path: '/conversaciones', icon: MessageCircle, keywords: ['whatsapp', 'chat', 'bandeja', 'mensajes'], roles: ['admin', 'super_admin', 'vendedor'] },
+            // Pegado a WhatsApp: las dos son bandejas de atención y el vendedor las lee juntas.
+            { label: 'Mercado Libre', path: '/mercadolibre/preguntas', icon: ShoppingBag, crumb: 'Preguntas', keywords: ['mercadolibre', 'meli', 'ml', 'preguntas', 'publicaciones', 'publicar'], roles: ['admin', 'super_admin', 'vendedor'] },
             { label: 'Clientes', path: '/clientes', icon: Users, keywords: ['compradores', 'leads'] },
             { label: 'Seguimientos', path: '/seguimientos', icon: CalendarClock, keywords: ['crm', 'contactos', 'agenda', 'próximo contacto', 'llamar'], roles: ['admin', 'super_admin', 'vendedor'] },
             { label: 'Tasaciones', path: '/tasaciones', icon: Gauge, keywords: ['tasación', 'valuación', 'usado', 'permuta', 'cotizar auto'], roles: ['admin', 'super_admin', 'vendedor'] },
@@ -117,8 +126,11 @@ export function resolveSegmentLabel(segment: string, parentPath: string): string
     if (/^\d+$/.test(segment)) return `#${segment}`;
     if (segment === 'nuevo') return 'Nuevo';
     if (segment === 'editar') return 'Editar';
+    // Prefijo de sección sin página propia: capitalizar el segmento daría
+    // "Mercadolibre", que no es como se escribe la marca.
+    if (segment === 'mercadolibre') return 'Mercado Libre';
     const path = `${parentPath}/${segment}`;
     const item = ALL_NAV_ITEMS.find((i) => i.path === path);
-    if (item) return item.label;
+    if (item) return item.crumb ?? item.label;
     return segment.charAt(0).toUpperCase() + segment.slice(1);
 }

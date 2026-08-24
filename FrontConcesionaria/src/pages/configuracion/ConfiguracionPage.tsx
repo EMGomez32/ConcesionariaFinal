@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt, Plug, Plus, Edit, Copy, Link2, ChevronRight, ChevronDown, MessageCircle, QrCode, Unplug, LogOut, Smartphone } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt, Plug, Plus, Edit, Copy, Link2, ChevronRight, ChevronDown, MessageCircle, QrCode, Unplug, LogOut, Smartphone, ShoppingBag, AlertTriangle, ExternalLink } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
 import { useTour } from '../../onboarding/useTour';
@@ -11,6 +11,8 @@ import { integracionesApi } from '../../api/integraciones.api';
 import type { Integracion, IntegracionConfig, IntegracionTipo } from '../../api/integraciones.api';
 import { whatsappApi } from '../../api/whatsapp.api';
 import type { EstadoSesionWhatsapp, EstadoWhatsappCuenta, SaludNumeroWhatsapp, WhatsappCuenta } from '../../api/whatsapp.api';
+import { mercadolibreApi } from '../../api/mercadolibre.api';
+import type { CuentaMlResumen, EstadoCuentaMl } from '../../api/mercadolibre.api';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
@@ -938,6 +940,269 @@ function CuentasWhatsapp() {
     );
 }
 
+// ─── Mercado Libre (vinculación de la cuenta por OAuth) ─────────────────────
+
+// La Redirect URI que hay que declarar en la app de Mercado Libre. Apunta a la
+// ruta PÚBLICA del backend que canjea el `code`, no a una pantalla del front.
+const redirectUriMl = () => `${window.location.origin}/api/webhooks/mercadolibre/callback`;
+
+function CuentasMercadoLibre() {
+    const { addToast } = useUIStore();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [estado, setEstado] = useState<EstadoCuentaMl | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [conectando, setConectando] = useState(false);
+    const [desvinculando, setDesvinculando] = useState<CuentaMlResumen | null>(null);
+    const [desvinculandoBusy, setDesvinculandoBusy] = useState(false);
+    const [pasosVisibles, setPasosVisibles] = useState(false);
+
+    const cargar = useCallback(() => {
+        mercadolibreApi.getCuenta()
+            .then((res) => setEstado(res))
+            .catch(() => addToast('Error al cargar el estado de Mercado Libre', 'error'))
+            .finally(() => setLoading(false));
+    }, [addToast]);
+
+    useEffect(() => { cargar(); }, [cargar]);
+
+    // Vuelta del OAuth: el backend redirige acá con ?ml=ok o ?ml=error&detalle=...
+    // El query se limpia enseguida para que un refresh no repita el toast.
+    useEffect(() => {
+        const resultado = searchParams.get('ml');
+        if (!resultado) return;
+        if (resultado === 'ok') {
+            addToast('Cuenta de Mercado Libre vinculada con éxito', 'success');
+        } else {
+            addToast(searchParams.get('detalle') || 'No se pudo vincular la cuenta de Mercado Libre', 'error');
+        }
+        const limpios = new URLSearchParams(searchParams);
+        limpios.delete('ml');
+        limpios.delete('detalle');
+        setSearchParams(limpios, { replace: true });
+        cargar();
+    }, [searchParams, setSearchParams, addToast, cargar]);
+
+    const conectar = async () => {
+        setConectando(true);
+        try {
+            const res = await mercadolibreApi.vincular();
+            // Redirect de PÁGINA COMPLETA: Mercado Libre bloquea el framing, así que
+            // la pantalla de autorización no se puede abrir en un iframe.
+            window.location.assign(res.url);
+            // No se libera el botón: la navegación ya está en curso.
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'No se pudo iniciar la vinculación'), 'error');
+            setConectando(false);
+        }
+    };
+
+    const confirmarDesvincular = async () => {
+        if (!desvinculando) return;
+        setDesvinculandoBusy(true);
+        try {
+            await mercadolibreApi.desvincular(desvinculando.id);
+            addToast('Cuenta de Mercado Libre desvinculada', 'success');
+            setDesvinculando(null);
+            cargar();
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'No se pudo desvincular la cuenta'), 'error');
+        } finally {
+            setDesvinculandoBusy(false);
+        }
+    };
+
+    const copiarRedirect = () => {
+        navigator.clipboard.writeText(redirectUriMl())
+            .then(() => addToast('Redirect URI copiada', 'success'))
+            .catch(() => addToast('No se pudo copiar la Redirect URI', 'error'));
+    };
+
+    // Dos cosas distintas: `configurada` es del servidor (las credenciales de la
+    // app de ML) y `conectada` es de esta concesionaria (la autorización OAuth).
+    const configurada = estado?.configurada ?? false;
+    const cuenta = estado?.conectada ? (estado.cuenta ?? null) : null;
+
+    return (
+        <div className="card" style={{ marginTop: 'var(--space-6)' }}>
+            <div style={{ marginBottom: 'var(--space-4)' }}>
+                <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <ShoppingBag size={18} /> Mercado Libre
+                </h2>
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 'var(--space-1)', lineHeight: 1.5, maxWidth: 560 }}>
+                    Vinculá la cuenta de Mercado Libre para publicar los vehículos desde el sistema y
+                    contestar las preguntas acá adentro. Se publica <strong>de a una y a mano</strong>, pero
+                    después el precio y la baja se sincronizan solos: si cambiás el precio se actualiza la
+                    publicación, y si el vehículo pasa a reservado o vendido se pausa o se cierra.
+                </p>
+            </div>
+
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--text-muted)' }}>
+                    <RefreshCw size={20} className="animate-spin" style={{ display: 'inline-block', marginRight: 'var(--space-2)' }} /> Cargando...
+                </div>
+            ) : (
+                <>
+                    {/* Sin credenciales de servidor no hay OAuth posible: se avisa qué falta
+                        y el botón queda deshabilitado (el secret NO se carga desde la UI). */}
+                    {!configurada && (
+                        <div style={{
+                            display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start',
+                            padding: 'var(--space-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+                            background: 'var(--bg-secondary)', marginBottom: 'var(--space-4)', maxWidth: 620,
+                        }}>
+                            <AlertTriangle size={16} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 2 }} />
+                            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                                <strong>Falta configurar Mercado Libre en el servidor.</strong> Hacen falta
+                                ML_CLIENT_ID y ML_CLIENT_SECRET (las credenciales de la app de Mercado Libre) y
+                                también INTEGRACIONES_SECRET_KEY, la clave con la que se cifran los tokens del
+                                vendedor: sin ella la vinculación se rechaza, porque esos tokens permiten publicar,
+                                cerrar avisos y contestar en tu nombre y no se guardan en texto plano. Son variables
+                                de entorno del backend, no se cargan desde esta pantalla: creá la app con los datos
+                                de más abajo, poné las variables y reiniciá el servidor.
+                            </p>
+                        </div>
+                    )}
+
+                    {cuenta ? (
+                        <div className="table-container">
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Cuenta</th>
+                                        <th>User ID</th>
+                                        <th>Sitio</th>
+                                        <th>Estado</th>
+                                        <th>Último error</th>
+                                        <th style={{ textAlign: 'right' }}>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style={{ fontWeight: 600 }}>{cuenta.nickname || '—'}</td>
+                                        <td className="font-mono" style={{ fontSize: 'var(--text-sm)' }}>{cuenta.mlUserId}</td>
+                                        <td>{cuenta.siteId}</td>
+                                        <td>
+                                            {cuenta.activa
+                                                ? (cuenta.ultimoError
+                                                    ? <Badge variant="warning">Con problemas</Badge>
+                                                    : <Badge variant="success">Conectada</Badge>)
+                                                : <Badge variant="danger">Inactiva</Badge>}
+                                        </td>
+                                        <td>
+                                            {cuenta.ultimoError ? (
+                                                <span
+                                                    className="text-danger"
+                                                    title={cuenta.ultimoError}
+                                                    style={{ display: 'inline-block', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom', fontSize: 'var(--text-sm)' }}
+                                                >
+                                                    {cuenta.ultimoError}
+                                                </span>
+                                            ) : '—'}
+                                        </td>
+                                        <td style={{ textAlign: 'right' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                                                <Button variant="secondary" size="sm" onClick={conectar} loading={conectando} disabled={!configurada}>
+                                                    <RefreshCw size={14} /> Volver a autorizar
+                                                </Button>
+                                                <Button variant="ghost" size="sm" onClick={() => setDesvinculando(cuenta)} disabled={conectando}>
+                                                    <Unplug size={14} /> Desvincular
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div>
+                            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', lineHeight: 1.5, marginBottom: 'var(--space-4)', maxWidth: 560 }}>
+                                Todavía no hay ninguna cuenta vinculada. Al conectar te vamos a llevar a Mercado Libre
+                                para que autorices con el usuario de la concesionaria; después volvés solo a esta pantalla.
+                            </p>
+                            <Button variant="primary" onClick={conectar} loading={conectando} disabled={!configurada}>
+                                <Plug size={16} /> Conectar con Mercado Libre
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* El último error es lo que avisa que ML dejó de aceptar el permiso:
+                        se muestra completo porque en la tabla va recortado. */}
+                    {cuenta?.ultimoError && (
+                        <div style={{
+                            display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start',
+                            padding: 'var(--space-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+                            background: 'var(--bg-secondary)', marginTop: 'var(--space-4)',
+                        }}>
+                            <AlertTriangle size={16} style={{ color: 'var(--danger)', flexShrink: 0, marginTop: 2 }} />
+                            <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                                Mercado Libre rechazó el último pedido: <span className="text-danger">{cuenta.ultimoError}</span>.
+                                Si el permiso venció o lo revocaron desde Mercado Libre, tocá <strong>Volver a autorizar</strong>.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Datos de la app de ML: la Redirect URI se calcula con el origen real
+                        del sitio, así no hay que adivinarla al configurar el portal. */}
+                    <div style={{ marginTop: 'var(--space-4)', padding: '0.85rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)' }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.45rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-primary)' }}>
+                            <Link2 size={14} /> Redirect URI (pegala en la app de Mercado Libre)
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <code style={{ flex: 1, fontSize: '0.75rem', padding: '0.45rem 0.55rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+                                {redirectUriMl()}
+                            </code>
+                            <Button type="button" variant="secondary" size="sm" onClick={copiarRedirect}>
+                                <Copy size={14} /> Copiar
+                            </Button>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setPasosVisibles(v => !v)}
+                            style={{ marginTop: '0.6rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'transparent', border: 'none', padding: 0, color: 'var(--accent)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}
+                        >
+                            {pasosVisibles ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            ¿Cómo creo la app en Mercado Libre? (4 pasos)
+                        </button>
+                        {pasosVisibles && (
+                            <ol style={{ margin: '0.5rem 0 0', paddingLeft: '1.2rem', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.65 }}>
+                                <li>
+                                    Entrá a{' '}
+                                    <a
+                                        href="https://developers.mercadolibre.com.ar"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        style={{ color: 'var(--accent-2)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
+                                    >
+                                        developers.mercadolibre.com.ar <ExternalLink size={11} />
+                                    </a>{' '}
+                                    con el usuario de la concesionaria y creá una aplicación.
+                                </li>
+                                <li>Pegá la Redirect URI de arriba en el campo <strong>URI de redirect</strong> de la app.</li>
+                                <li>En notificaciones, suscribí los topics <strong>questions</strong> e <strong>items</strong>.</li>
+                                <li>Copiá el <strong>App ID</strong> y el <strong>Secret Key</strong> y cargalos en el servidor como ML_CLIENT_ID y ML_CLIENT_SECRET.</li>
+                            </ol>
+                        )}
+                    </div>
+                </>
+            )}
+
+            <ConfirmDialog
+                isOpen={!!desvinculando}
+                title="Desvincular Mercado Libre"
+                message={desvinculando
+                    ? `¿Desvincular la cuenta "${desvinculando.nickname || desvinculando.mlUserId}"? Las publicaciones siguen vivas en Mercado Libre, pero el sistema deja de sincronizar precios y de traer preguntas. Para volver a usarla vas a tener que autorizarla de nuevo.`
+                    : ''}
+                confirmLabel="Desvincular"
+                cancelLabel="Cancelar"
+                type="danger"
+                onConfirm={confirmarDesvincular}
+                onCancel={() => setDesvinculando(null)}
+                loading={desvinculandoBusy}
+            />
+        </div>
+    );
+}
+
 const ConfiguracionPage = () => {
     const { user, setUser } = useAuthStore();
     const { addToast } = useUIStore();
@@ -1373,6 +1638,9 @@ const ConfiguracionPage = () => {
 
             {/* WhatsApp: sólo administración (vincula el número de la concesionaria). */}
             {isAdmin && <CuentasWhatsapp />}
+
+            {/* Mercado Libre: sólo administración (autoriza la cuenta por OAuth). */}
+            {isAdmin && <CuentasMercadoLibre />}
         </div>
     );
 };

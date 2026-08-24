@@ -5,6 +5,7 @@ import { BaseException, NotFoundException } from '../../../domain/exceptions/Bas
 import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { context } from '../../../infrastructure/security/context';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
+import { sincronizarEnSegundoPlano } from '../../services/meliPublicacion';
 
 export class CreateVenta {
     constructor(
@@ -49,7 +50,7 @@ export class CreateVenta {
         // cliente EXTENDIDO → atomicidad ILUSORIA (cada op re-entraba a la extensión y
         // abría su PROPIA sub-tx): si fallaba el update del vehículo tras crear la
         // venta, quedaba plata cobrada con el auto todavía re-vendible.
-        return withTenantTransaction(async (tx) => {
+        const venta = await withTenantTransaction(async (tx) => {
             // Lock del vehículo acotado al tenant + revalidación bajo lock: serializa
             // dos ventas concurrentes del MISMO auto (la 2da espera el commit de la 1ra,
             // ve 'vendido' y aborta). Cierra la doble venta que un findById sin lock deja.
@@ -102,5 +103,14 @@ export class CreateVenta {
 
             return venta;
         });
+
+        // El vehículo quedó 'vendido': el aviso de Mercado Libre se cierra acá,
+        // DESPUÉS del commit. Este es el camino REAL por el que un auto se
+        // vende (el estado no pasa por UpdateVehiculo), así que sin esto el
+        // aviso seguía vivo indefinidamente recibiendo consultas por una unidad
+        // que ya no está.
+        sincronizarEnSegundoPlano(ventaData.vehiculoId);
+
+        return venta;
     }
 }

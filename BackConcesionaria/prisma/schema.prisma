@@ -46,6 +46,9 @@ model Concesionaria {
   tiposPostventa          TipoPostventa[]
   integracionesCanal      IntegracionCanal[]
   whatsappCuentas         WhatsappCuenta[]
+  mercadolibreCuentas     MercadoLibreCuenta[]
+  publicacionesMl         PublicacionMl[]
+  preguntasMl             PreguntaMl[]
   conversaciones          Conversacion[]
   clientes                Cliente[]
   clienteSeguimientos     ClienteSeguimiento[]
@@ -150,6 +153,8 @@ model Usuario {
   historialPreciosVehiculo VehiculoPrecioHistorial[] @relation("PrecioHistorialUsuario")
   clientesAsignados      Cliente[]            @relation("ClienteVendedorAsignado")
   conversacionesAsignadas Conversacion[]     @relation("ConversacionAsignada")
+  preguntasMlAsignadas   PreguntaMl[]         @relation("PreguntaMlAsignada")
+  preguntasMlRespondidas PreguntaMl[]         @relation("PreguntaMlRespondida")
   mensajesWhatsapp       MensajeWhatsapp[]    @relation("MensajeEnviadoPor")
   refreshTokens          RefreshToken[]
 
@@ -208,6 +213,7 @@ model Cliente {
   vehiculosInteres        VehiculoInteres[]
   solicitudesFinanciacion SolicitudFinanciacion[]
   conversaciones          Conversacion[]
+  preguntasMl             PreguntaMl[]
   ventas                  Venta[]
 
   @@index([concesionariaId])
@@ -372,6 +378,7 @@ model Vehiculo {
   ventaCanjeVehiculo       VentaCanjeVehiculo[]
   ventas                   Venta?
   interesados              VehiculoInteres[]
+  publicacionesMl          PublicacionMl[]
   historialPrecios         VehiculoPrecioHistorial[]
 
   @@unique([concesionariaId, vin])
@@ -1002,6 +1009,137 @@ model Financiera {
   @@map("financieras")
 }
 
+/// Estado de una publicación en Mercado Libre (espeja el `status` del item).
+enum EstadoPublicacionMl {
+  borrador
+  activa
+  pausada
+  cerrada
+  error
+}
+
+/// Estado de una pregunta de Mercado Libre.
+enum EstadoPreguntaMl {
+  sin_responder
+  respondida
+  eliminada
+}
+
+/// Cuenta de Mercado Libre vinculada por OAuth. Los tokens se guardan CIFRADOS
+/// en reposo (secretBox, misma clave que las integraciones): con ellos se puede
+/// publicar y responder en nombre del vendedor.
+model MercadoLibreCuenta {
+  id              Int       @id @default(autoincrement())
+  concesionariaId Int       @map("concesionaria_id")
+  /// user_id del vendedor en Mercado Libre.
+  mlUserId        String    @map("ml_user_id")
+  nickname        String?
+  siteId          String    @default("MLA") @map("site_id")
+  /// Cifrados en reposo (AES-256-GCM): la vinculación se rechaza si falta
+  /// INTEGRACIONES_SECRET_KEY, así que acá NUNCA hay texto plano (a diferencia
+  /// de las integraciones viejas, que sí admiten filas legadas sin cifrar).
+  /// El refresh es de un solo uso: cada renovación devuelve uno nuevo que
+  /// reemplaza al anterior.
+  accessToken     String    @map("access_token")
+  refreshToken    String    @map("refresh_token")
+  expiraEn        DateTime  @map("expira_en")
+  activa          Boolean   @default(true)
+  ultimoError     String?   @map("ultimo_error")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+  concesionaria   Concesionaria     @relation(fields: [concesionariaId], references: [id])
+  publicaciones   PublicacionMl[]
+  preguntas       PreguntaMl[]
+
+  @@unique([concesionariaId, mlUserId])
+  @@index([concesionariaId])
+  @@map("mercadolibre_cuentas")
+}
+
+/// Publicación de un vehículo en Mercado Libre. Un vehículo puede tener a lo
+/// sumo una publicación viva por cuenta.
+model PublicacionMl {
+  id              Int                 @id @default(autoincrement())
+  concesionariaId Int                 @map("concesionaria_id")
+  cuentaId        Int                 @map("cuenta_id")
+  vehiculoId      Int                 @map("vehiculo_id")
+  /// Id del item en Mercado Libre (MLA...). Null mientras es borrador local.
+  itemId          String?             @map("item_id")
+  permalink       String?
+  estado          EstadoPublicacionMl @default(borrador)
+  /// gold_special (clásica), gold_pro (premium), free...
+  listingTypeId   String              @default("gold_special") @map("listing_type_id")
+  categoriaId     String?             @map("categoria_id")
+  titulo          String
+  /// Precio con el que se publicó, para detectar desincronización con el stock.
+  precioPublicado Decimal?            @map("precio_publicado") @db.Decimal(14, 2)
+  monedaPublicada String?             @map("moneda_publicada")
+  ultimoError     String?             @map("ultimo_error")
+  ultimaSyncAt    DateTime?           @map("ultima_sync_at")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  deletedAt       DateTime?           @map("deleted_at")
+  concesionaria   Concesionaria       @relation(fields: [concesionariaId], references: [id])
+  cuenta          MercadoLibreCuenta  @relation(fields: [cuentaId], references: [id])
+  vehiculo        Vehiculo            @relation(fields: [vehiculoId], references: [id])
+  preguntas       PreguntaMl[]
+
+  /// El unique lleva concesionariaId: la tabla es tenant-scoped y todas las
+  /// consultas van con el tenant inyectado, así que un unique GLOBAL sobre
+  /// item_id hacía que una fila invisible de otra concesionaria bloqueara el
+  /// insert con un P2002 imposible de diagnosticar desde el tenant dueño.
+  @@unique([concesionariaId, itemId])
+  @@index([concesionariaId, estado])
+  @@index([vehiculoId])
+  @@map("publicaciones_ml")
+}
+
+/// Pregunta hecha en una publicación de Mercado Libre. Es el equivalente a una
+/// consulta entrante: se puede responder desde el sistema y registrar como lead.
+model PreguntaMl {
+  id              Int                @id @default(autoincrement())
+  concesionariaId Int                @map("concesionaria_id")
+  cuentaId        Int                @map("cuenta_id")
+  publicacionId   Int?               @map("publicacion_id")
+  /// Id de la pregunta en Mercado Libre (único por tenant: las notificaciones
+  /// se repiten y el upsert reentra por acá sin duplicar).
+  mlQuestionId    String             @map("ml_question_id")
+  itemId          String             @map("item_id")
+  /// user_id de quien pregunta (Mercado Libre NO expone su teléfono).
+  mlFromUserId    String?            @map("ml_from_user_id")
+  nombreContacto  String?            @map("nombre_contacto")
+  texto           String
+  respuesta       String?
+  estado          EstadoPreguntaMl   @default(sin_responder)
+  /// Vendedor que la atiende.
+  asignadoAId     Int?               @map("asignado_a_id")
+  clienteId       Int?               @map("cliente_id")
+  preguntadaEn    DateTime           @map("preguntada_en")
+  respondidaEn    DateTime?          @map("respondida_en")
+  respondidaPorId Int?               @map("respondida_por_id")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  deletedAt       DateTime?          @map("deleted_at")
+  concesionaria   Concesionaria      @relation(fields: [concesionariaId], references: [id])
+  cuenta          MercadoLibreCuenta @relation(fields: [cuentaId], references: [id])
+  publicacion     PublicacionMl?     @relation(fields: [publicacionId], references: [id])
+  cliente         Cliente?           @relation(fields: [clienteId], references: [id])
+  asignadoA       Usuario?           @relation("PreguntaMlAsignada", fields: [asignadoAId], references: [id])
+  respondidaPor   Usuario?           @relation("PreguntaMlRespondida", fields: [respondidaPorId], references: [id])
+
+  /// Unique POR TENANT, no global: el upsert de la ingesta va scopeado por
+  /// concesionaria, así que con un unique global una pregunta ya ingerida en
+  /// otro tenant (misma cuenta de ML re-vinculada, tenant de demo migrado al
+  /// real) hacía que el upsert cayera en el create y reventara con un P2002
+  /// que se tragaba el catch por-pregunta: la bandeja del tenant legítimo
+  /// quedaba vacía para siempre y sin ningún error visible.
+  @@unique([concesionariaId, mlQuestionId])
+  @@index([concesionariaId, estado, preguntadaEn])
+  @@index([publicacionId])
+  @@map("preguntas_ml")
+}
+
 /// Estado del socket de WhatsApp de una cuenta vinculada.
 enum EstadoWhatsappCuenta {
   desconectado
@@ -1603,6 +1741,7 @@ enum EstadoLead {
 // las integraciones automáticas; el resto por carga manual.
 enum OrigenLead {
   deruedas
+  mercadolibre
   instagram
   facebook
   whatsapp
