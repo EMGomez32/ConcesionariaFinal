@@ -2,8 +2,8 @@ import crypto from 'crypto';
 import { env } from '../../config/env';
 
 /**
- * Cifrado en reposo de los secretos de integraciones (appSecret/pageAccessToken
- * de Meta, pass IMAP): AES-256-GCM con clave de INTEGRACIONES_SECRET_KEY
+ * Cifrado en reposo de los secretos de integraciones (appSecret y los tokens de
+ * acceso de Meta, pass IMAP): AES-256-GCM con clave de INTEGRACIONES_SECRET_KEY
  * (64 hex = 32 bytes; generarla EN la Pi con `openssl rand -hex 32`, mismo
  * procedimiento que los JWT: nunca sale del servidor).
  *
@@ -20,8 +20,22 @@ import { env } from '../../config/env';
 
 const PREFIJO = 'enc:v1:';
 
-/** Campos del config Json que son secretos y viajan cifrados en reposo. */
-export const CAMPOS_SECRETOS = ['appSecret', 'pageAccessToken', 'pass'] as const;
+/**
+ * Campos del config Json que son secretos y viajan cifrados en reposo.
+ *
+ * ÚNICA fuente de verdad: integracion.schema.ts la RE-EXPORTA (antes tenía una
+ * copia propia) porque el controller usa la misma lista para enmascarar en las
+ * respuestas y para el merge "vacío = conservar el guardado". Si las dos listas
+ * divergen, el bug es silencioso: cifrado-pero-no-enmascarado devuelve el blob
+ * `enc:v1:...` por la API, y enmascarado-pero-no-cifrado deja el token EN CLARO
+ * en Postgres.
+ *
+ * Un token de acceso de Meta (pageAccessToken / instagramAccessToken) permite
+ * publicar y mensajear EN NOMBRE de la concesionaria: van cifrados sí o sí.
+ * Los ids (pageId, igBusinessAccountId) NO son secretos —son públicos y la
+ * pantalla los tiene que poder mostrar—, así que no van en esta lista.
+ */
+export const CAMPOS_SECRETOS = ['appSecret', 'pageAccessToken', 'instagramAccessToken', 'pass'] as const;
 
 const clave = (): Buffer | null => {
     const hex = env.INTEGRACIONES_SECRET_KEY;

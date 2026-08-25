@@ -1190,6 +1190,20 @@ enum SaludNumeroWhatsapp {
   pausado
 }
 
+/// Por dónde entró el hilo. La bandeja es UNA sola para todos los canales (un
+/// vendedor atiende consultas, no canales): esto es la etiqueta que dice el
+/// origen, no una partición de la pantalla.
+///
+/// Los dos "_comentario" son públicos: responder ahí lo lee cualquiera que pase
+/// por la publicación, a diferencia de un DM. La UI tiene que decirlo.
+enum CanalConversacion {
+  whatsapp
+  instagram
+  messenger
+  instagram_comentario
+  facebook_comentario
+}
+
 enum EstadoConversacion {
   abierta
   cerrada
@@ -1211,6 +1225,16 @@ enum EstadoMensajeWhatsapp {
   recibido
 }
 
+/// Tipo de contenido del mensaje. Nació con WhatsApp (de ahí el nombre) pero es
+/// el tipo de TODOS los canales de la bandeja: los DM y los comentarios de Meta
+/// se mapean sobre estos mismos valores (un comentario entra como `texto`; qué
+/// es se sabe por `Conversacion.canal`, que es lo que decide cómo responderlo).
+///
+/// NO se agregaron valores nuevos a propósito. En Postgres un valor de enum NO
+/// se puede borrar (hay que recrear el tipo y reescribir la columna), así que
+/// sumar `comentario`/`historia`/`reaccion` "por las dudas" deja una marca
+/// permanente en la base a cambio de nada. Sumar uno cuando de verdad haga falta
+/// es una migración de una línea; sacarlo, no.
 enum TipoMensajeWhatsapp {
   texto
   imagen
@@ -1252,38 +1276,95 @@ model WhatsappCuenta {
   @@map("whatsapp_cuentas")
 }
 
-/// Hilo de WhatsApp con un contacto. Se vincula al Cliente por teléfono cuando
-/// existe; si no, queda suelta y se puede registrar como consulta desde la
-/// bandeja (reusa la ingesta de leads).
+/// Hilo con un contacto, de CUALQUIER canal (WhatsApp, DM de Instagram o
+/// Messenger, comentario de Instagram o de la página de Facebook). Se vincula al
+/// Cliente por teléfono cuando existe; si no, queda suelta y se puede registrar
+/// como consulta desde la bandeja (reusa la ingesta de leads).
+///
+/// POR QUÉ `claveHilo` Y NO UN UNIQUE COMPUESTO DE COLUMNAS
+/// Cada canal identifica al contacto con algo distinto: WhatsApp con el teléfono,
+/// los DM con el IGSID/PSID, los comentarios con el par post + comentario raíz.
+/// Un `@@unique([concesionariaId, canal, telefono, contactoExternoId, ...])` NO
+/// deduplicaría nada: en Postgres dos filas con un NULL en cualquier columna del
+/// índice no chocan, así que apenas un canal deje una parte en null volverían a
+/// entrar hilos duplicados por cada mensaje. `claveHilo` es UNA columna NOT NULL
+/// que siempre tiene valor. La deriva `claveHiloDe()` en
+/// src/application/services/conversacionService.ts — ÚNICA fuente de verdad del
+/// formato, y el backfill de la migración 20260825120000 lo reproduce en SQL.
+///
+/// Para WhatsApp vale `<whatsappCuentaId>:<telefono>`. Incluir la cuenta en la
+/// clave preserva EXACTAMENTE la semántica del unique viejo
+/// [whatsappCuentaId, telefono]: dos números de la misma concesionaria siguen
+/// teniendo hilos separados con el mismo contacto. Y como una cuenta pertenece a
+/// una sola concesionaria, agregar concesionariaId al unique no lo afloja ni lo
+/// aprieta — es la misma restricción escrita de una forma que también sirve para
+/// Meta. Ésta fue la forma que menos código rompe: sólo cambia la clave de
+/// búsqueda del hilo en obtenerOCrearConversacion, ningún flujo más.
 model Conversacion {
-  id               Int                @id @default(autoincrement())
-  concesionariaId  Int                @map("concesionaria_id")
-  whatsappCuentaId Int                @map("whatsapp_cuenta_id")
-  clienteId        Int?               @map("cliente_id")
-  telefono         String
-  jid              String?
-  nombreContacto   String?            @map("nombre_contacto")
-  estado           EstadoConversacion @default(abierta)
+  id                  Int                @id @default(autoincrement())
+  concesionariaId     Int                @map("concesionaria_id")
+  canal               CanalConversacion  @default(whatsapp)
+  /// Clave natural del hilo dentro del canal. NOT NULL a propósito (ver arriba).
+  claveHilo           String             @map("clave_hilo")
+  /// Sólo WhatsApp. Nullable porque los canales de Meta no tienen cuenta de WhatsApp.
+  whatsappCuentaId    Int?               @map("whatsapp_cuenta_id")
+  /// Sólo Meta: la IntegracionCanal (página de Facebook / cuenta de Instagram)
+  /// por la que entró el hilo. Es también quien tiene el token para responder.
+  integracionId       Int?               @map("integracion_id")
+  clienteId           Int?               @map("cliente_id")
+  /// Nullable: un DM de Instagram no trae teléfono. Sigue siendo el identificador
+  /// de WhatsApp y el que usa el dedupe contra Cliente.
+  telefono            String?
+  jid                 String?
+  /// Id del usuario del otro lado en Meta (IGSID o PSID). Es un id SCOPED a la
+  /// app/página: el mismo humano tiene ids distintos en dos páginas, por eso la
+  /// integración también entra en `claveHilo`.
+  contactoExternoId   String?            @map("contacto_externo_id")
+  /// Sólo comentarios: id del post y del comentario RAÍZ del hilo, que es a lo
+  /// que hay que contestarle para que la respuesta caiga en el hilo correcto.
+  postExternoId       String?            @map("post_externo_id")
+  comentarioExternoId String?            @map("comentario_externo_id")
+  nombreContacto      String?            @map("nombre_contacto")
+  estado              EstadoConversacion @default(abierta)
   /// Vendedor que atiende el hilo (null = sin asignar).
-  asignadoAId      Int?               @map("asignado_a_id")
-  ultimoMensajeAt  DateTime           @default(now()) @map("ultimo_mensaje_at")
+  asignadoAId         Int?               @map("asignado_a_id")
+  /// Cierre de la ventana de 24 h de Meta: pasado ese instante la Send API
+  /// rechaza el envío. Se corre 24 h hacia adelante con cada mensaje del usuario.
+  /// Null = no aplica (WhatsApp, comentarios) o todavía no se sabe.
+  ventanaVenceAt      DateTime?          @map("ventana_vence_at")
+  ultimoMensajeAt     DateTime           @default(now()) @map("ultimo_mensaje_at")
   /// Dirección del último mensaje. Denormalizado para filtrar "sin responder"
   /// en la bandeja sin subconsulta por conversación.
-  ultimoMensajeDir DireccionMensaje   @default(entrante) @map("ultimo_mensaje_dir")
-  noLeidos         Int                @default(0) @map("no_leidos")
-  createdAt        DateTime           @default(now()) @map("created_at")
-  updatedAt        DateTime           @updatedAt @map("updated_at")
-  deletedAt        DateTime?          @map("deleted_at")
-  concesionaria    Concesionaria      @relation(fields: [concesionariaId], references: [id])
-  whatsappCuenta   WhatsappCuenta     @relation(fields: [whatsappCuentaId], references: [id])
-  cliente          Cliente?           @relation(fields: [clienteId], references: [id])
-  asignadoA        Usuario?           @relation("ConversacionAsignada", fields: [asignadoAId], references: [id])
-  mensajes         MensajeWhatsapp[]
+  ultimoMensajeDir    DireccionMensaje   @default(entrante) @map("ultimo_mensaje_dir")
+  noLeidos            Int                @default(0) @map("no_leidos")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+  deletedAt           DateTime?          @map("deleted_at")
+  concesionaria       Concesionaria      @relation(fields: [concesionariaId], references: [id])
+  /// onDelete EXPLÍCITO: para una relación opcional el default de Prisma es
+  /// SetNull, y acá eso significa que borrar una fila de whatsapp_cuentas dejaría
+  /// los hilos vivos de ese número huérfanos EN SILENCIO (sin cuenta, con la
+  /// clave apuntando a una cuenta que ya no existe: el vendedor no puede
+  /// responder y revincular el número por QR abre hilos nuevos, partiendo la
+  /// bandeja en dos). Antes de multi-canal la columna era NOT NULL y Postgres lo
+  /// frenaba con RESTRICT; nullable y RESTRICT no se pelean, así que se conserva
+  /// esa guarda: la columna puede nacer NULL (los hilos de Meta) y aun así no se
+  /// puede borrar una cuenta que tiene hilos apuntándole.
+  whatsappCuenta      WhatsappCuenta?    @relation(fields: [whatsappCuentaId], references: [id], onDelete: Restrict)
+  /// Acá SÍ corresponde SetNull: si se elimina la integración de Meta, el
+  /// historial del hilo se conserva y sólo deja de tener por dónde responder.
+  integracion         IntegracionCanal?  @relation(fields: [integracionId], references: [id])
+  cliente             Cliente?           @relation(fields: [clienteId], references: [id])
+  asignadoA           Usuario?           @relation("ConversacionAsignada", fields: [asignadoAId], references: [id])
+  mensajes            MensajeWhatsapp[]
 
-  @@unique([whatsappCuentaId, telefono])
+  @@unique([concesionariaId, canal, claveHilo])
   @@index([concesionariaId, estado, ultimoMensajeAt])
+  /// Filtro por canal de la bandeja (chips "WhatsApp / Instagram / ...").
+  @@index([concesionariaId, canal, ultimoMensajeAt])
   @@index([concesionariaId, ultimoMensajeDir, noLeidos])
   @@index([clienteId])
+  @@index([integracionId])
   @@map("conversaciones")
 }
 
@@ -1297,6 +1378,11 @@ model MensajeWhatsapp {
   estado         EstadoMensajeWhatsapp @default(pendiente)
   /// Id que asigna WhatsApp. Único POR conversación (se repite entre chats).
   waMessageId    String?               @map("wa_message_id")
+  /// Id del mensaje o del comentario en Meta (`mid` de la Send API, `comment_id`
+  /// de un comentario). Es la clave de IDEMPOTENCIA de la ingesta: Meta REINTENTA
+  /// las notificaciones del webhook y sin esto cada reintento duplicaría la
+  /// burbuja. Null en WhatsApp (ahí el id es `waMessageId`).
+  externoId      String?               @map("externo_id")
   mediaUrl       String?               @map("media_url")
   mediaMimeType  String?               @map("media_mime_type")
   /// Usuario que lo envió desde el panel (null = entrante o automático).
@@ -1314,6 +1400,9 @@ model MensajeWhatsapp {
   enviadoPor     Usuario?              @relation("MensajeEnviadoPor", fields: [enviadoPorId], references: [id])
 
   @@unique([conversacionId, waMessageId])
+  /// Idempotencia de la ingesta de Meta: el reintento del webhook choca acá y se
+  /// traga en silencio (mismo patrón que el unique de waMessageId con Baileys).
+  @@unique([conversacionId, externoId])
   @@index([conversacionId, createdAt])
   @@index([estado, enviarAt])
   @@map("mensajes_whatsapp")
@@ -1338,6 +1427,8 @@ model IntegracionCanal {
   updatedAt       DateTime             @updatedAt @map("updated_at")
   deletedAt       DateTime?            @map("deleted_at")
   concesionaria   Concesionaria        @relation(fields: [concesionariaId], references: [id])
+  /// Hilos de la bandeja que entraron por esta integración (canales de Meta).
+  conversaciones  Conversacion[]
 
   @@index([concesionariaId])
   @@map("integraciones_canal")

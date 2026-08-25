@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt, Plug, Plus, Edit, Copy, Link2, ChevronRight, ChevronDown, MessageCircle, QrCode, Unplug, LogOut, Smartphone, ShoppingBag, AlertTriangle, ExternalLink, FlaskConical } from 'lucide-react';
+import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt, Plug, Plus, Edit, Copy, Link2, ChevronRight, ChevronDown, MessageCircle, QrCode, Unplug, LogOut, Smartphone, ShoppingBag, AlertTriangle, ExternalLink, FlaskConical, Check, Minus } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
@@ -8,7 +8,7 @@ import { useTourStore } from '../../store/tourStore';
 import { concesionariasApi } from '../../api/concesionarias.api';
 import { usuariosApi } from '../../api/usuarios.api';
 import { integracionesApi } from '../../api/integraciones.api';
-import type { Integracion, IntegracionConfig, IntegracionTipo } from '../../api/integraciones.api';
+import type { CanalMeta, EstadoCanal, Integracion, IntegracionConfig, IntegracionTipo } from '../../api/integraciones.api';
 import { whatsappApi } from '../../api/whatsapp.api';
 import type { EstadoSesionWhatsapp, EstadoWhatsappCuenta, SaludNumeroWhatsapp, WhatsappCuenta } from '../../api/whatsapp.api';
 import { mercadolibreApi, esCuentaDemo } from '../../api/mercadolibre.api';
@@ -78,6 +78,15 @@ const TIPO_INTEGRACION_LABEL: Record<IntegracionTipo, string> = {
     email: 'Casilla de email (DeRuedas)',
 };
 
+// Etiqueta corta para los chips de la tabla (la larga viene en canal.etiqueta).
+const CANAL_CORTO: Record<CanalMeta, string> = {
+    leadgen: 'Lead Ads',
+    messenger: 'Messenger',
+    instagram: 'DM de IG',
+    facebook_comentario: 'Coment. FB',
+    instagram_comentario: 'Coment. IG',
+};
+
 const ORIGEN_EMAIL_OPTIONS = [
     { value: 'deruedas', label: 'DeRuedas' },
     { value: 'web', label: 'Web' },
@@ -115,6 +124,11 @@ interface IntegracionFormState {
     verifyToken: string;
     appSecret: string;
     pageAccessToken: string;
+    // Ids públicos (no secretos): son los que habilitan los canales nuevos.
+    pageId: string;
+    igBusinessAccountId: string;
+    // Sólo para el flujo "Instagram Login"; con Facebook Login for Business va vacío.
+    instagramAccessToken: string;
     // email
     host: string;
     port: string;
@@ -128,6 +142,7 @@ interface IntegracionFormState {
 const INTEGRACION_FORM_INICIAL: IntegracionFormState = {
     tipo: 'meta', nombre: '',
     metaOrigen: 'instagram', verifyToken: '', appSecret: '', pageAccessToken: '',
+    pageId: '', igBusinessAccountId: '', instagramAccessToken: '',
     host: '', port: '993', secure: true, emailUser: '', pass: '', carpeta: 'INBOX', emailOrigen: 'deruedas',
 };
 
@@ -167,12 +182,64 @@ function WebhookMetaInfo({ integracionId }: { integracionId: number }) {
             </button>
             {pasosVisibles && (
                 <ol style={{ margin: '0.5rem 0 0', paddingLeft: '1.2rem', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.65 }}>
-                    <li>Creá una app en <strong>developers.facebook.com</strong> y vinculala a tu página.</li>
-                    <li>Agregale el producto <strong>Webhooks</strong> y conectá la página.</li>
-                    <li>Suscribí el campo <strong>leadgen</strong> usando esta URL de callback y el verify token que inventaste acá.</li>
-                    <li>Generá el token de acceso de la página y pegalo en el campo "Token de página" de esta integración.</li>
+                    <li>Creá una app en <strong>developers.facebook.com</strong> y vinculala a tu página de Facebook.</li>
+                    <li>Agregale el producto <strong>Webhooks</strong> y pegá esta URL de callback con el verify token que inventaste acá.</li>
+                    <li>Suscribí los campos que quieras recibir: en el objeto <strong>Page</strong>, <code>leadgen</code> (formularios), <code>messages</code> (Messenger) y <code>feed</code> (comentarios de la página); en el objeto <strong>Instagram</strong>, <code>messages</code> (DM) y <code>comments</code>. La MISMA URL sirve para los dos objetos.</li>
+                    <li>Generá el token de la página y pegalo abajo; sumá el id de la página y el de la cuenta de Instagram para habilitar mensajes y comentarios.</li>
                 </ol>
             )}
+        </div>
+    );
+}
+
+/**
+ * Qué canales quedaron listos y qué falta para los que no.
+ *
+ * `habilitado` sólo dice que de NUESTRO lado no falta ningún dato. Que además
+ * ENTRE depende de que en Meta se haya suscripto el campo y aprobado el permiso,
+ * y eso no hay forma barata de verificarlo desde acá: por eso cada canal se
+ * despliega con el paso exacto del otro lado (`enMeta`) en vez de mostrar un
+ * "activo" que podría ser mentira.
+ */
+function CanalesMetaInfo({ canales }: { canales: EstadoCanal[] }) {
+    const [abierto, setAbierto] = useState<string | null>(null);
+    if (canales.length === 0) return null;
+
+    return (
+        <div style={{ marginTop: '0.75rem' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.4rem' }}>Qué te va a entrar</div>
+            {canales.map(c => (
+                <div key={c.canal} style={{ borderTop: '1px solid var(--border)', padding: '0.45rem 0' }}>
+                    <button
+                        type="button"
+                        onClick={() => setAbierto(a => (a === c.canal ? null : c.canal))}
+                        aria-expanded={abierto === c.canal}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%',
+                            background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left',
+                        }}
+                    >
+                        {c.habilitado
+                            ? <Check size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                            : <Minus size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+                        <span style={{ fontSize: '0.82rem', color: c.habilitado ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                            {c.etiqueta}
+                        </span>
+                        {!c.habilitado && c.falta && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--warning)', marginLeft: 'auto', textAlign: 'right' }}>{c.falta}</span>
+                        )}
+                    </button>
+                    {abierto === c.canal && (
+                        <p style={{ margin: '0.35rem 0 0 1.75rem', fontSize: '0.74rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                            {c.enMeta}
+                        </p>
+                    )}
+                </div>
+            ))}
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                Un canal en verde quiere decir que de este lado no falta nada. Que además ENTRE depende de
+                que en Meta hayas suscripto el campo y te hayan aprobado el permiso: tocá cada canal para ver cuál.
+            </p>
         </div>
     );
 }
@@ -243,6 +310,11 @@ function IntegracionesConsultas() {
             // Los secretos vienen enmascarados: vacío = "no cambiar".
             appSecret: '',
             pageAccessToken: '',
+            instagramAccessToken: '',
+            // Los ids NO son secretos: vienen completos y se muestran completos,
+            // que es lo que deja verificar de un vistazo que se pegó el correcto.
+            pageId: cfg.pageId || '',
+            igBusinessAccountId: cfg.igBusinessAccountId || '',
             host: cfg.host || '',
             port: cfg.port != null ? String(cfg.port) : '993',
             secure: cfg.secure ?? true,
@@ -292,8 +364,13 @@ function IntegracionesConsultas() {
             ? {
                 origen: form.metaOrigen,
                 verifyToken: form.verifyToken.trim(),
+                // Los ids van SIEMPRE, incluso vacíos: mandar '' es la única
+                // forma de BORRAR un id ya guardado (el backend lo trata así).
+                pageId: form.pageId.trim(),
+                igBusinessAccountId: form.igBusinessAccountId.trim(),
                 ...(form.appSecret ? { appSecret: form.appSecret } : {}),
                 ...(form.pageAccessToken ? { pageAccessToken: form.pageAccessToken } : {}),
+                ...(form.instagramAccessToken ? { instagramAccessToken: form.instagramAccessToken } : {}),
             }
             : {
                 origen: form.emailOrigen || 'deruedas',
@@ -372,8 +449,9 @@ function IntegracionesConsultas() {
                         <Plug size={18} /> Integraciones de consultas
                     </h2>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5, maxWidth: 520 }}>
-                        Conectá los canales por donde te llegan consultas (Meta, DeRuedas) y se cargan solas
-                        como clientes con su vendedor asignado.
+                        Conectá los canales por donde te escriben (Meta, DeRuedas). Los formularios de campaña
+                        se cargan solos como clientes; los mensajes y comentarios caen en la bandeja para que
+                        los respondas.
                     </p>
                 </div>
                 <Button variant="primary" onClick={abrirAlta}>
@@ -396,7 +474,7 @@ function IntegracionesConsultas() {
                             <tr>
                                 <th>Nombre</th>
                                 <th>Tipo</th>
-                                <th>Origen</th>
+                                <th>Canales</th>
                                 <th>Activa</th>
                                 <th>Último evento</th>
                                 <th>Último error</th>
@@ -408,7 +486,25 @@ function IntegracionesConsultas() {
                                 <tr key={i.id}>
                                     <td style={{ fontWeight: 600 }}>{i.nombre}</td>
                                     <td>{i.tipo === 'meta' ? 'Meta' : 'Email'}</td>
-                                    <td>{i.config?.origen || '—'}</td>
+                                    {/* Para meta la columna "Origen" ya no decía nada útil (es el
+                                        OrigenLead del lead de Lead Ads, no el canal): se reemplaza
+                                        por los canales que quedaron listos. */}
+                                    <td>
+                                        {i.tipo !== 'meta' ? (i.config?.origen || '—') : (
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                                                {(i.canales ?? []).filter(c => c.habilitado).map(c => (
+                                                    <span key={c.canal} style={{
+                                                        fontSize: '0.7rem', padding: '0.1rem 0.5rem', borderRadius: 'var(--radius-pill)',
+                                                        background: 'var(--accent-light)', color: 'var(--accent)',
+                                                        border: '1px solid var(--border)', whiteSpace: 'nowrap',
+                                                    }}>{CANAL_CORTO[c.canal]}</span>
+                                                ))}
+                                                {(i.canales ?? []).every(c => !c.habilitado) && (
+                                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Ningún canal listo</span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </td>
                                     <td>
                                         <SwitchActivo
                                             activo={i.activo}
@@ -470,7 +566,10 @@ function IntegracionesConsultas() {
                 )}
             >
                 {creada ? (
-                    <WebhookMetaInfo integracionId={creada.id} />
+                    <>
+                        <WebhookMetaInfo integracionId={creada.id} />
+                        <CanalesMetaInfo canales={creada.canales ?? []} />
+                    </>
                 ) : (
                     <>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -502,6 +601,17 @@ function IntegracionesConsultas() {
                                         value={form.pageAccessToken} autoComplete="new-password"
                                         placeholder={editing ? '(sin cambios)' : ''}
                                         onChange={e => setForm(f => ({ ...f, pageAccessToken: e.target.value }))} />
+                                    <Input dense label="Id de la página de Facebook" type="text"
+                                        value={form.pageId} hint="sólo números — habilita Messenger y los comentarios de la página"
+                                        onChange={e => setForm(f => ({ ...f, pageId: e.target.value }))} />
+                                    <Input dense label="Id de la cuenta de Instagram" type="text"
+                                        value={form.igBusinessAccountId} hint="cuenta Profesional vinculada a la página — habilita los DM y comentarios de IG"
+                                        onChange={e => setForm(f => ({ ...f, igBusinessAccountId: e.target.value }))} />
+                                    <Input dense label="Token de Instagram (opcional)" type="password" containerClassName="col-span-full"
+                                        value={form.instagramAccessToken} autoComplete="new-password"
+                                        placeholder={editing ? '(sin cambios)' : ''}
+                                        hint="sólo si conectaste con el login de Instagram; con Facebook Login for Business dejalo vacío"
+                                        onChange={e => setForm(f => ({ ...f, instagramAccessToken: e.target.value }))} />
                                 </>
                             ) : (
                                 <>
@@ -539,7 +649,12 @@ function IntegracionesConsultas() {
                             )}
                         </div>
                         {editing && editing.tipo === 'meta' && (
-                            <WebhookMetaInfo integracionId={editing.id} />
+                            <>
+                                <WebhookMetaInfo integracionId={editing.id} />
+                                {/* Los canales se derivan de lo GUARDADO, no del formulario:
+                                    hasta no guardar, un id recién tipeado todavía no habilita nada. */}
+                                <CanalesMetaInfo canales={editing.canales ?? []} />
+                            </>
                         )}
                     </>
                 )}

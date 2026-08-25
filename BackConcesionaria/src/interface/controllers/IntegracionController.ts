@@ -4,8 +4,10 @@ import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import { BaseException, NotFoundException, ValidationException } from '../../domain/exceptions/BaseException';
 import { cifrarConfig, estaCifrado } from '../../infrastructure/security/secretBox';
+import { estadoCanalesMeta } from '../../domain/services/canalesMeta';
 import {
     CAMPOS_SECRETOS,
+    OPCIONALES_BORRABLES_META,
     metaConfigSchema,
     emailConfigSchema,
     updateMetaConfigSchema,
@@ -17,6 +19,11 @@ import {
  * (en el router). Sin capa repo: el modelo es chico y la extensión de Prisma
  * ya scopea tenant + soft-delete; el cuidado extra acá es que las credenciales
  * del `config` NUNCA salgan en claro (se enmascaran en toda respuesta).
+ *
+ * Toda respuesta agrega `canales`: qué puede hacer la integración con lo que
+ * tiene cargado (Lead Ads, DM de Messenger/Instagram, comentarios). Es derivado,
+ * no se guarda — así la pantalla dice la verdad sola cuando el admin completa
+ * un id, en vez de depender de un checkbox que alguien se olvida de tildar.
  */
 
 /** '••••' + últimos 4 de cada campo secreto presente; el resto queda igual. */
@@ -32,9 +39,15 @@ const enmascararConfig = (config: unknown): Record<string, unknown> => {
     return out;
 };
 
-const enmascarar = <T extends { config: unknown }>(integracion: T) => ({
+/**
+ * Config enmascarada + estado de los canales. `canales` se calcula sobre el
+ * config CRUDO (antes de enmascarar): sólo mira qué campos están presentes,
+ * nunca su valor. Para 'email' va vacío — no tiene canales que negociar.
+ */
+const enmascarar = <T extends { tipo: string; config: unknown }>(integracion: T) => ({
     ...integracion,
     config: enmascararConfig(integracion.config),
+    canales: integracion.tipo === 'meta' ? estadoCanalesMeta(integracion.config) : [],
 });
 
 // Function declaration (no arrow) a propósito: el `never` explícito deja que
@@ -100,7 +113,13 @@ export class IntegracionController {
                 const parcial = schemaParcial.safeParse(config);
                 if (!parcial.success) lanzarValidacion(parcial.error.issues);
                 const guardada = (existente.config ?? {}) as Record<string, unknown>;
-                const entrante = parcial.data as Record<string, unknown>;
+                // Sólo pisan lo guardado las claves que trajeron VALOR: una clave
+                // ausente que el parseo materializa como `undefined` borraría el
+                // dato viejo al spreadear (pasa con los campos preprocesados,
+                // como los ids de Meta).
+                const entrante = Object.fromEntries(
+                    Object.entries(parcial.data as Record<string, unknown>).filter(([, v]) => v !== undefined),
+                );
                 const mergeada: Record<string, unknown> = { ...guardada, ...entrante };
                 // Secreto vacío u omitido (o el valor enmascarado reenviado tal
                 // cual por el form) = conservar el guardado.
@@ -109,6 +128,18 @@ export class IntegracionController {
                     if (valor === undefined || valor === '' || (typeof valor === 'string' && valor.startsWith('••••'))) {
                         if (guardada[campo] === undefined) delete mergeada[campo];
                         else mergeada[campo] = guardada[campo];
+                    }
+                }
+                // Los ids opcionales de Meta NO son secretos: el admin los ve y
+                // los puede vaciar. Un '' explícito en el body = borrar el
+                // guardado (el schema lo normalizó a undefined, así que hay que
+                // mirar el body crudo para distinguir "vacié el campo" de "no
+                // mandé el campo").
+                if (existente.tipo === 'meta') {
+                    const crudo = (config ?? {}) as Record<string, unknown>;
+                    for (const campo of OPCIONALES_BORRABLES_META) {
+                        const valor = crudo[campo];
+                        if (typeof valor === 'string' && valor.trim() === '') delete mergeada[campo];
                     }
                 }
                 // La config resultante tiene que quedar COMPLETA para su tipo.

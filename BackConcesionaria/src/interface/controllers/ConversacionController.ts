@@ -4,20 +4,26 @@ import { context } from '../../infrastructure/security/context';
 import * as conversacionService from '../../application/services/conversacionService';
 
 /**
- * Bandeja de WhatsApp: listado de hilos, hilo con sus mensajes, envío (encolado)
+ * Bandeja multi-canal: listado de hilos, hilo con sus mensajes, envío (encolado)
  * y gestión (cerrar/asignar/registrar como consulta).
+ *
+ * Una sola bandeja para WhatsApp, los DM de Instagram y Messenger y los
+ * comentarios de Instagram/Facebook: el canal es un filtro y una etiqueta, no
+ * una pantalla aparte. El endpoint de envío tampoco cambia de forma — el front
+ * manda texto y el service sabe por dónde sale.
  *
  * Controllers finos: toda la lógica —incluida la visibilidad del vendedor puro,
  * que se aplica en el service para que valga igual en el listado, el detalle y
  * el envío— vive en conversacionService.
  */
 export class ConversacionController {
-    /** GET /conversaciones — bandeja paginada. */
+    /** GET /conversaciones — bandeja paginada (todos los canales, o uno). */
     static async getAll(req: Request, res: Response, next: NextFunction) {
         try {
-            const { estado, asignadoAId, sinResponder, q, page, limit } = req.query;
+            const { estado, canal, asignadoAId, sinResponder, q, page, limit } = req.query;
             const resultado = await conversacionService.listar({
                 estado: estado as string,
+                canal: canal as string,
                 asignadoAId: asignadoAId as string,
                 sinResponder: sinResponder as string,
                 q: q as string,
@@ -44,7 +50,11 @@ export class ConversacionController {
     /**
      * POST /conversaciones/:id/mensajes — encola un saliente.
      * NO envía en el request: devuelve el mensaje en estado `pendiente` con su
-     * turno (`enviarAt`) reservado. El worker lo despacha después.
+     * turno (`enviarAt`) reservado. El worker lo despacha por el canal del hilo.
+     *
+     * Lo que impide enviar sale como 409 con el motivo ya redactado para mostrar
+     * (número pausado, integración desactivada, ventana de 24 h de Meta vencida):
+     * nunca un 500 ni un código de error de Meta.
      */
     static async crearMensaje(req: Request, res: Response, next: NextFunction) {
         try {
@@ -74,11 +84,18 @@ export class ConversacionController {
         }
     }
 
-    /** POST /conversaciones/:id/registrar-consulta — convierte el hilo en lead. */
+    /**
+     * POST /conversaciones/:id/registrar-consulta — convierte el hilo en lead.
+     *
+     * El body es OPCIONAL y trae lo que el vendedor completó a mano (nombre y
+     * teléfono): en los canales de Meta el hilo puede no tener ninguno de los
+     * dos, y sin eso el cliente nacía con el id opaco de Meta por nombre.
+     */
     static async registrarConsulta(req: Request, res: Response, next: NextFunction) {
         try {
             const id = parseInt(req.params.id as string, 10);
-            const resultado = await conversacionService.registrarConsulta(id);
+            const { nombre, telefono } = (req.body ?? {}) as { nombre?: string; telefono?: string };
+            const resultado = await conversacionService.registrarConsulta(id, { nombre, telefono });
             await audit({
                 entidad: 'Conversacion',
                 accion: 'update',

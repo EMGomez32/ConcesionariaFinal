@@ -78,7 +78,11 @@ export const NAV_SECTIONS: NavSection[] = [
         title: 'Operaciones',
         items: [
             { label: 'Consultas', path: '/consultas', icon: Inbox, keywords: ['leads', 'consultas', 'deruedas', 'instagram'], roles: ['admin', 'super_admin', 'vendedor'] },
-            { label: 'WhatsApp', path: '/conversaciones', icon: MessageCircle, keywords: ['whatsapp', 'chat', 'bandeja', 'mensajes'], roles: ['admin', 'super_admin', 'vendedor'] },
+            // "WhatsApp" quedó corto: la bandeja ahora es multi-canal (WhatsApp,
+            // DM de Instagram y Messenger, comentarios de IG y de Facebook). Se
+            // MANTIENE 'whatsapp' en keywords para que quien lo busque por el
+            // nombre viejo lo siga encontrando en el buscador de comandos.
+            { label: 'Bandeja', path: '/conversaciones', icon: MessageCircle, keywords: ['whatsapp', 'instagram', 'messenger', 'facebook', 'dm', 'mensajes directos', 'comentarios', 'chat', 'bandeja', 'mensajes', 'meta'], roles: ['admin', 'super_admin', 'vendedor'] },
             // Pegado a WhatsApp: las dos son bandejas de atención y el vendedor las lee juntas.
             { label: 'Mercado Libre', path: '/mercadolibre/preguntas', icon: ShoppingBag, crumb: 'Preguntas', keywords: ['mercadolibre', 'meli', 'ml', 'preguntas', 'publicaciones', 'publicar'], roles: ['admin', 'super_admin', 'vendedor'] },
             { label: 'Clientes', path: '/clientes', icon: Users, keywords: ['compradores', 'leads'] },

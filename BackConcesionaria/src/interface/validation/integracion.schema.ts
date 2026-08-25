@@ -1,9 +1,10 @@
 import { z } from 'zod';
 
-// Schemas de validación de las integraciones de canal (ingesta automática de
-// consultas): webhook de Meta (Lead Ads de Instagram/Facebook) o casilla IMAP
-// (avisos de DeRuedas). `config` se valida DISCRIMINADO por `tipo` — cada canal
-// guarda credenciales distintas — y viaja al modelo IntegracionCanal como Json.
+// Schemas de validación de las integraciones de canal: webhook de Meta
+// (formularios de campaña, mensajes y comentarios de Instagram/Facebook) o
+// casilla IMAP (avisos de DeRuedas). `config` se valida DISCRIMINADO por `tipo`
+// — cada canal guarda credenciales distintas — y viaja al modelo
+// IntegracionCanal como Json.
 
 // Canal por el que entra la consulta (espejo del enum OrigenLead de Prisma).
 const ORIGENES_LEAD = ['deruedas', 'instagram', 'facebook', 'whatsapp', 'web', 'mostrador', 'referido', 'otro'] as const;
@@ -15,16 +16,57 @@ const optionalFk = z.preprocess(
 
 // ── Config por tipo de canal ─────────────────────────────────────────────────
 
-// Meta (Lead Ads): el webhook valida verifyToken en el handshake (GET) y firma
-// cada POST con appSecret; pageAccessToken se usa para pedir el lead al Graph API.
-export const metaConfigSchema = z.object({
+// Los ids de Meta (página, cuenta de Instagram) son numéricos larguísimos: se
+// guardan como STRING porque pasan el entero seguro de JS y nunca se hace
+// aritmética con ellos. Un '' se normaliza a undefined ANTES de validar para
+// que el formulario pueda mandar el campo vacío sin comerse "tiene que ser
+// numérico" (el controller interpreta ese '' como "borrar", ver
+// OPCIONALES_BORRABLES_META).
+const idMetaOpcional = (etiqueta: string) =>
+    z.preprocess(
+        (v) => {
+            if (typeof v !== 'string') return v;
+            const limpio = v.trim();
+            return limpio === '' ? undefined : limpio;
+        },
+        z.string()
+            .regex(/^\d{5,25}$/, `${etiqueta} tiene que ser el id numérico que muestra Meta (sólo dígitos)`)
+            .optional(),
+    );
+
+// Meta: el webhook valida verifyToken en el handshake (GET) y firma cada POST
+// con appSecret; los tokens de acceso se usan para pedirle datos al Graph API y
+// para responder (Send API / comentarios).
+//
+// Base sin refinamientos para poder derivar el schema del PATCH con .partial().
+// Los campos de los canales nuevos (página, Instagram) son TODOS OPCIONALES a
+// propósito: el PATCH revalida la config mergeada contra el schema COMPLETO, y
+// un campo obligatorio nuevo dejaría sin poder editarse a toda integración meta
+// que ya existe (las de Lead Ads, que sólo tienen los cuatro campos viejos).
+// Qué permiso habilita cada uno y cómo conseguirlo: ver ConfigMeta en
+// domain/services/canalesMeta.ts (fuente de verdad del contrato del config).
+const metaConfigBase = z.object({
     origen: z.enum(['instagram', 'facebook'], {
         error: 'Origen inválido. Válidos: instagram, facebook',
     }),
     verifyToken: z.string().min(1, 'El verify token es obligatorio'),
     appSecret: z.string().min(1, 'El app secret es obligatorio'),
     pageAccessToken: z.string().min(1, 'El page access token es obligatorio'),
+    // Id público de la página de Facebook. Habilita los canales del objeto
+    // `page` (Messenger y comentarios de la página): con él verificamos que el
+    // evento sea de nuestra página y reconocemos nuestros propios mensajes.
+    pageId: idMetaOpcional('El id de la página'),
+    // Id público de la cuenta profesional de Instagram (IGID). Habilita los
+    // canales del objeto `instagram` (DM y comentarios).
+    igBusinessAccountId: idMetaOpcional('El id de la cuenta de Instagram'),
+    // SECRETO. Sólo si la app usa el flujo "Instagram Login", que emite un token
+    // propio de la cuenta de IG; con "Facebook Login for Business" va vacío y se
+    // usa el token de la página. Sin .min(1): un '' significa "no cambiar" y lo
+    // resuelve el merge del controller, no la validación.
+    instagramAccessToken: z.string().optional(),
 });
+
+export const metaConfigSchema = metaConfigBase;
 
 // Email (IMAP): credenciales de la casilla donde caen los avisos de consultas.
 export const emailConfigSchema = z.object({
@@ -45,7 +87,17 @@ export type EmailConfig = z.infer<typeof emailConfigSchema>;
 // Campos de config que son secretos: la lista se enmascara en GET y en update
 // "vacío u omitido = conservar el guardado" (el front nunca ve el valor real,
 // así que no puede reenviarlo).
-export const CAMPOS_SECRETOS = ['appSecret', 'pageAccessToken', 'pass'] as const;
+//
+// RE-EXPORT, no una copia: la lista canónica vive en secretBox.ts, que es quien
+// cifra. Cuando estaban duplicadas, agregar un token a una sola de las dos lo
+// dejaba en claro en la base o en claro en la API — un bug mudo.
+export { CAMPOS_SECRETOS } from '../../infrastructure/security/secretBox';
+
+// Campos opcionales NO secretos de meta que el admin puede querer BORRAR. Para
+// los secretos, '' significa "conservar el guardado" (el front nunca los ve);
+// para estos ids, en cambio, '' significa "borralo": sin esta lista el merge
+// del controller los dejaría pegados para siempre con el valor viejo.
+export const OPCIONALES_BORRABLES_META = ['pageId', 'igBusinessAccountId'] as const;
 
 // ── Create ───────────────────────────────────────────────────────────────────
 
@@ -74,9 +126,14 @@ export const createIntegracionSchema = z.discriminatedUnion('tipo', [
 // secretos que llegan '' (o ausentes) significan "conservar el guardado":
 // se aceptan acá y el merge del controller los descarta.
 
-export const updateMetaConfigSchema = metaConfigSchema.partial().extend({
+// Se deriva de la BASE (no de metaConfigSchema) para no arrastrar refinamientos
+// si alguna vez se le agregan. Los secretos se re-extienden explícitos: bajo
+// .partial() el .min(1) sigue vivo y rechazaría el '' que el front manda como
+// "no cambiar".
+export const updateMetaConfigSchema = metaConfigBase.partial().extend({
     appSecret: z.string().optional(),
     pageAccessToken: z.string().optional(),
+    instagramAccessToken: z.string().optional(),
 });
 
 // OJO: NO se deriva con emailConfigSchema.partial() — en Zod los .default()
