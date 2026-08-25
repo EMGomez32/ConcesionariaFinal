@@ -9,6 +9,7 @@ import {
     ArrowLeft, Building2, Phone, Mail, MapPin, Tag,
     Car, DollarSign, Wrench, RefreshCw, Truck
 } from 'lucide-react';
+import { usePermisos } from '../../hooks/usePermisos';
 
 type Tab = 'info' | 'enviadas' | 'vehiculos' | 'gastos' | 'postventa';
 
@@ -67,6 +68,11 @@ const TIPO_COLORS: Record<string, string> = {
 const ProveedorDetallePage = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    // Esta pestaña era la única fuga real del precio de compra: `GET /proveedores/:id`
+    // no lleva authorize (todo el equipo necesita ver a quién se le compra) y devolvía
+    // la fila entera de cada Vehiculo. El backend ahora se lo borra a los no-admin, así
+    // que la columna se esconde en vez de quedar mostrando "-" a media concesionaria.
+    const permisos = usePermisos();
 
     const [activeTab, setActiveTab] = useState<Tab>('info');
     const [proveedor, setProveedor] = useState<Proveedor | null>(null);
@@ -239,7 +245,7 @@ const ProveedorDetallePage = () => {
                         : (
                             <table className="data-table">
                                 <thead>
-                                    <tr><th>Vehículo</th><th>Dominio</th><th>Estado</th><th>Precio compra</th></tr>
+                                    <tr><th>Vehículo</th><th>Dominio</th><th>Estado</th>{permisos.vePrecioDeCompra && <th>Precio compra</th>}</tr>
                                 </thead>
                                 <tbody>
                                     {vehiculos.map((v) => (
@@ -247,7 +253,9 @@ const ProveedorDetallePage = () => {
                                             <td><div className="fw-bold">{v.marca} {v.modelo}</div><div className="text-muted-sm">{v.anio}</div></td>
                                             <td>{v.dominio || '-'}</td>
                                             <td><span className="estado-badge">{v.estado}</span></td>
-                                            <td>{v.precioCompra ? `$${Number(v.precioCompra).toLocaleString('es-AR')} ${v.moneda || 'ARS'}` : '-'}</td>
+                                            {permisos.vePrecioDeCompra && (
+                                                <td>{v.precioCompra ? `$${Number(v.precioCompra).toLocaleString('es-AR')} ${v.moneda || 'ARS'}` : '-'}</td>
+                                            )}
                                         </tr>
                                     ))}
                                 </tbody>

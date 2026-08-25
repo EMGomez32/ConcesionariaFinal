@@ -18,6 +18,7 @@ import {
     Car, Calendar, FileText,
     ArrowRight, AlertCircle, User, MapPin, CheckCircle2
 } from 'lucide-react';
+import { usePermisos } from '../../hooks/usePermisos';
 
 const TIPO_BADGE: Record<string, string> = {
     traslado: 'info',
@@ -48,6 +49,12 @@ const EMPTY_FORM = {
 
 const MovimientosPage = () => {
     const { addToast } = useUIStore();
+    // El circuito está partido a propósito: despachar la unidad a un proveedor es
+    // acondicionamiento de stock (admin/vendedor), recibirla de vuelta es taller
+    // (además, postventa). Ver hooks/usePermisos.ts. Antes la pantalla mostraba los
+    // dos botones a todos —postventa y `lectura` incluidos— y el 403 llegaba
+    // después de completar el formulario entero.
+    const permisos = usePermisos();
 
     // List state
     const [movimientos, setMovimientos] = useState<VehiculoMovimiento[]>([]);
@@ -214,9 +221,11 @@ const MovimientosPage = () => {
                     <Button variant="secondary" onClick={() => loadMovimientos(page)}>
                         <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                     </Button>
-                    <Button variant="primary" onClick={openModal}>
-                        <Plus size={18} /> Nuevo Movimiento
-                    </Button>
+                    {permisos.movimientosCrear && (
+                        <Button variant="primary" onClick={openModal}>
+                            <Plus size={18} /> Nuevo Movimiento
+                        </Button>
+                    )}
                 </div>
             </header>
 
@@ -352,9 +361,11 @@ const MovimientosPage = () => {
                                         ) : (
                                             <div className="flex flex-col items-end gap-1">
                                                 <Badge variant="warning">En preparación</Badge>
-                                                <Button variant="secondary" size="sm" loading={retornandoId === m.id} onClick={() => handleRetorno(m.id)}>
-                                                    <CheckCircle2 size={14} /> Marcar retorno
-                                                </Button>
+                                                {permisos.movimientosMarcarRetorno && (
+                                                    <Button variant="secondary" size="sm" loading={retornandoId === m.id} onClick={() => handleRetorno(m.id)}>
+                                                        <CheckCircle2 size={14} /> Marcar retorno
+                                                    </Button>
+                                                )}
                                             </div>
                                         )}
                                     </td>

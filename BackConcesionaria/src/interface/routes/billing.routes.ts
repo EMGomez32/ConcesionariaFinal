@@ -1,5 +1,33 @@
 import { Router } from 'express';
 import { BillingController } from '../controllers/BillingController';
+import { authorize } from '../middlewares/authorize.middleware';
+
+// NOTA: comentario de línea y no bloque JSDoc a propósito — swagger-jsdoc
+// parsea TODO bloque /** */ de este directorio como YAML, y una lista con dos
+// puntos adentro lo hace explotar al arrancar (rompe la spec entera, no sólo
+// esta ruta). Los comentarios largos de estos archivos van con //.
+// CRITERIO DE PERMISOS DE ESTE MÓDULO — leer antes de agregar una ruta.
+//
+// Billing es la facturación del SaaS: la plataforma le cobra a la concesionaria.
+// Hay dos audiencias y NO son la misma:
+//
+//   - `super_admin` (la plataforma): define el catálogo de planes, asigna la
+//     suscripción de cada concesionaria y emite las facturas. Es quien cobra.
+//   - `admin` (el dueño de UNA concesionaria): mira su plan, su suscripción y sus
+//     facturas, y registra que las pagó. Es quien paga.
+//
+// Antes esto estaba gateado en el MONTAJE con `authorize('admin')`, lo que dejaba
+// a cualquier admin de cualquier tenant escribir el catálogo. Y `Plan` es un
+// modelo GLOBAL (ver GLOBAL_MODELS en prisma.extension.ts): la extensión NO le
+// inyecta `concesionariaId` ni lo envuelve en la transacción con `app.tenant_id`,
+// así que un `plan.update({ where: { id } })` pega directo en la fila que
+// comparten TODOS los tenants. Un admin podía dejar el precio del SaaS en 1 para
+// todo el mundo. Por eso el gating pasó a ser POR RUTA y las tres rutas que el
+// @openapi ya documentaba como "super_admin only" ahora lo exigen de verdad.
+//
+// OJO al agregar una ruta: este router ya NO está gateado en el montaje, así que
+// toda ruta necesita su `authorize(...)` propio — incluidas las lecturas, porque
+// lo que se lee acá es plata del contrato con el cliente, no del salón.
 
 const router = Router();
 
@@ -10,11 +38,13 @@ const router = Router();
  *   get:
  *     tags: [Billing]
  *     summary: Listar planes SaaS
+ *     description: admin (el dueño mira el catálogo de su plan) y super_admin.
  *     responses:
  *       200: { description: Listado de planes, content: { application/json: { schema: { type: array, items: { type: object } } } } }
  *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
  */
-router.get('/planes', BillingController.getPlanes);
+router.get('/planes', authorize('admin'), BillingController.getPlanes);
 
 /**
  * @openapi
@@ -42,7 +72,7 @@ router.get('/planes', BillingController.getPlanes);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
-router.post('/planes', BillingController.createPlan);
+router.post('/planes', authorize('super_admin'), BillingController.createPlan);
 
 /**
  * @openapi
@@ -73,7 +103,7 @@ router.post('/planes', BillingController.createPlan);
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/planes/:id', BillingController.updatePlan);
+router.patch('/planes/:id', authorize('super_admin'), BillingController.updatePlan);
 
 // Suscripciones
 /**
@@ -82,12 +112,14 @@ router.patch('/planes/:id', BillingController.updatePlan);
  *   get:
  *     tags: [Billing]
  *     summary: Obtener suscripción del tenant actual
+ *     description: admin (su propia suscripción) y super_admin.
  *     responses:
  *       200: { description: Suscripción, content: { application/json: { schema: { type: object } } } }
  *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/subscription', BillingController.getMySubscription);
+router.get('/subscription', authorize('admin'), BillingController.getMySubscription);
 
 /**
  * @openapi
@@ -104,7 +136,7 @@ router.get('/subscription', BillingController.getMySubscription);
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/concesionarias/:id/subscription', BillingController.getSubscriptionByConcesionariaId);
+router.get('/concesionarias/:id/subscription', authorize('super_admin'), BillingController.getSubscriptionByConcesionariaId);
 
 /**
  * @openapi
@@ -134,7 +166,7 @@ router.get('/concesionarias/:id/subscription', BillingController.getSubscription
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/concesionarias/:id/subscription', BillingController.updateSubscription);
+router.patch('/concesionarias/:id/subscription', authorize('super_admin'), BillingController.updateSubscription);
 
 // Invoices
 /**
@@ -143,6 +175,7 @@ router.patch('/concesionarias/:id/subscription', BillingController.updateSubscri
  *   get:
  *     tags: [Billing]
  *     summary: Listar facturas
+ *     description: admin (las facturas de SU concesionaria) y super_admin.
  *     parameters:
  *       - { $ref: '#/components/parameters/pageParam' }
  *       - { $ref: '#/components/parameters/limitParam' }
@@ -160,8 +193,9 @@ router.patch('/concesionarias/:id/subscription', BillingController.updateSubscri
  *                 totalPages: { type: integer }
  *                 totalResults: { type: integer }
  *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
  */
-router.get('/invoices', BillingController.getInvoices);
+router.get('/invoices', authorize('admin'), BillingController.getInvoices);
 
 /**
  * @openapi
@@ -169,6 +203,9 @@ router.get('/invoices', BillingController.getInvoices);
  *   post:
  *     tags: [Billing]
  *     summary: Crear factura
+ *     description: >
+ *       super_admin only. La plataforma le emite la factura a la concesionaria;
+ *       que el propio tenant se emita facturas de SaaS no tiene sentido de negocio.
  *     requestBody:
  *       required: true
  *       content:
@@ -188,9 +225,10 @@ router.get('/invoices', BillingController.getInvoices);
  *       201: { description: Factura creada, content: { application/json: { schema: { type: object } } } }
  *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/invoices', BillingController.createInvoice);
+router.post('/invoices', authorize('super_admin'), BillingController.createInvoice);
 
 /**
  * @openapi
@@ -203,9 +241,10 @@ router.post('/invoices', BillingController.createInvoice);
  *     responses:
  *       200: { description: Factura encontrada, content: { application/json: { schema: { type: object } } } }
  *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/invoices/:id', BillingController.getInvoiceById);
+router.get('/invoices/:id', authorize('admin'), BillingController.getInvoiceById);
 
 /**
  * @openapi
@@ -213,6 +252,10 @@ router.get('/invoices/:id', BillingController.getInvoiceById);
  *   post:
  *     tags: [Billing]
  *     summary: Registrar pago de factura
+ *     description: >
+ *       admin (paga las facturas de SU concesionaria) y super_admin. `status` sólo
+ *       lo puede fijar super_admin: un admin registra el pago en 'pending' y la
+ *       plataforma lo confirma, para que el tenant no se dé por pagado solo.
  *     parameters:
  *       - { name: id, in: path, required: true, schema: { type: integer } }
  *     requestBody:
@@ -231,9 +274,10 @@ router.get('/invoices/:id', BillingController.getInvoiceById);
  *       200: { description: Pago registrado, content: { application/json: { schema: { type: object } } } }
  *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.post('/invoices/:id/payments', BillingController.registrarPagoInvoice);
+router.post('/invoices/:id/payments', authorize('admin'), BillingController.registrarPagoInvoice);
 
 export default router;

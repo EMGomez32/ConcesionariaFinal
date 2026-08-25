@@ -169,7 +169,7 @@ export const CIRCUITO: PasoDelCircuito[] = [
     {
         orden: 5,
         titulo: 'Entra la consulta',
-        que: 'La consulta llega de un formulario de campaña de Instagram o Facebook, de una casilla de mail, de WhatsApp, de Mercado Libre o del mostrador. Queda con un vendedor asignado, sin duplicar al cliente si ya estaba, y con el auto por el que preguntó anotado.',
+        que: 'La consulta llega de un formulario de campaña de Instagram o Facebook, de una casilla de mail, de WhatsApp, de Mercado Libre o del mostrador. Queda con un vendedor asignado y sin duplicar al cliente si ya estaba. Si el canal dice por qué auto preguntaron —una pregunta de Mercado Libre siempre cuelga de una publicación— el vehículo queda anotado solo; si no lo dice, lo carga el vendedor cuando atiende.',
         quien: ['admin', 'vendedor'],
         pantalla: 'Consultas, WhatsApp y Mercado Libre',
     },
@@ -377,13 +377,39 @@ export const ROLES: Rol[] = [
             // columna de días en stock y el orden por antigüedad para todos los roles.
             // Lo admin-only es el capital inmovilizado (reporte stock-antiguedad).
             'Ve hace cuántos días está cada auto en stock, pero no cuánta plata tenés parada ahí: el capital inmovilizado sale a precio de compra y es sólo del administrador.',
-            // Decía "No borra nada" y "la baja la hace el administrador": falso. Los cinco
-            // sustantivos que siguen sí son authorize('admin'), pero ventas, reservas,
-            // financiaciones, ingresos y archivos hoy no tienen ese candado.
-            'No da de baja vehículos, clientes, presupuestos, gastos ni proveedores: esa baja queda del lado del administrador.',
+            // Este punto había quedado acotado a cinco sustantivos porque ventas,
+            // reservas, financiaciones, ingresos y archivos no tenían candado por rol.
+            // Ahora lo tienen —anular es authorize('admin')— así que vuelve a decir
+            // lo que el dueño quiere oír, y esta vez es cierto. Se dice "anular
+            // operaciones" y no "no borra nada": tasaciones, seguimientos e intereses
+            // sí los da de baja, porque son su propia agenda de trabajo.
+            // Decía también "una seña": es FALSO y hay que decirlo con precisión, porque
+            // el dueño lee esto y decide a quién le da qué perfil. El DELETE de reservas
+            // está cerrado a admin, pero el front no lo usa NUNCA: cancela por
+            // PATCH /reservas/:id con estado 'cancelada', que es admin+vendedor y hace
+            // lo mismo (libera el vehículo, lo republica en Mercado Libre y registra el
+            // movimiento). Y está bien que sea así: el cliente que se arrepiente lo
+            // atiende el vendedor, en el momento, o la unidad queda bloqueada.
+            'No anula operaciones. Una venta, un plan de financiación o un acta de ingreso los carga y los corrige, pero darlos de baja es del administrador. Lo mismo con vehículos, clientes, presupuestos, gastos y proveedores.',
+            'La seña es la excepción, y es a propósito: si el cliente se arrepiente, el vendedor la cancela en el momento y el auto vuelve a publicarse solo. Queda en Auditoría con nombre y fecha.',
+            // Decía "ni un extra, ni el usado que se tomó en canje": de las tres, sólo
+            // la del pago era cierta. El canje se CERRÓ a admin al detectar esto (es el
+            // renglón que baja el total de la venta: un usado de $8.000.000 se descuenta
+            // de lo que el cliente debe, y borrarlo y recargarlo con otro valor era el
+            // único camino que le quedaba al vendedor para mover el neto de una
+            // operación cerrada). El extra queda abierto A PROPÓSITO y por eso se dice
+            // acá en vez de esconderlo: es un renglón de $30.000 mal tipeado, se corrige
+            // en el mismo acordeón donde se cargó, y queda auditado igual.
+            'Tampoco saca un pago ya registrado en una venta ni el usado que se tomó en canje: ésos los quita sólo el administrador, y queda en Auditoría con nombre y fecha.',
+            'Los extras de la venta sí los corrige él —los carga y los quita en el mismo lugar—, porque son la carga de su propia operación y no plata que ya entró. También queda en Auditoría.',
             // "ni a Gastos Fijos" era falso: el ítem no tiene gate en el menú y el GET del
             // listado tampoco. Lo que sí es del administrador es cargarlos y editarlos.
-            'No entra a Auditoría ni a Usuarios, y no carga la cotización del dólar. Gastos Fijos los ve, pero cargarlos y editarlos es del administrador.',
+            // Decía "no entra a Usuarios" a secas y era falso a nivel servidor: GET
+            // /usuarios no lleva authorize porque media docena de pantallas lo usan de
+            // lookup para el combo de "vendedor asignado". Lo que se hizo es RECORTAR la
+            // respuesta para los no-admin (nombre y rol; sin mail ni comisión), así que
+            // ahora la frase dice exactamente eso.
+            'No entra a Auditoría ni administra Usuarios, y no carga la cotización del dólar. Del equipo ve los nombres y qué hace cada uno —los necesita para asignar—, no los mails ni las comisiones. Gastos Fijos los ve, pero cargarlos y editarlos es del administrador.',
             'No vincula la cuenta de WhatsApp ni la de Mercado Libre, y no publica avisos: eso lo hace el administrador. Sí responde y atiende las dos bandejas.',
             'En WhatsApp y en las preguntas de Mercado Libre ve sólo lo que tiene asignado o lo que no tiene dueño. Si intenta responder la pregunta de otro vendedor, el sistema se lo rechaza.',
             'En Consultas ve su cartera, no la del resto del equipo.',
@@ -408,7 +434,7 @@ export const ROLES: Rol[] = [
             'Reportes → Por vencer',
         ],
         notaMenu:
-            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas (Consultas, WhatsApp, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo aunque no sean su tarea.',
+            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas (Consultas, WhatsApp, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
         tareas: [
             {
                 titulo: 'Cobrar una cuota',
@@ -442,6 +468,20 @@ export const ROLES: Rol[] = [
             },
         ],
         noPuede: [
+            // Punto nuevo: hasta que las pantallas de operación tuvieron candado,
+            // el cobrador podía registrar una venta o tomar una seña con sólo abrir
+            // la URL. Ahora el servidor se lo niega, y eso define su puesto.
+            // La segunda oración decía "esas pantallas las abre para mirar... no para
+            // operarlas" e incluía Ventas, justo la pantalla donde el cobrador SÍ opera:
+            // POST /ventas/:id/pagos es admin+vendedor+cobrador, y el formulario está
+            // adentro del detalle de la venta. Dos bullets seguidos que se desmentían,
+            // en la única lista que esta página tiene para ofrecer como prueba.
+            'No registra ventas, no toma señas y no da de alta unidades. Reservas y Vehículos los abre para mirar de dónde viene el contrato que está cobrando; a Ventas entra además a cargarle el pago.',
+            'Registra el cobro —la cuota o el pago de la venta— pero no lo saca después. Anular un pago ya cobrado o dar de baja una financiación es del administrador.',
+            // No estaba dicho en ningún lado y es permiso que ya tiene: la tarjeta de
+            // módulo vende "refinanciación del saldo real cuando hace falta" como
+            // función del producto, y el que la usa es él.
+            'Sí arma planes de financiación propia y refinancia el saldo cuando el cliente no llega: es la herramienta con la que cierra una visita a un moroso. Lo que no puede es dar de baja el contrato.',
             'De los reportes ve tres: Caja mensual, Cartera de mora y Por vencer. Ventas, Rentabilidad, Ranking, Comisiones, Objetivos, Postventa y Documentación le dan permiso denegado.',
             'No puede bajar el estado de cuenta del cliente en PDF: ese documento está habilitado para el administrador y el vendedor.',
             'No entra a Consultas, WhatsApp, Mercado Libre, Seguimientos ni Tasaciones: no le aparecen en el menú y el servidor tampoco se los da.',
@@ -460,12 +500,15 @@ export const ROLES: Rol[] = [
             'Postventa → Casos',
             'Postventa → Agenda de taller',
             'Postventa → Tipos de caso',
+            'Movimientos (para marcar el retorno de la unidad que vuelve del taller)',
+            'Vehículos → Archivos (para adjuntar las fotos del trabajo)',
+            'Ventas (para marcar la unidad como entregada)',
             'Reportes → Postventa',
             'Reportes → Documentación',
             'Reportes → Próx. service',
         ],
         notaMenu:
-            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas (Consultas, WhatsApp, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo aunque no sean su tarea.',
+            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas (Consultas, WhatsApp, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
         tareas: [
             {
                 titulo: 'Abrir un caso',
@@ -490,6 +533,13 @@ export const ROLES: Rol[] = [
             {
                 titulo: 'Manejar la agenda y traer al cliente de vuelta',
                 pasos: [
+                    // Los tres pasos de abajo son permisos que el servidor ya le daba y
+                    // que esta sección no enseñaba: la función quedaba muerta y la
+                    // unidad figuraba "en taller" para siempre porque nadie cerraba el
+                    // movimiento.
+                    'Cuando la unidad vuelve del taller, entrá a Movimientos y marcá el retorno: si no, el auto queda figurando en preparación en el stock y en el reporte de documentación.',
+                    'La foto del trabajo hecho subila a la ficha del auto, pestaña Archivos. Es la ficha que sale en el PDF y en la publicación de Mercado Libre. La portada la elige el vendedor.',
+                    'Cuando la entregás, marcala como entregada desde la venta. Anular la operación no: eso es del administrador.',
                     'La pestaña Agenda de taller te muestra los turnos, con el recordatorio por WhatsApp a mano.',
                     'En cada caso dejá cargada la fecha del próximo service.',
                     'Reportes → Próx. service te arma la lista de a quién hay que llamar para que vuelva.',
@@ -501,6 +551,14 @@ export const ROLES: Rol[] = [
         noPuede: [
             'No ve Consultas, WhatsApp, Mercado Libre, Seguimientos ni Tasaciones: no le aparecen en el menú y el servidor tampoco se los da.',
             'De los reportes tiene tres pestañas: Postventa, Documentación y Próx. service. Ventas, caja, mora, ranking, comisiones y rentabilidad no las ve.',
+            // Punto nuevo, por la misma razón que el del cobrador: hasta que las
+            // pantallas de operación tuvieron candado, este perfil podía registrar
+            // una venta o una seña entrando por la URL.
+            // Decía "las operaciones las mira": falso, y era la afirmación que le
+            // escondía al taller tres permisos que YA tiene. Las tres negaciones sí son
+            // ciertas; lo que hacía falta era decir lo que sí puede, que está más abajo
+            // en `tareas` y en `modulos`.
+            'No registra ventas, no toma señas y no arma planes de financiación. Su trabajo empieza después de la entrega.',
             'Crea y edita los tipos de caso del catálogo, pero borrarlos es del administrador.',
             'No borra casos de postventa: la baja la hace el administrador.',
             // Decía "no toca ... gastos fijos" a secas, y eso se leía como que no los ve.
@@ -512,7 +570,13 @@ export const ROLES: Rol[] = [
         id: 'admin',
         nombre: 'Administrador (el dueño o el gerente)',
         resumen:
-            'El perfil del que se hace cargo del negocio. Ve todo lo de la concesionaria y es el único que ve la plata fina: el precio de compra, el margen por unidad, el ranking y las comisiones.',
+            // Decía "el precio de compra" en esta enumeración y era falso: el vendedor
+            // lo carga al dar de alta la unidad, así que no puede ser exclusivo del
+            // administrador. La corrección ya se había aplicado al bullet del vendedor
+            // (más arriba) y este resumen había quedado repitiendo la versión vieja. Lo
+            // que sí se cerró en la misma pasada es la lista de compras por proveedor,
+            // que era el único lugar donde el costo de cada unidad se veía en grilla.
+            'El perfil del que se hace cargo del negocio. Ve todo lo de la concesionaria y es el único que ve la plata fina: el margen por unidad, el capital inmovilizado, el ranking, las comisiones y lo que se le pagó a cada proveedor por cada auto.',
         diaTipico:
             'Abre el tablero completo: ventas del mes, ingresos y egresos con el resultado neto, la mora, la tendencia de los últimos seis meses, el objetivo del mes con su barra, la actividad reciente del equipo y las ocho alertas juntas. Desde ahí baja a lo que le llamó la atención. A fin de mes cierra los números, revisa objetivos y liquida comisiones.',
         modulos: [
@@ -604,13 +668,14 @@ export const ROLES: Rol[] = [
     {
         id: 'lectura',
         nombre: 'Consulta (sólo mirar)',
-        // El resumen decía "Pensado para el que necesita mirar y no operar". Ese candado
-        // todavía no existe (ver ESTADO_HONESTO), así que el rol no se vende por ahí:
-        // se describe por lo que sí tiene cerrado, que es bastante y es comprobable.
+        // El resumen se había acotado a "ve las pantallas" porque el candado de
+        // operación no existía y no se lo podía vender como "mirar y no operar".
+        // Ahora sí existe y lo aplica el servidor, así que el rol vuelve a
+        // describirse por lo que es: consulta de verdad, no un menú recortado.
         resumen:
-            'Para el que entra a buscar un dato y no a trabajar: el contador, un socio, alguien de administración. Ve las pantallas de la concesionaria; los reportes y las bandejas de atención los tiene cerrados.',
+            'Para el que entra a buscar un dato y no a trabajar: el contador, un socio, alguien de administración. Mira y no toca: no crea, no edita y no da de baja nada. Los reportes y las bandejas de atención los tiene cerrados.',
         diaTipico:
-            'Entra, busca lo que necesita y se va. Ve el stock, los clientes, las ventas, las reservas, los presupuestos, los gastos, las financiaciones, la postventa, los proveedores y las sucursales. No tiene tablero de trabajo ni bandejas que atender. Los reportes y las bandejas de atención los tiene cerrados en el servidor; el resto de sus límites hoy los pone el menú, y lo contamos en "En qué estado está".',
+            'Entra, busca lo que necesita y se va. Ve el stock, los clientes, las ventas, las reservas, los presupuestos, los gastos, las financiaciones, la postventa, los proveedores y las sucursales. No tiene tablero de trabajo ni bandejas que atender. Y no opera: no registra una venta, no toma una seña, no arma un plan de cuotas, no carga el ingreso de una unidad ni le sube un archivo a la ficha de un auto, y tampoco da de baja nada. En las pantallas de operación directamente no le aparecen los botones de alta ni los de baja, y si alguien probara la dirección a mano el servidor tampoco lo dejaría: el límite está en los dos lados.',
         modulos: [
             'Vehículos y Comparador',
             'Clientes',
@@ -642,8 +707,17 @@ export const ROLES: Rol[] = [
             },
         ],
         noPuede: [
+            // El primero es el que define al rol, así que va primero. Antes este
+            // punto no existía porque las pantallas de operación no tenían candado.
+            'No registra nada: ni una venta, ni una seña, ni un plan de cuotas, ni un ingreso de unidad, ni un movimiento al taller, ni un archivo en la ficha de un auto. Tampoco edita ni da de baja. Es el único perfil que sólo lee.',
             'No entra a ningún reporte. Si abre la pantalla Reportes, no tiene ninguna pestaña habilitada.',
-            'No ve Consultas, WhatsApp, Mercado Libre, Seguimientos, Tasaciones, Usuarios ni Auditoría.',
+            // "Seguimientos" y "Usuarios" eran los dos flojos de esta enumeración. La
+            // bitácora del cliente (la nota libre del vendedor sobre la negociación) se
+            // leía entera desde la pestaña Seguimiento de cualquier ficha, y ahora está
+            // cerrada de verdad. Con Usuarios el arreglo fue otro —hay pantallas que
+            // necesitan el lookup de nombres—, así que la frase dice lo que pasa.
+            'No ve Consultas, WhatsApp, Mercado Libre, Tasaciones ni Auditoría. Tampoco la bitácora de seguimiento de un cliente: lo que el vendedor anota de la negociación no le aparece.',
+            'De los usuarios no ve nada: ni el listado, ni los mails, ni quién cobra qué comisión.',
             'No exporta a Excel y no ve el historial de precios de una unidad.',
         ],
     },
@@ -982,9 +1056,9 @@ export const ESTADO_HONESTO: { titulo: string; detalle: string }[] = [
             'Se publica de verdad y el aviso sigue al stock: reservás y se pausa, vendés y se cierra, cambiás el precio y se actualiza. Ahora, para que eso ande hay dos pasos que no son automáticos: hay que cargar las credenciales de la aplicación en el servidor, y cada concesionaria tiene que crear su propia aplicación en el portal de desarrolladores de Mercado Libre y autorizar su cuenta. Aparte, publicar en Mercado Libre lo cobra Mercado Libre, no nosotros: por eso se publica unidad por unidad y siempre a pedido, nunca solo. Si querés verlo antes de conectar nada, hay un modo demostración que muestra el circuito completo sin salir a la red, y todo lo que genera queda rotulado como simulado y afuera de los reportes.',
     },
     {
-        titulo: 'De Instagram y Facebook entran los formularios, no los mensajes',
+        titulo: 'De Instagram y Facebook entra el formulario, no el chat',
         detalle:
-            'Lo que entra solo es el formulario de campaña de Meta (Lead Ads): el que el interesado completa dentro de Instagram o Facebook sin salir de la app. Eso llega al sistema como consulta, con su vendedor asignado, en el momento. Lo que NO entra son los mensajes directos, los comentarios ni Messenger: no hay lectura de esos canales, y un DM de prueba no va a aparecer en Consultas. Y, como con Mercado Libre, no viene enchufado: cada concesionaria tiene que crear su propia aplicación en el portal de desarrolladores de Meta, suscribir el webhook a los formularios y generar el token de su página. Además hace falta tener campañas de Lead Ads corriendo: sin formularios publicados, no hay nada que entrar.',
+            'Lo que entra solo es el formulario de campaña: ese que el interesado completa dentro de Instagram o Facebook, sin salir de la app. Cae en Consultas en el momento, con el nombre y el teléfono que dejó y un vendedor ya asignado. Los mensajes directos, los comentarios y Messenger no se leen: si lo probás mandándote un mensaje a vos mismo no va a aparecer, y no está fallando. Dos cosas antes de que funcione, y conviene saberlas de entrada: hay que conectar tu página con una aplicación propia de Meta —trámite de una sola vez, igual que con Mercado Libre— y tener avisos con formulario dando vueltas. Sin campañas publicadas no hay formularios, y sin formularios no entra nada.',
     },
     {
         titulo: 'Con los portales de avisos no hay conexión directa',
@@ -997,14 +1071,26 @@ export const ESTADO_HONESTO: { titulo: string; detalle: string }[] = [
             'El número se vincula escaneando un QR, igual que WhatsApp Web, y te sigue funcionando en el celular. No hay respuestas automáticas ni contestador: los mensajes los escribe una persona desde el panel. Salen espaciados a propósito, con un ritmo variable, para cuidar el número. No es la conexión oficial de Meta para empresas.',
     },
     {
-        titulo: 'Los perfiles: lo que sí podemos garantizar y lo que todavía no',
-        // Esta entrada se mantiene honesta a propósito, pero NO enumera qué
-        // operaciones quedaron sin control de rol. La página es pública y el
-        // sistema está corriendo en producción: publicar esa lista es entregarle
-        // el mapa a cualquiera, y no hace a nadie más informado — al que le
-        // importa el tema se le contesta de frente cuando pregunta.
+        titulo: 'Los perfiles son cinco y vienen fijos: no se arman a medida',
+        // Esta entrada nació admitiendo que las pantallas de operación no tenían
+        // control de rol. Ya lo tienen: el candado lo aplica el servidor en todas
+        // ellas, y ahora el front además esconde el control que el rol no puede
+        // usar (ver hooks/usePermisos.ts), así que la promesa se cumple en las dos
+        // capas. La entrada NO se borra ni se convierte en un cartel de logro: se
+        // queda en esta sección porque lo que sí sigue siendo un límite real es
+        // que el catálogo de perfiles es cerrado (seed de seis roles, sin pantalla
+        // para inventar uno nuevo ni para mover un permiso suelto).
+        //
+        // El "cinco" contra el "6" del encabezado se reconcilia EN EL TEXTO, no se
+        // esconde: el hero cuenta seis fichas de rol y esta sección hablaba de cinco
+        // perfiles sin que ninguna de las dos frases se hiciera cargo de la otra. El
+        // sexto es la cuenta de plataforma, que no es un puesto del salón.
+        //
+        // Sigue sin enumerar rutas ni endpoints, por lo mismo de siempre: la
+        // página es pública y el sistema está en producción. Se nombran pantallas
+        // y operaciones, que es lo que el dueño entiende y lo que se puede señalar.
         detalle:
-            'Lo que sí, y lo aplica el servidor: los reportes de plata (rentabilidad, ranking, comisiones, objetivos) son del administrador; las bandejas de atención (Consultas, WhatsApp, Mercado Libre, Seguimientos, Tasaciones) son de administrador y vendedor; Usuarios, Auditoría, las integraciones y la cotización son del administrador; y las bajas de vehículos, clientes, presupuestos, gastos y proveedores también. Todo eso no se esquiva ni conociendo la dirección. Lo que todavía no: en las pantallas de operación del día a día el límite por perfil lo pone el menú, y lo estamos terminando de cerrar también del lado del servidor. Si tu caso necesita que un perfil determinado no pueda registrar cierta operación ni forzando, preguntalo y te decimos con precisión cómo está ese punto hoy.',
+            'Primero lo que cambió, porque es la parte buena: los límites por perfil los aplica el servidor y no el menú. Vale para los reportes de plata, para las bandejas de atención y para las pantallas de operación del día a día: registrar una venta, tomar una seña, armar un plan de cuotas, mandar una unidad al taller o subirle fotos. Saberse la dirección de una pantalla no alcanza para entrar. Y registrar quedó separado de anular: dar de baja una venta, una financiación, un acta de ingreso, un pago ya cobrado o el usado tomado en canje es del administrador. El vendedor carga la operación; no la borra. Dos excepciones, dichas de frente porque son a propósito: la seña la cancela el vendedor cuando el cliente se arrepiente —si no, la unidad queda bloqueada— y los extras de una venta los corrige quien los cargó. Las dos quedan en Auditoría con nombre y fecha. Del lado de la administración hay un matiz que conviene saber: Auditoría es del administrador y punto, pero el listado de usuarios lo necesitan media docena de pantallas para el selector de "vendedor asignado", así que en vez de cerrarlo se recortó — quien no es administrador ve nombres y funciones, no mails ni comisiones. Lo que sigue siendo un límite: los perfiles de la concesionaria son cinco y vienen fijos —administrador, vendedor, cobrador, postventa y consulta— más la cuenta de plataforma, que no se le asigna a nadie del salón y por eso arriba vas a contar seis fichas. No se inventa uno nuevo ni se le corre un permiso suelto a una persona. Si alguien hace dos trabajos, se le dan dos perfiles: vendedor y cobrador a la vez, por ejemplo, y suma los dos. Si tu concesionaria necesita un recorte que no entra en esos cinco, decilo antes de contratar y lo hablamos.',
     },
     {
         titulo: 'La tasación la hace tu tasador, no el sistema',

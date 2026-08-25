@@ -13,6 +13,8 @@ import {
     Building2, Car, Calendar, User,
     ArrowDownLeft
 } from 'lucide-react';
+import { usePermisos } from '../../hooks/usePermisos';
+import { getErrorMessage } from '../../utils/getErrorMessage';
 
 const TIPO_INGRESO_OPTS: { value: TipoIngreso; label: string }[] = [
     { value: 'compra_proveedor', label: 'Compra Proveedor' },
@@ -37,6 +39,9 @@ function tipoLabel(tipo: TipoIngreso) {
 const IngresosPage = () => {
     const { addToast } = useUIStore();
     const navigate = useNavigate();
+    // Anular un ingreso es del admin (borra el acta con su monto de compra); darlo
+    // de alta es de admin/vendedor. Ver hooks/usePermisos.ts.
+    const permisos = usePermisos();
 
     // List state
     const [ingresos, setIngresos] = useState<IngresoVehiculo[]>([]);
@@ -117,8 +122,13 @@ const IngresosPage = () => {
             addToast('Registro de ingreso eliminado', 'success');
             setDeletingId(null);
             loadIngresos(page);
-        } catch {
-            addToast('Error al eliminar ingreso', 'error');
+        } catch (err) {
+            // `catch (err)` y no `catch {`: el interceptor de api/client.ts rechaza con
+            // el body ya desempaquetado, así que el motivo real del backend viaja en
+            // `err.message`. Descartarlo convertía un "no tenés permiso" en un
+            // "Error al eliminar ingreso", y el usuario abría un ticket creyendo que
+            // el servidor estaba caído.
+            addToast(getErrorMessage(err, 'Error al eliminar ingreso'), 'error');
         } finally {
             setDeleteLoading(false);
         }
@@ -141,9 +151,11 @@ const IngresosPage = () => {
                     <Button variant="secondary" onClick={() => loadIngresos(page)}>
                         <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                     </Button>
-                    <Button variant="primary" onClick={() => navigate('/vehiculos/nuevo')}>
-                        <Plus size={18} /> Ingresar Vehículo
-                    </Button>
+                    {permisos.ingresosCrear && (
+                        <Button variant="primary" onClick={() => navigate('/vehiculos/nuevo')}>
+                            <Plus size={18} /> Ingresar Vehículo
+                        </Button>
+                    )}
                 </div>
             </header>
 
@@ -186,7 +198,7 @@ const IngresosPage = () => {
                             <th>Modalidad</th>
                             <th>Ubicación Actual</th>
                             <th>Fecha de Ingreso</th>
-                            <th>Valorización</th>
+                            {permisos.veValorDeIngreso && <th>Valorización</th>}
                             <th>Origen del Activo</th>
                             <th style={{ textAlign: 'right' }}>Acciones</th>
                         </tr>
@@ -238,14 +250,20 @@ const IngresosPage = () => {
                                         </span>
                                     </div>
                                 </td>
-                                <td>
-                                    <div className="flex items-baseline gap-1">
-                                        <span className="text-3xs font-black text-muted">$</span>
-                                        <span className="font-black text-lg tabular-nums">
-                                            {Number(i.valorTomado || 0).toLocaleString('es-AR')}
-                                        </span>
-                                    </div>
-                                </td>
+                                {/* En un ingreso por compra, este importe ES el precio de compra
+                                    de la unidad: el backend se lo recorta a quien no sea
+                                    admin/vendedor, así que la columna se esconde en vez de
+                                    quedar mostrando $0 a media concesionaria. */}
+                                {permisos.veValorDeIngreso && (
+                                    <td>
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-3xs font-black text-muted">$</span>
+                                            <span className="font-black text-lg tabular-nums">
+                                                {Number(i.valorTomado || 0).toLocaleString('es-AR')}
+                                            </span>
+                                        </div>
+                                    </td>
+                                )}
                                 <td>
                                     <div className="flex items-center gap-3">
                                         <div className="flex items-center justify-center text-muted">
@@ -262,7 +280,9 @@ const IngresosPage = () => {
                                     </div>
                                 </td>
                                 <td style={{ textAlign: 'right' }}>
-                                    <button className="icon-btn danger" onClick={() => setDeletingId(i.id)} title="Eliminar"><Trash2 size={16} /></button>
+                                    {permisos.ingresosAnular && (
+                                        <button className="icon-btn danger" onClick={() => setDeletingId(i.id)} title="Eliminar"><Trash2 size={16} /></button>
+                                    )}
                                 </td>
                             </tr>
                         ))}

@@ -24,7 +24,6 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Modal from '../../components/ui/Modal';
 import { FileUploader } from '../../components/ui/FileUploader';
-import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
 import { waShareLink } from '../../utils/whatsapp';
 import {
@@ -34,6 +33,7 @@ import {
     Plus, Trash2, ExternalLink, Upload, X, Image, FileText as FileIcon, Edit, MessageCircle, Star, Users,
     TrendingUp, TrendingDown, Minus, ShoppingBag, AlertTriangle, Pause, Play, Ban
 } from 'lucide-react';
+import { usePermisos } from '../../hooks/usePermisos';
 import type { LucideIcon } from 'lucide-react';
 import type { PaginatedResponse, ApiError } from '../../types/api.types';
 
@@ -93,8 +93,12 @@ const VehiculoDetallePage = () => {
     // Publicar en Mercado Libre (y consultar la cuenta vinculada) es admin-only en
     // el backend: se oculta la tarjeta entera para el resto de los roles, si no
     // serían botones muertos que siempre dan 403.
-    const user = useAuthStore((s) => s.user);
-    const puedePublicarMl = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin');
+    // La pestaña Archivos también tiene permisos distintos por acción, y el corte no
+    // es obvio: postventa SUBE y BORRA (documentar con fotos la unidad que pasó por
+    // el taller es su trabajo) pero NO marca la portada, que es decisión comercial.
+    // Ver hooks/usePermisos.ts.
+    const permisos = usePermisos();
+    const puedePublicarMl = permisos.esAdmin;
 
     const [activeTab, setActiveTab] = useState<Tab>('info');
     const [vehiculo, setVehiculo] = useState<VehiculoFull | null>(null);
@@ -709,13 +713,18 @@ const VehiculoDetallePage = () => {
                         <div className="stat-label">Precio lista</div>
                     </div>
                 </div>
-                <div className="stat-card glass">
-                    <DollarSign size={20} style={{ color: 'var(--warning)' }} />
-                    <div>
-                        <div className="stat-value">{vehiculo.precioCompra ? `$${Number(vehiculo.precioCompra).toLocaleString('es-AR')}` : '-'}</div>
-                        <div className="stat-label">Precio compra</div>
+                {/* Sólo admin: es la materia prima del margen. El backend además
+                    lo recorta, así que para el resto ni siquiera llega el dato —
+                    la tarjeta se esconde para no dejar un "-" permanente. */}
+                {permisos.vePrecioDeCompra && (
+                    <div className="stat-card glass">
+                        <DollarSign size={20} style={{ color: 'var(--warning)' }} />
+                        <div>
+                            <div className="stat-value">{vehiculo.precioCompra ? `$${Number(vehiculo.precioCompra).toLocaleString('es-AR')}` : '-'}</div>
+                            <div className="stat-label">Precio compra</div>
+                        </div>
                     </div>
-                </div>
+                )}
                 <div className="stat-card glass">
                     <Wrench size={20} style={{ color: 'var(--danger)' }} />
                     <div>
@@ -769,8 +778,11 @@ const VehiculoDetallePage = () => {
                         <InfoSection title="Datos de compra" rows={[
                             { icon: MapPin, label: 'Sucursal', value: vehiculo.sucursal?.nombre },
                             { icon: Calendar, label: 'Fecha ingreso', value: vehiculo.fechaIngreso ? new Date(vehiculo.fechaIngreso).toLocaleDateString('es-AR') : undefined },
-                            { icon: Calendar, label: 'Fecha compra', value: vehiculo.fechaCompra ? new Date(vehiculo.fechaCompra).toLocaleDateString('es-AR') : undefined },
-                            { icon: DollarSign, label: 'Precio compra', value: vehiculo.precioCompra ? `$${Number(vehiculo.precioCompra).toLocaleString('es-AR')}` : undefined },
+                            // Datos de compra: sólo admin (ver la tarjeta de arriba). InfoSection
+                            // saltea las filas con value undefined, así que para el resto del
+                            // equipo estas dos no se dibujan.
+                            { icon: Calendar, label: 'Fecha compra', value: permisos.vePrecioDeCompra && vehiculo.fechaCompra ? new Date(vehiculo.fechaCompra).toLocaleDateString('es-AR') : undefined },
+                            { icon: DollarSign, label: 'Precio compra', value: permisos.vePrecioDeCompra && vehiculo.precioCompra ? `$${Number(vehiculo.precioCompra).toLocaleString('es-AR')}` : undefined },
                             { icon: DollarSign, label: 'Precio lista', value: vehiculo.precioLista ? `$${Number(vehiculo.precioLista).toLocaleString('es-AR')}` : undefined },
                             { icon: Car, label: 'Proveedor', value: vehiculo.proveedorCompra?.nombre },
                         ]} />
@@ -795,9 +807,11 @@ const VehiculoDetallePage = () => {
                             <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700 }}>
                                 {archivos.length > 0 ? `${archivos.length} archivo${archivos.length !== 1 ? 's' : ''}` : 'Sin archivos'}
                             </h3>
-                            <Button variant="primary" size="sm" onClick={() => setShowArchivoForm(v => !v)}>
-                                {showArchivoForm ? <><X size={14} style={{ marginRight: '0.4rem' }} />Cancelar</> : <><Upload size={14} style={{ marginRight: '0.4rem' }} />Agregar archivo</>}
-                            </Button>
+                            {permisos.archivosSubir && (
+                                <Button variant="primary" size="sm" onClick={() => setShowArchivoForm(v => !v)}>
+                                    {showArchivoForm ? <><X size={14} style={{ marginRight: '0.4rem' }} />Cancelar</> : <><Upload size={14} style={{ marginRight: '0.4rem' }} />Agregar archivo</>}
+                                </Button>
+                            )}
                         </div>
 
                         {/* Upload form */}
@@ -889,7 +903,7 @@ const VehiculoDetallePage = () => {
                                                                 </div>
                                                                 <div className="archivo-actions">
                                                                     {/* Sólo las fotos pueden ser la principal del vehículo. */}
-                                                                    {grupo === 'foto' && (
+                                                                    {grupo === 'foto' && (permisos.archivosMarcarPrincipal || a.esPrincipal) && (
                                                                         a.esPrincipal ? (
                                                                             <span className="icon-btn" title="Foto principal" style={{ color: 'var(--warning)', cursor: 'default' }}>
                                                                                 <Star size={15} fill="currentColor" />
@@ -903,9 +917,11 @@ const VehiculoDetallePage = () => {
                                                                     <a href={a.url} target="_blank" rel="noreferrer" className="icon-btn" title="Ver archivo">
                                                                         <ExternalLink size={15} />
                                                                     </a>
-                                                                    <button className="icon-btn danger" title="Eliminar" onClick={() => handleDeleteArchivo(a)}>
-                                                                        <Trash2 size={15} />
-                                                                    </button>
+                                                                    {permisos.archivosBorrar && (
+                                                                        <button className="icon-btn danger" title="Eliminar" onClick={() => handleDeleteArchivo(a)}>
+                                                                            <Trash2 size={15} />
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         ))}

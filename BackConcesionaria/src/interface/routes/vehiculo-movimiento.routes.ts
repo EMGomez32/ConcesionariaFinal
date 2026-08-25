@@ -1,7 +1,23 @@
 import { Router } from 'express';
 import { VehiculoMovimientoController } from '../controllers/VehiculoMovimientoController';
+import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
 import { createMovimientoSchema, marcarRetornoSchema } from '../validation/vehiculo-movimiento.schema';
+
+/**
+ * CRITERIO DE PERMISOS: quien HACE el trabajo lo REGISTRA; ANULAR es del admin,
+ * porque borrar el rastro de una operación es con lo que se tapa un desvío. Acá
+ * no hay ninguna baja: las dos rutas registran hechos físicos (la unidad se mueve,
+ * la unidad vuelve), así que ambas son de los roles operativos.
+ * `super_admin` tiene bypass en authorize(), no se nombra.
+ *
+ * Toda ruta que MUTA lleva `authorize(...)`: `router.use(authenticate)` exige
+ * sesión, no rol, y los controllers no miran roles.
+ *
+ * La lista de POST / se alinea con POST /vehiculos/:id/transferir (admin,
+ * vendedor), que crea el mismo tipo de fila por otra vía. Nota: reservas y ventas
+ * también generan movimientos desde sus propios use-cases sin pasar por acá.
+ */
 
 const router = Router();
 
@@ -38,6 +54,7 @@ router.get('/', VehiculoMovimientoController.getAll);
  *   post:
  *     tags: [Vehículos]
  *     summary: Crear movimiento de vehículo
+ *     description: Requiere rol admin o vendedor.
  *     requestBody:
  *       required: true
  *       content:
@@ -55,9 +72,10 @@ router.get('/', VehiculoMovimientoController.getAll);
  *       201: { description: Movimiento creado, content: { application/json: { schema: { type: object } } } }
  *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/', validateBody(createMovimientoSchema), VehiculoMovimientoController.create);
+router.post('/', authorize('admin', 'vendedor'), validateBody(createMovimientoSchema), VehiculoMovimientoController.create);
 
 /**
  * @openapi
@@ -65,14 +83,21 @@ router.post('/', validateBody(createMovimientoSchema), VehiculoMovimientoControl
  *   patch:
  *     tags: [Vehículos]
  *     summary: Marcar el retorno de una preparación
- *     description: Cierra el ciclo de un envío a preparación (mecánico, lavadero, etc.) registrando su vuelta.
+ *     description: >
+ *       Cierra el ciclo de un envío a preparación (mecánico, lavadero, etc.)
+ *       registrando su vuelta. Requiere rol admin, vendedor o postventa.
  *     parameters:
  *       - { name: id, in: path, required: true, schema: { type: integer } }
  *     responses:
  *       200: { description: Retorno registrado }
  *       400: { $ref: '#/components/responses/ValidationError' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id/retorno', validateBody(marcarRetornoSchema), VehiculoMovimientoController.marcarRetorno);
+// `postventa` va incluido a propósito: recibir la unidad que vuelve del taller es
+// su trabajo, y hoy llega a esta ruta. Cerrarla a admin+vendedor sería romper un
+// flujo real para "endurecer" algo que ni siquiera es una baja.
+router.patch('/:id/retorno', authorize('admin', 'vendedor', 'postventa'), validateBody(marcarRetornoSchema), VehiculoMovimientoController.marcarRetorno);
 
 export default router;

@@ -8,6 +8,28 @@ import { DeleteVehiculo } from '../../application/use-cases/vehiculos/DeleteVehi
 import { TransferVehiculo } from '../../application/use-cases/vehiculos/TransferVehiculo';
 import { audit } from '../../infrastructure/security/audit';
 import { Col, sendCsv } from '../../utils/csv';
+import { actorEsAdmin } from '../../infrastructure/security/roles';
+
+/**
+ * Recorta los datos de compra para todo el que no sea admin.
+ *
+ * `precioCompra` es la materia prima del margen: con él y el precio de venta
+ * cualquiera reconstruye la rentabilidad que `/reportes/rentabilidad` reserva al
+ * admin. `GET /vehiculos` no lleva authorize a propósito (todo el equipo necesita
+ * ver el stock), así que el recorte va por rol acá — mismo patrón que
+ * `sanitizarVehiculosComprados` en la ficha del proveedor y que `sanitizeUsuario`
+ * con `comisionPorcentaje`.
+ *
+ * Se van los DOS juntos: la fecha de compra sola no es el margen, pero es el otro
+ * campo que la ficha del proveedor ya trataba como dato de compra, y separarlos
+ * dejaría dos criterios distintos para el mismo dato.
+ */
+function sanitizarDatosDeCompra<T>(vehiculo: T, esAdmin: boolean): T {
+    if (esAdmin || !vehiculo || typeof vehiculo !== 'object') return vehiculo;
+    const { precioCompra, fechaCompra, ...resto } = vehiculo as any;
+    void precioCompra; void fechaCompra;
+    return resto as T;
+}
 
 const repository = new PrismaVehiculoRepository();
 const getVehiculosUC = new GetVehiculos(repository);
@@ -50,7 +72,8 @@ export class VehiculoController {
             const { limit, page, sortBy, sortOrder } = req.query;
             const where = VehiculoController.buildWhere(req.query);
             const result = await getVehiculosUC.execute(where, { limit, page, sortBy, sortOrder } as any);
-            res.json(result);
+            const esAdmin = actorEsAdmin();
+            res.json({ ...result, results: (result.results ?? []).map((v: any) => sanitizarDatosDeCompra(v, esAdmin)) });
         } catch (error) {
             next(error);
         }
@@ -125,7 +148,7 @@ export class VehiculoController {
         try {
             const id = parseInt(req.params.id as string, 10);
             const result = await getVehiculoByIdUC.execute(id);
-            res.json(result);
+            res.json(sanitizarDatosDeCompra(result, actorEsAdmin()));
         } catch (error) {
             next(error);
         }
@@ -157,7 +180,7 @@ export class VehiculoController {
                 entidadId: id,
                 detalle: `Vehiculo ${id} actualizado`,
             });
-            res.json(result);
+            res.json(sanitizarDatosDeCompra(result, actorEsAdmin()));
         } catch (error) {
             next(error);
         }
@@ -190,7 +213,7 @@ export class VehiculoController {
                 entidadId: id,
                 detalle: `Vehículo transferido a sucursal ${sucursalDestinoId}`,
             });
-            res.json(result);
+            res.json(sanitizarDatosDeCompra(result, actorEsAdmin()));
         } catch (error) {
             next(error);
         }

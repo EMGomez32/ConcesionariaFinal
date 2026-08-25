@@ -3,6 +3,7 @@ import { Proveedor } from '../../../domain/entities/Proveedor';
 import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { VEHICULO_PUBLICO } from '../proyecciones';
 
 export class PrismaProveedorRepository implements IProveedorRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Proveedor>> {
@@ -53,13 +54,22 @@ export class PrismaProveedorRepository implements IProveedorRepository {
         const p = await prisma.proveedor.findUnique({
             where: { id },
             include: {
-                vehiculosCompra: { where: { deletedAt: null } },
-                gastosVehiculo: { where: { deletedAt: null }, include: { vehiculo: true } },
+                // Con `select` y no la fila entera: es la pestaña "Vehículos
+                // comprados", y sin proyección devolvía Vehiculo completo — o sea
+                // el `precioCompra` de cada unidad, a cualquier usuario autenticado
+                // y sin authorize en la ruta. `precioCompra` y `fechaCompra` SÍ
+                // viajan acá (es la pestaña que existe para mostrarlos) pero el
+                // controller se los borra a quien no sea admin.
+                vehiculosCompra: {
+                    where: { deletedAt: null },
+                    select: { ...VEHICULO_PUBLICO, precioCompra: true, fechaCompra: true },
+                },
+                gastosVehiculo: { where: { deletedAt: null }, include: { vehiculo: { select: VEHICULO_PUBLICO } } },
                 postventaItems: { where: { deletedAt: null }, include: { caso: true } },
                 // Unidades que se enviaron a este proveedor para preparación.
                 movimientosDestino: {
                     where: { deletedAt: null },
-                    include: { vehiculo: true },
+                    include: { vehiculo: { select: VEHICULO_PUBLICO } },
                     orderBy: { fecha: 'desc' },
                 },
             },

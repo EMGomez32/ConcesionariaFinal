@@ -11,23 +11,45 @@ import { cleanFilters } from '../../utils/cleanFilters';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
 import { BaseException } from '../../domain/exceptions/BaseException';
+import { actorEsAdmin } from '../../infrastructure/security/roles';
+
+/**
+ * Lo que un no-admin puede ver de un colega: el nombre para el combo de "vendedor
+ * asignado", el rol para poder filtrar quiénes son vendedores, y poco más.
+ *
+ * POR QUÉ ESTA LISTA ES BLANCA Y NO NEGRA: `GET /usuarios` y `GET /usuarios/:id`
+ * NO llevan authorize —a diferencia de las mutaciones del mismo archivo— y no es
+ * un olvido: media docena de pantallas (Clientes, Consultas, Reservas, Ventas,
+ * Presupuestos, Bandeja, Preguntas) los usan como LOOKUP para poblar el selector
+ * de vendedor, y esas pantallas las abren vendedor, cobrador y lectura. Cerrarlas
+ * a admin rompe esos filtros. Pero devolver la fila entera convertía el lookup en
+ * el padrón de la concesionaria: nombre + mail + rol de cada empleado, o sea el
+ * mapa exacto para armar un phishing dirigido al administrador. La proyección
+ * delgada deja el lookup en pie y saca el mail.
+ *
+ * `email` es el campo que importa acá. Si mañana una pantalla de no-admin necesita
+ * otro dato, agregarlo a esta lista es un cambio consciente; el `delete` de la
+ * versión anterior dejaba entrar cualquier columna nueva del modelo sin que nadie
+ * lo decidiera.
+ */
+const CAMPOS_VISIBLES_PARA_NO_ADMIN = ['id', 'nombre', 'activo', 'roles', 'sucursalId', 'concesionariaId'] as const;
 
 // Saca de la respuesta lo que un usuario no debería ver:
 //  - passwordHash SIEMPRE (ningún cliente lo necesita; nunca debe salir).
-//  - comisionPorcentaje sólo para admin/super_admin: es dato de nómina, igual que
-//    el reporte /comisiones (que está gateado a admin). Sin esto, cualquier usuario
-//    autenticado podía leer el % de comisión de sus colegas por GET /usuarios.
+//  - para no-admin, TODO lo que no esté en CAMPOS_VISIBLES_PARA_NO_ADMIN. Eso
+//    incluye comisionPorcentaje (dato de nómina, igual que el reporte /comisiones
+//    que está gateado a admin) y el email (el padrón que arma el phishing).
 function sanitizeUsuario(u: any, isAdmin: boolean) {
     if (!u || typeof u !== 'object') return u;
     const { passwordHash, ...rest } = u as any;
     void passwordHash;
-    if (!isAdmin) delete (rest as any).comisionPorcentaje;
-    return rest;
-}
+    if (isAdmin) return rest;
 
-function actorEsAdmin(): boolean {
-    const roles = context.getUser()?.roles ?? [];
-    return roles.includes('admin') || roles.includes('super_admin');
+    const recortado: Record<string, unknown> = {};
+    for (const campo of CAMPOS_VISIBLES_PARA_NO_ADMIN) {
+        if (campo in rest) recortado[campo] = (rest as any)[campo];
+    }
+    return recortado;
 }
 
 const repository = new PrismaUsuarioRepository();
@@ -179,7 +201,11 @@ export class UsuarioController {
                 entidadId: uid,
                 detalle: 'Actualización de perfil propio',
             });
-            res.json(sanitizeUsuario(result, actorEsAdmin()));
+            // `true` a propósito, no `actorEsAdmin()`: el recorte de sanitizeUsuario
+            // existe para que nadie lea los datos de un COLEGA, y acá el registro es
+            // el propio. Un `lectura` que corrige su nombre tiene que recibir de
+            // vuelta su email, no una ficha con su propio mail borrado.
+            res.json(sanitizeUsuario(result, true));
         } catch (error) {
             next(error);
         }

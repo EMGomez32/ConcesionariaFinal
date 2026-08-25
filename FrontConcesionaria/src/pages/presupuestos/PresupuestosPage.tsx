@@ -82,6 +82,7 @@ import {
     ArrowRightLeft, DollarSign, Calendar, User,
     MapPin, Hash, RefreshCw, Briefcase, Calculator, ArrowRight, FileDown, MessageCircle
 } from 'lucide-react';
+import { getErrorMessage } from '../../utils/getErrorMessage';
 import { waLink } from '../../utils/whatsapp';
 
 const FORMA_PAGO_OPTIONS_CONV: { value: FormaPagoVenta; label: string }[] = [
@@ -395,8 +396,10 @@ const PresupuestosPage = () => {
             setForm(blankForm());
             load(1);
         } catch (e: unknown) {
-            const err = e as { response?: { data?: { message?: string } } };
-            addToast(err.response?.data?.message ?? 'Fallo en la validación de la cotización', 'error');
+            // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
+            // el body YA desempaquetado: leer `err.response.data.message` daba siempre
+            // undefined, y el motivo real del backend nunca llegaba a la pantalla.
+            addToast(getErrorMessage(e, 'Fallo en la validación de la cotización'), 'error');
         } finally {
             setSaving(false);
         }
@@ -420,8 +423,10 @@ const PresupuestosPage = () => {
             setEditId(null);
             load(page);
         } catch (e: unknown) {
-            const err = e as { response?: { data?: { message?: string } } };
-            addToast(err.response?.data?.message ?? 'Error al actualizar expediente', 'error');
+            // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
+            // el body YA desempaquetado: leer `err.response.data.message` daba siempre
+            // undefined, y el motivo real del backend nunca llegaba a la pantalla.
+            addToast(getErrorMessage(e, 'Error al actualizar expediente'), 'error');
         } finally {
             setSaving(false);
         }
@@ -434,8 +439,10 @@ const PresupuestosPage = () => {
             addToast(`Expediente actualizado a: ${STATUS[estado as EstadoPresupuesto]?.label.toUpperCase()}`, 'success');
             load(page);
         } catch (e: unknown) {
-            const err = e as { response?: { data?: { message?: string } } };
-            addToast(err.response?.data?.message ?? 'Fallo en la transición administrativa', 'error');
+            // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
+            // el body YA desempaquetado: leer `err.response.data.message` daba siempre
+            // undefined, y el motivo real del backend nunca llegaba a la pantalla.
+            addToast(getErrorMessage(e, 'Fallo en la transición administrativa'), 'error');
         }
     };
 
@@ -448,8 +455,10 @@ const PresupuestosPage = () => {
             setDeleteId(null);
             load(page);
         } catch (e: unknown) {
-            const err = e as { response?: { data?: { message?: string } } };
-            addToast(err.response?.data?.message ?? 'Error al anular presupuesto', 'error');
+            // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
+            // el body YA desempaquetado: leer `err.response.data.message` daba siempre
+            // undefined, y el motivo real del backend nunca llegaba a la pantalla.
+            addToast(getErrorMessage(e, 'Error al anular presupuesto'), 'error');
         }
     };
 

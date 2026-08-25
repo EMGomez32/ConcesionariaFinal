@@ -87,13 +87,18 @@ export class GetInvoiceById {
 export class RegistrarPagoInvoice {
     constructor(private readonly repository: IBillingRepository) { }
     async execute(invoiceId: number, data: any) {
-        const status = data.status ?? 'pending';
-
         // La ruta de pago de invoices es authorize('admin'): un admin paga las facturas
         // de SU concesionaria (super_admin, cualquiera). Filtro de tenant EXPLÍCITO — el
         // tx raw NO pasa por la extensión, así que el aislamiento no puede depender sólo
         // de la RLS (misma regla que RegistrarPagoCuota).
         const isSuper = context.getUser()?.roles?.includes('super_admin') || false;
+
+        // `status` NO se acepta del body de un admin. Abajo, un pago 'succeeded' que
+        // cubre el total marca la factura 'paid': dejar que el tenant se declare
+        // 'succeeded' es dejar que se dé por pagado el SaaS él solo. El admin registra
+        // el pago y queda 'pending' hasta que la plataforma (o el callback del proveedor,
+        // que corre como super_admin) lo confirme.
+        const status = isSuper ? (data.status ?? 'pending') : 'pending';
         const tenantId = context.getTenantId();
         if (!isSuper && !tenantId) throw new BaseException(401, 'Sesión sin concesionaria', 'UNAUTHORIZED');
         const tenantSql = isSuper ? Prisma.empty : Prisma.sql`AND concesionaria_id = ${tenantId}`;

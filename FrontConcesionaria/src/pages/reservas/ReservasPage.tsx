@@ -20,6 +20,7 @@ import {
     Bookmark, ChevronLeft, ChevronRight,
     Eye, XCircle, X
 } from 'lucide-react';
+import { usePermisos } from '../../hooks/usePermisos';
 
 const ESTADO_OPTS: { value: EstadoReserva; label: string }[] = [
     { value: 'activa', label: 'Activa' },
@@ -55,6 +56,10 @@ const isVencimientoProximo = (fecha: string) => {
 const ReservasPage = () => {
     const navigate = useNavigate();
     const { addToast } = useUIStore();
+    // Tomar una seña y cancelarla son las dos caras del mismo trabajo del vendedor
+    // (el cliente se arrepiente y la unidad vuelve a `publicado`), y las dos van por
+    // rutas admin+vendedor. Lo que no puede es verlas `lectura`. Ver usePermisos.ts.
+    const permisos = usePermisos();
 
     // List state
     const [reservas, setReservas] = useState<Reserva[]>([]);
@@ -184,9 +189,11 @@ const ReservasPage = () => {
                         <p className="page-subtitle">{total} reserva{total !== 1 ? 's' : ''} en total</p>
                     </div>
                 </div>
-                <Button data-tour="res-nueva" variant="primary" onClick={openModal}>
-                    <Plus size={16} style={{ marginRight: '0.5rem' }} /> Nueva Reserva
-                </Button>
+                {permisos.reservasOperar && (
+                    <Button data-tour="res-nueva" variant="primary" onClick={openModal}>
+                        <Plus size={16} style={{ marginRight: '0.5rem' }} /> Nueva Reserva
+                    </Button>
+                )}
             </div>
 
             {/* Filters */}
@@ -283,7 +290,7 @@ const ReservasPage = () => {
                                                 >
                                                     <Eye size={15} />
                                                 </button>
-                                                {r.estado === 'activa' && (
+                                                {r.estado === 'activa' && permisos.reservasOperar && (
                                                     <button
                                                         className="icon-btn danger"
                                                         title="Cancelar reserva"

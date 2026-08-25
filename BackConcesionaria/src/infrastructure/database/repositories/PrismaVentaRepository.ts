@@ -5,6 +5,7 @@ import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../security/tenantGuard';
+import { VEHICULO_PUBLICO } from '../proyecciones';
 
 export class PrismaVentaRepository implements IVentaRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Venta>> {
@@ -20,7 +21,7 @@ export class PrismaVentaRepository implements IVentaRepository {
             orderBy: { [sortBy as string]: sortOrder },
             include: {
                 cliente: true,
-                vehiculo: true,
+                vehiculo: { select: VEHICULO_PUBLICO },
                 vendedor: { select: { nombre: true, email: true } }
             }
         });
@@ -41,7 +42,7 @@ export class PrismaVentaRepository implements IVentaRepository {
             where: { id },
             include: {
                 cliente: true,
-                vehiculo: true,
+                vehiculo: { select: VEHICULO_PUBLICO },
                 extras: { where: { deletedAt: null } },
                 pagos: { where: { deletedAt: null } },
                 canjes: { where: { deletedAt: null } },
@@ -83,8 +84,14 @@ export class PrismaVentaRepository implements IVentaRepository {
         return prisma.ventaPago.create({ data: { ...data, ventaId } });
     }
 
-    async removePago(pagoId: number): Promise<void> {
-        await prisma.ventaPago.delete({ where: { id: pagoId } });
+    // `deleteMany` y no `delete`: ata el sub-recurso a SU venta. Con `delete({ where:
+    // { id } })` el :id de la venta que viaja en el path era decorativo y se podía
+    // borrar el renglón de cualquier otra venta del tenant pasando un ventaId
+    // inventado. La extensión reescribe deleteMany como updateMany de deletedAt
+    // (soft delete) y le inyecta el concesionariaId, igual que a delete.
+    async removePago(ventaId: number, pagoId: number): Promise<void> {
+        const { count } = await prisma.ventaPago.deleteMany({ where: { id: pagoId, ventaId } });
+        if (count === 0) throw new NotFoundException('Pago de la venta');
     }
 
     // Extras
@@ -96,8 +103,9 @@ export class PrismaVentaRepository implements IVentaRepository {
         return prisma.ventaExtra.create({ data: { ...data, ventaId } });
     }
 
-    async removeExtra(extraId: number): Promise<void> {
-        await prisma.ventaExtra.delete({ where: { id: extraId } });
+    async removeExtra(ventaId: number, extraId: number): Promise<void> {
+        const { count } = await prisma.ventaExtra.deleteMany({ where: { id: extraId, ventaId } });
+        if (count === 0) throw new NotFoundException('Extra de la venta');
     }
 
     // Canjes
@@ -117,8 +125,9 @@ export class PrismaVentaRepository implements IVentaRepository {
         return prisma.ventaCanjeVehiculo.create({ data: { ...data, ventaId } });
     }
 
-    async removeCanje(canjeId: number): Promise<void> {
-        await prisma.ventaCanjeVehiculo.delete({ where: { id: canjeId } });
+    async removeCanje(ventaId: number, canjeId: number): Promise<void> {
+        const { count } = await prisma.ventaCanjeVehiculo.deleteMany({ where: { id: canjeId, ventaId } });
+        if (count === 0) throw new NotFoundException('Canje de la venta');
     }
 
     private mapToEntity(v: any): Venta {

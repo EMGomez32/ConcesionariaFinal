@@ -112,7 +112,9 @@ export class PrismaVehiculoRepository implements IVehiculoRepository {
             v.archivos,
             v.moneda ?? 'ARS',
             v.vencimientoVtv ?? null,
-            v.vencimientoSeguro ?? null
+            v.vencimientoSeguro ?? null,
+            v.precioCompra ? Number(v.precioCompra) : null,
+            v.fechaCompra ?? null
         );
     }
 }

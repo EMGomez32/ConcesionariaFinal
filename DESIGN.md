@@ -147,7 +147,15 @@ Una base neutra fría iluminada por un trío de acentos neón de rol fijo; el co
 ### Status
 - **success** `#10b981` (= emerald) · **warning** `#f59e0b` · **danger** `#ef4444` · **info** `#06b6d4` (= cyan). Se usan solo por su significado.
 - danger y warning exponen canales `--danger-rgb` / `--warning-rgb` para tonales translúcidos (badges, rings, glows — mismo patrón que `--accent-rgb`), y danger un par oscuro `--danger-hover` (`#dc2626`) que cierra su gradiente, paralelo a `--accent-hover`.
+- danger suma `--danger-strong` (`#b91c1c`) para el CIERRE del gradiente del botón destructivo. Existe por contraste, no por estética: con `danger` (rojo 500) el texto blanco encima da 3.76:1 y el piso AA para 15px/600 es 4.5:1; con el par hover→strong el botón va de 4.83:1 a 6.47:1. `danger` a secas se sigue usando como COLOR DE TEXTO, donde oscurecerlo empeoraría la lectura sobre fondo oscuro.
 - El scrim de modales es `--overlay-scrim` (`rgba(15,23,42,0.75)`, tinta slate translúcida): único overlay del sistema.
+
+### Tinta sobre acento
+El acento de AUTENZA es un emerald/cyan muy luminoso en los dos temas, así que **el texto blanco encima no llega al piso de contraste**: daba 1.85:1 en oscuro y 2.54:1 en claro, contra el 4.5:1 que exige WCAG AA para los tamaños que usa la UI (botones 15px/600, tabs 13px/700 — ninguno califica como texto grande).
+
+Todo texto que vaya **sobre `--accent` o sobre `--accent-gradient`** usa `--text-on-accent` (`#04060d`), que lo lleva a entre 5.37:1 y 10.97:1 según el punto del gradiente. El gradiente de marca **no se toca**: es binding. Aplica a `.btn-primary`, `.segmented-btn.is-active`, `.icon-btn:hover` y `.skip-link`.
+
+`--text-white` queda para superficies oscuras que no son el acento (hoy: los botones destructivos, sobre el par danger-hover/danger-strong).
 
 ### Named Rules
 **The Signal-Not-Wallpaper Rule.** El neón (acentos, glows, gradiente aurora) marca significado —acción, estado, foco, una métrica que importa— y nunca decora un fondo denso de datos. Si un glow no comunica estado, sobra.

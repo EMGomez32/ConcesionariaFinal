@@ -24,6 +24,7 @@ import type { FormaPagoVenta, EstadoEntrega, Venta } from '../../types/venta.typ
 import type { ApiError } from '../../types/api.types';
 import VentaSubResources from '../../components/ventas/VentaSubResources';
 import VentaFacturaPanel from '../../components/ventas/VentaFacturaPanel';
+import { usePermisos } from '../../hooks/usePermisos';
 import { ventasApi } from '../../api/ventas.api';
 
 // ─── Tipos auxiliares ──────────────────────────────────────────────────────
@@ -55,10 +56,18 @@ const entregaStatusMap: Record<EstadoEntrega, { label: string; variant: 'warning
     cancelada: { label: 'Cancelada', variant: 'default' },
 };
 
-const entregaTransitions: Record<EstadoEntrega, { label: string; next: EstadoEntrega }[]> = {
+/**
+ * `esAnulacion` separa las dos cosas que este endpoint hace y que la UI mostraba
+ * pegadas en la misma fila: avanzar la entrega (trabajo diario de vendedor y
+ * postventa) y "Anular Operación", que manda la venta a `cancelada` — estado
+ * TERMINAL, sin transición de vuelta ni para el admin, que además no revierte el
+ * stock. El backend acota ese destino a admin dentro del controller, así que sin
+ * este flag el de postventa apretaba el botón rojo pegado al suyo y comía un 403.
+ */
+const entregaTransitions: Record<EstadoEntrega, { label: string; next: EstadoEntrega; esAnulacion?: boolean }[]> = {
     pendiente: [{ label: 'Bloquear Entrega', next: 'bloqueada' }, { label: 'Autorizar Entrega', next: 'autorizada' }],
-    bloqueada: [{ label: 'Autorizar Entrega', next: 'autorizada' }, { label: 'Anular Operación', next: 'cancelada' }],
-    autorizada: [{ label: 'Efectivizar Entrega', next: 'entregada' }, { label: 'Anular Operación', next: 'cancelada' }],
+    bloqueada: [{ label: 'Autorizar Entrega', next: 'autorizada' }, { label: 'Anular Operación', next: 'cancelada', esAnulacion: true }],
+    autorizada: [{ label: 'Efectivizar Entrega', next: 'entregada' }, { label: 'Anular Operación', next: 'cancelada', esAnulacion: true }],
     entregada: [],
     cancelada: [],
 };
@@ -125,6 +134,12 @@ const VentasPage = () => {
 
     const { data: detail, isLoading: loadingDetail } = useVenta(selectedDetailId);
 
+    // Cada control de esta pantalla espeja un authorize() del backend. Sin esto,
+    // `lectura` (el contador, el socio) veía el tacho rojo "Anular Venta" en cada
+    // fila y el vendedor confirmaba un diálogo que le prometía revertir el stock
+    // para recibir un cartel de error. Ver hooks/usePermisos.ts.
+    const permisos = usePermisos();
+
     // Catalog Queries
     const { data: clientesData } = useClientes({}, { limit: 1000 });
     const { data: vendedoresData } = useUsuarios({}, { limit: 1000 });
@@ -170,6 +185,15 @@ const VentasPage = () => {
             addToast(apiError?.message ?? 'Fallo en la validación fiscal de la venta', 'error');
         }
     };
+
+    /**
+     * Transiciones de entrega que este rol puede disparar de verdad. Avanzar la
+     * entrega es de admin/vendedor/postventa; "Anular Operación" es sólo del admin
+     * (el backend lo chequea por DESTINO, no por ruta: es el mismo PATCH).
+     */
+    const transicionesVisibles = (detail ? entregaTransitions[detail.estadoEntrega] ?? [] : []).filter(
+        (t) => (t.esAnulacion ? permisos.ventasCancelarOperacion : permisos.ventasAvanzarEntrega)
+    );
 
     const handleAddPago = () => addPago(setForm);
     const handleAddCanje = () => addCanje(setForm);
@@ -355,8 +379,12 @@ const VentasPage = () => {
                 <div className="flex justify-end gap-2">
                     <button className="icon-btn" title="Auditar Operación" onClick={(e) => { e.stopPropagation(); setSelectedDetailId(v.id); }}><Eye size={16} /></button>
                     <button className="icon-btn" title="Descargar comprobante PDF" onClick={(e) => { e.stopPropagation(); handleComprobante(v.id); }}><Printer size={16} /></button>
-                    <button className="icon-btn" title="Emitir / descargar factura AFIP" disabled={facturaEnCurso.has(v.id)} onClick={(e) => { e.stopPropagation(); handleFactura(v.id); }}><FileText size={16} /></button>
-                    <button className="icon-btn danger" onClick={e => { e.stopPropagation(); handleDelete(v.id); }} title="Anular Venta"><Trash2 size={16} /></button>
+                    {permisos.ventasOperar && (
+                        <button className="icon-btn" title="Emitir / descargar factura AFIP" disabled={facturaEnCurso.has(v.id)} onClick={(e) => { e.stopPropagation(); handleFactura(v.id); }}><FileText size={16} /></button>
+                    )}
+                    {permisos.ventasAnular && (
+                        <button className="icon-btn danger" onClick={e => { e.stopPropagation(); handleDelete(v.id); }} title="Anular Venta"><Trash2 size={16} /></button>
+                    )}
                 </div>
             )
         }
@@ -379,9 +407,11 @@ const VentasPage = () => {
                     <Button variant="secondary" onClick={() => refetchVentas()}>
                         <RefreshCw size={18} className={loadingVentas ? 'animate-spin' : ''} />
                     </Button>
-                    <Button data-tour="ventas-nueva" variant="primary" onClick={() => { setForm(emptyForm()); setCreateOpen(true); }}>
-                        <Plus size={18} /> Registrar Nueva Transacción
-                    </Button>
+                    {permisos.ventasOperar && (
+                        <Button data-tour="ventas-nueva" variant="primary" onClick={() => { setForm(emptyForm()); setCreateOpen(true); }}>
+                            <Plus size={18} /> Registrar Nueva Transacción
+                        </Button>
+                    )}
                 </div>
             </header>
 
@@ -697,11 +727,11 @@ const VentasPage = () => {
                                     <MapPin size={14} className="text-warning" /> Trazabilidad Logística
                                 </h3>
                                 <div>
-                                    {entregaTransitions[detail.estadoEntrega]?.length > 0 ? (
+                                    {transicionesVisibles.length > 0 ? (
                                         <div>
                                             <p className="text-xs text-secondary italic mb-4">Acciones de auditoría requeridas para el flujo de entrega:</p>
                                             <div className="flex flex-wrap gap-2">
-                                                {entregaTransitions[detail.estadoEntrega].map(t => (
+                                                {transicionesVisibles.map(t => (
                                                     <Button
                                                         key={t.next}
                                                         variant={t.next === 'cancelada' ? 'danger' : t.next === 'entregada' ? 'primary' : 'secondary'}

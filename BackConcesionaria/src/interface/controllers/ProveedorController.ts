@@ -7,6 +7,29 @@ import { UpdateProveedor } from '../../application/use-cases/proveedores/UpdateP
 import { DeleteProveedor } from '../../application/use-cases/proveedores/DeleteProveedor';
 import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
+import { actorEsAdmin } from '../../infrastructure/security/roles';
+
+/**
+ * La pestaña "Vehículos comprados" del detalle es el único lugar de la app donde el
+ * costo de cada unidad se lista en grilla. `GET /proveedores/:id` no tiene authorize
+ * (todo el equipo necesita ver a quién se le compra y a quién se le manda un auto al
+ * taller), así que el recorte va por rol acá, igual que `sanitizeUsuario` hace con
+ * `comisionPorcentaje`: la lista la ve todo el mundo, la columna de plata sólo admin.
+ *
+ * Es el número que el negocio existe para no mostrar: con la ficha del proveedor
+ * abierta, un perfil `lectura` (el contador externo, el socio consignatario) se
+ * llevaba la lista completa de compras con lo que se pagó por cada auto.
+ */
+function sanitizarVehiculosComprados(p: any, esAdmin: boolean) {
+    if (esAdmin || !p || typeof p !== 'object' || !Array.isArray(p.vehiculosCompra)) return p;
+    return {
+        ...p,
+        vehiculosCompra: p.vehiculosCompra.map(({ precioCompra, fechaCompra, ...resto }: any) => {
+            void precioCompra; void fechaCompra;
+            return resto;
+        }),
+    };
+}
 
 const repository = new PrismaProveedorRepository();
 const getProveedoresUC = new GetProveedores(repository);
@@ -30,7 +53,7 @@ export class ProveedorController {
         try {
             const id = parseInt(req.params.id as string, 10);
             const result = await getProveedorByIdUC.execute(id);
-            res.json(result);
+            res.json(sanitizarVehiculosComprados(result, actorEsAdmin()));
         } catch (error) {
             next(error);
         }

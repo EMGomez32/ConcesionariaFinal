@@ -5,6 +5,26 @@ import { GetIngresoVehiculoById } from '../../application/use-cases/vehiculo-ing
 import { CreateIngresoVehiculo } from '../../application/use-cases/vehiculo-ingresos/CreateIngresoVehiculo';
 import { DeleteIngresoVehiculo } from '../../application/use-cases/vehiculo-ingresos/DeleteIngresoVehiculo';
 import { audit } from '../../infrastructure/security/audit';
+import { actorTieneRol } from '../../infrastructure/security/roles';
+
+// En un ingreso `compra_proveedor`, `valorTomado` ES el precio de compra de la
+// unidad: sale del mismo campo del alta del vehículo. Dejarlo abierto convertía a
+// `GET /vehiculo-ingresos` en el reporte de rentabilidad por la ventana de atrás —
+// se cruza con el `precioVenta` de `GET /ventas` por vehiculoId y sale el margen
+// unidad por unidad, que es justo lo que `/reportes/rentabilidad` reserva a admin.
+//
+// No se cierra la ruta entera con authorize: el listado de ingresos es una consulta
+// legítima de `lectura` y de postventa (qué entró, cuándo, de quién, a qué sucursal)
+// y cerrarlo les rompe la pantalla. Se recorta el importe, igual que
+// ProveedorController hace con precioCompra y UsuarioController con comisionPorcentaje.
+// admin+vendedor porque es el mismo par que ya puede exportar el CSV de vehículos y
+// el vendedor es quien carga el valor.
+function sanitizarValorTomado<T>(ingreso: T, veElImporte: boolean): T {
+    if (veElImporte || !ingreso || typeof ingreso !== 'object') return ingreso;
+    const { valorTomado, ...resto } = ingreso as any;
+    void valorTomado;
+    return resto as T;
+}
 
 const repository = new PrismaIngresoVehiculoRepository();
 const getIngresosUC = new GetIngresosVehiculo(repository);
@@ -25,8 +45,9 @@ export class IngresoVehiculoController {
                 filters.fecha = range;
             }
 
-            const result = await getIngresosUC.execute(filters, { limit, page, sortBy, sortOrder } as any);
-            res.json(result);
+            const result: any = await getIngresosUC.execute(filters, { limit, page, sortBy, sortOrder } as any);
+            const veElImporte = actorTieneRol('admin', 'vendedor');
+            res.json({ ...result, results: (result.results ?? []).map((i: any) => sanitizarValorTomado(i, veElImporte)) });
         } catch (error) {
             next(error);
         }
@@ -36,7 +57,7 @@ export class IngresoVehiculoController {
         try {
             const id = parseInt(req.params.id as string, 10);
             const result = await getByIdUC.execute(id);
-            res.json(result);
+            res.json(sanitizarValorTomado(result, actorTieneRol('admin', 'vendedor')));
         } catch (error) {
             next(error);
         }

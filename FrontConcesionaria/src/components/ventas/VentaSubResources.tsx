@@ -4,6 +4,7 @@ import client from '../../api/client';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
+import { usePermisos } from '../../hooks/usePermisos';
 import { useUIStore } from '../../store/uiStore';
 
 type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
@@ -46,6 +47,10 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 
 const VentaSubResources = ({ ventaId }: VentaSubResourcesProps) => {
     const { addToast } = useUIStore();
+    // El acordeón de sub-recursos es donde el cobrador carga el pago y donde el
+    // vendedor corrige un extra mal tipeado — pero también donde estaban los tres
+    // tachos que el backend cerró. Ver hooks/usePermisos.ts.
+    const permisos = usePermisos();
 
     // Section open/close
     const [openPagos, setOpenPagos] = useState(true);
@@ -277,9 +282,11 @@ const VentaSubResources = ({ ventaId }: VentaSubResourcesProps) => {
                         <strong>Pagos</strong>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>({pagos.length})</span>
                     </div>
-                    <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); setShowAddPago(s => !s); setOpenPagos(true); }}>
-                        <Plus size={14} /> Agregar pago
-                    </Button>
+                    {permisos.ventasCobrar && (
+                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); setShowAddPago(s => !s); setOpenPagos(true); }}>
+                            <Plus size={14} /> Agregar pago
+                        </Button>
+                    )}
                 </div>
                 {openPagos && (
                     <div style={tableContainer}>
@@ -327,9 +334,11 @@ const VentaSubResources = ({ ventaId }: VentaSubResourcesProps) => {
                                             <td style={{ fontSize: '0.85rem' }}>{p.referencia || '-'}</td>
                                             <td style={{ fontSize: '0.85rem' }}>{p.fecha ? new Date(p.fecha).toLocaleDateString('es-AR') : '-'}</td>
                                             <td style={{ textAlign: 'right' }}>
+                                                {permisos.ventasQuitarPagoOCanje && (
                                                 <button className="icon-btn danger" onClick={() => handleDeletePago(p.id)} title="Eliminar">
                                                     <Trash2 size={14} />
                                                 </button>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}
@@ -349,9 +358,11 @@ const VentaSubResources = ({ ventaId }: VentaSubResourcesProps) => {
                         <strong>Extras</strong>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>({extras.length})</span>
                     </div>
-                    <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); setShowAddExtra(s => !s); setOpenExtras(true); }}>
-                        <Plus size={14} /> Agregar extra
-                    </Button>
+                    {permisos.ventasOperar && (
+                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); setShowAddExtra(s => !s); setOpenExtras(true); }}>
+                            <Plus size={14} /> Agregar extra
+                        </Button>
+                    )}
                 </div>
                 {openExtras && (
                     <div style={tableContainer}>
@@ -393,9 +404,11 @@ const VentaSubResources = ({ ventaId }: VentaSubResourcesProps) => {
                                             <td style={{ fontWeight: 700 }}>${Number(x.monto).toLocaleString('es-AR')}</td>
                                             <td style={{ fontSize: '0.85rem' }}>{x.comprobanteUrl ? <a href={x.comprobanteUrl} target="_blank" rel="noreferrer">Ver</a> : '-'}</td>
                                             <td style={{ textAlign: 'right' }}>
+                                                {permisos.ventasQuitarExtra && (
                                                 <button className="icon-btn danger" onClick={() => handleDeleteExtra(x.id)} title="Eliminar">
                                                     <Trash2 size={14} />
                                                 </button>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}
@@ -415,9 +428,11 @@ const VentaSubResources = ({ ventaId }: VentaSubResourcesProps) => {
                         <strong>Canjes</strong>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>({canjes.length})</span>
                     </div>
-                    <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); setShowAddCanje(s => !s); setOpenCanjes(true); }}>
-                        <Plus size={14} /> Agregar canje
-                    </Button>
+                    {permisos.ventasOperar && (
+                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); setShowAddCanje(s => !s); setOpenCanjes(true); }}>
+                            <Plus size={14} /> Agregar canje
+                        </Button>
+                    )}
                 </div>
                 {openCanjes && (
                     <div style={tableContainer}>
@@ -455,9 +470,11 @@ const VentaSubResources = ({ ventaId }: VentaSubResourcesProps) => {
                                             <td>#{c.vehiculoCanjeId}</td>
                                             <td style={{ fontWeight: 700 }}>${Number(c.valorTomado).toLocaleString('es-AR')}</td>
                                             <td style={{ textAlign: 'right' }}>
+                                                {permisos.ventasQuitarPagoOCanje && (
                                                 <button className="icon-btn danger" onClick={() => handleDeleteCanje(c.id)} title="Eliminar">
                                                     <Trash2 size={14} />
                                                 </button>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}

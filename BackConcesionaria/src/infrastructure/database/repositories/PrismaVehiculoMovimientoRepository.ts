@@ -7,6 +7,7 @@ import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../security/tenantGuard';
+import { VEHICULO_PUBLICO } from '../proyecciones';
 
 export class PrismaVehiculoMovimientoRepository implements IVehiculoMovimientoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<VehiculoMovimiento>> {
@@ -21,7 +22,7 @@ export class PrismaVehiculoMovimientoRepository implements IVehiculoMovimientoRe
             skip: (pageNum - 1) * limitNum,
             orderBy: { [sortBy as string]: sortOrder },
             include: {
-                vehiculo: true,
+                vehiculo: { select: VEHICULO_PUBLICO },
                 desdeSucursal: true,
                 hastaSucursal: true,
                 proveedorDestino: true,
@@ -44,7 +45,7 @@ export class PrismaVehiculoMovimientoRepository implements IVehiculoMovimientoRe
         const m = await prisma.vehiculoMovimiento.findUnique({
             where: { id },
             include: {
-                vehiculo: true,
+                vehiculo: { select: VEHICULO_PUBLICO },
                 desdeSucursal: true,
                 hastaSucursal: true,
                 proveedorDestino: true,
@@ -155,7 +156,7 @@ export class PrismaVehiculoMovimientoRepository implements IVehiculoMovimientoRe
             where: { id },
             data: { fechaRetorno: fecha ? new Date(fecha) : new Date() },
             include: {
-                vehiculo: true,
+                vehiculo: { select: VEHICULO_PUBLICO },
                 desdeSucursal: true,
                 hastaSucursal: true,
                 proveedorDestino: true,

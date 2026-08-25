@@ -127,7 +127,11 @@ const ClienteDetallePage = () => {
                     // El estado de cuenta es admin/vendedor: si el rol no tiene acceso
                     // (o falla), se degrada a null y la sección simplemente no aparece.
                     reportesApi.estadoCuenta(cid).catch(() => null),
-                    seguimientosApi.getByCliente(cid),
+                    // La bitácora de seguimiento pasó a ser admin/vendedor en el
+                    // backend: no es dato de ficha, es la nota libre del vendedor sobre
+                    // la negociación. Se degrada a [] como sus dos vecinas de arriba, y
+                    // la pestaña no se arma para los roles que no la pueden pedir.
+                    seguimientosApi.getByCliente(cid).catch(() => [] as Seguimiento[]),
                     // Interés en vehículos (puente CRM↔inventario). admin/vendedor: si
                     // el rol no accede, se degrada a [] y el tab queda vacío.
                     vehiculoInteresApi.getByCliente(cid).catch(() => [] as VehiculoInteres[]),
@@ -328,7 +332,7 @@ const ClienteDetallePage = () => {
         { key: 'financiaciones', label: 'Financiaciones', icon: Banknote, count: financiaciones.length },
         { key: 'solicitudes', label: 'Solicitudes', icon: FileSignature, count: solicitudes.length },
         { key: 'postventa', label: 'Postventa', icon: Wrench, count: postventaCasos.length },
-        { key: 'seguimiento', label: 'Seguimiento', icon: Clock, count: seguimientos.length },
+        ...(puedeEditar ? [{ key: 'seguimiento' as const, label: 'Seguimiento', icon: Clock, count: seguimientos.length }] : []),
         { key: 'interes', label: 'Interés', icon: Star, count: interes.length },
     ];
 

@@ -17,6 +17,8 @@ import {
     ChevronRight, Calendar, User, ShoppingBag,
     AlertCircle, CheckCircle2, Car, TrendingUp, Receipt, Calculator, MessageCircle
 } from 'lucide-react';
+import { getErrorMessage } from '../../utils/getErrorMessage';
+import { usePermisos } from '../../hooks/usePermisos';
 import { waShareLink } from '../../utils/whatsapp';
 import { formatFecha } from '../../utils/fecha';
 import { getApiErrorMessage } from '../../utils/error';
@@ -208,6 +210,11 @@ const FinanciacionesPage = () => {
     const [savingPago, setSavingPago] = useState(false);
 
     const { addToast } = useUIStore();
+    // Ésta es la pantalla donde vive el cobrador, y hasta ahora le mostraba entera
+    // la caja de herramientas del admin. "Anular Contrato" (DELETE /financiaciones/:id)
+    // es sólo del admin: era un botón muerto en la pantalla de uso diario de otro rol.
+    // Ver hooks/usePermisos.ts.
+    const permisos = usePermisos();
 
     // ── Catálogos ────────────────────────────────────────────────────────────
     const loadCatalogos = useCallback(async () => {
@@ -328,8 +335,10 @@ const FinanciacionesPage = () => {
             loadList(page);
             if (detailId === id) refreshDetail(id);
         } catch (e: unknown) {
-            const err = e as { response?: { data?: { message?: string } } };
-            addToast(err?.response?.data?.message ?? 'Fallo en la transición de estado', 'error');
+            // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
+            // el body YA desempaquetado: leer `err.response.data.message` daba siempre
+            // undefined, y el motivo real del backend nunca llegaba a la pantalla.
+            addToast(getErrorMessage(e, 'Fallo en la transición de estado'), 'error');
         }
     };
 
@@ -358,8 +367,10 @@ const FinanciacionesPage = () => {
             setForm(emptyForm());
             loadList(1);
         } catch (e: unknown) {
-            const err = e as { response?: { data?: { message?: string } } };
-            addToast(err?.response?.data?.message ?? 'Error estructural al generar plan', 'error');
+            // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
+            // el body YA desempaquetado: leer `err.response.data.message` daba siempre
+            // undefined, y el motivo real del backend nunca llegaba a la pantalla.
+            addToast(getErrorMessage(e, 'Error estructural al generar plan'), 'error');
         } finally {
             setSaving(false);
         }
@@ -374,8 +385,10 @@ const FinanciacionesPage = () => {
             setDeleteId(null);
             loadList(page);
         } catch (e: unknown) {
-            const err = e as { response?: { data?: { message?: string } } };
-            addToast(err?.response?.data?.message ?? 'Error al revocar plan', 'error');
+            // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
+            // el body YA desempaquetado: leer `err.response.data.message` daba siempre
+            // undefined, y el motivo real del backend nunca llegaba a la pantalla.
+            addToast(getErrorMessage(e, 'Error al revocar plan'), 'error');
         }
     };
 
@@ -542,9 +555,11 @@ const FinanciacionesPage = () => {
                     <Button data-tour="fin-simular" variant="secondary" onClick={openSimulador} title="Simular un plan de cuotas para mostrarle al cliente (no crea nada)">
                         <Calculator size={18} /> Simular cuotas
                     </Button>
-                    <Button data-tour="fin-nuevo" variant="primary" onClick={() => { setForm(emptyForm()); setCreateOpen(true); }}>
-                        <Plus size={18} /> Instrumentar Nuevo Plan
-                    </Button>
+                    {permisos.financiacionOperar && (
+                        <Button data-tour="fin-nuevo" variant="primary" onClick={() => { setForm(emptyForm()); setCreateOpen(true); }}>
+                            <Plus size={18} /> Instrumentar Nuevo Plan
+                        </Button>
+                    )}
                 </div>
             </header>
 
@@ -713,7 +728,9 @@ const FinanciacionesPage = () => {
                                     <td style={{ textAlign: 'right' }}>
                                         <div className="flex justify-end gap-2">
                                             <button className="icon-btn" title="Ver Expediente"><Eye size={16} /></button>
-                                            <button className="icon-btn danger" onClick={e => { e.stopPropagation(); setDeleteId(f.id); }} title="Anular Contrato"><Trash2 size={16} /></button>
+                                            {permisos.financiacionAnular && (
+                                                <button className="icon-btn danger" onClick={e => { e.stopPropagation(); setDeleteId(f.id); }} title="Anular Contrato"><Trash2 size={16} /></button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -1119,7 +1136,7 @@ const FinanciacionesPage = () => {
                             </div>
                         )}
 
-                        {(finTransitions[detail.estado as EstadoFinanciacion]?.length > 0 || puedeRefinanciarse(detail.estado)) && (
+                        {permisos.financiacionOperar && (finTransitions[detail.estado as EstadoFinanciacion]?.length > 0 || puedeRefinanciarse(detail.estado)) && (
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h4 className="text-sm font-black uppercase tracking-widest mb-1">Control de Gestión Legal</h4>
@@ -1175,7 +1192,7 @@ const FinanciacionesPage = () => {
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
                                                     <div className="flex items-center gap-2 justify-end">
-                                                        {(c.estado === 'pendiente' || c.estado === 'parcial' || c.estado === 'vencida') && (
+                                                        {permisos.financiacionCobrarCuota && (c.estado === 'pendiente' || c.estado === 'parcial' || c.estado === 'vencida') && (
                                                             <Button variant="primary" size="sm" onClick={() => openPagarCuota(c)}>
                                                                 RECAUDAR
                                                             </Button>

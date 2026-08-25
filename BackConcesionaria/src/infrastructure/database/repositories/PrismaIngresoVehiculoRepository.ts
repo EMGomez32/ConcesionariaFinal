@@ -7,6 +7,7 @@ import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../security/tenantGuard';
+import { VEHICULO_PUBLICO } from '../proyecciones';
 
 export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<IngresoVehiculo>> {
@@ -22,7 +23,7 @@ export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoReposito
             skip: (pageNum - 1) * limitNum,
             orderBy: { [sortBy as string]: sortOrder },
             include: {
-                vehiculo: true,
+                vehiculo: { select: VEHICULO_PUBLICO },
                 sucursal: true,
                 clienteOrigen: true,
                 proveedorOrigen: true,
@@ -45,7 +46,7 @@ export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoReposito
         const i = await prisma.ingresoVehiculo.findUnique({
             where: { id },
             include: {
-                vehiculo: true,
+                vehiculo: { select: VEHICULO_PUBLICO },
                 sucursal: true,
                 clienteOrigen: true,
                 proveedorOrigen: true,

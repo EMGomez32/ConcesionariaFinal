@@ -37,6 +37,15 @@
   --text-secondary: #475569;
   --text-muted: #8a93a6;
   --text-white: #ffffff;
+  /* Tinta para texto SOBRE un fondo de acento (el gradiente de marca y --accent).
+     El acento es un emerald/cyan muy luminoso en los dos temas, así que el blanco
+     encima daba 1.85:1 en oscuro y 2.54:1 en claro — el piso de WCAG AA para este
+     texto (15px/600 y 13px/700, ninguno califica como texto grande) es 4.5:1.
+     Con esta tinta va de 7.98:1 a 10.97:1 según el punto del gradiente, y el
+     gradiente de marca queda intacto, que es lo que DESIGN.md pide no tocar.
+     Se define una sola vez: el acento es luminoso en ambos temas, así que el
+     tema oscuro hereda el mismo valor a propósito. */
+  --text-on-accent: #04060d;
 
   /* Status. danger/warning llevan canales -rgb (como los acentos) para los
      tonales translúcidos de badges/rings/glows, y danger un par -hover que
@@ -46,6 +55,13 @@
   --warning-rgb: 245, 158, 11;
   --danger: #ef4444;
   --danger-hover: #dc2626;
+  /* Rojo profundo para el CIERRE del gradiente de una acción destructiva. Existe
+     por contraste: con --danger (rojo 500) el texto blanco encima daba 3.76:1 y
+     el piso de WCAG AA para 15px/600 es 4.5:1. Con este par el botón va de
+     4.83:1 a 6.47:1 sin invertir la tinta, que en una acción destructiva sería
+     ir contra la convención. No reemplaza a --danger: ese se sigue usando como
+     COLOR DE TEXTO, donde oscurecerlo empeoraría la lectura sobre fondo oscuro. */
+  --danger-strong: #b91c1c;
   --danger-rgb: 239, 68, 68;
   --info: #06b6d4;
 
@@ -462,7 +478,7 @@ button {
 
 .btn-primary {
   background: var(--accent-gradient);
-  color: var(--text-white);
+  color: var(--text-on-accent);
   box-shadow: 0 6px 20px -8px rgba(var(--accent-rgb), 0.55);
   position: relative;
   overflow: hidden;
@@ -510,7 +526,11 @@ button {
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, var(--danger) 0%, var(--danger-hover) 100%);
+  /* Un paso más oscuro que --danger: con el rojo 500 el blanco daba 3.76:1.
+     Se corre el fondo en vez de invertir la tinta porque blanco-sobre-rojo es
+     la convención universal de una acción destructiva, y --danger no se toca
+     porque también se usa como COLOR DE TEXTO (ahí oscurecerlo sería peor). */
+  background: linear-gradient(135deg, var(--danger-hover) 0%, var(--danger-strong) 100%);
   color: var(--text-white);
   box-shadow: 0 6px 20px -8px rgba(var(--danger-rgb), 0.45);
 }
@@ -643,7 +663,7 @@ button {
 
 .segmented-btn.is-active {
   background: var(--accent-gradient);
-  color: var(--text-white);
+  color: var(--text-on-accent);
   box-shadow: 0 6px 20px -8px rgba(var(--accent-rgb), 0.55);
 }
 
@@ -1580,13 +1600,14 @@ button {
 
 .icon-btn:hover {
   background: var(--accent);
-  color: var(--text-white);
+  color: var(--text-on-accent);
   border-color: var(--accent);
   transform: rotate(90deg) scale(1.1);
 }
 
 .icon-btn.danger:hover {
-  background: var(--danger);
+  /* Ver .btn-danger: el rojo 500 con blanco encima no llega a 4.5:1. */
+  background: var(--danger-hover);
   color: var(--text-white);
   border-color: var(--danger);
 }
@@ -1682,7 +1703,7 @@ html {
   z-index: 10000;
   padding: 0.625rem 1rem;
   background: var(--accent);
-  color: var(--text-white);
+  color: var(--text-on-accent);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: 600;

@@ -549,13 +549,15 @@ const CapacitacionPage = () => {
                                             ))}
                                         </ul>
                                         {/*
-                                          * Decía "No es una recomendación: el sistema lo bloquea",
-                                          * y salía igual bajo los seis roles. Era falso como
-                                          * garantía general: las pantallas de operación (ventas,
-                                          * reservas, financiaciones, ingresos, movimientos) no
-                                          * tienen candado por rol, y la propia página lo admite dos
-                                          * secciones después. Ahora nombra las familias de límite
-                                          * que el servidor sí aplica y manda a leer el resto.
+                                          * Esta nota ya pasó por dos versiones. La primera decía
+                                          * "el sistema lo bloquea" y era falsa: las pantallas de
+                                          * operación no tenían candado por rol. La segunda lo
+                                          * admitía y mandaba a la sección 06. Ahora el candado
+                                          * existe en todas, así que vuelve a afirmarlo — y agrega
+                                          * lo que separa a este producto: registrar y anular no
+                                          * son el mismo permiso. El link a la sección 06 se
+                                          * mantiene porque allá queda un límite real: los perfiles
+                                          * son cinco y cerrados, no se arman a medida.
                                           *
                                           * El super_admin lleva su propia nota: lo suyo no es un
                                           * candado sino dónde arranca su sesión (un redirect del
@@ -570,10 +572,12 @@ const CapacitacionPage = () => {
                                             </p>
                                         ) : (
                                             <p className="cap-nopuede-nota">
-                                                Los límites de plata, las bandejas de atención, las bajas y la
-                                                administración los aplica el servidor, no sólo la pantalla. En las
-                                                pantallas de operación del día a día el límite todavía lo pone el
-                                                menú: está dicho en{' '}
+                                                No es una recomendación: estos límites los aplica el servidor, y la
+                                                pantalla acompaña — el botón que tu perfil no puede usar no te
+                                                aparece. Vale también para las de operación del día a día, y anular
+                                                no es lo mismo que registrar: dar de baja una venta o una
+                                                financiación es del administrador. Lo que sí sigue fijo son los
+                                                perfiles: está dicho en{' '}
                                                 <a className="cap-link-plano" href="#estado">En qué estado está</a>.
                                             </p>
                                         )}

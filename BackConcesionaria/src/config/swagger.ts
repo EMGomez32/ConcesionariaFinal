@@ -154,6 +154,7 @@ const options: swaggerJsdoc.Options = {
             { name: 'Postventa', description: 'Casos de postventa e ítems' },
             { name: 'Auditoría', description: 'Log de auditoría + export CSV' },
             { name: 'Billing', description: 'Planes SaaS, suscripciones, facturas, pagos' },
+            { name: 'Bandeja', description: 'Bandeja multi-canal: WhatsApp, DM de Instagram y Messenger, comentarios de Instagram y Facebook' },
         ],
     },
     apis: [

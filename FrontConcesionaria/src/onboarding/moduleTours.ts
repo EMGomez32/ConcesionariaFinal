@@ -9,6 +9,14 @@ import type { DriveStep } from 'driver.js';
  * `useTour` descarta los pasos cuyo elemento no está visible (ocultos por rol, mobile),
  * así que un paso con ancla ausente simplemente no aparece.
  *
+ * OJO: esa suposición ("ocultos por rol") es la que hace que este archivo NO necesite
+ * saber de roles, y durante un tiempo no se cumplió — Ventas, Reservas y Financiaciones
+ * mostraban el botón de alta a todos, así que el tour auto-arrancaba y le señalaba a
+ * `lectura` un "Registra la operación" que terminaba en un error. Hoy esas páginas
+ * esconden el control por rol (hooks/usePermisos.ts) y el filtro vuelve a alcanzar. Si
+ * alguna vez se decide mostrar un botón deshabilitado en vez de esconderlo, el paso
+ * correspondiente hay que filtrarlo ACÁ, porque un botón disabled sigue siendo visible.
+ *
  * Nota: en Financiaciones, RECAUDAR/REFINANCIAR viven dentro del modal de detalle, así
  * que el tour de la LISTA los explica desde el paso de la tabla (no se anclan directo).
  */

@@ -31,7 +31,15 @@ export const apiLimiter = rateLimit({
 
 // Limiter propio de los webhooks públicos: mucho más holgado que el global
 // (Meta reintenta en ráfagas ante fallas) pero con techo contra abuso, ya que
-// la ruta no pide JWT (la protege la firma HMAC).
+// las rutas no piden JWT.
+//
+// OJO con generalizar "las protege la firma": vale SÓLO para Meta, que firma el
+// body con HMAC (X-Hub-Signature-256 → validarFirmaMeta → 403). Mercado Libre NO
+// firma nada; ahí el filtro por `application_id` es descarte de ruido, no
+// autenticación (el client_id viaja en la URL de OAuth, no es secreto). Para el
+// webhook de ML, este limiter ES una de las defensas reales, junto con que el
+// handler sólo procesa recursos de cuentas ya vinculadas y descarta toda pregunta
+// cuyo seller_id no sea el de la cuenta.
 export const webhookLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 1200,

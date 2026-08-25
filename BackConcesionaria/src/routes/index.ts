@@ -143,7 +143,18 @@ router.use('/metas', metaVentaRoutes);
 // nivel de montaje: el gating es por-ruta dentro del router (ojo al agregar rutas).
 router.use('/objetivos-vendedor', objetivoVendedorRoutes);
 
-// SaaS Billing — módulo de facturación/suscripción: solo admin.
-router.use('/billing', authorize('admin'), billingRoutes);
+// SaaS Billing — facturación del contrato con la concesionaria. SIN authorize a
+// nivel de montaje: el gating es POR RUTA dentro del router, porque acá conviven
+// dos audiencias que no son la misma. `super_admin` (la plataforma) define planes,
+// asigna suscripciones y emite facturas; `admin` (el dueño de una concesionaria)
+// sólo mira su plan, su suscripción y sus facturas, y registra que las pagó.
+//
+// El guard de montaje era `authorize('admin')` y quedaba MÁS FLOJO que el contrato
+// que el propio billing.routes.ts documentaba ("super_admin only" en tres rutas).
+// Como `Plan` es un modelo GLOBAL (no lleva concesionariaId, la extensión de Prisma
+// no lo filtra ni lo envuelve en la transacción con app.tenant_id), un admin de
+// cualquier tenant podía reescribir el catálogo de planes de TODOS. Ver el
+// encabezado de billing.routes.ts.
+router.use('/billing', billingRoutes);
 
 export default router;
