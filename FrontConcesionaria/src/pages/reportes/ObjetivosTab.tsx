@@ -53,7 +53,22 @@ const ProgressCell = ({
                 <span className="text-xs font-bold" style={{ color }}>{p}%</span>
             </div>
             <div style={{ height: '8px', width: '100%', background: 'color-mix(in srgb, var(--text-primary) 10%, transparent)', borderRadius: '999px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${shown}%`, background: color, borderRadius: '999px', transition: 'width .3s' }} />
+                {/* La barra se llena con scaleX y no con width: hay una por vendedor,
+                    y animar width obliga al navegador a recalcular el layout de toda
+                    la fila en cada frame. transform va por el compositor y no toca
+                    layout. El radio se achata horizontalmente con la escala, pero a
+                    8px de alto el radio efectivo es 4px: no se nota. */}
+                <div
+                    style={{
+                        height: '100%',
+                        width: '100%',
+                        background: color,
+                        borderRadius: '999px',
+                        transform: `scaleX(${shown / 100})`,
+                        transformOrigin: 'left center',
+                        transition: 'transform .3s',
+                    }}
+                />
             </div>
         </div>
     );

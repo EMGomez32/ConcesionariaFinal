@@ -1,18 +1,28 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import AppLayout from './components/layout/AppLayout';
-import ProtectedRoute from './components/layout/ProtectedRoute';
-import RequireRole from './components/auth/RequireRole';
-import RedirectSuperAdmin from './components/auth/RedirectSuperAdmin';
 import PageLoader from './components/ui/PageLoader';
 import { PLATAFORMA_NAV } from './config/plataformaNav';
 
-// Login: eager (es la entrada antes de auth)
-import LoginPage from './pages/auth/LoginPage';
-import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
-import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+/*
+ * El shell autenticado también va lazy. Antes era eager con el argumento de que
+ * el login es "la entrada", y eso dejó de ser cierto: /capacitacion es pública y
+ * se le manda por WhatsApp a alguien que todavía no tiene usuario. Con los
+ * imports eager, esa visita bajaba el layout, el sidebar, el buscador y axios
+ * dentro del chunk de entrada para leer un documento estático. Todos estos
+ * componentes se usan como `element` de un <Route>, o sea dentro del <Suspense>
+ * de abajo, así que el lazy no necesita ningún fallback extra.
+ */
+const AppLayout = lazy(() => import('./components/layout/AppLayout'));
+const ProtectedRoute = lazy(() => import('./components/layout/ProtectedRoute'));
+const RequireRole = lazy(() => import('./components/auth/RequireRole'));
+const RedirectSuperAdmin = lazy(() => import('./components/auth/RedirectSuperAdmin'));
+
+const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
 
 // Resto de pages: lazy — un chunk por feature
+const CapacitacionPage = lazy(() => import('./pages/capacitacion/CapacitacionPage'));
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'));
 const VehiculosPage = lazy(() => import('./pages/vehiculos/VehiculosPage'));
 const VehiculoFormPage = lazy(() => import('./pages/vehiculos/VehiculoFormPage'));
@@ -56,6 +66,13 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+          {/* Capacitación: PÚBLICA a propósito, sin ProtectedRoute. Se le manda el
+              link por WhatsApp a un dueño de concesionaria que todavía no es
+              cliente y no tiene usuario: si pidiera login, no la vería nadie.
+              No consume la API — todo su contenido es estático. Va acá arriba
+              porque el catch-all <Route path="*"> redirige a "/" y la comería. */}
+          <Route path="/capacitacion" element={<CapacitacionPage />} />
 
           <Route element={<ProtectedRoute />}>
             {/* Panel de PLATAFORMA (super_admin): front separado con su propio
