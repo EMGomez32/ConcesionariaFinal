@@ -280,6 +280,13 @@ export interface CrearLeadResultado {
      * simulado se convierte en un dato permanente.
      */
     simulada?: boolean;
+    /**
+     * La pregunta era simulada y el teléfono o el mail que se cargó a mano
+     * matcheó con un cliente REAL del CRM. Esa ficha no se rotula (es de verdad)
+     * y tampoco se le tocó nada: la ingesta sólo le anotó la consulta, rotulada,
+     * en observaciones. El aviso lo dice en vez de anunciar un alta que no pasó.
+     */
+    sobreFichaReal?: boolean;
 }
 
 export const mercadolibreApi = {

@@ -11,7 +11,8 @@ import { assertMismoTenant } from '../../infrastructure/security/tenantGuard';
  * Reglas:
  *  - Dedupe por teléfono o email dentro del tenant: una consulta repetida NO
  *    crea otro cliente; reabre el lead si estaba ganado/perdido y anota la
- *    consulta en observaciones.
+ *    consulta en observaciones. EXCEPCIÓN: una consulta `simulada` que cae sobre
+ *    una ficha real sólo anota la línea (ver `sobreFichaReal`).
  *  - Asignación round-robin real: el vendedor activo con menos leads en
  *    'nuevo' (empate → menor id), salvo que venga vendedorId explícito.
  *  - NO crea ClienteSeguimiento: el "tiempo a primer contacto" del reporte de
@@ -31,10 +32,12 @@ export interface ConsultaEntrante {
     /** Vendedor elegido a mano; si falta se asigna por round-robin. */
     vendedorId?: number | null;
     /**
-     * La consulta la fabricó el sistema (modo demostración de Mercado Libre), no
-     * un interesado real. Marca la ficha y la línea de observaciones: el lead
-     * queda en el CRM —y sobrevive a apagar la demostración— así que tiene que
-     * poder distinguirse de una consulta de verdad en cualquier pantalla.
+     * La consulta la fabricó el sistema (modo demostración de Mercado Libre o de
+     * los canales de Meta), no un interesado real. Marca la ficha y la línea de
+     * observaciones: el lead queda en el CRM —y sobrevive a apagar la
+     * demostración— así que tiene que poder distinguirse de una consulta de
+     * verdad en cualquier pantalla. Y gobierna la rama de dedupe: sobre una
+     * ficha REAL preexistente lo simulado no escribe nada más que esa línea.
      */
     simulada?: boolean;
 }
@@ -44,6 +47,14 @@ export interface ResultadoIngesta {
     creado: boolean;
     reabierto: boolean;
     vendedorAsignadoId: number | null;
+    /**
+     * La consulta era SIMULADA y el dedupe la hizo caer sobre una ficha que NO
+     * nació de la simulación (un cliente de verdad con ese teléfono o ese mail).
+     * Ahí la ingesta sólo anota la línea de observaciones y no le toca nada más:
+     * el flag sube para que el aviso de la pantalla lo diga en vez de anunciar
+     * un alta que no pasó.
+     */
+    sobreFichaReal: boolean;
 }
 
 /**
@@ -95,6 +106,32 @@ export async function buscarClientePorContacto(telefono?: string | null, email?:
     return prisma.cliente.findFirst({ where: { OR: or }, orderBy: { id: 'asc' } });
 }
 
+/**
+ * Dedupe de las consultas SIMULADAS que no traen ni teléfono ni email.
+ *
+ * POR QUÉ: un hilo simulado (o una pregunta simulada de Mercado Libre) no tiene
+ * ninguno de los dos, así que `buscarClientePorContacto` no puede matchear y
+ * cada corrida de la demostración dejaba OTRA ficha idéntica en el CRM —
+ * "Ariel Sosa (DEMO)" cinco veces a la quinta demostración—. Los clientes no se
+ * borran al salir del modo demostración (pueden ser una ficha real que la
+ * ingesta actualizó), así que la acumulación hay que evitarla acá, no limpiarla
+ * después.
+ *
+ * El match es DELIBERADAMENTE angosto: sólo contra fichas ya marcadas
+ * `origenSimulado` y sin contacto cargado, que es exactamente la ficha que deja
+ * una demostración anterior. Nunca puede caer sobre un cliente real —esos no
+ * tienen `origenSimulado`— ni sobre uno al que el vendedor le cargó el teléfono
+ * a mano (ese lo levanta el dedupe normal, por teléfono).
+ */
+async function buscarFichaSimuladaSinContacto(nombre: string) {
+    const limpio = nombre.trim();
+    if (!limpio) return null;
+    return prisma.cliente.findFirst({
+        where: { origenSimulado: true, telefono: null, email: null, nombre: limpio },
+        orderBy: { id: 'asc' },
+    });
+}
+
 const lineaConsulta = (c: ConsultaEntrante): string => {
     const fecha = new Date().toISOString().slice(0, 10);
     const texto = (c.texto ?? '').trim().slice(0, 600);
@@ -122,24 +159,47 @@ export async function ingestarConsulta(consulta: ConsultaEntrante): Promise<Resu
     await assertMismoTenant('usuario', consulta.vendedorId, context.getTenantId() ?? null);
 
     // Dedupe: mismo teléfono o email en el tenant (la extensión filtra tenant).
-    const existente = await buscarClientePorContacto(telefono, email);
+    // Si la consulta es SIMULADA y no trae contacto, el segundo escalón la ata a
+    // la ficha que dejó la demostración anterior en vez de crear otra igual.
+    const existente = await buscarClientePorContacto(telefono, email)
+        ?? (consulta.simulada === true ? await buscarFichaSimuladaSinContacto(consulta.nombre) : null);
 
     if (existente) {
-        const reabierto = existente.estadoLead === 'ganado' || existente.estadoLead === 'perdido';
-        const vendedorAsignadoId = existente.vendedorAsignadoId
-            ?? consulta.vendedorId
-            ?? await elegirVendedorRoundRobin();
+        // Una consulta SIMULADA que cae sobre una ficha REAL (el operador cargó
+        // un teléfono que ya estaba en el CRM) NO puede escribirle nada al
+        // cliente salvo la línea de observaciones, que ya viene rotulada:
+        //  - `origenLead` le dejaría escrito para siempre "instagram" a alguien
+        //    que nunca escribió por Instagram, y la ficha NO lleva chip de
+        //    simulación (`origenSimulado` es del cliente, y este es real), así
+        //    que ese origen inventado sale en el reporte de consultas como un
+        //    lead entrante de un canal que no existió.
+        //  - `estadoLead` lo sacaría de 'ganado'/'perdido' y lo devolvería a
+        //    'nuevo': el embudo y la señal de "consultas sin atender" del
+        //    dashboard —dos números que se le muestran al comprador— se mueven
+        //    por una charla que no tuvo nadie.
+        // Con `origenSimulado` la ficha ya es parte de la demostración y se
+        // actualiza como siempre.
+        const sobreFichaReal = consulta.simulada === true && existente.origenSimulado !== true;
+        const reabierto = !sobreFichaReal
+            && (existente.estadoLead === 'ganado' || existente.estadoLead === 'perdido');
+        const vendedorAsignadoId = sobreFichaReal
+            ? existente.vendedorAsignadoId
+            : (existente.vendedorAsignadoId ?? consulta.vendedorId ?? await elegirVendedorRoundRobin());
         await prisma.cliente.update({
             where: { id: existente.id },
             data: {
                 estadoLead: reabierto ? 'nuevo' : existente.estadoLead,
-                origenLead: existente.origenLead ?? consulta.origen,
+                origenLead: sobreFichaReal ? existente.origenLead : (existente.origenLead ?? consulta.origen),
                 vendedorAsignadoId,
                 observaciones: [existente.observaciones, lineaConsulta(consulta)].filter(Boolean).join('\n'),
             },
         });
-        if (consulta.vehiculoId) await upsertInteres(existente.id, consulta.vehiculoId, consulta.texto);
-        return { clienteId: existente.id, creado: false, reabierto, vendedorAsignadoId };
+        // El interés por un vehículo tampoco: sería una ficha real "interesada"
+        // en un auto por el que nunca preguntó.
+        if (consulta.vehiculoId && !sobreFichaReal) {
+            await upsertInteres(existente.id, consulta.vehiculoId, consulta.texto);
+        }
+        return { clienteId: existente.id, creado: false, reabierto, vendedorAsignadoId, sobreFichaReal };
     }
 
     const vendedorAsignadoId = consulta.vendedorId ?? await elegirVendedorRoundRobin();
@@ -156,12 +216,13 @@ export async function ingestarConsulta(consulta: ConsultaEntrante): Promise<Resu
             // La marca va SÓLO en la ficha nueva. En la rama de dedupe de arriba
             // el cliente puede ser uno REAL preexistente (el operador cargó un
             // teléfono ya conocido): rotularlo de simulado sería el error
-            // inverso, así que ahí el rastro queda en las observaciones.
+            // inverso, así que ahí el rastro queda en las observaciones — y por
+            // lo mismo esa rama no le escribe NADA más (`sobreFichaReal`).
             origenSimulado: consulta.simulada === true,
         } as never,
     });
     if (consulta.vehiculoId) await upsertInteres(creado.id, consulta.vehiculoId, consulta.texto);
-    return { clienteId: creado.id, creado: true, reabierto: false, vendedorAsignadoId };
+    return { clienteId: creado.id, creado: true, reabierto: false, vendedorAsignadoId, sobreFichaReal: false };
 }
 
 async function upsertInteres(clienteId: number, vehiculoId: number, texto?: string | null): Promise<void> {

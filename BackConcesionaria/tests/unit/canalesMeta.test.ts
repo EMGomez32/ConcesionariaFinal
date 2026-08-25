@@ -85,6 +85,25 @@ describe('estadoCanalesMeta', () => {
         expect(habilitados({ ...LEGADO, pageId: '   ' })).toEqual(['leadgen']);
     });
 
+    it('en demostración quedan los CUATRO canales de conversación, sin un solo token', () => {
+        // Una integración simulada no tiene credenciales que cargar (nada sale a
+        // la red): si acá dijera "falta el token", el composer de la bandeja
+        // quedaría bloqueado y no habría nada que demostrar.
+        expect(estadoCanalesMeta({}, 'demo').filter((c) => c.habilitado).map((c) => c.canal))
+            .toEqual(['messenger', 'facebook_comentario', 'instagram', 'instagram_comentario']);
+    });
+
+    it('en demostración Lead Ads NO se da por listo: la demo no lo simula', () => {
+        // El error inverso al que evita todo el módulo: rotular como disponible
+        // un canal que la demostración no puede mostrar. No hay lead de ejemplo
+        // ni desvío simulado para los formularios de campaña.
+        const leadgen = estadoCanalesMeta({}, 'demo').find((c) => c.canal === 'leadgen');
+        expect(leadgen?.habilitado).toBe(false);
+        expect(leadgen?.falta).toMatch(/no simula/i);
+        // Y tampoco le pide al admin trámites en Meta para un canal simulado.
+        expect(leadgen?.enMeta).toMatch(/FUERA de la demostración/i);
+    });
+
     it('tolera un config nulo o basura sin explotar (viene de un Json de Prisma)', () => {
         expect(habilitados(null as unknown as ConfigMeta)).toEqual([]);
         expect(habilitados(undefined as unknown as ConfigMeta)).toEqual([]);
@@ -123,6 +142,20 @@ describe('canalMetaHabilitado', () => {
 
     it('un canal desconocido es false, no una excepción', () => {
         expect(canalMetaHabilitado(LEGADO, 'telepatia' as CanalMeta)).toBe(false);
+    });
+
+    it('en demostración vale para los canales de conversación y no para Lead Ads', () => {
+        // Mismo corte que estadoCanalesMeta: la regla vive en un solo lugar.
+        expect(canalMetaHabilitado({}, 'instagram', 'demo')).toBe(true);
+        expect(canalMetaHabilitado({}, 'messenger', 'demo')).toBe(true);
+        expect(canalMetaHabilitado({}, 'instagram_comentario', 'demo')).toBe(true);
+        expect(canalMetaHabilitado({}, 'facebook_comentario', 'demo')).toBe(true);
+        expect(canalMetaHabilitado({}, 'leadgen', 'demo')).toBe(false);
+    });
+
+    it('el default sigue siendo real: quien llama con un solo argumento no cambia', () => {
+        expect(canalMetaHabilitado({}, 'instagram')).toBe(false);
+        expect(canalMetaHabilitado(LEGADO, 'leadgen')).toBe(true);
     });
 });
 

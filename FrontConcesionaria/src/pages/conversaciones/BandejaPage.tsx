@@ -19,10 +19,12 @@ import {
     AlertTriangle,
     Lock,
     RotateCcw,
+    FlaskConical,
     type LucideIcon,
 } from 'lucide-react';
 import {
     conversacionesApi,
+    esHiloSimulado,
     type CanalConversacion,
     type ConversacionDetalle,
     type ConversacionFilter,
@@ -382,12 +384,25 @@ const BandejaPage = () => {
             conversacionesApi.registrarConsulta(id, datos),
         onSuccess: (res, vars) => {
             const conTelefono = !!(vars.datos.telefono?.trim() || hilo?.telefono);
+            // El backend confirma con `simulada` que la ficha quedó rotulada; si
+            // no lo manda, se cae en lo que ya sabe la pantalla sobre el hilo.
+            const simulada = res.simulada === true || esHiloSimulado(hilo);
             addToast(
-                !res.creado
-                    ? 'Consulta registrada sobre un cliente que ya existía'
-                    : conTelefono
-                        ? 'Consulta registrada: se creó el cliente y quedó vinculado al chat'
-                        : 'Consulta registrada: el cliente quedó SIN teléfono. Completá el contacto en su ficha.',
+                simulada
+                    ? (res.creado
+                        ? 'Consulta registrada desde una conversación simulada: el cliente queda en Clientes con el rótulo SIMULACIÓN y fuera de los reportes. No se borra al apagar la demostración.'
+                        // El teléfono cargado a mano matcheó con una ficha REAL del
+                        // CRM. No se le tocó nada —ni el origen ni el estado del
+                        // lead—: decirlo es la diferencia entre un aviso y una
+                        // sorpresa cuando alguien mire esa ficha la semana que viene.
+                        : res.sobreFichaReal === true
+                            ? 'Ese teléfono ya era de un cliente REAL del CRM. Como la conversación era simulada, sólo se le anotó la consulta (rotulada) en observaciones: no se le cambió el origen ni se le reabrió el lead.'
+                            : 'Consulta registrada sobre un cliente que ya existía. Ojo: la conversación era simulada, no la hizo nadie.')
+                    : !res.creado
+                        ? 'Consulta registrada sobre un cliente que ya existía'
+                        : conTelefono
+                            ? 'Consulta registrada: se creó el cliente y quedó vinculado al chat'
+                            : 'Consulta registrada: el cliente quedó SIN teléfono. Completá el contacto en su ficha.',
                 'success',
             );
             setAltaAbierta(false);
@@ -413,6 +428,14 @@ const BandejaPage = () => {
     const canalDelHilo = hilo?.canal ?? filaSeleccionada?.canal ?? null;
     const metaHilo = canalMeta(canalDelHilo);
     const IconoHilo = metaHilo.icono;
+
+    // ¿Este hilo lo fabricó el modo demostración de Meta? Se mira el DETALLE y
+    // TAMBIÉN la fila de la lista, por el mismo motivo que el canal: mientras el
+    // detalle está en vuelo —en cada cambio de hilo— `hilo` es undefined, y el
+    // rótulo no puede desaparecer justo en ese momento. Alcanza con que uno de
+    // los dos lo diga: rotular de más cuesta un chip, rotular de menos hace
+    // pasar por comprador real a alguien que no existe.
+    const hiloSimulado = esHiloSimulado(hilo) || esHiloSimulado(filaSeleccionada);
 
     // Sólo bloqueamos el envío cuando SABEMOS que el número está caído. Sin la
     // lista de cuentas (vendedor) se deja encolar: el worker despacha cuando vuelva.
@@ -509,15 +532,27 @@ const BandejaPage = () => {
     // y el toast lo anunciaba como un alta limpia. Ahora se le piden los datos a
     // quien los tiene delante: el vendedor que está leyendo la charla.
     const faltanDatosDelContacto = !!hilo && !hilo.nombreContacto && !hilo.telefono;
+    // El panel también se abre en los hilos SIMULADOS aunque traigan nombre.
+    // Registrar la consulta es el único paso del circuito por el que algo
+    // fabricado se convierte en un dato permanente del CRM —el cliente sobrevive
+    // a apagar la demostración—, así que no puede pasar de un click sin que la
+    // pantalla lo diga. Ahí los campos son opcionales: es una confirmación
+    // rotulada, no una carga de datos.
+    const altaPideConfirmacion = !!hilo && (faltanDatosDelContacto || hiloSimulado);
     const registrarDirecto = () => {
         if (!hilo) return;
         registrar.mutate({ id: hilo.id, datos: {} });
     };
     const confirmarAltaManual = () => {
         if (!hilo) return;
+        const nombre = nombreConsulta.trim();
+        const telefono = telefonoConsulta.trim();
         registrar.mutate({
             id: hilo.id,
-            datos: { nombre: nombreConsulta.trim(), telefono: telefonoConsulta.trim() },
+            // Sólo lo que se completó: un '' explícito pisaría el nombre que el
+            // hilo ya trae, y en un hilo simulado el panel es una confirmación
+            // donde dejar los campos vacíos es lo normal.
+            datos: { ...(nombre ? { nombre } : {}), ...(telefono ? { telefono } : {}) },
         });
     };
 
@@ -660,6 +695,18 @@ const BandejaPage = () => {
                                             <span className="truncate">{c.ultimoMensaje || 'Sin mensajes todavía'}</span>
                                         </span>
                                         <span className="bandeja-item-badges">
+                                            {/* PRIMERO, antes del canal: es lo que cambia el
+                                                significado de toda la fila. Un vendedor que
+                                                lee la lista de reojo tiene que ver que ahí no
+                                                hay un cliente esperando respuesta. */}
+                                            {esHiloSimulado(c) && (
+                                                <Badge
+                                                    variant="warning"
+                                                    title="Conversación simulada: la generó el modo demostración. No hay nadie del otro lado y nada de lo que respondas sale a Meta."
+                                                >
+                                                    <FlaskConical size={11} aria-hidden="true" /> SIMULACIÓN
+                                                </Badge>
+                                            )}
                                             <Badge variant={m.variant} title={`Entró por ${m.largo}`}>
                                                 {m.label}
                                             </Badge>
@@ -734,6 +781,18 @@ const BandejaPage = () => {
                                             entró el hilo — que es el dato que lo identifica cuando no
                                             hay número (un DM de Instagram, un comentario). */}
                                         <div className="bandeja-hilo-tel">
+                                            {/* Va PRIMERO y fuera del gate del canal: en el celular la
+                                                lista se oculta al abrir el hilo, así que la cabecera es
+                                                la única señal que queda, y este rótulo tiene que estar
+                                                aunque el canal todavía no se sepa. */}
+                                            {hiloSimulado && (
+                                                <Badge
+                                                    variant="warning"
+                                                    title="Conversación simulada: la generó el modo demostración. No hay nadie del otro lado y nada de lo que respondas sale a Meta."
+                                                >
+                                                    <FlaskConical size={11} aria-hidden="true" /> SIMULACIÓN
+                                                </Badge>
+                                            )}
                                             {/* Gateado por el CANAL y no por `hilo`: en el celular la
                                                 lista se oculta al abrir un hilo, así que este badge es la
                                                 ÚNICA señal de por dónde entró la charla. Esperar al
@@ -765,8 +824,10 @@ const BandejaPage = () => {
                                             loading={registrar.isPending}
                                             title={faltanDatosDelContacto
                                                 ? 'Este chat no tiene nombre ni teléfono: hay que completarlos para dar de alta al cliente'
-                                                : 'Da de alta el contacto como consulta y lo vincula a este chat'}
-                                            onClick={() => (faltanDatosDelContacto
+                                                : hiloSimulado
+                                                    ? 'La conversación es simulada: el cliente queda en el CRM rotulado como SIMULACIÓN y NO se borra al apagar la demostración'
+                                                    : 'Da de alta el contacto como consulta y lo vincula a este chat'}
+                                            onClick={() => (altaPideConfirmacion
                                                 ? setAltaAbierta((v) => !v)
                                                 : registrarDirecto())}
                                         >
@@ -862,18 +923,46 @@ const BandejaPage = () => {
                                 )}
                             </div>
 
-                            {/* Alta manual del contacto: sólo cuando el hilo no tiene ni nombre
-                                ni teléfono. Se pide ACÁ y no después, en la ficha, porque el
-                                único que sabe cómo se llama esa persona es el vendedor que
-                                está leyendo la charla. */}
-                            {altaAbierta && faltanDatosDelContacto && (
+                            {/* Alta del contacto. Aparece en dos casos: cuando al hilo le
+                                faltan nombre y teléfono —se piden ACÁ y no después, en la
+                                ficha, porque el único que sabe cómo se llama esa persona es
+                                el vendedor que está leyendo la charla— y cuando el hilo es
+                                SIMULADO, donde los campos son opcionales y el panel existe
+                                para que el rótulo se lea antes de crear la ficha. */}
+                            {altaAbierta && altaPideConfirmacion && (
                                 <form
                                     className="bandeja-alta"
                                     onSubmit={(e) => { e.preventDefault(); confirmarAltaManual(); }}
                                 >
+                                    {/* El rótulo va DENTRO del panel: acá es donde algo simulado
+                                        pasa a ser una ficha del CRM, y el chip de la cabecera
+                                        queda arriba, fuera del foco de quien está completando. */}
+                                    {hiloSimulado && (
+                                        <p className="bandeja-alta-sim">
+                                            <FlaskConical size={13} aria-hidden="true" />
+                                            <span>
+                                                <strong>Esta conversación la generó el sistema:</strong> no hay ningún
+                                                interesado del otro lado. El cliente que se cree queda en el CRM marcado
+                                                como <strong>SIMULACIÓN</strong>, fuera de los reportes,
+                                                y <strong>no se borra al apagar el modo demostración</strong>: conviene
+                                                borrarlo a mano cuando termines de mostrar el sistema.
+                                            </span>
+                                        </p>
+                                    )}
                                     <p className="bandeja-alta-txt">
-                                        Este chat entró por {metaHilo.plataforma} y no trae nombre ni teléfono.
-                                        Completalos para que el cliente quede contactable desde el CRM.
+                                        {faltanDatosDelContacto
+                                            ? `Este chat entró por ${metaHilo.plataforma} y no trae nombre ni teléfono. `
+                                                + 'Completalos para que el cliente quede contactable desde el CRM.'
+                                            : 'Podés dejar los campos vacíos: se usa el nombre que ya trae el chat. '
+                                                + 'Completalos sólo si querés que la ficha quede con otros datos.'}
+                                        {/* El teléfono es la única puerta por la que una consulta
+                                            simulada toca una ficha REAL: el dedupe del CRM es por
+                                            número exacto. Se avisa acá, que es donde se escribe. */}
+                                        {hiloSimulado && (
+                                            <> Si el teléfono que pongas ya existe en Clientes, la consulta se anota
+                                            sobre <strong>esa ficha real</strong> (rotulada, en observaciones) y no
+                                            se crea ninguna nueva.</>
+                                        )}
                                     </p>
                                     <div className="bandeja-alta-campos">
                                         <Input
@@ -899,7 +988,10 @@ const BandejaPage = () => {
                                         <Button
                                             type="submit"
                                             size="sm"
-                                            disabled={!nombreConsulta.trim()}
+                                            // El nombre sólo es obligatorio cuando el hilo no trae
+                                            // ninguno: si el panel se abrió para confirmar una
+                                            // conversación simulada, dejarlo vacío es lo esperable.
+                                            disabled={faltanDatosDelContacto && !nombreConsulta.trim()}
                                             loading={registrar.isPending}
                                         >
                                             <UserPlus size={14} /> Registrar consulta
@@ -914,6 +1006,23 @@ const BandejaPage = () => {
                                         </Button>
                                     </div>
                                 </form>
+                            )}
+
+                            {/* PRIMERO de la pila: enmarca todo lo que viene abajo. Los avisos
+                                que siguen (ventana de 24 h, respuesta pública) son
+                                exactamente las reglas que la demostración tiene que enseñar,
+                                así que siguen apareciendo igual — lo que cambia es que acá se
+                                dice, antes de leerlos, que del otro lado no hay nadie. */}
+                            {hiloSimulado && (
+                                <p className="bandeja-aviso is-simulado">
+                                    <FlaskConical size={14} aria-hidden="true" />
+                                    <span>
+                                        <strong>Conversación simulada</strong> (modo demostración): la generó el
+                                        sistema para mostrar cómo funciona la bandeja, no hay nadie del otro lado.
+                                        Lo que respondas queda guardado acá adentro: <strong>no se llama a Meta</strong> y
+                                        {' '}<strong>esto no se publica en ningún lado</strong>.
+                                    </span>
+                                </p>
                             )}
 
                             {cuentaCaida && (
@@ -967,6 +1076,15 @@ const BandejaPage = () => {
                                     <span>
                                         Esto es un comentario: tu respuesta se publica en {metaHilo.plataforma},
                                         {' '}abajo de la publicación, y la ve cualquiera que entre.
+                                        {/* En un hilo simulado la frase de arriba sería falsa si
+                                            quedara sola: no hay publicación ni nadie que la vea.
+                                            El aviso se mantiene porque es la regla que se está
+                                            enseñando, pero tiene que decir cuál es su alcance acá. */}
+                                        {hiloSimulado && (
+                                            <> <strong>En esta conversación simulada no se publica nada</strong>: el
+                                            aviso está para que veas cómo se ve la advertencia sobre un comentario
+                                            de verdad.</>
+                                        )}
                                     </span>
                                 </p>
                             )}
@@ -990,9 +1108,25 @@ const BandejaPage = () => {
                             )}
 
                             <form
-                                className="bandeja-composer"
+                                className={`bandeja-composer ${hiloSimulado ? 'is-simulado' : ''}`}
                                 onSubmit={(e) => { e.preventDefault(); enviarBorrador(); }}
                             >
+                                {/* Tercer rótulo, pegado a la caja de escribir. Los otros dos
+                                    (fila y cabecera) se leen al elegir el hilo; éste está donde
+                                    se escribe, que es el único momento en que creer que del
+                                    otro lado hay un cliente tiene consecuencias. */}
+                                {hiloSimulado && (
+                                    <span className="bandeja-composer-sim">
+                                        <Badge variant="warning">
+                                            <FlaskConical size={11} aria-hidden="true" /> SIMULACIÓN
+                                        </Badge>
+                                        <span className="bandeja-composer-sim-txt">
+                                            {esPublico
+                                                ? 'La respuesta se guarda acá adentro: no se llama a Meta y no se publica en ningún lado.'
+                                                : 'El mensaje se guarda acá adentro: no se llama a Meta y no le llega a nadie.'}
+                                        </span>
+                                    </span>
+                                )}
                                 <Textarea
                                     dense
                                     rows={2}
@@ -1016,9 +1150,15 @@ const BandejaPage = () => {
                                                 ? `No se puede escribir por ${metaHilo.plataforma} en este momento`
                                                 : cuentaCaida
                                                     ? 'El número de WhatsApp no está conectado'
-                                                    : esPublico
-                                                        ? 'Escribí la respuesta… se publica a la vista de todos'
-                                                        : 'Escribí un mensaje… (Enter envía, Shift+Enter salto de línea)'
+                                                    // El placeholder simulado va antes que el público:
+                                                    // "se publica a la vista de todos" es justo lo que
+                                                    // acá no pasa, y es la frase que el vendedor lee
+                                                    // mientras escribe.
+                                                    : hiloSimulado
+                                                        ? 'Escribí la respuesta… es una simulación: no sale a Meta'
+                                                        : esPublico
+                                                            ? 'Escribí la respuesta… se publica a la vista de todos'
+                                                            : 'Escribí un mensaje… (Enter envía, Shift+Enter salto de línea)'
                                     }
                                     style={{ resize: 'none' }}
                                     onKeyDown={(e) => {
@@ -1032,10 +1172,18 @@ const BandejaPage = () => {
                                     type="submit"
                                     disabled={bloqueado || !borrador.trim() || sobran > 0}
                                     loading={enviar.isPending}
-                                    aria-label={esPublico ? 'Publicar respuesta' : 'Enviar mensaje'}
-                                    title={esPublico
-                                        ? 'La respuesta queda publicada en el comentario, a la vista de todos'
-                                        : undefined}
+                                    aria-label={hiloSimulado
+                                        ? (esPublico ? 'Publicar respuesta simulada' : 'Enviar mensaje simulado')
+                                        : (esPublico ? 'Publicar respuesta' : 'Enviar mensaje')}
+                                    // La etiqueta del botón no cambia —es la misma acción del
+                                    // circuito real, que es lo que se está demostrando—, pero
+                                    // sobre un hilo simulado no puede afirmar que algo queda
+                                    // publicado: no hay ninguna publicación abajo de la cual caiga.
+                                    title={hiloSimulado
+                                        ? 'Es una simulación: la respuesta queda guardada acá adentro, no se llama a Meta y no se publica en ningún lado'
+                                        : esPublico
+                                            ? 'La respuesta queda publicada en el comentario, a la vista de todos'
+                                            : undefined}
                                 >
                                     <Send size={16} /> {esPublico ? 'Publicar' : 'Enviar'}
                                 </Button>
@@ -1142,7 +1290,10 @@ const BandejaPage = () => {
                 .bandeja-hilo-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); }
                 .bandeja-hilo-quien { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
                 .bandeja-hilo-nombre { font-weight: 700; font-size: var(--text-base); }
-                .bandeja-hilo-tel { display: flex; align-items: center; gap: 0.35rem; min-width: 0; font-size: var(--text-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+                /* flex-wrap: con el chip SIMULACIÓN son dos badges + el texto en la
+                   segunda línea de la cabecera; en el celular, antes que recortar
+                   un rótulo, que baje de renglón. */
+                .bandeja-hilo-tel { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem; min-width: 0; font-size: var(--text-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
                 .bandeja-hilo-tel .badge { padding: 0.1rem 0.4rem; font-size: var(--text-3xs); letter-spacing: 0.04em; gap: 0.2rem; flex-shrink: 0; }
                 .bandeja-hilo-acciones { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
                 .bandeja-asignar { min-width: 150px; }
@@ -1176,12 +1327,68 @@ const BandejaPage = () => {
                 .bandeja-aviso.is-bloqueo { color: var(--danger); }
                 .bandeja-aviso.is-error { color: var(--danger); word-break: break-word; }
                 .bandeja-aviso.is-publico { color: var(--accent-3); }
-                .bandeja-composer { display: flex; align-items: flex-end; gap: 0.5rem; padding: 0.75rem; border-top: 1px solid var(--border); }
+                /* Simulación: el mismo amarillo del chip SIMULACIÓN, para que el
+                   aviso y el badge se lean como una sola cosa. No es un bloqueo
+                   (se puede escribir), así que no va en rojo.
+                   Y va ENMARCADO, no como un renglón de color: el .bandeja-aviso
+                   base YA es var(--warning), así que pintarlo del mismo amarillo no
+                   lo distinguía de nada — quedaba idéntico a los avisos vecinos
+                   ("el número no está conectado", "quedan 2 h para responder"), que
+                   son amarillos también. Un hilo simulado suele mostrar dos o tres
+                   de estos apilados: sin el recuadro había que LEERLOS para saber
+                   cuál dice que del otro lado no hay nadie, y este rótulo tiene que
+                   verse sin buscarlo. Mismo tratamiento que .bandeja-alta-sim,
+                   para que todo lo simulado se lea igual en esta pantalla.
+                   Los 0,2,0 también le ganan al padding del media query de abajo
+                   (una @media no suma especificidad): buscado — el recuadro
+                   necesita su padding propio arriba Y abajo, el del aviso suelto
+                   termina en 0 porque se apoya en el de al lado. */
+                .bandeja-aviso.is-simulado {
+                    color: var(--warning);
+                    margin: 0.6rem 0.75rem 0;
+                    padding: 0.5rem 0.6rem;
+                    border: 1px dashed color-mix(in srgb, var(--warning) 45%, transparent);
+                    border-radius: var(--radius-sm);
+                    background: color-mix(in srgb, var(--warning) 8%, transparent);
+                }
+                /* flex-wrap para que el rótulo de simulación ocupe su propio
+                   renglón arriba de la caja: sin él se metía entre el textarea y
+                   el botón y en el celular los apretaba a los dos. */
+                .bandeja-composer { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 0.5rem; padding: 0.75rem; border-top: 1px solid var(--border); }
                 .bandeja-composer .input-group { flex: 1; min-width: 0; }
+                /* Dos clases (0,2,0) para ganarle al .bandeja-composer de arriba
+                   sin depender del orden dentro de este <style>. La caja de
+                   escribir cambia de aspecto entera: es la señal periférica que
+                   se nota aunque no se lea ni una palabra del aviso. */
+                .bandeja-composer.is-simulado {
+                    border-top: 1px dashed color-mix(in srgb, var(--warning) 55%, transparent);
+                    background: color-mix(in srgb, var(--warning) 7%, transparent);
+                }
+                /* flex-basis 100% = renglón propio, arriba del textarea y del botón. */
+                .bandeja-composer-sim { flex: 1 0 100%; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; min-width: 0; }
+                .bandeja-composer-sim .badge { padding: 0.1rem 0.4rem; font-size: var(--text-3xs); letter-spacing: 0.04em; gap: 0.2rem; flex-shrink: 0; }
+                .bandeja-composer-sim-txt { font-size: var(--text-2xs); line-height: 1.4; color: var(--warning); }
 
                 /* Alta manual del contacto (hilos de Meta sin nombre ni teléfono). */
                 .bandeja-alta { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.6rem 0.75rem 0; padding: 0.7rem; border: 1px dashed var(--border); border-radius: var(--radius-md); background: var(--bg-secondary); }
                 .bandeja-alta-txt { margin: 0; font-size: var(--text-xs); line-height: 1.45; color: var(--text-secondary); }
+                /* Rótulo dentro del panel de alta: acá algo simulado se vuelve una
+                   ficha permanente del CRM, así que el aviso va enmarcado y no como
+                   una línea más de texto gris. */
+                .bandeja-alta-sim {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 0.4rem;
+                    margin: 0;
+                    padding: 0.5rem 0.6rem;
+                    border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+                    border-radius: var(--radius-sm);
+                    background: color-mix(in srgb, var(--warning) 10%, transparent);
+                    font-size: var(--text-2xs);
+                    line-height: 1.45;
+                    color: var(--text-secondary);
+                }
+                .bandeja-alta-sim > svg { flex-shrink: 0; margin-top: 0.1rem; color: var(--warning); }
                 .bandeja-alta-campos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.5rem; }
                 .bandeja-alta-acciones { display: flex; gap: 0.5rem; }
 
@@ -1217,6 +1424,11 @@ const BandejaPage = () => {
                     .bandeja-hilo-head { padding: 0.6rem 0.75rem; }
                     .bandeja-asignar { min-width: 7rem; }
                     .bandeja-aviso { padding: 0.5rem 0.75rem 0; }
+                    /* En el celular queda el CHIP pegado a la caja (que es el
+                       rótulo que no puede faltar) y se cae la frase larga: la
+                       misma explicación ya está entera en el aviso de arriba, y
+                       acá cada renglón de más empuja el hilo fuera de pantalla. */
+                    .bandeja-composer-sim-txt { display: none; }
                 }
             `}</style>
         </div>

@@ -620,7 +620,7 @@ const esPreguntaSimulada = (p: {
 export async function registrarPreguntaComoLead(
     preguntaId: number,
     datos: { nombre?: string; telefono?: string; email?: string; vendedorId?: number | null },
-): Promise<{ clienteId: number; creado: boolean; simulada: boolean }> {
+): Promise<{ clienteId: number; creado: boolean; simulada: boolean; sobreFichaReal: boolean }> {
     const pregunta = await prisma.preguntaMl.findFirst({
         where: { id: preguntaId },
         select: {
@@ -650,7 +650,7 @@ export async function registrarPreguntaComoLead(
     // siempre en el create. El lead viejo quedaba huérfano y desbalanceaba el
     // round-robin.
     if (pregunta.clienteId != null) {
-        return { clienteId: pregunta.clienteId, creado: false, simulada };
+        return { clienteId: pregunta.clienteId, creado: false, simulada, sobreFichaReal: false };
     }
 
     const resultado = await ingestarConsulta({
@@ -679,7 +679,10 @@ export async function registrarPreguntaComoLead(
     }
     logger.info(`[meli-preguntas] pregunta ${preguntaId} registrada como consulta (cliente ${resultado.clienteId})${simulada ? ' [SIMULADA]' : ''}`);
 
-    return { clienteId: resultado.clienteId, creado: resultado.creado, simulada };
+    // `sobreFichaReal`: la pregunta simulada cayó, por el teléfono o el mail que
+    // cargó el operador, sobre un cliente de VERDAD. Ahí la ingesta sólo le anota
+    // la línea rotulada en observaciones; el aviso de la pantalla lo dice.
+    return { clienteId: resultado.clienteId, creado: resultado.creado, simulada, sobreFichaReal: resultado.sobreFichaReal };
 }
 
 export interface FiltroPreguntas {

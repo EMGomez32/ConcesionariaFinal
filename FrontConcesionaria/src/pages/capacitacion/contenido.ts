@@ -57,12 +57,23 @@ export const VENTAJAS: Ventaja[] = [
     {
         titulo: 'Las consultas: ninguna queda sin dueño',
         problema:
-            'El formulario que dejó uno en la campaña de Instagram lo vio un vendedor, la pregunta de Mercado Libre la contestó otro dos días después, y el WhatsApp quedó quince chats más abajo. Cuando preguntás quién atendió a fulano, cada uno dice que pensó que lo tenía el otro. El cliente que nadie contestó ya compró en otro lado y vos ni te enteraste de que existió, porque nunca quedó anotado en ningún lado.',
+            'El formulario que dejó uno en la campaña de Instagram lo vio un vendedor, la pregunta de Mercado Libre la contestó otro dos días después, el mensaje directo de Instagram lo abrió el que maneja la cuenta y el WhatsApp quedó quince chats más abajo. Cuando preguntás quién atendió a fulano, cada uno dice que pensó que lo tenía el otro. El cliente que nadie contestó ya compró en otro lado y vos ni te enteraste de que existió, porque nunca quedó anotado en ningún lado.',
         solucion: [
-            'Todas las consultas entran por el mismo lugar y salen con un vendedor asignado. Si no elegís vos a quién, va sola al vendedor activo que menos consultas nuevas tiene arriba.',
+            // Decía "Todo lo que te escribe el cliente cae en el mismo buzón" y ese
+            // "todo" lo desmienten los dos bullets siguientes: una pregunta de Mercado
+            // Libre también es el cliente escribiéndote y vive en su propia pantalla, y
+            // los Lead Ads y la casilla de correo entran derecho a Consultas. Se acota
+            // el sujeto a lo que sí comparte buzón: los mensajes de WhatsApp y de las
+            // redes de Meta.
+            'Los mensajes que te entran por WhatsApp y por las redes caen en un solo buzón: la Bandeja. WhatsApp, los mensajes directos de Instagram, los de Messenger y los comentarios de tus publicaciones de Instagram y de tu página de Facebook. Se leen y se contestan desde ahí, sin abrir cinco aplicaciones.',
+            'Los formularios de campaña de Instagram y Facebook —los Lead Ads de Meta— entran aparte y solos, derecho a Consultas. Los avisos que te llegan por mail a una casilla también: esa casilla el sistema la revisa cada cinco minutos.',
+            'Lo que entra como consulta sale con un vendedor asignado: si no elegís vos a quién, va sola al vendedor activo que menos consultas nuevas tiene arriba.',
+            // Decía "alguien los toma" para los dos buzones y eso es cierto sólo en la
+            // Bandeja: ahí el vendedor se asigna el hilo solo. En Mercado Libre poner
+            // dueño a una pregunta es del administrador; el vendedor ve las que no
+            // tienen dueño, las contesta y las pasa a cliente, pero no se las asigna.
+            'Ninguno de los dos buzones se reparte solo. En la Bandeja, el hilo queda a la vista hasta que un vendedor se lo asigna o se lo asignás vos. Las preguntas de Mercado Libre las ve todo el equipo comercial y cualquiera las contesta, pero ponerle dueño a una es del administrador. En los dos casos, con un botón se registra como consulta y ahí sí queda con vendedor.',
             'Si el teléfono o el mail ya estaban cargados no se duplica el cliente: se le anota la consulta nueva con fecha y canal, y si lo habían dado por perdido, se reabre.',
-            'Los formularios de campaña de Instagram y Facebook —los Lead Ads de Meta— entran solos. Los avisos que te llegan por mail a una casilla también: esa casilla el sistema la revisa cada cinco minutos.',
-            'Las de WhatsApp y las preguntas de Mercado Libre caen en una bandeja y se pasan a consulta con un botón.',
             'Después, la pantalla Consultas te muestra las que nadie tocó todavía, la más vieja arriba, con los días que lleva esperando, de qué canal vino, qué auto preguntó y quién la tiene.',
             'Y el reloj del primer contacto lo para el vendedor cuando registra el contacto de verdad: el sistema no se anota a sí mismo como si hubiera llamado.',
         ],
@@ -70,9 +81,11 @@ export const VENTAJAS: Ventaja[] = [
             'Consultas → Sin atender: los días que lleva esperando cada una, el canal, el vendedor, el teléfono y qué auto preguntó',
             'Consultas → Por vendedor: el embudo de cada uno (nuevo, contactado, negociando, ganado, perdido) y las horas promedio que tarda en hacer el primer contacto',
             'Consultas → Por canal: cuántas entraron, cuántas se ganaron, cuántas se perdieron y la tasa de conversión de cada origen',
-            'WhatsApp: bandeja compartida con los no leídos, el filtro de "sin responder" y la asignación del chat a un vendedor',
+            'Bandeja: WhatsApp, Instagram, Messenger y los comentarios de las dos redes en una sola lista, con los no leídos, el filtro por canal, el de "sin responder" y la asignación del hilo a un vendedor',
+            'Bandeja → un hilo abierto: el botón para registrarlo como consulta, el aviso de que una respuesta a un comentario se publica a la vista de todos y, en los mensajes directos, el plazo de 24 horas que da Meta para contestar',
             'Mercado Libre → Preguntas: asignar, responder desde acá (la respuesta se publica en el aviso) y pasar la pregunta a cliente con un botón',
-            'Ajustes → Integraciones: el canal de formularios de Instagram y Facebook (Lead Ads) y la casilla de correo, con el último dato que entró y el último error, para saber si está funcionando',
+            'Ajustes → Integraciones de consultas: los canales de Meta (formularios de campaña, mensajes de Instagram, mensajes de Messenger y comentarios de las dos redes) y la casilla de correo, con la fecha del último dato que entró y el último error de cada integración',
+            'Ajustes → WhatsApp y Ajustes → Mercado Libre: cada cuenta vinculada con su estado y su último error',
             'Seguimientos: la agenda de a quién hay que llamar hoy, con los contactos vencidos marcados',
         ],
     },
@@ -162,16 +175,19 @@ export const CIRCUITO: PasoDelCircuito[] = [
     {
         orden: 4,
         titulo: 'Se publica',
-        que: 'Le ponés precio de lista, cargás las fotos y pasás el auto a Publicado. Desde ahí sacás la ficha en PDF para el cliente (sin lo que pagaste ni lo que gastaste) o el catálogo de todo el stock filtrado. Si tenés la cuenta de Mercado Libre vinculada, se publica la unidad desde acá, de a una y siempre a pedido.',
+        // El precio de lista, las fotos y el paso a Publicado son del vendedor. El
+        // aviso de Mercado Libre no: publicar, pausar, reactivar y cerrar son
+        // admin-only, y al vendedor la tarjeta ni le aparece en la ficha del auto.
+        que: 'Le ponés precio de lista, cargás las fotos y pasás el auto a Publicado. Desde ahí sacás la ficha en PDF para el cliente (sin lo que pagaste ni lo que gastaste) o el catálogo de todo el stock filtrado. Y si tenés la cuenta de Mercado Libre vinculada, el administrador publica la unidad desde la misma ficha, de a una y siempre a pedido.',
         quien: ['admin', 'vendedor'],
         pantalla: 'Vehículos y Mercado Libre',
     },
     {
         orden: 5,
         titulo: 'Entra la consulta',
-        que: 'La consulta llega de un formulario de campaña de Instagram o Facebook, de una casilla de mail, de WhatsApp, de Mercado Libre o del mostrador. Queda con un vendedor asignado y sin duplicar al cliente si ya estaba. Si el canal dice por qué auto preguntaron —una pregunta de Mercado Libre siempre cuelga de una publicación— el vehículo queda anotado solo; si no lo dice, lo carga el vendedor cuando atiende.',
+        que: 'Hay dos caminos y conviene distinguirlos. El formulario de campaña de Instagram o Facebook, el aviso que te llega a la casilla de mail y el que entra por el mostrador quedan como consulta en el acto, con un vendedor asignado y sin duplicar al cliente si ya estaba. Lo demás llega como conversación: WhatsApp, los mensajes directos de Instagram y de Messenger y los comentarios de las dos redes caen en la Bandeja, y las preguntas de Mercado Libre en la suya. Ahí se contestan, y con un botón se registran como consulta. Si el canal dice por qué auto preguntaron —una pregunta de Mercado Libre siempre cuelga de una publicación— el vehículo queda anotado solo; si no lo dice, lo carga el vendedor cuando atiende.',
         quien: ['admin', 'vendedor'],
-        pantalla: 'Consultas, WhatsApp y Mercado Libre',
+        pantalla: 'Consultas, Bandeja y Mercado Libre',
     },
     {
         orden: 6,
@@ -262,9 +278,13 @@ export interface Rol {
     diaTipico: string;
     /**
      * Los módulos donde el rol TRABAJA. No es "el menú recortado": hoy el menú
-     * sólo esconde las bandejas (Consultas, WhatsApp, Mercado Libre, Seguimientos,
+     * sólo esconde las bandejas (Consultas, Bandeja, Mercado Libre, Seguimientos,
      * Tasaciones) y los ítems de administrador (Usuarios, Auditoría). Cuando el
      * menú real muestra bastante más que esta lista, el rol lo aclara en `notaMenu`.
+     *
+     * Ojo con el nombre: el ítem del menú que antes se llamaba "WhatsApp" hoy se
+     * llama "Bandeja" (nav.ts), porque el mismo buzón recibe WhatsApp, los DM de
+     * Instagram y de Messenger y los comentarios de IG y de Facebook.
      */
     modulos: string[];
     /** Aclaración de qué le aparece en el menú además de los `modulos` de arriba. */
@@ -281,11 +301,11 @@ export const ROLES: Rol[] = [
         resumen:
             'El que atiende, cotiza, reserva y vende. Trabaja sobre su cartera: sus consultas, sus clientes, sus operaciones. Ve su objetivo del mes, no el de los demás.',
         diaTipico:
-            'Abre el tablero y le aparecen tres cosas: las consultas que todavía no atendió, las reservas que están por vencer y los clientes que tenía agendado llamar hoy. Arranca por las consultas más viejas, contesta la bandeja de WhatsApp y las preguntas de Mercado Libre que tiene asignadas, y va cargando lo que sale: una tasación, un presupuesto, una seña, una venta.',
+            'Abre el tablero y le aparecen tres cosas: las consultas que todavía no atendió, las reservas que están por vencer y los clientes que tenía agendado llamar hoy. Arranca por las consultas más viejas, sigue por la Bandeja —WhatsApp, los mensajes directos de Instagram y de Messenger y los comentarios de las dos redes, todo en una sola lista— y por las preguntas de Mercado Libre, y va cargando lo que sale: una tasación, un presupuesto, una seña, una venta.',
         modulos: [
             'Dashboard',
             'Consultas',
-            'WhatsApp',
+            'Bandeja (WhatsApp, Instagram y Facebook)',
             'Mercado Libre (preguntas)',
             'Clientes',
             'Seguimientos',
@@ -310,6 +330,22 @@ export const ROLES: Rol[] = [
                     'Si esa consulta no era para vos, cambiá el vendedor desde el selector de la fila.',
                 ],
                 pantalla: 'Consultas',
+            },
+            {
+                // Tarea nueva: la bandeja dejó de ser sólo WhatsApp y hay dos reglas
+                // que el vendedor tiene que conocer ANTES de escribir, porque las dos
+                // se las va a encontrar en pantalla: el plazo de 24 h de Meta (que
+                // bloquea el composer, ver domain/services/metaErrores.ts) y que la
+                // respuesta a un comentario se publica en público.
+                titulo: 'Contestar la Bandeja',
+                pasos: [
+                    'Entrá a Bandeja. En una sola lista tenés los chats de WhatsApp, los mensajes directos de Instagram y de Messenger, y los comentarios de tus publicaciones de Instagram y de tu página de Facebook. Cada hilo dice de dónde vino.',
+                    'Filtrá por canal o por "sin responder", y tomá el hilo que todavía no tiene dueño: te lo asignás y queda claro quién lo está atendiendo.',
+                    'Si el hilo es un comentario, la pantalla te lo avisa antes de que escribas: esa respuesta se publica abajo de la publicación y la lee cualquiera que pase. Por eso el botón dice "Publicar" y no "Enviar".',
+                    'En Instagram y en Messenger hay un plazo que pone Meta: sólo se puede contestar dentro de las 24 horas desde el último mensaje de la persona. Cuando falta poco, la pantalla te dice cuánto te queda; si ya se pasó, te bloquea el campo y te explica por qué.',
+                    'Cuando el hilo vale la pena, tocá "Registrar consulta": se crea la ficha del cliente y la consulta queda con vendedor. Un mensaje de Instagram no trae teléfono, así que ese paso lo hacés vos.',
+                ],
+                pantalla: 'Bandeja',
             },
             {
                 titulo: 'Tasar el usado que el cliente entrega',
@@ -367,11 +403,16 @@ export const ROLES: Rol[] = [
             },
         ],
         noPuede: [
-            // Decía "el precio de compra ... es sólo del administrador": falso. El
-            // vendedor carga el alta del vehículo (POST es admin+vendedor) y la ficha
-            // muestra el precio de compra sin gate de rol. Lo que sí es sólo del
-            // administrador es el reporte de Rentabilidad (authorize('admin')).
-            'No ve el reporte de Rentabilidad: el margen de cada unidad, con el precio de compra y todos los gastos ya descontados, es sólo del administrador.',
+            // Este bullet se había acotado a Rentabilidad porque la ficha del vehículo
+            // devolvía el precio de compra sin gate de rol. Ya no: VehiculoController
+            // recorta precioCompra y fechaCompra para todo el que no sea admin, en las
+            // cuatro salidas (listado, detalle, alta y edición). El vendedor lo escribe
+            // al dar de alta la unidad y lo sigue viendo como valor tomado en el acta de
+            // ingreso (ahí el corte es admin+vendedor), pero la ficha ya no se lo
+            // devuelve. Se dice con esa precisión: es un argumento de venta y no se
+            // puede exagerar ni quedar corto.
+            'No ve el precio de compra en la ficha del auto. Lo carga él cuando da de alta la unidad y lo sigue viendo en el acta de ingreso, pero después la ficha ya no se lo devuelve: el precio de compra y la fecha de compra el servidor se los manda sólo al administrador.',
+            'Tampoco ve el reporte de Rentabilidad: el margen de cada unidad, con el precio de compra y todos los gastos ya descontados, es sólo del administrador.',
             'No ve el Ranking de vendedores ni el reporte de Comisiones. Ve su propio objetivo del mes y su avance, no el de los compañeros.',
             // Decía "no ve la antigüedad del stock": falso, la lista de Vehículos trae la
             // columna de días en stock y el orden por antigüedad para todos los roles.
@@ -410,8 +451,13 @@ export const ROLES: Rol[] = [
             // respuesta para los no-admin (nombre y rol; sin mail ni comisión), así que
             // ahora la frase dice exactamente eso.
             'No entra a Auditoría ni administra Usuarios, y no carga la cotización del dólar. Del equipo ve los nombres y qué hace cada uno —los necesita para asignar—, no los mails ni las comisiones. Gastos Fijos los ve, pero cargarlos y editarlos es del administrador.',
-            'No vincula la cuenta de WhatsApp ni la de Mercado Libre, y no publica avisos: eso lo hace el administrador. Sí responde y atiende las dos bandejas.',
-            'En WhatsApp y en las preguntas de Mercado Libre ve sólo lo que tiene asignado o lo que no tiene dueño. Si intenta responder la pregunta de otro vendedor, el sistema se lo rechaza.',
+            'No conecta ningún canal: ni el número de WhatsApp, ni la aplicación de Meta que trae Instagram y Facebook, ni la cuenta de Mercado Libre, y tampoco publica avisos. Todo eso es del administrador. Lo suyo es atender: responde la Bandeja y las preguntas de Mercado Libre.',
+            // Decía "el canal no cambia nada: un mensaje de Instagram se comporta igual
+            // que un WhatsApp" y así, sin sujeto, es falso: el canal cambia por completo
+            // CÓMO se contesta (el plazo de 24 h y que un comentario sale en público),
+            // y eso lo cuenta la tarea "Contestar la Bandeja" que se lee al lado. Lo que
+            // no cambia es QUIÉN atiende cada hilo, que es de lo que habla este bullet.
+            'En la Bandeja y en las preguntas de Mercado Libre ve lo que tiene asignado y lo que todavía no tiene dueño, venga del canal que venga: el canal no cambia quién atiende ni a quién se le asigna. Si intenta contestar lo que está asignado a otro vendedor, el sistema se lo rechaza. Cómo se contesta sí cambia según el canal, y eso está en la tarea de la Bandeja, más arriba.',
             'En Consultas ve su cartera, no la del resto del equipo.',
             'No importa clientes en lote desde una planilla: eso es del administrador.',
         ],
@@ -434,7 +480,7 @@ export const ROLES: Rol[] = [
             'Reportes → Por vencer',
         ],
         notaMenu:
-            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas (Consultas, WhatsApp, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
+            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas de atención (Consultas, Bandeja, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
         tareas: [
             {
                 titulo: 'Cobrar una cuota',
@@ -481,10 +527,15 @@ export const ROLES: Rol[] = [
             // No estaba dicho en ningún lado y es permiso que ya tiene: la tarjeta de
             // módulo vende "refinanciación del saldo real cuando hace falta" como
             // función del producto, y el que la usa es él.
-            'Sí arma planes de financiación propia y refinancia el saldo cuando el cliente no llega: es la herramienta con la que cierra una visita a un moroso. Lo que no puede es dar de baja el contrato.',
-            'De los reportes ve tres: Caja mensual, Cartera de mora y Por vencer. Ventas, Rentabilidad, Ranking, Comisiones, Objetivos, Postventa y Documentación le dan permiso denegado.',
+            // La refinanciación es de las operaciones que ANTES no dejaban rastro: el
+            // enum de la base no tenía el valor y el registro de auditoría se descartaba
+            // en silencio. Ya está corregido (migración de acciones de auditoría), así
+            // que ahora se puede afirmar, y conviene: es la operación con la que el
+            // cobrador cambia una deuda.
+            'Sí arma planes de financiación propia y refinancia el saldo cuando el cliente no llega: es la herramienta con la que cierra una visita a un moroso. La refinanciación queda en Auditoría con su propio tipo de operación, con nombre y fecha. Lo que no puede es dar de baja el contrato.',
+            'De los reportes ve tres: Caja mensual, Cartera de mora y Por vencer. Ventas, Rentabilidad, Ranking, Comisiones, Objetivos, Postventa, Documentación y Próx. service le dan permiso denegado.',
             'No puede bajar el estado de cuenta del cliente en PDF: ese documento está habilitado para el administrador y el vendedor.',
-            'No entra a Consultas, WhatsApp, Mercado Libre, Seguimientos ni Tasaciones: no le aparecen en el menú y el servidor tampoco se los da.',
+            'No entra a Consultas, a la Bandeja, a Mercado Libre, a Seguimientos ni a Tasaciones: no le aparecen en el menú y el servidor tampoco se los da.',
             'No da de alta usuarios, no toca los datos de la concesionaria ni las integraciones.',
         ],
     },
@@ -508,7 +559,7 @@ export const ROLES: Rol[] = [
             'Reportes → Próx. service',
         ],
         notaMenu:
-            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas (Consultas, WhatsApp, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
+            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas de atención (Consultas, Bandeja, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
         tareas: [
             {
                 titulo: 'Abrir un caso',
@@ -549,7 +600,7 @@ export const ROLES: Rol[] = [
             },
         ],
         noPuede: [
-            'No ve Consultas, WhatsApp, Mercado Libre, Seguimientos ni Tasaciones: no le aparecen en el menú y el servidor tampoco se los da.',
+            'No ve Consultas, la Bandeja, Mercado Libre, Seguimientos ni Tasaciones: no le aparecen en el menú y el servidor tampoco se los da.',
             'De los reportes tiene tres pestañas: Postventa, Documentación y Próx. service. Ventas, caja, mora, ranking, comisiones y rentabilidad no las ve.',
             // Punto nuevo, por la misma razón que el del cobrador: hasta que las
             // pantallas de operación tuvieron candado, este perfil podía registrar
@@ -570,15 +621,19 @@ export const ROLES: Rol[] = [
         id: 'admin',
         nombre: 'Administrador (el dueño o el gerente)',
         resumen:
-            // Decía "el precio de compra" en esta enumeración y era falso: el vendedor
-            // lo carga al dar de alta la unidad, así que no puede ser exclusivo del
-            // administrador. La corrección ya se había aplicado al bullet del vendedor
-            // (más arriba) y este resumen había quedado repitiendo la versión vieja. Lo
-            // que sí se cerró en la misma pasada es la lista de compras por proveedor,
-            // que era el único lugar donde el costo de cada unidad se veía en grilla.
-            'El perfil del que se hace cargo del negocio. Ve todo lo de la concesionaria y es el único que ve la plata fina: el margen por unidad, el capital inmovilizado, el ranking, las comisiones y lo que se le pagó a cada proveedor por cada auto.',
+            // El "precio de compra" había salido de esta enumeración porque la ficha del
+            // vehículo lo devolvía para cualquier rol. Volvió a ser exclusivo suyo, y
+            // esta vez de verdad: el servidor recorta precioCompra y fechaCompra en el
+            // listado, en la ficha, en el alta y en la edición para todo el que no sea
+            // admin, y lo mismo hace la ficha del proveedor con lo que le compraste.
+            // El "precio de compra" no puede ir en la enumeración de "es el único que
+            // ve": el servidor lo recorta a admin en la ficha del auto y en la del
+            // proveedor, pero en el ACTA DE INGRESO el corte es admin+vendedor, y en una
+            // compra a proveedor el valor tomado del acta ES el precio de compra. La
+            // pestaña del vendedor ya lo decía bien; las dos tienen que decir lo mismo.
+            'El perfil del que se hace cargo del negocio. Ve todo lo de la concesionaria y es el único que ve la plata fina: el margen que dejó cada unidad, el capital inmovilizado, el ranking, las comisiones y lo que se le pagó a cada proveedor por cada auto. El precio de compra en la ficha del auto y en la del proveedor también es sólo suyo; el vendedor lo carga al dar de alta la unidad y lo sigue viendo como valor tomado en el acta de ingreso.',
         diaTipico:
-            'Abre el tablero completo: ventas del mes, ingresos y egresos con el resultado neto, la mora, la tendencia de los últimos seis meses, el objetivo del mes con su barra, la actividad reciente del equipo y las ocho alertas juntas. Desde ahí baja a lo que le llamó la atención. A fin de mes cierra los números, revisa objetivos y liquida comisiones.',
+            'Abre el tablero completo: ventas del mes, ingresos y egresos con el resultado neto, la mora, la tendencia de los últimos seis meses, el objetivo del mes con su barra, la actividad reciente del equipo y las ocho alertas juntas. Desde ahí baja a lo que le llamó la atención. Si además atiende, la Bandeja la ve entera: todos los hilos del equipo, no sólo los suyos. A fin de mes cierra los números, revisa objetivos y liquida comisiones.',
         modulos: [
             'Todas las pantallas de la concesionaria',
             'Reportes: las once pestañas',
@@ -586,7 +641,10 @@ export const ROLES: Rol[] = [
             'Auditoría',
             'Sucursales',
             'Gastos Fijos',
-            'Cotización del dólar',
+            // Decía "Cotización del dólar" suelto, como si fuera un ítem del menú. No lo
+            // es: la cotización se carga desde la propia pantalla de Reportes, cuando se
+            // consolidan monedas, y ahí sólo puede tocarla el administrador.
+            'La cotización del dólar, que se carga desde Reportes',
             'Ajustes: datos y marca',
             'Ajustes: integraciones',
         ],
@@ -597,7 +655,12 @@ export const ROLES: Rol[] = [
                     'Entrá a Reportes → Rentabilidad y elegí el rango de fechas y la sucursal.',
                     'Tenés una fila por unidad vendida: precio de venta, precio de compra, gastos cargados, cuánto quedó y el margen.',
                     'Si una fila muestra el margen en blanco, tocá el detalle: te dice qué importes no pudo restar y en qué moneda. No te inventa el número.',
-                    'Si querés todo en una sola moneda, cargá la cotización del día en Ajustes y volvé a consolidar. El reporte te aclara qué cotización usó.',
+                    // Decía "cargá la cotización del día en Ajustes": en Ajustes no hay
+                    // nada de cotización. Se carga desde esta misma pantalla, con el chip
+                    // del dólar del encabezado o con el botón que ofrece el propio
+                    // reporte cuando falta. El paso mandaba al dueño a irse de la
+                    // pantalla correcta.
+                    'Si querés todo en una sola moneda, elegí consolidar en pesos o en dólares. Si todavía no cargaste la cotización, el propio reporte te ofrece cargarla ahí mismo, sin salir de la pantalla. Después te aclara qué cotización usó y de qué fecha.',
                     'Bajalo a Excel si lo querés trabajar aparte.',
                 ],
                 pantalla: 'Reportes → Rentabilidad',
@@ -646,9 +709,23 @@ export const ROLES: Rol[] = [
                 titulo: 'Dejar el sistema con tu cara y conectar los canales',
                 pasos: [
                     'En Ajustes cargá los datos de la concesionaria, subí el logo y elegí los colores y el pie: eso sale impreso en todos los documentos que le entregás al cliente.',
-                    'En Integraciones configurás el canal de formularios de Instagram y Facebook (los Lead Ads de Meta), y la casilla de correo que el sistema revisa cada cinco minutos. Las claves quedan guardadas cifradas y en pantalla se ven tapadas.',
-                    'La misma pantalla te muestra el último dato que entró por cada canal y el último error, así sabés si está andando sin llamar a nadie.',
-                    'WhatsApp se vincula escaneando un QR, como WhatsApp Web. Mercado Libre se vincula autorizando tu propia cuenta (leé el estado honesto más abajo).',
+                    'Más abajo, en la tarjeta de Integraciones de consultas, tenés los canales de Meta uno por uno: los formularios de campaña, los mensajes de Instagram, los de Messenger y los comentarios de las dos redes. Cada canal en verde quiere decir que de este lado no falta nada; tocándolo te dice qué te falta hacer del otro, en el portal de Meta.',
+                    'WhatsApp se vincula escaneando un QR, como WhatsApp Web. Mercado Libre, autorizando tu propia cuenta. Los canales de Meta necesitan además una aplicación tuya y que Meta te apruebe los permisos, que es lo que tarda (leé el estado honesto más abajo).',
+                    // Son DOS botones, no uno: "Activar modo demostración" crea la
+                    // integración simulada y recién ahí aparece "Generar conversaciones
+                    // de ejemplo", que es el que siembra los hilos. Contado como un solo
+                    // paso, el dueño enciende la demo, abre la Bandeja vacía y cree que
+                    // falló algo. Del lado de Mercado Libre pasa lo mismo: primero se
+                    // publica una unidad y después se siembran las preguntas.
+                    'Mientras el trámite avanza, encendé el modo demostración desde esta misma pantalla. Son dos toques: primero "Activar modo demostración" y después "Generar conversaciones de ejemplo", que es el que llena la Bandeja con hilos de los cuatro canales de Meta.',
+                    'Del lado de Mercado Libre el modo demostración va aparte y con el mismo criterio: lo encendés, publicás una unidad simulada y después sembrás las preguntas de ejemplo para contestarlas. Todo rotulado como simulación y sin salir a la red. Lo apagás cuando quieras.',
+                    'Acá también configurás la casilla de correo que el sistema revisa cada cinco minutos. Las claves quedan guardadas cifradas y en pantalla se ven tapadas.',
+                    // Decía "el último dato que entró por cada canal": la columna de
+                    // último evento existe sólo en la tabla de integraciones (Meta y la
+                    // casilla), y es de la integración entera, no de cada canal. Las
+                    // tablas de WhatsApp y de Mercado Libre no la tienen; sí tienen el
+                    // último error, que es lo único común a las tres.
+                    'De cada integración de Meta y de la casilla de correo, la misma pantalla te dice cuándo entró el último dato y cuál fue el último error. De WhatsApp y de Mercado Libre ves el estado de cada cuenta vinculada y su último error. Así sabés si está andando sin llamar a nadie.',
                 ],
                 pantalla: 'Ajustes',
             },
@@ -673,10 +750,16 @@ export const ROLES: Rol[] = [
         // Ahora sí existe y lo aplica el servidor, así que el rol vuelve a
         // describirse por lo que es: consulta de verdad, no un menú recortado.
         resumen:
-            'Para el que entra a buscar un dato y no a trabajar: el contador, un socio, alguien de administración. Mira y no toca: no crea, no edita y no da de baja nada. Los reportes y las bandejas de atención los tiene cerrados.',
+            'Para el que entra a buscar un dato y no a trabajar: el contador, un socio, alguien de administración. Mira y no toca: no crea, no edita y no da de baja nada. Los reportes y las bandejas de atención —Consultas, la Bandeja y Mercado Libre— los tiene cerrados.',
+        // Decía "No tiene tablero de trabajo ni bandejas que atender" y la primera mitad
+        // es falsa en pantalla: el tablero es la ruta de aterrizaje y no está filtrado
+        // por rol, así que este perfil entra y ve los cuatro contadores y el gráfico de
+        // stock. Lo que no le aparece son las Acciones del día (su lista de alertas
+        // queda vacía). Es el mismo desfasaje que ya se había corregido en el cobrador.
         diaTipico:
-            'Entra, busca lo que necesita y se va. Ve el stock, los clientes, las ventas, las reservas, los presupuestos, los gastos, las financiaciones, la postventa, los proveedores y las sucursales. No tiene tablero de trabajo ni bandejas que atender. Y no opera: no registra una venta, no toma una seña, no arma un plan de cuotas, no carga el ingreso de una unidad ni le sube un archivo a la ficha de un auto, y tampoco da de baja nada. En las pantallas de operación directamente no le aparecen los botones de alta ni los de baja, y si alguien probara la dirección a mano el servidor tampoco lo dejaría: el límite está en los dos lados.',
+            'Entra, busca lo que necesita y se va. Aterriza en el tablero, que le muestra los contadores del stock, las ventas, las reservas y los clientes, más el gráfico de cómo está repartido el stock. Lo que no le aparece son las Acciones del día: no tiene cola de trabajo ni bandejas que atender. Después ve el stock, los clientes, las ventas, las reservas, los presupuestos, los gastos, las financiaciones, la postventa, los proveedores y las sucursales. Y no opera: no registra una venta, no toma una seña, no arma un plan de cuotas, no carga el ingreso de una unidad ni le sube un archivo a la ficha de un auto, y tampoco da de baja nada. En las pantallas de operación directamente no le aparecen los botones de alta ni los de baja, y si alguien probara la dirección a mano el servidor tampoco lo dejaría: el límite está en los dos lados.',
         modulos: [
+            'Dashboard (los contadores, sin las alertas de trabajo)',
             'Vehículos y Comparador',
             'Clientes',
             'Reservas',
@@ -688,6 +771,10 @@ export const ROLES: Rol[] = [
             'Postventa',
             'Proveedores y Sucursales',
         ],
+        // Era el único perfil no-admin sin `notaMenu`, y es el que más la necesita:
+        // en el menú le aparecen tres pantallas que no están en la lista de arriba.
+        notaMenu:
+            'Son los módulos donde mira, no un menú recortado: el menú le esconde las bandejas de atención (Consultas, Bandeja, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría. En cambio le siguen apareciendo Reportes y Ajustes. Reportes le abre la pantalla pero ninguna pestaña de adentro. En Ajustes ve los datos de la concesionaria en modo lectura, en gris y sin poder editarlos; las integraciones de canales no le aparecen.',
         tareas: [
             {
                 titulo: 'Buscar un dato puntual',
@@ -710,14 +797,24 @@ export const ROLES: Rol[] = [
             // El primero es el que define al rol, así que va primero. Antes este
             // punto no existía porque las pantallas de operación no tenían candado.
             'No registra nada: ni una venta, ni una seña, ni un plan de cuotas, ni un ingreso de unidad, ni un movimiento al taller, ni un archivo en la ficha de un auto. Tampoco edita ni da de baja. Es el único perfil que sólo lee.',
-            'No entra a ningún reporte. Si abre la pantalla Reportes, no tiene ninguna pestaña habilitada.',
+            // Matiz que la página tiene que sostener sin contradecirse: Reportes no está
+            // filtrado por rol en el menú, así que este perfil SÍ lo ve listado. Lo que
+            // no tiene es una sola pestaña que le abra (ningún reporte lo incluye en su
+            // authorize). El módulo Reportes, más abajo, lo dice igual.
+            'No entra a ningún reporte. La pantalla Reportes le aparece en el menú, pero no tiene ninguna pestaña habilitada adentro.',
             // "Seguimientos" y "Usuarios" eran los dos flojos de esta enumeración. La
             // bitácora del cliente (la nota libre del vendedor sobre la negociación) se
             // leía entera desde la pestaña Seguimiento de cualquier ficha, y ahora está
             // cerrada de verdad. Con Usuarios el arreglo fue otro —hay pantallas que
             // necesitan el lookup de nombres—, así que la frase dice lo que pasa.
-            'No ve Consultas, WhatsApp, Mercado Libre, Tasaciones ni Auditoría. Tampoco la bitácora de seguimiento de un cliente: lo que el vendedor anota de la negociación no le aparece.',
-            'De los usuarios no ve nada: ni el listado, ni los mails, ni quién cobra qué comisión.',
+            'No ve Consultas, la Bandeja, Mercado Libre, Tasaciones ni Auditoría. Tampoco la bitácora de seguimiento de un cliente: lo que el vendedor anota de la negociación no le aparece.',
+            // Decía "De los usuarios no ve nada: ni el listado...". El absoluto era falso
+            // y se cae en la primera demo: los nombres del equipo salen en el filtro de
+            // vendedor de Clientes y en cada fila del listado de Ventas, dos pantallas que
+            // este perfil abre. Lo que el recorte del servidor sí saca es el mail y la
+            // comisión. Se dice con la misma precisión que el bullet del vendedor y que
+            // el párrafo de ESTADO_HONESTO, para que las tres digan lo mismo.
+            'No administra Usuarios: no le abre esa pantalla, no da de alta a nadie y no toca permisos. No ve los mails ni quién cobra qué comisión. Los nombres del equipo y qué hace cada uno sí los ve, porque el filtro de vendedor de Clientes y el listado de Ventas los necesitan para decir quién atendió.',
             'No exporta a Excel y no ve el historial de precios de una unidad.',
         ],
     },
@@ -799,7 +896,7 @@ export const MODULOS: Modulo[] = [
     {
         nombre: 'Vehículos',
         seccion: 'Gestión de Stock',
-        qué: 'La ficha de cada unidad, con precio de compra, precio de lista, VTV, seguro, estado y sucursal. De la ficha cuelgan las fotos y archivos, los gastos, los movimientos, los presupuestos, las reservas, la venta, los interesados y el historial de precios. Ficha en PDF para el cliente, catálogo del stock filtrado y exportación a Excel.',
+        qué: 'La ficha de cada unidad, con precio de lista, VTV, seguro, estado y sucursal. El precio de compra y la fecha de compra están ahí, pero el servidor se los manda sólo al administrador. De la ficha cuelgan las fotos y archivos, los gastos, los movimientos, los presupuestos, las reservas, la venta, los interesados y el historial de precios. Ficha en PDF para el cliente, catálogo del stock filtrado y exportación a Excel.',
         roles: TODOS,
     },
     {
@@ -811,7 +908,10 @@ export const MODULOS: Modulo[] = [
     {
         nombre: 'Ingresos',
         seccion: 'Gestión de Stock',
-        qué: 'El acta de cómo entró cada unidad: compra a proveedor, compra a particular, permuta, consignación u otro, con el valor tomado, de quién vino y quién lo registró.',
+        // El valor tomado lleva el mismo recorte que el precio de compra en Vehículos, y
+        // se dice con el mismo fraseo: al cobrador, al de postventa y al perfil de
+        // consulta el servidor no se los manda, y la columna directamente no se dibuja.
+        qué: 'El acta de cómo entró cada unidad: compra a proveedor, compra a particular, permuta, consignación u otro, de quién vino y quién lo registró. El valor tomado está ahí, pero el servidor se lo manda sólo al administrador y al vendedor.',
         roles: TODOS,
     },
     {
@@ -839,15 +939,18 @@ export const MODULOS: Modulo[] = [
         roles: ['admin', 'vendedor'],
     },
     {
-        nombre: 'WhatsApp',
+        // El ítem del menú se llama "Bandeja" desde que el buzón dejó de ser sólo de
+        // WhatsApp (nav.ts). El nombre viejo sigue funcionando en el buscador de
+        // comandos, pero en pantalla no aparece más, así que acá tampoco.
+        nombre: 'Bandeja',
         seccion: 'Operaciones',
-        qué: 'Bandeja compartida del número de la concesionaria: hilos ordenados por actividad, no leídos, filtro de "sin responder", búsqueda y asignación del chat a un vendedor. El hilo se engancha solo al cliente si el teléfono ya estaba cargado.',
+        qué: 'Un solo buzón para todo lo que te escribe el cliente: WhatsApp, los mensajes directos de Instagram y de Messenger, y los comentarios de tus publicaciones de Instagram y de tu página de Facebook. Se responde desde acá en los cinco. Hilos ordenados por actividad, no leídos, filtro por canal y de "sin responder", búsqueda y asignación del hilo a un vendedor. El de WhatsApp se engancha solo al cliente si el teléfono ya estaba cargado; los de Instagram y Messenger no traen teléfono, así que se registran como consulta con un botón.',
         roles: ['admin', 'vendedor'],
     },
     {
         nombre: 'Mercado Libre',
         seccion: 'Operaciones',
-        qué: 'Publicás la unidad desde el sistema, de a una y a pedido, y el aviso sigue al stock: si reservás se pausa, si vendés se cierra, si cambiás el precio se actualiza. Las preguntas entran a una bandeja, se asignan, se responden desde acá y se pasan a cliente con un botón.',
+        qué: 'Publicás la unidad desde el sistema, de a una y a pedido, y el aviso sigue al stock: si reservás se pausa, si vendés se cierra, si cambiás el precio se actualiza. Las preguntas entran a una bandeja, se asignan, se responden desde acá y se pasan a cliente con un botón. Si todavía no vinculaste tu cuenta, el modo demostración te deja recorrer todo eso con publicaciones y preguntas simuladas.',
         roles: ['admin', 'vendedor'],
     },
     {
@@ -913,8 +1016,11 @@ export const MODULOS: Modulo[] = [
     {
         nombre: 'Reportes',
         seccion: 'Finanzas & Postventa',
-        qué: 'Once pestañas, y cada rol ve sólo las que le corresponden: el vendedor no ve rentabilidad ni comisiones, el cobrador ve caja, mora y por vencer, el de postventa ve taller y documentación. Casi todos se filtran por fecha y sucursal y bajan a Excel.',
-        roles: ['admin', 'vendedor', 'cobrador', 'postventa'],
+        qué: 'Once pestañas, y cada rol ve sólo las que le corresponden: el vendedor no ve rentabilidad ni comisiones, el cobrador ve caja, mora y por vencer, el de postventa ve taller y documentación. El perfil de consulta ve la pantalla en el menú, pero no le abre ninguna pestaña. Casi todos se filtran por fecha y sucursal y bajan a Excel.',
+        // 'lectura' va en la lista porque el ítem del menú no está filtrado por rol:
+        // lo ve listado. Que no le abra nada adentro lo dice el texto de arriba y el
+        // `noPuede` del rol. Sacarlo de acá sería dibujar un menú que no es el real.
+        roles: ['admin', 'vendedor', 'cobrador', 'postventa', 'lectura'],
     },
     {
         nombre: 'Sucursales',
@@ -937,7 +1043,12 @@ export const MODULOS: Modulo[] = [
     {
         nombre: 'Ajustes',
         seccion: 'Configuración',
-        qué: 'Los datos de la concesionaria, el logo y los colores que salen en todos los documentos, la cotización del dólar del día, y las integraciones de canales (los formularios de Instagram y Facebook, la casilla de correo, WhatsApp y Mercado Libre). Editar es del administrador; el resto lo ve en gris.',
+        // Dos cosas estaban mal acá. Una: la cotización del dólar no vive en Ajustes,
+        // se carga desde Reportes al consolidar monedas. Otra: "el resto lo ve en gris"
+        // vale sólo para los datos de la concesionaria; las integraciones, WhatsApp,
+        // Mercado Libre y los modos demostración están detrás del rol administrador y
+        // al resto NO le aparecen, ni en gris. El logo y los colores, tampoco.
+        qué: 'Los datos de la concesionaria: eso lo abre todo el equipo, y quien no es administrador los ve en gris, sin poder editarlos. El logo, los colores y el pie que salen en todos los documentos son del administrador, igual que los datos fiscales. Y las integraciones de canales —los cuatro canales de Meta (mensajes de Instagram, mensajes de Messenger y comentarios de las dos redes), los formularios de campaña, la casilla de correo, WhatsApp y Mercado Libre— también: al resto del equipo no le aparecen. Cada canal muestra qué le falta hacer del lado de Meta, y de ahí se encienden y se apagan los modos demostración.',
         roles: TODOS,
     },
     {
@@ -989,6 +1100,13 @@ export const REPORTES: Reporte[] = [
     {
         nombre: 'Ranking de vendedores',
         responde: 'Quién vende: unidades, facturado y rentabilidad por vendedor en el período.',
+    },
+    {
+        // Faltaba, y es una de las once pestañas reales de Reportes. La página la
+        // nombraba tres veces (el rol admin, el cobrador y la tarea de objetivos) y
+        // acá no figuraba.
+        nombre: 'Objetivos',
+        responde: 'Cómo viene cada vendedor contra la meta que le pusiste: el objetivo del mes, lo que lleva hecho y el porcentaje cumplido.',
     },
     {
         nombre: 'Comisiones',
@@ -1051,14 +1169,41 @@ export const ESTADO_HONESTO: { titulo: string; detalle: string }[] = [
             'El circuito de facturación está armado y se puede mostrar en pantalla: determina si el comprobante es A, B o C según la condición de IVA de las dos partes, separa el neto del IVA, numera por punto de venta sin saltos y genera el PDF con el código QR. Pero el CAE que emite hoy es simulado: no tiene validez fiscal. Falta el certificado y la conexión real con AFIP, que es el próximo paso del módulo. Hasta que eso esté, la factura oficial la seguís emitiendo por donde la emitís hoy.',
     },
     {
+        // Esta entrada tenía dos afirmaciones falsas.
+        //
+        // 1) "cada concesionaria tiene que crear su propia aplicación en el portal de
+        //    desarrolladores de Mercado Libre": no. La aplicación de Mercado Libre es
+        //    UNA sola por instalación (vive en la configuración del servidor, no hay
+        //    fila por concesionaria como sí la hay para Meta). Lo único que hace cada
+        //    concesionaria es autorizar SU cuenta. El trámite de aplicación propia es
+        //    de Meta, y así lo cuenta el paso del administrador tres bloques más arriba.
+        //
+        // 2) "cuando lo apagás, se borra": se borran la cuenta simulada, sus
+        //    publicaciones y sus preguntas. Los clientes registrados desde una pregunta
+        //    simulada NO, y es a propósito (la ingesta puede haber actualizado una ficha
+        //    real). El cartel de confirmación de Ajustes lo dice con todas las letras y
+        //    el aviso posterior informa cuántos quedaron, así que la página prometía lo
+        //    contrario de lo que muestra la pantalla.
         titulo: 'Mercado Libre funciona, pero no viene enchufado',
         detalle:
-            'Se publica de verdad y el aviso sigue al stock: reservás y se pausa, vendés y se cierra, cambiás el precio y se actualiza. Ahora, para que eso ande hay dos pasos que no son automáticos: hay que cargar las credenciales de la aplicación en el servidor, y cada concesionaria tiene que crear su propia aplicación en el portal de desarrolladores de Mercado Libre y autorizar su cuenta. Aparte, publicar en Mercado Libre lo cobra Mercado Libre, no nosotros: por eso se publica unidad por unidad y siempre a pedido, nunca solo. Si querés verlo antes de conectar nada, hay un modo demostración que muestra el circuito completo sin salir a la red, y todo lo que genera queda rotulado como simulado y afuera de los reportes.',
+            'Se publica de verdad y el aviso sigue al stock: reservás y se pausa, vendés y se cierra, cambiás el precio y se actualiza. Ahora, para que eso ande hay un paso que no es automático, y es tuyo: autorizar tu propia cuenta de Mercado Libre desde Ajustes. La aplicación contra la que se autoriza se carga una sola vez del lado del sistema, así que no tenés que crear ninguna ni tramitar nada en el portal de Mercado Libre. Aparte, publicar en Mercado Libre lo cobra Mercado Libre, no nosotros: por eso se publica unidad por unidad y siempre a pedido, nunca solo. Si querés verlo antes de conectar nada, encendés el modo demostración desde Ajustes y recorrés el circuito completo sin salir a la red: publicás una unidad, la pausás, la cerrás, elegís el tipo de publicación viendo lo que costaría y, con otro botón, sembrás preguntas de ejemplo para contestarlas. Todo lo que genera queda rotulado como simulado, afuera de los reportes y sin link, porque no hay ningún aviso que abrir afuera. Cuando lo apagás se borran la cuenta simulada, sus publicaciones y sus preguntas. Lo único que queda son los clientes que hayas registrado desde una pregunta de ejemplo, porque ya son fichas del CRM: quedan en Clientes con el rótulo de simulación y afuera de los reportes, la pantalla te dice cuántos quedaron y los borrás vos si querés.',
     },
     {
-        titulo: 'De Instagram y Facebook entra el formulario, no el chat',
+        // Entrada REESCRITA DE CERO. La versión anterior ("los mensajes directos, los
+        // comentarios y Messenger no se leen") quedó falsa: los cuatro canales entran
+        // y se responden desde la Bandeja. Lo que sigue siendo cierto de la vieja es
+        // el trámite (aplicación propia de Meta + permisos aprobados) y que sin
+        // campañas publicadas no hay Lead Ads.
+        //
+        // Por eso ahora es mitad función y mitad trámite pendiente, y se escribe en
+        // ese orden: primero lo que hace, después lo que falta. Las tres reglas que
+        // el dueño se va a encontrar en pantalla —el plazo de 24 h de Meta, que un
+        // comentario se responde en público y el modo demostración— se cuentan acá
+        // porque son las que explican por qué la pantalla se comporta como se
+        // comporta. "App Review" no se nombra: se dice qué es.
+        titulo: 'Instagram y Facebook: el chat ya entra, pero antes hay un trámite con Meta',
         detalle:
-            'Lo que entra solo es el formulario de campaña: ese que el interesado completa dentro de Instagram o Facebook, sin salir de la app. Cae en Consultas en el momento, con el nombre y el teléfono que dejó y un vendedor ya asignado. Los mensajes directos, los comentarios y Messenger no se leen: si lo probás mandándote un mensaje a vos mismo no va a aparecer, y no está fallando. Dos cosas antes de que funcione, y conviene saberlas de entrada: hay que conectar tu página con una aplicación propia de Meta —trámite de una sola vez, igual que con Mercado Libre— y tener avisos con formulario dando vueltas. Sin campañas publicadas no hay formularios, y sin formularios no entra nada.',
+            'Ahora sí entra el chat. Los mensajes directos de Instagram, los de Messenger y los comentarios de tus publicaciones de Instagram y de tu página de Facebook caen en la misma Bandeja que WhatsApp, y se contestan desde el sistema. Los formularios de campaña —los Lead Ads— siguen entrando aparte y solos, derecho a Consultas y con un vendedor asignado. Tres cosas para saber de entrada. La primera es una regla de Meta y no nuestra: a un mensaje directo de Instagram o de Messenger sólo se lo puede contestar dentro de las 24 horas desde el último mensaje de la persona. Cuando falta poco el sistema te avisa cuánto te queda, y si el plazo ya se pasó te bloquea el campo y te explica por qué, en vez de dejarte escribir un mensaje que no va a llegar. Vas a poder responderle en cuanto te escriba de nuevo. La segunda: los comentarios no tienen ese plazo, pero responder un comentario es público —se publica abajo de la publicación y lo lee cualquiera que pase—, así que la pantalla te lo avisa antes de escribir y el botón dice "Publicar" en vez de "Enviar". La tercera es el trámite, que no cambió: cada concesionaria tiene que crear su propia aplicación en el portal de Meta y pedirle permiso para leer y responder mensajes y comentarios. Ese permiso lo revisa gente de Meta y tarda semanas; hasta que lo aprueban, la aplicación sólo le puede escribir a un puñado de cuentas de prueba. Mientras tanto no te quedás mirando una pantalla vacía: encendés el modo demostración desde Ajustes y tocás "Generar conversaciones de ejemplo" —son dos botones, uno atrás del otro—, y ahí la Bandeja se llena con hilos de los cuatro canales: uno con el plazo abierto, otro a punto de cerrarse, otro ya cerrado y dos comentarios, para que veas cómo se comporta cada caso antes de tramitar nada. Todo queda rotulado como simulación: no se llama a Meta, no le llega nada a nadie y no se publica ningún comentario. Lo único que la demostración no reproduce son los formularios de campaña. Cuando la apagás se lleva los hilos simulados, pero si registraste alguno como consulta esa ficha queda en Clientes, rotulada como simulación y afuera de los reportes: ya es un cliente del CRM, y lo borrás vos si querés.',
     },
     {
         titulo: 'Con los portales de avisos no hay conexión directa',
@@ -1066,9 +1211,13 @@ export const ESTADO_HONESTO: { titulo: string; detalle: string }[] = [
             'No hay integración con DeRuedas ni con otros portales de clasificados. Lo que sí hay es un lector de casilla de correo: configurás un mail, y cada cinco minutos el sistema lee los avisos que te llegan ahí, saca el nombre, el teléfono y el mail, y arma la consulta con su vendedor asignado. Sirve para cualquier portal que te avise por correo, pero es eso: leer tu casilla, no estar conectado al portal.',
     },
     {
-        titulo: 'WhatsApp no es un bot',
+        // El título decía "WhatsApp no es un bot" y se quedó corto cuando el buzón dejó
+        // de ser sólo de WhatsApp: la promesa de "acá no contesta una máquina" vale para
+        // los cinco canales. Lo específico de WhatsApp (el QR, el ritmo, que no es la
+        // conexión oficial) se mantiene tal cual, porque sigue siendo cierto.
+        titulo: 'La Bandeja no es un contestador automático',
         detalle:
-            'El número se vincula escaneando un QR, igual que WhatsApp Web, y te sigue funcionando en el celular. No hay respuestas automáticas ni contestador: los mensajes los escribe una persona desde el panel. Salen espaciados a propósito, con un ritmo variable, para cuidar el número. No es la conexión oficial de Meta para empresas.',
+            'No hay respuestas automáticas ni bot en ningún canal: los mensajes los escribe una persona desde el panel. En WhatsApp, además, el número se vincula escaneando un QR, igual que WhatsApp Web, y te sigue funcionando en el celular; los mensajes salen espaciados a propósito, con un ritmo variable, para cuidar el número. Eso no es la conexión oficial de Meta para empresas. Instagram, Messenger y los comentarios sí van por la conexión oficial de Meta, con lo que eso trae: la aplicación propia, el permiso aprobado y el plazo de 24 horas de los mensajes directos.',
     },
     {
         titulo: 'Los perfiles son cinco y vienen fijos: no se arman a medida',

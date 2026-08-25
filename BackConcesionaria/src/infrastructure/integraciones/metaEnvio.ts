@@ -272,6 +272,102 @@ async function credencialesDe(
 const emisorDeDm = (canal: CanalMetaConversacion, config: ConfigMeta): string =>
     idDeCuentaMeta(config, objetoDe(canal)) ?? idDeCuentaMeta(config, 'page') ?? 'me';
 
+/**
+ * A dónde va la respuesta en Meta: la persona (DM) o el comentario RAÍZ del hilo
+ * (comentarios). Tira el mismo error que ya tiraba cada camino si el hilo no lo
+ * tiene guardado.
+ *
+ * Está separado porque lo usan los DOS modos: sin esto, el desvío de la
+ * demostración habría tenido que repetir las dos frases —o peor, tragarse la
+ * falta de destino y "enviar" igual—, y la demostración quedaría siendo MÁS
+ * permisiva que la plataforma que dice reproducir.
+ */
+function destinoMeta(conversacion: ConversacionMetaEnvio, canal: CanalMetaConversacion): string {
+    if (esCanalDeComentarios(canal)) {
+        if (!conversacion.comentarioExternoId) {
+            throw new CanalMetaNoConfiguradoError(
+                'La conversación no tiene guardado el id del comentario, así que no se sabe en qué hilo publicar la respuesta.',
+            );
+        }
+        return conversacion.comentarioExternoId;
+    }
+    if (!conversacion.contactoExternoId) {
+        throw new CanalMetaNoConfiguradoError(
+            'La conversación no tiene guardado el id del contacto en Meta, así que no hay a quién mandarle el mensaje.',
+        );
+    }
+    return conversacion.contactoExternoId;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Modo demostración
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ¿El hilo salió por una integración en modo demostración?
+ *
+ * El `where` es EL MISMO que el de `credencialesDe` (tenant a mano, tipo meta,
+ * activa y sin borrar) a propósito: una integración demo apagada o borrada tiene
+ * que caer en el mismo "está desactivada o fue eliminada" que una real, no
+ * "enviarse" simulada en silencio. Por eso este chequeo no la encuentra y el
+ * envío sigue de largo hasta el error de siempre.
+ */
+async function esIntegracionSimulada(conversacion: ConversacionMetaEnvio): Promise<boolean> {
+    if (!conversacion.integracionId) return false;
+    const integracion = await withAuthBypass((tx) => tx.integracionCanal.findFirst({
+        where: {
+            id: conversacion.integracionId as number,
+            concesionariaId: conversacion.concesionariaId,
+            tipo: 'meta',
+            activo: true,
+            deletedAt: null,
+        },
+        select: { modo: true },
+    }));
+    return integracion?.modo === 'demo';
+}
+
+/**
+ * Secuencia dentro del proceso. Va junto al reloj porque dos respuestas
+ * despachadas en el mismo milisegundo chocarían contra el unique
+ * `[conversacionId, externoId]` de los mensajes.
+ */
+let secuenciaEnvioSimulado = 0;
+
+/**
+ * Registra el envío como exitoso SIN tocar la red, y devuelve un id que se
+ * distingue a simple vista de uno de Meta.
+ *
+ * El id importa: el worker lo guarda en `mensaje.externoId`, que es la misma
+ * columna donde va el `mid` real. Con prefijo `DEMO-` cualquiera que mire la
+ * fila, el log o la burbuja sabe que eso no salió a ningún lado; un id con forma
+ * de `m_AbC...` sería exactamente el dato falso que este desvío no puede
+ * producir.
+ */
+function despacharSimulado(
+    conversacion: ConversacionMetaEnvio,
+    canal: CanalMetaConversacion,
+    texto: string,
+): { externoId: string } {
+    const esComentario = esCanalDeComentarios(canal);
+    // Mismos rechazos que el camino real: a un hilo sin destino no se le
+    // "responde" ni siquiera simulando.
+    destinoMeta(conversacion, canal);
+
+    secuenciaEnvioSimulado += 1;
+    // `DEMO-` + base36 del reloj: corto, ordenado en el tiempo e imposible de
+    // confundir con un mid de Meta de un vistazo.
+    const externoId = `${esComentario ? 'DEMO-COMMENT' : 'DEMO-MID'}`
+        + `-${Date.now().toString(36).toUpperCase()}-${secuenciaEnvioSimulado}`;
+
+    logger.info(
+        `[meta-envio] hilo ${conversacion.id} (${canal}): SIMULADO — `
+        + `${esComentario ? 'respuesta a comentario' : 'DM'} de ${texto.length} caracteres registrado `
+        + `sin llamar a Meta (${externoId})`,
+    );
+    return { externoId };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Envío
 // ─────────────────────────────────────────────────────────────────────────────
@@ -304,6 +400,28 @@ export async function despacharMensajeMeta(
 
     const texto = (contenido ?? '').trim();
     if (!texto) throw new CanalMetaNoConfiguradoError('El mensaje no puede estar vacío');
+
+    // ÚNICO desvío del modo demostración en toda la salida hacia Meta. Va ACÁ y
+    // no en el service porque esta función es el embudo por el que sale TODO lo
+    // que el sistema le manda a Meta: enganchándolo en este punto, la
+    // demostración recorre exactamente el mismo código de negocio que el modo
+    // real (encolar, el turno del worker, la política de reintentos, marcar
+    // enviado, guardar el id externo) y no queda ni una regla duplicada en un
+    // `if (demo)` que después se desincronice de la de verdad.
+    //
+    // Y va exactamente en este renglón:
+    //  - DESPUÉS de `assertVentanaMetaAbierta`: en demostración la ventana de
+    //    24 h SE RESPETA. Es la mitad de lo que hay que demostrar —el vendedor
+    //    tiene que ver el composer bloqueado y entender por qué—, así que
+    //    saltearla acá haría que la demo mienta justo sobre la regla que enseña.
+    //  - ANTES de `credencialesDe`: esa función exige el token del canal y lo
+    //    descifra. Una integración demo NO tiene credenciales (no hay ningún
+    //    secreto real que guardar), así que ahí reventaría antes de llegar al
+    //    fetch. Este es el punto donde el modo demostración deja de tocar la red
+    //    y de exigir token, sin dejar de recorrer todo lo demás.
+    // El costo es una lectura extra de la fila de la integración por envío: es
+    // la misma que `credencialesDe` hace a continuación para las reales.
+    if (await esIntegracionSimulada(conversacion)) return despacharSimulado(conversacion, canal, texto);
 
     const { config, token } = await credencialesDe(conversacion, canal);
 
@@ -343,11 +461,7 @@ async function enviarDm(
     texto: string,
     token: string,
 ): Promise<{ externoId: string | null }> {
-    if (!conversacion.contactoExternoId) {
-        throw new CanalMetaNoConfiguradoError(
-            'La conversación no tiene guardado el id del contacto en Meta, así que no hay a quién mandarle el mensaje.',
-        );
-    }
+    const destinatario = destinoMeta(conversacion, canal);
 
     const respuesta = await llamarGraph<{ message_id?: string; recipient_id?: string }>(
         `${encodeURIComponent(emisorDeDm(canal, config))}/messages`,
@@ -355,7 +469,7 @@ async function enviarDm(
             token,
             method: 'POST',
             body: {
-                recipient: { id: conversacion.contactoExternoId },
+                recipient: { id: destinatario },
                 message: { text: texto },
                 messaging_type: 'RESPONSE',
             },
@@ -390,11 +504,7 @@ async function responderComentario(
     texto: string,
     token: string,
 ): Promise<{ externoId: string | null }> {
-    if (!conversacion.comentarioExternoId) {
-        throw new CanalMetaNoConfiguradoError(
-            'La conversación no tiene guardado el id del comentario, así que no se sabe en qué hilo publicar la respuesta.',
-        );
-    }
+    const comentarioRaiz = destinoMeta(conversacion, canal);
 
     // Instagram usa /replies y Facebook /comments para lo mismo: colgar una
     // respuesta del comentario raíz. Las dos redes aplanan los hilos en dos
@@ -403,7 +513,7 @@ async function responderComentario(
     const sufijo = canal === 'instagram_comentario' ? 'replies' : 'comments';
 
     const respuesta = await llamarGraph<{ id?: string }>(
-        `${encodeURIComponent(conversacion.comentarioExternoId)}/${sufijo}`,
+        `${encodeURIComponent(comentarioRaiz)}/${sufijo}`,
         { token, method: 'POST', body: { message: texto } },
     );
 

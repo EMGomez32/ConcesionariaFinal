@@ -516,6 +516,19 @@ export async function listar(filtros: FiltroConversaciones) {
                 ventanaVenceAt: true,
                 whatsappCuentaId: true,
                 integracionId: true,
+                // El MODO de la integración que trajo el hilo, para el rótulo de
+                // simulación de cada fila. Va en el listado y no se resuelve en
+                // el front porque Ajustes › Integraciones es admin-only: sin
+                // esto un vendedor vería la bandeja simulada sin una sola marca.
+                integracion: { select: { modo: true } },
+                // Los ids del hilo viajan SÓLO para que el rótulo tenga red: el
+                // front (`esHiloSimulado`) confirma la simulación por el prefijo
+                // DEMO- si algún día `simulado` dejara de llegar. Sin estos
+                // campos el chip de la lista dependía de una única fuente y los
+                // tres respaldos que el front declara eran inalcanzables.
+                claveHilo: true,
+                contactoExternoId: true,
+                comentarioExternoId: true,
                 cliente: { select: { id: true, nombre: true } },
                 asignadoA: { select: { id: true, nombre: true } },
                 // El include NO hereda el filtro de borrados de la extensión: va
@@ -531,8 +544,13 @@ export async function listar(filtros: FiltroConversaciones) {
         prisma.conversacion.count({ where }),
     ]);
 
-    const results = filas.map(({ mensajes, ...conversacion }) => ({
+    const results = filas.map(({ mensajes, integracion, ...conversacion }) => ({
         ...conversacion,
+        // Aplanado como booleano: la fila de la lista no necesita el objeto, y
+        // así el rótulo de la lista y el del composer (`envio.simulado`) se
+        // llaman igual. Se mira el modo aunque la integración esté desactivada:
+        // un hilo que nació simulado sigue siendo simulado.
+        simulado: integracion?.modo === 'demo',
         ultimoMensaje: mensajes[0]?.contenido ?? null,
     }));
 
@@ -557,6 +575,14 @@ export interface CondicionesEnvio {
     /** true = lo que se escriba queda PÚBLICO en la publicación (comentarios). */
     respuestaPublica: boolean;
     limiteCaracteres: number;
+    /**
+     * true = el hilo entró por una integración en modo DEMOSTRACIÓN: la
+     * respuesta se registra adentro del sistema y no se llama a Meta. Se
+     * resuelve en el backend (el modo vive en la fila de la integración, y
+     * Ajustes › Integraciones es admin-only) para que la bandeja pueda rotular
+     * la simulación también para un vendedor.
+     */
+    simulado: boolean;
 }
 
 /** Si el canal de Meta del hilo está en condiciones de responder, y por qué no. */
@@ -564,6 +590,13 @@ interface EstadoCanalHilo {
     habilitado: boolean;
     /** Qué falta, redactado para mostrar TAL CUAL. null cuando está todo. */
     motivo: string | null;
+    /**
+     * La integración que trajo el hilo está en modo demostración: lo que se
+     * escriba NO sale a Meta. Viaja hasta el composer porque es el rótulo que
+     * distingue lo conectado de lo simulado, y quien mira la bandeja tiene que
+     * poder verlo sin buscarlo.
+     */
+    simulado: boolean;
 }
 
 /**
@@ -588,6 +621,7 @@ async function estadoCanalDelHilo(
             habilitado: false,
             motivo: 'A esta conversación le falta el vínculo con la integración de Meta, así que no hay por dónde responder. '
                 + 'Va a poder contestarse cuando entre un mensaje nuevo del hilo.',
+            simulado: false,
         };
     }
 
@@ -595,21 +629,28 @@ async function estadoCanalDelHilo(
     // concesionaria no puede matchear ni por accidente.
     const integracion = await prisma.integracionCanal.findFirst({
         where: { id: integracionId, tipo: 'meta', activo: true },
-        select: { config: true },
+        // `modo` viaja junto al config porque decide las dos cosas de un tirón:
+        // si el canal está habilitado (una demo no tiene credenciales que
+        // cargar) y si el hilo se rotula como simulado en pantalla.
+        select: { config: true, modo: true },
     });
     if (!integracion) {
         return {
             habilitado: false,
             motivo: 'La integración de Meta de esta conversación está desactivada o fue eliminada. '
                 + 'Avisale a un administrador para que la revise en Ajustes › Integraciones.',
+            simulado: false,
         };
     }
 
+    const simulado = integracion.modo === 'demo';
     // Qué falta lo decide el dominio, que es el mismo que pinta el estado de los
-    // canales en Ajustes: el vendedor y el admin leen exactamente lo mismo.
-    const estado = estadoCanalesMeta(integracion.config).find((c) => c.canal === canal);
-    if (!estado || estado.habilitado) return { habilitado: true, motivo: null };
-    return { habilitado: false, motivo: motivoCanalMetaNoConfigurado(estado) };
+    // canales en Ajustes: el vendedor y el admin leen exactamente lo mismo. En
+    // modo demostración los cinco canales salen habilitados —no hay token que
+    // cargar—, si no el composer quedaría bloqueado y no habría nada que mostrar.
+    const estado = estadoCanalesMeta(integracion.config, integracion.modo).find((c) => c.canal === canal);
+    if (!estado || estado.habilitado) return { habilitado: true, motivo: null, simulado };
+    return { habilitado: false, motivo: motivoCanalMetaNoConfigurado(estado), simulado };
 }
 
 /**
@@ -641,6 +682,9 @@ export function condicionesEnvio(
         ventanaVenceAt: ventana.venceAt,
         respuestaPublica: esCanalComentario(canal),
         limiteCaracteres: LIMITE_TEXTO[canal] ?? 4096,
+        // Un hilo de WhatsApp nunca es simulado: WhatsApp se vincula de verdad
+        // escaneando el QR, no tiene modo demostración.
+        simulado: canalMeta?.simulado === true,
     };
 }
 
@@ -659,6 +703,9 @@ export async function detalle(id: number) {
             integracionId: true,
             telefono: true,
             jid: true,
+            // Igual que en el listado: el front lo usa como respaldo del rótulo
+            // de simulación (la clave lleva adentro el id DEMO- del contacto).
+            claveHilo: true,
             contactoExternoId: true,
             postExternoId: true,
             comentarioExternoId: true,
@@ -1090,10 +1137,21 @@ export async function registrarConsulta(id: number, datos: DatosConsultaManual =
             nombreContacto: true,
             asignadoAId: true,
             clienteId: true,
+            // El modo de la integración es la fuente de verdad del rótulo: dice
+            // si el hilo lo fabricó el modo demostración o si del otro lado hay
+            // alguien de verdad.
+            integracion: { select: { modo: true } },
         },
     });
     if (!conversacion) throw new NotFoundException('Conversación');
     assertPuedeAtender(conversacion.asignadoAId);
+
+    // Éste es el ÚNICO punto por el que algo simulado sale de la simulación: el
+    // cliente que se crea acá sobrevive a "Salir del modo demostración" (ya es
+    // una ficha del CRM, con lo que el vendedor le haya cargado a mano). Sin la
+    // marca, un hilo que fabricó el sistema terminaba como una ficha
+    // indistinguible de un interesado real y contada en el reporte de consultas.
+    const simulada = conversacion.integracion?.modo === 'demo';
 
     const nombreCargado = opcional(datos.nombre);
     const telefonoCargado = opcional(datos.telefono);
@@ -1103,7 +1161,7 @@ export async function registrarConsulta(id: number, datos: DatosConsultaManual =
     // no tiene ninguno de los dos, así que una segunda llamada crearía otra
     // ficha del mismo contacto: si ya quedó vinculado, se respeta ese vínculo.
     if (!telefono && conversacion.clienteId) {
-        return { clienteId: conversacion.clienteId, creado: false };
+        return { clienteId: conversacion.clienteId, creado: false, simulada, sobreFichaReal: false };
     }
 
     const ultimoEntrante = await prisma.mensajeWhatsapp.findFirst({
@@ -1121,6 +1179,11 @@ export async function registrarConsulta(id: number, datos: DatosConsultaManual =
             ?? `Consulta por ${nombreCanal(conversacion.canal)}`,
         telefono,
         texto: ultimoEntrante?.contenido ?? null,
+        // Rótulo de punta a punta: marca la ficha nueva (origenSimulado, que la
+        // deja fuera de los reportes y con el chip SIMULACIÓN en Clientes) y deja
+        // escrito en las observaciones que la consulta la generó la demostración,
+        // en vez de afirmar que llegó por Instagram.
+        simulada,
     });
 
     // Lo cargado a mano no pisa lo que ya había: el nombre del hilo puede
@@ -1134,7 +1197,14 @@ export async function registrarConsulta(id: number, datos: DatosConsultaManual =
     if (Object.keys(cambios).length > 0) {
         await prisma.conversacion.update({ where: { id }, data: cambios });
     }
-    logger.info(`[bandeja] conversación ${id} (${conversacion.canal}) registrada como consulta (cliente ${resultado.clienteId})`);
+    logger.info(`[bandeja] conversación ${id} (${conversacion.canal}) registrada como consulta (cliente ${resultado.clienteId})${simulada ? ' [SIMULADA]' : ''}`);
 
-    return { clienteId: resultado.clienteId, creado: resultado.creado };
+    // `simulada` vuelve al front: es lo que le permite al aviso decir que el
+    // lead quedó en Clientes rotulado y que sobrevive a apagar la demostración.
+    // `sobreFichaReal` es el caso incómodo: el vendedor cargó a mano un teléfono
+    // que ya estaba en el CRM, así que la consulta simulada cayó sobre un cliente
+    // de VERDAD. La ingesta no le tocó ni el origen ni el estado del lead —sólo
+    // le anotó la línea rotulada—, y el aviso tiene que decir eso en vez de
+    // anunciar un alta que no pasó.
+    return { clienteId: resultado.clienteId, creado: resultado.creado, simulada, sobreFichaReal: resultado.sobreFichaReal };
 }

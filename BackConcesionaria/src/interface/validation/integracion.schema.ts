@@ -120,6 +120,33 @@ export const createIntegracionSchema = z.discriminatedUnion('tipo', [
     }),
 ]);
 
+// ── Modo demostración ────────────────────────────────────────────────────────
+
+/**
+ * Encender el modo demostración de Meta / sembrar sus conversaciones de ejemplo.
+ *
+ * No lleva ningún campo propio a propósito: qué integración se crea y con qué
+ * datos lo decide el servidor (nombre fijo, config sin credenciales, modo demo),
+ * así que el body sólo sirve para que un super_admin elija concesionaria. El
+ * schema existe para que Zod descarte cualquier otra clave: sin él, un body con
+ * `modo: 'real'` o con un `pageAccessToken` llegaría crudo al controller.
+ *
+ * El preprocess NO es cosmético: son botones que se aprietan sin datos, y en
+ * Express 5 un POST sin cuerpo deja `req.body` en `undefined` (body-parser ya no
+ * lo inicializa en `{}`). Sin esto, `z.object` rechazaría la llamada con un 400
+ * de validación por un body que nunca hizo falta mandar.
+ */
+export const demoIntegracionSchema = z.preprocess(
+    (v) => (v === undefined || v === null ? {} : v),
+    z.object({
+        // Tiene que SOBREVIVIR al strip de Zod: para un super_admin la extensión
+        // no inyecta concesionariaId y es la única forma de decir sobre qué
+        // concesionaria se opera. Para el resto `resolveConcesionariaId` lo
+        // ignora y usa el del token, así que declararlo no abre nada.
+        concesionariaId: optionalFk,
+    }),
+);
+
 // ── Update ───────────────────────────────────────────────────────────────────
 // PATCH no permite cambiar `tipo`: config viene PARCIAL y el controller la
 // valida contra el tipo GUARDADO y la mergea sobre la config existente. Los

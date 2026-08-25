@@ -641,11 +641,21 @@ const CapacitacionPage = () => {
                             <h2 className="cap-section-title" id="cap-h-reportes">
                                 Lo que vas a poder responder
                             </h2>
+                            {/*
+                                El contador del encabezado cuenta las entradas de REPORTES y el rol
+                                Administrador habla de "las once pestañas": los dos números son
+                                correctos y hablan de cosas distintas, así que se reconcilian ACÁ, en
+                                el texto, con el mismo criterio con el que se reconcilia el 5-vs-6 de
+                                los perfiles. Once viven en la pantalla Reportes; el resto son alertas
+                                del tablero y documentos de la ficha del cliente y de Consultas.
+                            */}
                             <p className="cap-section-lead">
                                 <BarChart3 size={15} aria-hidden="true" />
                                 <span>
                                     Cada reporte contesta una pregunta concreta. Estas son las preguntas,
-                                    dichas como se dicen en el salón.
+                                    dichas como se dicen en el salón. Once se contestan en las pestañas de la
+                                    pantalla Reportes; las demás salen de las alertas del tablero y de las
+                                    pantallas de Clientes, Consultas y Vehículos.
                                 </span>
                             </p>
                         </div>
@@ -706,7 +716,9 @@ const CapacitacionPage = () => {
                             </h2>
                             <p className="cap-cierre-text">
                                 Una demo en vivo: cargamos una unidad tuya con su precio de compra y sus gastos,
-                                y mirás el margen real en pantalla. Ahí decidís.
+                                y mirás el margen real en pantalla. Los canales que dependen de un trámite —Instagram,
+                                Facebook y Mercado Libre— se miran andando con el modo demostración, sin conectar
+                                ni tramitar nada. Ahí decidís.
                             </p>
 
                             {CONTACTO ? (

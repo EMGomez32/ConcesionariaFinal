@@ -1408,6 +1408,14 @@ model MensajeWhatsapp {
   @@map("mensajes_whatsapp")
 }
 
+/// Cómo se atienden las llamadas de una integración de canales. Mismo criterio
+/// que `ModoCuentaMl` y que `EntornoAfip.mock`: `demo` = todo se resuelve
+/// ADENTRO del sistema, sin red y sin credenciales; `real` = las APIs de verdad.
+enum ModoIntegracion {
+  real
+  demo
+}
+
 /// Config de ingesta automática de consultas por tenant: webhook de Meta
 /// (Lead Ads) o casilla IMAP (avisos de DeRuedas). `config` guarda las
 /// credenciales del canal, cifradas en reposo (AES-256-GCM) cuando
@@ -1419,6 +1427,13 @@ model IntegracionCanal {
   tipo            TipoIntegracionCanal
   nombre          String
   activo          Boolean              @default(true)
+  /// Una integración 'demo' NUNCA sale a la red: el envío lo resuelve el desvío
+  /// de `metaEnvio.despacharMensajeMeta` adentro del sistema, y sus canales se
+  /// reportan HABILITADOS aunque el config no tenga tokens, porque no hay
+  /// ninguno que cargar. Existe para poder mostrar la bandeja de Instagram,
+  /// Messenger y comentarios mientras Meta no aprueba el App Review; todo lo
+  /// que genera va rotulado como simulación en la pantalla.
+  modo            ModoIntegracion      @default(real)
   config          Json
   /// Última consulta ingerida OK y último error del canal (diagnóstico en Ajustes).
   ultimoEvento    DateTime?            @map("ultimo_evento")
@@ -1880,11 +1895,25 @@ enum TipoMovimientoVehiculo {
   otro
 }
 
+/// Acciones del rastro de auditoría. `delete_soft` es la baja LÓGICA (la de la
+/// mayoría de los recursos) y `delete` la baja FÍSICA, la de los datos sin
+/// soft-delete (cotizaciones, intereses de un cliente, lo simulado del modo
+/// demostración). `refinanciar` mueve deuda de un contrato a otro y merece su
+/// propio rastro en vez de confundirse con un `update`.
+///
+/// `delete` y `refinanciar` faltaban acá aunque el tipo de TypeScript de
+/// `security/audit.ts` ya los declaraba y SIETE controllers los usaban: Prisma
+/// rechazaba el INSERT con "Invalid value for argument `accion`" y `audit()`
+/// se traga el error a propósito (nunca puede romper la operación que audita),
+/// así que esas bajas quedaban SIN rastro y en silencio. La lista de acá es la
+/// que manda: si se agrega una acción al tipo de TS, va también en este enum.
 enum AccionAudit {
   create
   update
   cancel
   delete_soft
+  delete
+  refinanciar
   login
   logout
 }

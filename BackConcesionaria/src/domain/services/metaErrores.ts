@@ -112,7 +112,7 @@ function mensajeVendedorDeMeta(status: number, codigo: number | null, subcodigo:
             return 'Meta no encontró a dónde mandar la respuesta: lo más probable es que el comentario o la publicación se hayan borrado.';
         case 230:
         case 551:
-            return 'Meta no deja escribirle a esta persona (puede haber bloqueado los mensajes de la cuenta). Si es urgente, contactala por otra vía.';
+            return 'Meta no deja escribirle a esta persona (puede haber bloqueado los mensajes de la cuenta). Si es urgente, buscá otra vía para llegarle.';
         default:
             break;
     }
@@ -310,7 +310,7 @@ export function estadoVentanaMeta(conversacion: HiloConVentanaMeta): EstadoVenta
             venceAt: ventanaVenceAt,
             motivo: `Pasaron más de 24 horas desde el último mensaje de ${nombreDe(conversacion)} `
                 + `(hace ${24 + horas} h) y ${red} no deja responder fuera de ese plazo. `
-                + 'Vas a poder escribirle en cuanto vuelva a escribir; si es urgente, contactala por otra vía.',
+                + 'Vas a poder escribirle en cuanto te vuelva a escribir; si es urgente, buscá otra vía para llegarle.',
         };
     }
 

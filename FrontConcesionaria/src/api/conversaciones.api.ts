@@ -43,6 +43,54 @@ export interface UsuarioRef {
     nombre: string;
 }
 
+/**
+ * Ids que emite el modo demostración de Meta. Van con prefijo `DEMO-` a
+ * propósito, igual que los de Mercado Libre: se distinguen a simple vista de un
+ * IGSID/PSID real (que son números largos) sin tener que consultar nada.
+ *
+ * NO va anclada sólo al principio: los ids sueltos (`contactoExternoId`,
+ * `comentarioExternoId`) empiezan con DEMO-, pero la clave natural del hilo es
+ * `<integracionId>:<idExterno>` — "7:DEMO-IGSID-ARIEL" —, así que con `/^DEMO-/`
+ * esa rama no podía dar verdadero NUNCA y el respaldo por clave era decorativo.
+ */
+const ID_SIMULADO = /(^|:)DEMO-/i;
+
+/**
+ * Lo mínimo que hace falta para saber si un hilo es simulado. Es estructural
+ * para que le sirvan las dos formas que llegan del backend: la FILA de la lista
+ * y el DETALLE del hilo (que además trae los ids externos).
+ */
+export interface HiloSimulable {
+    /** Lo dice el backend: la integración por la que entró el hilo está en modo demo. */
+    simulado?: boolean | null;
+    /** Alias del anterior, por si el backend rotula con el nombre del modo. */
+    demo?: boolean | null;
+    modo?: string | null;
+    claveHilo?: string | null;
+    contactoExternoId?: string | null;
+    comentarioExternoId?: string | null;
+    envio?: { simulado?: boolean | null } | null;
+}
+
+/**
+ * Si el hilo lo fabricó el modo demostración de Meta.
+ *
+ * No depende de en qué nivel del payload viaje el flag —alcanza con que UNO diga
+ * simulado—, y como último recurso lo confirma por los ids `DEMO-`: el rótulo es
+ * lo único que le permite al vendedor (y a quien mira la demostración)
+ * distinguir un comprador real de uno fabricado, así que no puede depender de
+ * que un campo opcional llegue. Equivocarse rotulando de más cuesta un chip;
+ * equivocarse rotulando de menos hace pasar por cliente a alguien que no existe.
+ */
+export const esHiloSimulado = (hilo?: HiloSimulable | null): boolean =>
+    hilo?.simulado === true
+    || hilo?.demo === true
+    || hilo?.modo === 'demo'
+    || hilo?.envio?.simulado === true
+    || ID_SIMULADO.test(hilo?.contactoExternoId ?? '')
+    || ID_SIMULADO.test(hilo?.comentarioExternoId ?? '')
+    || ID_SIMULADO.test(hilo?.claveHilo ?? '');
+
 /** Fila del listado de la bandeja. */
 export interface ConversacionListItem {
     id: number;
@@ -63,6 +111,22 @@ export interface ConversacionListItem {
      *  lista los hilos de Meta a los que se les está por cerrar la ventana de
      *  24 h. Si no viene, la lista simplemente no muestra ese aviso. */
     ventanaVenceAt?: string | null;
+    /** El hilo lo fabricó el modo demostración de Meta. Viaja en el LISTADO
+     *  porque GET /integraciones es admin-only: sin esto el vendedor —que es el
+     *  que atiende la bandeja— no tendría forma de saber que del otro lado no
+     *  hay nadie. Se lee con `esHiloSimulado`, que además lo confirma por la
+     *  clave del hilo. */
+    simulado?: boolean;
+    /** Clave natural del hilo (`<integracionId>:<idExterno>`). Sólo se usa para
+     *  rotular: en un hilo simulado el id externo empieza con DEMO-. */
+    claveHilo?: string | null;
+    /** Id del contacto en Meta y, en los comentarios, el comentario raíz. Como
+     *  `claveHilo`, viajan SÓLO para que el rótulo tenga más de una fuente: en
+     *  un hilo simulado empiezan con DEMO-. No se muestran. */
+    contactoExternoId?: string | null;
+    comentarioExternoId?: string | null;
+    /** Integración de Meta por la que entró. Diagnóstico, no se muestra. */
+    integracionId?: number | null;
 }
 
 export interface MensajeWhatsapp {
@@ -104,6 +168,11 @@ export interface CondicionesEnvio {
      *  recorta el pegado en silencio y el vendedor manda medio mensaje sin
      *  enterarse. Se avisa y se frena el envío. */
     limiteCaracteres: number;
+    /** El hilo entró por una integración en modo demostración: el saliente se
+     *  guarda acá adentro y NO se llama a Meta. Va junto a las otras condiciones
+     *  porque el composer es donde más caro sale creer que algo es real: es el
+     *  lugar donde se escribe pensando que lo lee un cliente. */
+    simulado?: boolean;
 }
 
 /** Hilo abierto: la conversación + sus últimos 100 mensajes en orden ascendente. */
@@ -136,6 +205,13 @@ export interface ConversacionDetalle {
      *  `ultimoMensajeAt` a propósito — ese lo mueve también un saliente, y la
      *  ventana la corre sólo el entrante del usuario. */
     ventanaVenceAt: string | null;
+    /** Clave natural del hilo dentro del canal. En un hilo simulado el id
+     *  externo que la compone empieza con DEMO-, y eso alcanza para rotularlo. */
+    claveHilo?: string | null;
+    /** El hilo lo fabricó el modo demostración. Duplicado con `envio.simulado` a
+     *  propósito (mismo criterio que la cuenta demo de Mercado Libre): la
+     *  cabecera decide el rótulo antes de mirar las condiciones del composer. */
+    simulado?: boolean;
     /** Estado del composer, ya resuelto por el backend. */
     envio: CondicionesEnvio;
     /** Relaciones que el backend puede expandir además del contrato mínimo. */
@@ -177,6 +253,21 @@ export interface RegistrarConsultaResultado {
     clienteId: number;
     /** true = se creó un cliente nuevo; false = dedupe contra uno existente. */
     creado: boolean;
+    /**
+     * La conversación era simulada: el cliente quedó marcado como tal en el CRM
+     * (`origenSimulado`) y fuera de los reportes. El aviso de éxito lo repite —
+     * es el único paso del circuito por el que algo simulado se convierte en un
+     * dato permanente que sobrevive a apagar la demostración.
+     */
+    simulada?: boolean;
+    /**
+     * La consulta era simulada y el teléfono que se cargó a mano matcheó con un
+     * cliente REAL que ya estaba en el CRM. Esa ficha NO se rotula (es de verdad)
+     * y por eso tampoco se le tocó nada: la ingesta sólo le anotó la consulta,
+     * rotulada, en observaciones — no le cambió el origen ni le reabrió el lead.
+     * El aviso lo dice: si no, la pantalla anuncia un alta que no pasó.
+     */
+    sobreFichaReal?: boolean;
 }
 
 /**

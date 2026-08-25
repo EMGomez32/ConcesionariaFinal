@@ -7,7 +7,7 @@ import { useTour } from '../../onboarding/useTour';
 import { useTourStore } from '../../store/tourStore';
 import { concesionariasApi } from '../../api/concesionarias.api';
 import { usuariosApi } from '../../api/usuarios.api';
-import { integracionesApi } from '../../api/integraciones.api';
+import { integracionesApi, esIntegracionDemo } from '../../api/integraciones.api';
 import type { CanalMeta, EstadoCanal, Integracion, IntegracionConfig, IntegracionTipo } from '../../api/integraciones.api';
 import { whatsappApi } from '../../api/whatsapp.api';
 import type { EstadoSesionWhatsapp, EstadoWhatsappCuenta, SaludNumeroWhatsapp, WhatsappCuenta } from '../../api/whatsapp.api';
@@ -244,7 +244,13 @@ function CanalesMetaInfo({ canales }: { canales: EstadoCanal[] }) {
     );
 }
 
-function SwitchActivo({ activo, disabled, onToggle }: { activo: boolean; disabled?: boolean; onToggle: () => void }) {
+// `title` explica por qué NO se puede tocar (una integración real de Meta no se
+// reenciende con la demostración puesta). Es también lo que distingue el
+// deshabilitado permanente del transitorio: con motivo el cursor dice
+// "no-permitido"; sin motivo el switch está esperando la respuesta del PATCH.
+function SwitchActivo({ activo, disabled, onToggle, title }: {
+    activo: boolean; disabled?: boolean; onToggle: () => void; title?: string;
+}) {
     return (
         <button
             type="button"
@@ -253,11 +259,14 @@ function SwitchActivo({ activo, disabled, onToggle }: { activo: boolean; disable
             aria-label={activo ? 'Desactivar integración' : 'Activar integración'}
             onClick={onToggle}
             disabled={disabled}
+            title={title}
             style={{
                 flexShrink: 0, width: 40, height: 22, borderRadius: 'var(--radius-pill)',
                 border: '1px solid var(--border)',
                 background: activo ? 'var(--accent-gradient)' : 'var(--bg-secondary)',
-                position: 'relative', cursor: disabled ? 'wait' : 'pointer', transition: 'background 0.2s',
+                position: 'relative',
+                cursor: disabled ? (title ? 'not-allowed' : 'wait') : 'pointer',
+                transition: 'background 0.2s',
                 opacity: disabled ? 0.6 : 1,
             }}
         >
@@ -283,6 +292,12 @@ function IntegracionesConsultas() {
     const [saving, setSaving] = useState(false);
     const [togglingId, setTogglingId] = useState<number | null>(null);
     const [form, setForm] = useState<IntegracionFormState>(INTEGRACION_FORM_INICIAL);
+    // Modo demostración de Meta (mismo juego de estados que el bloque de Mercado
+    // Libre: uno por botón, más el par abierto/ocupado del diálogo de salida).
+    const [activandoDemo, setActivandoDemo] = useState(false);
+    const [sembrandoDemo, setSembrandoDemo] = useState(false);
+    const [saliendoDemo, setSaliendoDemo] = useState(false);
+    const [saliendoDemoBusy, setSaliendoDemoBusy] = useState(false);
 
     const cargar = useCallback(() => {
         integracionesApi.getAll()
@@ -441,12 +456,102 @@ function IntegracionesConsultas() {
             .catch(() => addToast('No se pudo copiar la URL', 'error'));
     };
 
+    // ── Modo demostración de Meta ───────────────────────────────────────────
+    // No hay OAuth ni credenciales que pedir: el alta es un botón y la pantalla
+    // pasa a mostrarse rotulada como simulación en cuanto vuelve el listado.
+    const activarDemo = async () => {
+        setActivandoDemo(true);
+        try {
+            await integracionesApi.activarDemo();
+            addToast('Modo demostración activado: no se llama a Meta. Generá las conversaciones de ejemplo para verlas en la Bandeja.', 'success');
+            cargar();
+        } catch (err) {
+            // El 409 del backend dice el motivo útil ("ya hay una integración
+            // real de Meta"): va textual, es lo que indica qué hacer.
+            addToast(getApiErrorMessage(err, 'No se pudo activar el modo demostración'), 'error');
+        } finally {
+            setActivandoDemo(false);
+        }
+    };
+
+    const sembrarConversacionesDemo = async () => {
+        setSembrandoDemo(true);
+        try {
+            const res = await integracionesApi.sembrarConversacionesDemo();
+            // La siembra es idempotente: volver a apretar el botón no duplica el
+            // lote, REINICIA los hilos que ya estaban (vuelven a verse recién
+            // llegados, que es lo que hace falta para repetir la demostración).
+            // Reiniciar incluye descartar las respuestas de la corrida anterior,
+            // y eso se nombra: es lo único que el botón borra.
+            const creadas = res?.creadas;
+            const yaExistian = res?.yaExistian ?? 0;
+            const descartadas = res?.respuestasDescartadas ?? 0;
+            const colaDescartadas = descartadas > 0
+                ? ` Se descartaron ${descartadas} respuesta(s) de la demostración anterior.`
+                : '';
+            addToast(typeof creadas === 'number'
+                ? (creadas === 0
+                    ? `Las ${yaExistian} conversaciones de ejemplo ya estaban: se reiniciaron y vuelven a verse recién llegadas en la Bandeja.${colaDescartadas}`
+                    : `${creadas} conversaciones de ejemplo generadas${yaExistian > 0 ? ` (${yaExistian} ya estaban: se reiniciaron)` : ''}. Están en Bandeja, rotuladas como SIMULACIÓN.${colaDescartadas}`)
+                : 'Conversaciones de ejemplo generadas', 'success');
+            cargar();
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'No se pudieron generar las conversaciones de ejemplo'), 'error');
+        } finally {
+            setSembrandoDemo(false);
+        }
+    };
+
+    const confirmarSalirDemo = async () => {
+        setSaliendoDemoBusy(true);
+        try {
+            const res = await integracionesApi.desactivarDemo();
+            // Los clientes registrados desde una conversación simulada NO se
+            // borran: se nombran acá para que nadie los descubra después
+            // mezclados con los de verdad (en Clientes salen rotulados).
+            const conversaciones = res?.conversacionesEliminadas ?? 0;
+            const clientes = res?.clientesConservados ?? 0;
+            addToast(clientes > 0
+                ? `Modo demostración desactivado (${conversaciones} conversaciones simuladas borradas). Quedaron ${clientes} cliente(s) registrados desde ellas: están en Clientes con el rótulo SIMULACIÓN.`
+                : `Modo demostración desactivado: se borraron ${conversaciones} conversaciones simuladas`, 'success');
+            setSaliendoDemo(false);
+            cargar();
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'No se pudo salir del modo demostración'), 'error');
+        } finally {
+            setSaliendoDemoBusy(false);
+        }
+    };
+
+    // La integración simulada del tenant, si está puesta. El MODO es la única
+    // fuente de verdad: una demo reporta sus canales habilitados sin tener un
+    // solo token cargado (si no, el composer de la Bandeja quedaría bloqueado y
+    // no habría nada que demostrar), así que por los canales no se distingue de
+    // una conectada de verdad.
+    const demoMeta = integraciones.find(i => i.tipo === 'meta' && esIntegracionDemo(i)) ?? null;
+    // No se ofrece encender la demostración mientras haya una integración de Meta
+    // REAL activa: lo conectado y lo simulado no pueden convivir en la misma
+    // bandeja — el rótulo de simulación terminaría puesto sobre mensajes de
+    // clientes de verdad. El backend además lo rechaza con un 409.
+    const hayMetaRealActiva = integraciones.some(i => i.tipo === 'meta' && !esIntegracionDemo(i) && i.activo);
+    // El corte va en las DOS direcciones. Con la demostración puesta tampoco se
+    // conecta la integración REAL de Meta: quedarían las dos vivas y la bandeja
+    // mezclaría, en una sola lista ordenada por fecha, los cinco hilos fabricados
+    // con los mensajes de compradores de verdad — y esta misma pantalla seguiría
+    // rotulada como SIMULACIÓN afirmando que "no se llama a Meta", que sería
+    // falso. El backend lo rechaza con un 409; acá se avisa antes de que el
+    // admin cargue los tokens al pedo. Email no se toca: no compite con nada.
+    const metaBloqueadaPorDemo = !editing && !!demoMeta && form.tipo === 'meta';
+
     return (
         <div className="card" style={{ marginTop: '1.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
                 <div>
-                    <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <Plug size={18} /> Integraciones de consultas
+                        {/* El rótulo va en el título de la sección para que se vea sin
+                            buscarlo: es lo que distingue lo conectado de lo simulado. */}
+                        {demoMeta && <Badge variant="warning">SIMULACIÓN</Badge>}
                     </h2>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5, maxWidth: 520 }}>
                         Conectá los canales por donde te escriben (Meta, DeRuedas). Los formularios de campaña
@@ -454,10 +559,42 @@ function IntegracionesConsultas() {
                         los respondas.
                     </p>
                 </div>
-                <Button variant="primary" onClick={abrirAlta}>
-                    <Plus size={16} /> Agregar integración
-                </Button>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <Button variant="primary" onClick={abrirAlta}>
+                        <Plus size={16} /> Agregar integración
+                    </Button>
+                    {/* A propósito NO depende de tener credenciales: la demostración
+                        existe justamente para el caso en que Meta todavía no aprobó
+                        la app y no hay ningún token que cargar. */}
+                    {!demoMeta && !hayMetaRealActiva && (
+                        <Button variant="secondary" onClick={activarDemo} loading={activandoDemo}>
+                            <FlaskConical size={16} /> Activar modo demostración
+                        </Button>
+                    )}
+                </div>
             </div>
+
+            {/* Con la demostración encendida, la pantalla entera se lee distinto:
+                los canales figuran habilitados sin una sola credencial cargada. */}
+            {demoMeta && (
+                <div style={{
+                    display: 'flex', gap: '0.75rem', alignItems: 'flex-start',
+                    padding: '0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-secondary)', marginBottom: '1rem', maxWidth: 640,
+                }}>
+                    <FlaskConical size={16} style={{ color: 'var(--accent-2)', flexShrink: 0, marginTop: 2 }} />
+                    <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                        <strong>Modo demostración de Meta</strong> (integración simulada, sin conexión con
+                        Instagram ni con Facebook). Los cuatro canales —mensajes de Instagram y de Messenger,
+                        y los comentarios de ambas— se atienden desde la <strong>Bandeja</strong> igual que con
+                        la integración real: se responde, se respeta la ventana de 24 horas y aparece el aviso
+                        de que un comentario se contesta en público. Pero todo eso pasa únicamente adentro del
+                        sistema: <strong>no se llama a Meta</strong>, no le llega nada a nadie y no se publica
+                        ningún comentario. Los identificadores simulados se ven como{' '}
+                        <span className="font-mono">DEMO-…</span> y los hilos salen rotulados como SIMULACIÓN.
+                    </p>
+                </div>
+            )}
 
             {loading ? (
                 <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
@@ -484,7 +621,15 @@ function IntegracionesConsultas() {
                         <tbody>
                             {integraciones.map((i) => (
                                 <tr key={i.id}>
-                                    <td style={{ fontWeight: 600 }}>{i.nombre}</td>
+                                    <td style={{ fontWeight: 600 }}>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                            {i.nombre}
+                                            {/* El nombre lo elige el backend ("Instagram y Facebook
+                                                (demostración)") pero es texto: el rótulo tiene que
+                                                ser un chip, no una palabra dentro de un nombre. */}
+                                            {esIntegracionDemo(i) && <Badge variant="warning">SIMULACIÓN</Badge>}
+                                        </span>
+                                    </td>
                                     <td>{i.tipo === 'meta' ? 'Meta' : 'Email'}</td>
                                     {/* Para meta la columna "Origen" ya no decía nada útil (es el
                                         OrigenLead del lead de Lead Ads, no el canal): se reemplaza
@@ -502,15 +647,46 @@ function IntegracionesConsultas() {
                                                 {(i.canales ?? []).every(c => !c.habilitado) && (
                                                     <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Ningún canal listo</span>
                                                 )}
+                                                {/* Un canal en verde normalmente quiere decir "tenés el
+                                                    token cargado". En la demo quiere decir otra cosa, y
+                                                    sin esta palabra la fila afirma que hay credenciales
+                                                    donde no hay ninguna. */}
+                                                {esIntegracionDemo(i) && (
+                                                    <span
+                                                        style={{ color: 'var(--warning)', fontSize: '0.7rem', alignSelf: 'center' }}
+                                                        title="Los canales de la integración simulada se habilitan sin credenciales: es lo que permite responder desde la Bandeja durante la demostración. Nada de eso sale a Meta."
+                                                    >
+                                                        simulados
+                                                    </span>
+                                                )}
                                             </div>
                                         )}
                                     </td>
                                     <td>
-                                        <SwitchActivo
-                                            activo={i.activo}
-                                            disabled={togglingId === i.id}
-                                            onToggle={() => toggleActivo(i)}
-                                        />
+                                        {/* La simulada NO lleva interruptor. El PATCH que hay
+                                            detrás lo rechaza con un 409 (no tiene config que
+                                            editar y apagarla dejaría los hilos simulados en la
+                                            bandeja sin poder responderse ni borrarse), así que
+                                            el switch era un control que sólo podía fallar —
+                                            delante del comprador. Se apaga con "Salir del modo
+                                            demostración", que además limpia. */}
+                                        {esIntegracionDemo(i) ? (
+                                            <span
+                                                style={{ fontSize: '0.78rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}
+                                                title='La integración de demostración se apaga con "Salir del modo demostración": así se van también las conversaciones de ejemplo.'
+                                            >
+                                                Activa (simulada)
+                                            </span>
+                                        ) : (
+                                            <SwitchActivo
+                                                activo={i.activo}
+                                                disabled={togglingId === i.id || (!i.activo && i.tipo === 'meta' && !!demoMeta)}
+                                                onToggle={() => toggleActivo(i)}
+                                                title={!i.activo && i.tipo === 'meta' && demoMeta
+                                                    ? 'No se puede reactivar la integración real de Meta con el modo demostración encendido: la bandeja mezclaría los mensajes de verdad con los simulados. Salí primero del modo demostración.'
+                                                    : undefined}
+                                            />
+                                        )}
                                     </td>
                                     <td>{i.ultimoEvento ? formatFecha(i.ultimoEvento) : '—'}</td>
                                     <td>
@@ -525,18 +701,35 @@ function IntegracionesConsultas() {
                                         ) : '—'}
                                     </td>
                                     <td style={{ textAlign: 'right' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                                            {i.tipo === 'meta' && (
-                                                <button className="icon-btn" onClick={() => copiarWebhook(i)} aria-label="Copiar URL del webhook" title="Copiar URL del webhook">
-                                                    <Link2 size={16} />
-                                                </button>
+                                        {/* En la integración simulada no hay webhook que copiar (nadie
+                                            va a llamarlo) ni credenciales que editar, y borrarla es
+                                            "salir del modo demostración", que además arrastra las
+                                            conversaciones: las acciones son las de la simulación. */}
+                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                            {esIntegracionDemo(i) ? (
+                                                <>
+                                                    <Button variant="secondary" size="sm" onClick={sembrarConversacionesDemo} loading={sembrandoDemo}>
+                                                        <MessageCircle size={14} /> Generar conversaciones de ejemplo
+                                                    </Button>
+                                                    <Button variant="ghost" size="sm" onClick={() => setSaliendoDemo(true)} disabled={sembrandoDemo}>
+                                                        <Unplug size={14} /> Salir del modo demostración
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {i.tipo === 'meta' && (
+                                                        <button className="icon-btn" onClick={() => copiarWebhook(i)} aria-label="Copiar URL del webhook" title="Copiar URL del webhook">
+                                                            <Link2 size={16} />
+                                                        </button>
+                                                    )}
+                                                    <button className="icon-btn" onClick={() => abrirEdicion(i)} aria-label="Editar" title="Editar">
+                                                        <Edit size={16} />
+                                                    </button>
+                                                    <button className="icon-btn danger" onClick={() => setDeleting(i)} aria-label="Eliminar" title="Eliminar">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </>
                                             )}
-                                            <button className="icon-btn" onClick={() => abrirEdicion(i)} aria-label="Editar" title="Editar">
-                                                <Edit size={16} />
-                                            </button>
-                                            <button className="icon-btn danger" onClick={() => setDeleting(i)} aria-label="Eliminar" title="Eliminar">
-                                                <Trash2 size={16} />
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -544,6 +737,33 @@ function IntegracionesConsultas() {
                         </tbody>
                     </table>
                 </div>
+            )}
+
+            {/* Qué siembra el botón: se dice acá para que se entienda que la
+                ventana vencida es parte de la demostración y no una falla. */}
+            {demoMeta && (
+                <p style={{ marginTop: '0.75rem', color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.6, maxWidth: 640 }}>
+                    <strong>Generar conversaciones de ejemplo</strong> siembra hilos en los cuatro canales: uno
+                    de Instagram con la ventana de 24 horas <strong>abierta</strong>, otro con la ventana ya
+                    <strong> vencida</strong> (para mostrar por qué el sistema bloquea la respuesta y qué hay que
+                    hacer), uno de Messenger y un comentario. Aparecen en <strong>Bandeja</strong>, rotulados como
+                    SIMULACIÓN. Apretarlo de nuevo no duplica nada: <strong>reinicia</strong> los hilos —vuelven a
+                    verse recién llegados y se descartan las respuestas que hayas escrito en la demostración
+                    anterior—, así el relato empieza de cero. Los formularios de campaña (Lead Ads) no se simulan:
+                    ese canal sólo se prueba con la integración real.
+                </p>
+            )}
+
+            {/* Por qué existe el botón de arriba. Se explica sólo cuando se puede
+                apretar: con la demo puesta ya lo cuenta el recuadro, y con una
+                integración real activa el botón ni aparece. */}
+            {!demoMeta && !hayMetaRealActiva && (
+                <p style={{ marginTop: '0.75rem', color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.6, maxWidth: 640 }}>
+                    El <strong>modo demostración</strong> sirve para mostrar cómo funcionan los canales de Meta
+                    mientras Meta todavía no aprobó la app: crea una integración simulada y llena la Bandeja con
+                    conversaciones de ejemplo. No se conecta con Meta, no le llega nada a nadie y no publica
+                    ningún comentario. Se puede apagar en cualquier momento.
+                </p>
             )}
 
             <Modal
@@ -559,7 +779,7 @@ function IntegracionesConsultas() {
                 ) : (
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
                         <Button variant="secondary" onClick={cerrarModal} disabled={saving}>Cancelar</Button>
-                        <Button variant="primary" onClick={guardar} loading={saving}>
+                        <Button variant="primary" onClick={guardar} loading={saving} disabled={metaBloqueadaPorDemo}>
                             <Save size={16} /> {editing ? 'Guardar cambios' : 'Crear integración'}
                         </Button>
                     </div>
@@ -572,6 +792,25 @@ function IntegracionesConsultas() {
                     </>
                 ) : (
                     <>
+                        {/* Se dice ANTES de los campos: cargar un app secret y tres
+                            tokens para que el backend rechace el alta al final es la
+                            peor forma de enterarse. */}
+                        {metaBloqueadaPorDemo && (
+                            <div style={{
+                                display: 'flex', gap: '0.75rem', alignItems: 'flex-start',
+                                padding: '0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+                                background: 'var(--bg-secondary)', marginBottom: '1rem',
+                            }}>
+                                <FlaskConical size={16} style={{ color: 'var(--accent-2)', flexShrink: 0, marginTop: 2 }} />
+                                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                                    Esta concesionaria está en <strong>modo demostración de Meta</strong>. No se puede
+                                    conectar la integración real mientras esté encendido: quedarían las dos vivas y la
+                                    Bandeja mezclaría los mensajes de gente de verdad con las conversaciones simuladas.
+                                    Usá <strong>Salir del modo demostración</strong> (borra lo simulado) y después
+                                    conectá la real.
+                                </p>
+                            </div>
+                        )}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                             <Select dense label="Tipo de canal" containerClassName="col-span-full"
                                 value={form.tipo} disabled={!!editing}
@@ -672,6 +911,22 @@ function IntegracionesConsultas() {
                 onConfirm={confirmarEliminar}
                 onCancel={() => setDeleting(null)}
                 loading={deletingBusy}
+            />
+
+            {/* El mensaje dice QUÉ se borra y QUÉ NO. Lo segundo importa más: los
+                clientes registrados desde una conversación simulada sobreviven, y
+                si nadie lo avisa acá se descubren después mezclados con los de
+                verdad, sin el hilo que explicaba de dónde salieron. */}
+            <ConfirmDialog
+                isOpen={saliendoDemo}
+                title="Salir del modo demostración"
+                message="Se borra la integración simulada de Meta junto con TODAS las conversaciones y los mensajes de ejemplo que generó. Nada de eso existió nunca afuera: no se llama a Meta, así que en Instagram y en Facebook no se toca nada. Lo único que NO se borra son los clientes que hayas registrado como consulta desde una conversación simulada: ya son fichas del CRM (pueden tener datos cargados a mano), quedan en Clientes con el rótulo SIMULACIÓN y los borrás vos si querés. Podés volver a activar la demostración cuando quieras."
+                confirmLabel="Salir y borrar lo simulado"
+                cancelLabel="Cancelar"
+                type="danger"
+                onConfirm={confirmarSalirDemo}
+                onCancel={() => setSaliendoDemo(false)}
+                loading={saliendoDemoBusy}
             />
         </div>
     );

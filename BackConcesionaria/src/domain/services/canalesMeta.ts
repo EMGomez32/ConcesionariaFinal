@@ -1,4 +1,4 @@
-import { CanalConversacion } from '@prisma/client';
+import { CanalConversacion, ModoIntegracion } from '@prisma/client';
 /**
  * Qué puede hacer una integración de Meta con lo que tiene cargado.
  *
@@ -198,14 +198,54 @@ export const CANALES_META: readonly DefinicionCanal[] = [
 const comoConfig = (config: unknown): ConfigMeta => (config ?? {}) as ConfigMeta;
 
 /**
+ * Qué hay que hacer en el portal de Meta para un canal SIMULADO: nada. Reemplaza
+ * al `enMeta` real porque ese texto manda a suscribir webhooks y a pedir
+ * permisos que en modo demostración no intervienen: dejarlo puesto haría que la
+ * pantalla le pida al admin trámites para un canal que nunca va a salir del
+ * sistema.
+ */
+const EN_META_SIMULADO = 'Canal SIMULADO: no hay nada que configurar en Meta. Los mensajes de este canal '
+    + 'los genera y los responde el propio sistema — no se llama a Meta y nada de lo que se escriba se publica.';
+
+/**
+ * El único canal que el modo demostración NO reproduce.
+ *
+ * Los otros cuatro son conversaciones: la siembra fabrica hilos y el desvío de
+ * `metaEnvio` responde sin salir a la red, así que en demostración están tan
+ * disponibles como con la integración real. `leadgen` no es una conversación —
+ * es un formulario que Meta empuja por webhook y que el sistema va a buscar al
+ * Graph API—, y de eso no hay ni un lead de ejemplo ni un desvío simulado.
+ * Marcarlo habilitado sería el error inverso al que evita todo este módulo:
+ * rotular como listo algo que la demostración no puede mostrar.
+ */
+const CANAL_FUERA_DE_LA_DEMO: CanalMeta = 'leadgen';
+
+const FALTA_LEADGEN_DEMO = 'El modo demostración no simula los formularios de campaña: no hay ningún '
+    + 'lead de ejemplo que mostrar. Para verlo funcionando hace falta la integración real de Meta.';
+
+const EN_META_LEADGEN_DEMO = 'Canal FUERA de la demostración: los formularios de campaña no se simulan '
+    + '(la demostración cubre los cuatro canales de conversación). Se prueba con la integración real de Meta.';
+
+/**
  * Estado de los cinco canales para una integración meta. Se calcula sobre el
  * config GUARDADO (los secretos pueden venir cifrados o enmascarados: acá sólo
  * se mira si están presentes, nunca su valor).
+ *
+ * `modo` es el de la fila `IntegracionCanal`. En `demo` salen HABILITADOS los
+ * CUATRO canales de conversación aunque el config esté vacío: una integración
+ * simulada no tiene credenciales que cargar (nada sale a la red), y si acá
+ * dijera "falta el token de página" el composer de la bandeja quedaría bloqueado
+ * y no habría nada que demostrar. `leadgen` queda AFUERA con su motivo: la
+ * demostración no lo reproduce, así que darlo por listo prometería en Ajustes un
+ * canal que después no hay dónde mostrar. El default `'real'` deja intacto a
+ * todo el que ya llamaba con un solo argumento.
  */
-export function estadoCanalesMeta(config: unknown): EstadoCanalMeta[] {
+export function estadoCanalesMeta(config: unknown, modo: ModoIntegracion = 'real'): EstadoCanalMeta[] {
     const c = comoConfig(config);
+    const simulada = modo === 'demo';
     return CANALES_META.map((def) => {
-        const falta = def.falta(c);
+        const fueraDeLaDemo = simulada && def.canal === CANAL_FUERA_DE_LA_DEMO;
+        const falta = simulada ? (fueraDeLaDemo ? FALTA_LEADGEN_DEMO : null) : def.falta(c);
         return {
             canal: def.canal,
             etiqueta: def.etiqueta,
@@ -213,15 +253,20 @@ export function estadoCanalesMeta(config: unknown): EstadoCanalMeta[] {
             campo: def.campo,
             habilitado: falta === null,
             falta,
-            enMeta: def.enMeta,
+            enMeta: simulada ? (fueraDeLaDemo ? EN_META_LEADGEN_DEMO : EN_META_SIMULADO) : def.enMeta,
         };
     });
 }
 
 /** Atajo para el webhook/envío: ¿esta integración tiene con qué atender el canal? */
-export function canalMetaHabilitado(config: unknown, canal: CanalMeta): boolean {
+export function canalMetaHabilitado(config: unknown, canal: CanalMeta, modo: ModoIntegracion = 'real'): boolean {
     const def = CANALES_META.find((d) => d.canal === canal);
+    // Un canal que no existe sigue siendo `false` también en demostración: la
+    // simulación reproduce los canales que el sistema tiene, no inventa otros.
     if (!def) return false;
+    // Mismo corte que `estadoCanalesMeta`: en demostración están los cuatro
+    // canales de conversación y NO los formularios de campaña, que no se simulan.
+    if (modo === 'demo') return def.canal !== CANAL_FUERA_DE_LA_DEMO;
     return def.falta(comoConfig(config)) === null;
 }
 

@@ -243,7 +243,12 @@ const PreguntasPage = () => {
                     ? (simulada
                         ? 'Lead creado a partir de una pregunta simulada: queda en Clientes rotulado como SIMULACIÓN'
                         : 'Lead creado y vinculado a la pregunta')
-                    : 'La pregunta quedó vinculada a un cliente que ya existía',
+                    // El contacto cargado a mano matcheó con una ficha REAL. Como
+                    // la pregunta era simulada, no se le tocó ni el origen ni el
+                    // estado del lead: sólo quedó la línea rotulada.
+                    : res.sobreFichaReal === true
+                        ? 'Ese contacto ya era de un cliente REAL del CRM. Como la pregunta era simulada, sólo se le anotó la consulta (rotulada) en observaciones: no se le cambió el origen ni se le reabrió el lead.'
+                        : 'La pregunta quedó vinculada a un cliente que ya existía',
                 'success',
             );
             setLeadAbierto(false);
