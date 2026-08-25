@@ -51,6 +51,10 @@ export class PrismaVehiculoRepository implements IVehiculoRepository {
             where: { id },
             include: {
                 sucursal: true,
+                // Sólo acá y no en el listado: la grilla no muestra el proveedor,
+                // y sin este include el renglón "Proveedor" de la ficha quedaba
+                // siempre vacío (la relación nunca venía).
+                proveedorCompra: { select: { id: true, nombre: true } },
                 archivos: { where: { deletedAt: null } },
                 movimientos: {
                     where: { deletedAt: null },
@@ -114,7 +118,8 @@ export class PrismaVehiculoRepository implements IVehiculoRepository {
             v.vencimientoVtv ?? null,
             v.vencimientoSeguro ?? null,
             v.precioCompra ? Number(v.precioCompra) : null,
-            v.fechaCompra ?? null
+            v.fechaCompra ?? null,
+            v.proveedorCompra ?? null
         );
     }
 }

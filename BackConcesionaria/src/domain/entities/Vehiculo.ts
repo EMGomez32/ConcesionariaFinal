@@ -37,7 +37,15 @@ export class Vehiculo {
          * así tiene que quedar — es la que se usa en los `include` anidados.
          */
         public readonly precioCompra: number | null = null,
-        public readonly fechaCompra: Date | null = null
+        public readonly fechaCompra: Date | null = null,
+        /**
+         * A quién se le compró la unidad. A diferencia del precio, esto NO se
+         * recorta por rol: la lista de proveedores la ve todo el equipo (hay que
+         * saber a quién se le compra y a quién se le manda un auto al taller), y
+         * el criterio ya está escrito así en ProveedorController — lo que ahí se
+         * esconde a los no-admin es la columna de plata, no el proveedor.
+         */
+        public readonly proveedorCompra?: { id: number; nombre: string } | null
     ) { }
 
     public isAvailable(): boolean {
