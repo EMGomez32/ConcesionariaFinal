@@ -355,6 +355,13 @@ const ClienteDetallePage = () => {
                             {cliente.origenLead && (
                                 <Badge variant="default">{ORIGEN_LEAD_LABEL[cliente.origenLead]}</Badge>
                             )}
+                            {/* Lead nacido de una pregunta simulada: sobrevive a
+                                apagar la demostración, así que la ficha lo dice. */}
+                            {cliente.origenSimulado && (
+                                <Badge variant="warning" title="La consulta que originó esta ficha la generó el modo demostración de Mercado Libre: no la hizo un interesado real">
+                                    SIMULACIÓN
+                                </Badge>
+                            )}
                             {puedeEditar && (
                                 <select
                                     className="lead-stage-select"

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { MercadoLibreController } from '../controllers/MercadoLibreController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
-import { publicarSchema, responderSchema, asignarSchema, leadSchema } from '../validation/mercadolibre.schema';
+import { publicarSchema, responderSchema, asignarSchema, leadSchema, demoSchema } from '../validation/mercadolibre.schema';
 
 const router = Router();
 
@@ -10,7 +10,8 @@ const router = Router();
 // authorize quedan abiertas a cualquier autenticado):
 //   - admin: todo lo que vincula la cuenta, cuesta plata o toca una publicación
 //     (vincular/desvincular, opciones, publicar, pausar/reactivar/cerrar/
-//     sincronizar) y el reparto de la bandeja (asignar preguntas).
+//     sincronizar), el modo demostración (encenderlo, apagarlo, sembrar sus
+//     preguntas) y el reparto de la bandeja (asignar preguntas).
 //   - admin + vendedor: la bandeja de preguntas y lo que se hace con una
 //     pregunta (responder, convertirla en lead). El recorte fino lo aplica el
 //     controller: un vendedor PURO sólo ve y atiende las asignadas a él o sin
@@ -28,7 +29,9 @@ const router = Router();
  *       `configurada` dice si el SERVIDOR tiene ML_CLIENT_ID/ML_CLIENT_SECRET:
  *       sin eso no hay OAuth posible y el panel muestra el aviso en vez de un
  *       botón de vincular que no puede funcionar. `conectada` dice si además hay
- *       una cuenta vinculada y activa. Los tokens no se exponen nunca.
+ *       una cuenta vinculada y activa. `demo` dice que lo que se ve NO sale a
+ *       Mercado Libre: la responde el simulador y la pantalla tiene que rotularlo.
+ *       Los tokens no se exponen nunca.
  *     responses:
  *       200:
  *         description: Estado de la integración
@@ -39,15 +42,19 @@ const router = Router();
  *               properties:
  *                 configurada: { type: boolean }
  *                 conectada: { type: boolean }
+ *                 demo: { type: boolean, description: La cuenta conectada es simulada (modo demostración) }
+ *                 modo: { type: string, nullable: true, enum: [real, demo] }
  *                 cuenta:
  *                   type: object
  *                   nullable: true
  *                   properties:
  *                     id: { type: integer }
- *                     mlUserId: { type: string }
+ *                     mlUserId: { type: string, description: 'DEMO-<concesionariaId> en las cuentas simuladas' }
  *                     nickname: { type: string, nullable: true }
  *                     siteId: { type: string, example: MLA }
  *                     activa: { type: boolean }
+ *                     modo: { type: string, enum: [real, demo] }
+ *                     demo: { type: boolean }
  *                     ultimoError: { type: string, nullable: true, description: Motivo del último fallo (p. ej. refresh rechazado - hay que re-autorizar) }
  *                     expiraEn: { type: string, format: date-time }
  *       401: { $ref: '#/components/responses/Unauthorized' }
@@ -78,7 +85,7 @@ router.get('/cuenta', authorize('admin'), MercadoLibreController.getCuenta);
  *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
- *       409: { description: Faltan ML_CLIENT_ID/ML_CLIENT_SECRET en el servidor }
+ *       409: { description: Faltan ML_CLIENT_ID/ML_CLIENT_SECRET en el servidor, o la concesionaria está en modo demostración (hay que salir primero) }
  */
 router.post('/vincular', authorize('admin'), MercadoLibreController.vincular);
 
@@ -101,6 +108,123 @@ router.post('/vincular', authorize('admin'), MercadoLibreController.vincular);
  *       404: { $ref: '#/components/responses/NotFound' }
  */
 router.delete('/cuenta/:id', authorize('admin'), MercadoLibreController.desvincular);
+
+/**
+ * @openapi
+ * /mercadolibre/demo:
+ *   post:
+ *     tags: [Mercado Libre]
+ *     summary: Activar el modo demostración (cuenta simulada, sin OAuth)
+ *     description: >
+ *       Crea una cuenta que NO existe en Mercado Libre: sus llamadas las responde
+ *       el simulador y NUNCA salen a la red, con el mismo criterio que el modo
+ *       mock de AFIP. Sirve para recorrer el circuito completo (publicar,
+ *       elegir tipo de publicación, pausar, cerrar, responder preguntas) sin la
+ *       app de Mercado Libre y sin publicar un aviso real. Todo lo que genera va
+ *       rotulado como simulado en la pantalla y los ids empiezan con DEMO-.
+ *       Idempotente: si la demo ya estaba activa devuelve 200 y la deja como está.
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               concesionariaId: { type: integer, description: Sólo para super_admin - en qué concesionaria se activa. Para el resto sale del token }
+ *     responses:
+ *       201:
+ *         description: Modo demostración activado. Devuelve la cuenta con la misma forma que GET /mercadolibre/cuenta
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id: { type: integer }
+ *                 mlUserId: { type: string, example: DEMO-1 }
+ *                 nickname: { type: string, example: VENDEDOR_DEMO }
+ *                 siteId: { type: string, example: MLA }
+ *                 activa: { type: boolean }
+ *                 modo: { type: string, enum: [demo] }
+ *                 demo: { type: boolean, example: true }
+ *                 creada: { type: boolean, description: false si la demo ya estaba activa }
+ *       200: { description: La demo ya estaba activa (no se cambió nada) }
+ *       400: { $ref: '#/components/responses/ValidationError' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ *       409: { description: Hay rastro de lo REAL en la concesionaria - una cuenta real vinculada (aunque el vínculo esté caído) o avisos MLA todavía vivos. Hay que desvincular y cerrarlos primero }
+ */
+router.post('/demo', authorize('admin'), validateBody(demoSchema), MercadoLibreController.activarDemo);
+
+/**
+ * @openapi
+ * /mercadolibre/demo:
+ *   delete:
+ *     tags: [Mercado Libre]
+ *     summary: Salir del modo demostración y borrar todo lo simulado
+ *     description: >
+ *       Borrón y cuenta nueva: elimina la cuenta simulada JUNTO con sus
+ *       publicaciones y preguntas, para poder repetir la demostración desde cero.
+ *       El borrado es físico y en una sola transacción. Los clientes que se hayan
+ *       generado desde una pregunta simulada NO se tocan (la ingesta pudo haber
+ *       actualizado un cliente REAL preexistente): quedan marcados con
+ *       `origenSimulado` y se informan en `clientesConservados`.
+ *     parameters:
+ *       - { name: concesionariaId, in: query, schema: { type: integer }, description: Sólo para super_admin - de qué concesionaria se apaga la demo. Para el resto sale del token }
+ *     responses:
+ *       200:
+ *         description: Modo demostración desactivado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 publicacionesEliminadas: { type: integer }
+ *                 preguntasEliminadas: { type: integer }
+ *                 clientesConservados: { type: integer, description: Clientes del CRM que nacieron de una pregunta simulada y siguen ahí, rotulados }
+ *       400: { $ref: '#/components/responses/ValidationError' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ *       409: { description: El modo demostración no está activo en esta concesionaria }
+ */
+router.delete('/demo', authorize('admin'), MercadoLibreController.desactivarDemo);
+
+/**
+ * @openapi
+ * /mercadolibre/demo/preguntas:
+ *   post:
+ *     tags: [Mercado Libre]
+ *     summary: Generar preguntas de ejemplo para la demostración
+ *     description: >
+ *       Siembra entre 3 y 5 preguntas simuladas repartidas sobre las
+ *       publicaciones demo que existan (más publicaciones, más preguntas), con
+ *       textos de un comprador de autos real y nombres de contacto claramente
+ *       ficticios (COMPRADOR_DEMO_N). Quedan sin responder y con fecha escalonada
+ *       en las últimas horas. Sirve para mostrar la bandeja: responder, asignar y
+ *       convertir en lead recorren el mismo código que con una cuenta real.
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               concesionariaId: { type: integer, description: Sólo para super_admin - en qué concesionaria se siembran. Para el resto sale del token }
+ *     responses:
+ *       201:
+ *         description: Preguntas generadas
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 creadas: { type: integer }
+ *                 yaExistian: { type: integer, description: Las que ya estaban sembradas para esa publicación (la siembra es idempotente) }
+ *       400: { $ref: '#/components/responses/ValidationError' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ *       409: { description: El modo demostración no está activo, o todavía no hay ninguna publicación simulada }
+ */
+router.post('/demo/preguntas', authorize('admin'), validateBody(demoSchema), MercadoLibreController.sembrarPreguntasDemo);
 
 /**
  * @openapi
@@ -327,6 +451,7 @@ router.post('/publicaciones/:id/sincronizar', authorize('admin'), MercadoLibreCo
  *                 total: { type: integer }
  *                 page: { type: integer }
  *                 limit: { type: integer }
+ *                 demo: { type: boolean, description: La cuenta vigente del tenant es simulada. Va acá porque GET /mercadolibre/cuenta es admin-only y la bandeja tiene que rotularse también para el vendedor, incluso con la lista vacía }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
@@ -358,6 +483,7 @@ router.get('/preguntas', authorize('admin', 'vendedor'), MercadoLibreController.
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { description: La pregunta está asignada a otro vendedor }
  *       404: { $ref: '#/components/responses/NotFound' }
+ *       409: { description: La pregunta ya fue respondida o el comprador la eliminó - Mercado Libre admite una sola respuesta por pregunta }
  */
 router.post('/preguntas/:id/responder', authorize('admin', 'vendedor'), validateBody(responderSchema), MercadoLibreController.responder);
 

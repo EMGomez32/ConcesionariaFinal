@@ -23,5 +23,12 @@ export class Cliente {
         public readonly condicionIva?: string | null,
         /** Canal por el que entró la consulta (deruedas, instagram...). null = histórico. */
         public readonly origenLead?: string | null,
+        /**
+         * La consulta que originó la ficha la fabricó el modo demostración de
+         * Mercado Libre. Viaja al front porque la pantalla tiene que rotularla:
+         * el lead sobrevive a apagar la demostración y sin la marca es
+         * indistinguible de un interesado real.
+         */
+        public readonly origenSimulado: boolean = false,
     ) { }
 }

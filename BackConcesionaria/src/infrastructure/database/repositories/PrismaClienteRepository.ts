@@ -50,7 +50,7 @@ export class PrismaClienteRepository implements IClienteRepository {
         }
         // Filtro por canal de entrada del lead. Misma whitelist defensiva que
         // estadoLead: un valor fuera del enum se ignora (evita el 500 de Prisma).
-        const ORIGENES_LEAD = ['deruedas', 'instagram', 'facebook', 'whatsapp', 'web', 'mostrador', 'referido', 'otro'];
+        const ORIGENES_LEAD = ['deruedas', 'mercadolibre', 'instagram', 'facebook', 'whatsapp', 'web', 'mostrador', 'referido', 'otro'];
         if (filter.origenLead && ORIGENES_LEAD.includes(String(filter.origenLead))) {
             whereClause.origenLead = filter.origenLead;
         }
@@ -172,6 +172,9 @@ export class PrismaClienteRepository implements IClienteRepository {
             c.tipoDoc ?? null,
             c.condicionIva ?? null,
             c.origenLead ?? null,
+            // No entra en `pickEditable`: la marca la pone la ingesta de la
+            // consulta simulada, no el body de un PUT.
+            c.origenSimulado === true,
         );
     }
 }

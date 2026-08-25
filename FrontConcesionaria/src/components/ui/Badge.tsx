@@ -13,6 +13,8 @@ interface BadgeProps {
     children: React.ReactNode;
     variant?: BadgeVariant;
     className?: string;
+    /** Tooltip nativo: un rótulo de una palabra a veces necesita explicar por qué está. */
+    title?: string;
 }
 
 const VARIANT_TO_CLASS: Record<BadgeVariant, string> = {
@@ -25,9 +27,9 @@ const VARIANT_TO_CLASS: Record<BadgeVariant, string> = {
     default: 'badge-navy',
 };
 
-const Badge = ({ children, variant = 'default', className = '' }: BadgeProps) => {
+const Badge = ({ children, variant = 'default', className = '', title }: BadgeProps) => {
     return (
-        <span className={`badge ${VARIANT_TO_CLASS[variant]} ${className}`.trim()}>
+        <span className={`badge ${VARIANT_TO_CLASS[variant]} ${className}`.trim()} title={title}>
             {children}
         </span>
     );

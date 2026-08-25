@@ -11,7 +11,16 @@ import apiClient from './client';
  *
  * Los tokens viven cifrados en el backend y se renuevan solos; cuando ML deja de
  * aceptarlos, la cuenta queda con `ultimoError` y hay que volver a autorizar.
+ *
+ * Aparte del vínculo real existe el MODO DEMOSTRACIÓN: una cuenta simulada que se
+ * da de alta sin OAuth y cuyas llamadas nunca salen a la red de Mercado Libre.
+ * Recorre el mismo circuito (publicar, sincronizar, contestar) para poder mostrar
+ * la integración sin credenciales y sin publicar avisos de verdad, y por eso todo
+ * lo que sale de ella tiene que llegar ROTULADO a la pantalla.
  */
+
+/** Origen de la cuenta. `demo` = simulada dentro del sistema, sin conexión con ML. */
+export type ModoCuentaMl = 'real' | 'demo';
 
 /** Estado del ítem en Mercado Libre. `borrador` = creado acá, todavía no subido. */
 export type EstadoPublicacionMl = 'borrador' | 'activa' | 'pausada' | 'cerrada' | 'error';
@@ -38,6 +47,10 @@ export interface CuentaMlResumen {
     expiraEn: string | null;
     /** Último fallo contra la API de ML. Si tiene valor, casi siempre hay que re-autorizar. */
     ultimoError: string | null;
+    /** `demo` = cuenta simulada: no hay OAuth detrás y ninguna llamada sale a la red. */
+    modo: ModoCuentaMl;
+    /** Atajo de `modo === 'demo'`: es el flag con el que la pantalla rotula la simulación. */
+    demo: boolean;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -52,6 +65,51 @@ export interface EstadoCuentaMl {
     conectada: boolean;
     configurada: boolean;
     cuenta?: CuentaMlResumen | null;
+    /**
+     * El backend rotula el modo también en la raíz de la respuesta; ver `esCuentaDemo`.
+     * Viaja en `null` cuando no hay cuenta vinculada (`modo: cuenta?.modo ?? null`),
+     * así que el tipo lo admite: escribir sólo `ModoCuentaMl` sería mentirle al resto
+     * del front sobre lo que de verdad llega.
+     */
+    modo?: ModoCuentaMl | null;
+    demo?: boolean;
+}
+
+/**
+ * Si la cuenta vinculada es simulada. El rótulo de simulación es lo que le permite
+ * a quien mira la pantalla distinguir lo conectado de lo simulado, así que no puede
+ * depender de en qué nivel del payload viaje el flag: alcanza con que UNO diga demo.
+ */
+export const esCuentaDemo = (estado?: EstadoCuentaMl | null): boolean =>
+    estado?.demo === true
+    || estado?.modo === 'demo'
+    || estado?.cuenta?.demo === true
+    || estado?.cuenta?.modo === 'demo';
+
+/** Lo que devuelve la siembra de preguntas de ejemplo. */
+export interface SiembraPreguntasDemo {
+    /** Optativo: el backend puede confirmar el alta sin informar el conteo. */
+    creadas?: number;
+    /**
+     * Las que ya estaban sembradas sobre esas publicaciones. La siembra es
+     * idempotente (el id de cada pregunta sale de publicación + plantilla), así
+     * que volver a apretar el botón no duplica el lote: el aviso lo tiene que
+     * decir en vez de anunciar preguntas nuevas que no se crearon.
+     */
+    yaExistian?: number;
+}
+
+/** Lo que devuelve apagar la demostración. */
+export interface BajaDemo {
+    publicacionesEliminadas: number;
+    preguntasEliminadas: number;
+    /**
+     * Clientes del CRM que nacieron de una pregunta simulada y NO se borran (la
+     * ingesta pudo haber actualizado un cliente real preexistente). Quedan
+     * rotulados en Clientes; el aviso de salida los nombra para que nadie los
+     * descubra después mezclados con los leads de verdad.
+     */
+    clientesConservados: number;
 }
 
 /** Lo que devuelve el inicio del OAuth: la URL de autorización de ML. */
@@ -194,6 +252,14 @@ export interface ListaPreguntas {
     total: number;
     page: number;
     limit: number;
+    /**
+     * La cuenta vigente del tenant es simulada. Viaja en el LISTADO porque GET
+     * /mercadolibre/cuenta es admin-only: sin esto, para un vendedor el rótulo
+     * dependía de que hubiera filas con id DEMO-, y con la bandeja vacía (todo
+     * contestado, o el filtro "Eliminadas") la pantalla se presentaba como una
+     * bandeja de Mercado Libre en producción.
+     */
+    demo?: boolean;
 }
 
 /** Alta del lead a partir de una pregunta: deduplica contra los clientes del tenant. */
@@ -208,6 +274,12 @@ export interface CrearLeadResultado {
     clienteId: number;
     /** true = se creó un cliente nuevo; false = se ató a uno existente. */
     creado: boolean;
+    /**
+     * La pregunta era simulada: el cliente quedó marcado como tal en el CRM. El
+     * aviso de éxito lo repite — es el único paso del circuito por el que algo
+     * simulado se convierte en un dato permanente.
+     */
+    simulada?: boolean;
 }
 
 export const mercadolibreApi = {
@@ -233,6 +305,36 @@ export const mercadolibreApi = {
     /** Suelta la cuenta: las publicaciones quedan en ML, pero el sistema deja de sincronizarlas. */
     desvincular: (id: number) =>
         apiClient.delete<void>(`/mercadolibre/cuenta/${id}`),
+
+    // ─── Modo demostración ──────────────────────────────────────────────────
+
+    /**
+     * Da de alta la cuenta simulada del tenant. No hay OAuth ni credenciales: es
+     * el interruptor que hace que las llamadas las conteste el simulador en vez
+     * de la red. El backend lo rechaza (409) si ya hay una cuenta REAL activa,
+     * para que nunca convivan lo publicado de verdad y lo simulado.
+     *
+     * La pantalla igual vuelve a pedir GET /mercadolibre/cuenta después: el alta
+     * es el disparador, el estado rotulado sigue saliendo de ahí.
+     */
+    activarDemo: () =>
+        apiClient.post<CuentaMlResumen>('/mercadolibre/demo'),
+
+    /**
+     * Apaga la demostración y borra la cuenta simulada con sus publicaciones y
+     * preguntas. Es a propósito destructivo: nada de eso existió nunca fuera del
+     * sistema, y así la demostración se puede repetir desde cero.
+     */
+    desactivarDemo: () =>
+        apiClient.delete<BajaDemo>('/mercadolibre/demo'),
+
+    /**
+     * Siembra preguntas de compradores ficticios sobre las publicaciones
+     * simuladas. Devuelve 409 si todavía no hay ninguna publicada: sin publicación
+     * no hay a qué colgarlas.
+     */
+    sembrarPreguntasDemo: () =>
+        apiClient.post<SiembraPreguntasDemo>('/mercadolibre/demo/preguntas'),
 
     // ─── Publicaciones ──────────────────────────────────────────────────────
 

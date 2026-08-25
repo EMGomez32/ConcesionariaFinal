@@ -31,12 +31,20 @@ export const ESTADO_LEAD_MAP: Record<EstadoLead, { label: string; variant: 'viol
 
 export const ESTADOS_LEAD: EstadoLead[] = ['nuevo', 'contactado', 'negociando', 'ganado', 'perdido'];
 
-/** Canal por el que entró la consulta/lead (null = sin registrar). */
-export type OrigenLead = 'deruedas' | 'instagram' | 'facebook' | 'whatsapp' | 'web' | 'mostrador' | 'referido' | 'otro';
+/**
+ * Canal por el que entró la consulta/lead (null = sin registrar).
+ *
+ * `mercadolibre` estaba en el enum de la base pero faltaba acá: los leads que
+ * entran por la bandeja de preguntas caían en un lookup `undefined` y la pastilla
+ * de canal salía VACÍA en el listado y en la ficha — el lead peor rotulado del
+ * CRM era justo el que venía de una integración.
+ */
+export type OrigenLead = 'deruedas' | 'mercadolibre' | 'instagram' | 'facebook' | 'whatsapp' | 'web' | 'mostrador' | 'referido' | 'otro';
 
 /** Etiqueta legible por canal. El orden del array ES el del select. */
 export const ORIGEN_LEAD_LABEL: Record<OrigenLead, string> = {
     deruedas: 'DeRuedas',
+    mercadolibre: 'Mercado Libre',
     instagram: 'Instagram',
     facebook: 'Facebook',
     whatsapp: 'WhatsApp',
@@ -46,7 +54,7 @@ export const ORIGEN_LEAD_LABEL: Record<OrigenLead, string> = {
     otro: 'Otro',
 };
 
-export const ORIGENES_LEAD: OrigenLead[] = ['deruedas', 'instagram', 'facebook', 'whatsapp', 'web', 'mostrador', 'referido', 'otro'];
+export const ORIGENES_LEAD: OrigenLead[] = ['deruedas', 'mercadolibre', 'instagram', 'facebook', 'whatsapp', 'web', 'mostrador', 'referido', 'otro'];
 
 export interface Cliente {
     id: number;
@@ -61,6 +69,12 @@ export interface Cliente {
     estadoLead?: EstadoLead;
     /** Canal de entrada del lead. null = sin registrar (altas manuales viejas). */
     origenLead?: OrigenLead | null;
+    /**
+     * La consulta que dio origen a esta ficha la fabricó el modo demostración de
+     * Mercado Libre: no la hizo ningún interesado real. El lead queda en el CRM
+     * aunque se apague la demostración, así que hay que rotularlo donde se lo vea.
+     */
+    origenSimulado?: boolean;
     /** Vendedor "dueño" del cliente (ownership CRM). null = sin asignar. */
     vendedorAsignadoId?: number | null;
     vendedorAsignado?: { id: number; nombre: string } | null;

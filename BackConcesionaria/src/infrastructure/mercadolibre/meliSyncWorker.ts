@@ -86,7 +86,12 @@ async function correrCiclo(): Promise<void> {
         // CERO filas EN SILENCIO y el worker no sincroniza nada. Sin la
         // extensión, `activa` y `deletedAt` se filtran A MANO.
         const cuentas = await withAuthBypass((tx) => tx.mercadoLibreCuenta.findMany({
-            where: { activa: true, deletedAt: null },
+            // Las cuentas en modo demostración quedan afuera: sus llamadas las
+            // responde el simulador contra la propia base, así que no hay nada
+            // que reconciliar (el espejo ML → base sería un no-op) ni preguntas
+            // nuevas que traer — las siembra el panel. Barrerlas sólo llenaría el
+            // log de una cuenta que por definición nunca se desincroniza.
+            where: { activa: true, deletedAt: null, modo: 'real' },
             orderBy: { id: 'asc' },
         }));
         for (const [indice, cuenta] of cuentas.entries()) {

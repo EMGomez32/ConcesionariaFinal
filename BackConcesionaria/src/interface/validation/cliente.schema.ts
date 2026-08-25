@@ -45,8 +45,11 @@ const estadoLeadEnum = z.enum(['nuevo', 'contactado', 'negociando', 'ganado', 'p
 }).optional();
 
 // Canal por el que entró la consulta (espejo del enum OrigenLead de Prisma).
-const ORIGENES_LEAD = ['deruedas', 'instagram', 'facebook', 'whatsapp', 'web', 'mostrador', 'referido', 'otro'] as const;
-const MSG_ORIGEN = 'Origen inválido. Válidos: deruedas, instagram, facebook, whatsapp, web, mostrador, referido, otro';
+// `mercadolibre` estaba en el enum de Prisma pero faltaba en este espejo: los
+// leads que entran por la bandeja de preguntas quedaban imposibles de guardar
+// desde el form de cliente (la edición rebotaba por "origen inválido").
+const ORIGENES_LEAD = ['deruedas', 'mercadolibre', 'instagram', 'facebook', 'whatsapp', 'web', 'mostrador', 'referido', 'otro'] as const;
+const MSG_ORIGEN = 'Origen inválido. Válidos: deruedas, mercadolibre, instagram, facebook, whatsapp, web, mostrador, referido, otro';
 
 // origenLead en create/update: nullable en DB (los históricos no lo registraron),
 // así que el '' del form (limpieza) → null; ausente (undefined) → no se toca.

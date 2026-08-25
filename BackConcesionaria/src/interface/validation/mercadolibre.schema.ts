@@ -29,6 +29,35 @@ const nullableFk = (msg: string) =>
 const textoOpcional = (max: number, msg: string) =>
     z.preprocess((v) => (v === '' ? undefined : v), z.string().trim().max(max, msg).optional());
 
+// Tenant elegido por body. Tiene que SOBREVIVIR al strip de Zod porque para un
+// super_admin la extensión no inyecta concesionariaId y es la única forma de
+// decir sobre qué concesionaria se opera; para el resto `resolveConcesionariaId`
+// lo ignora y usa el del token, así que declararlo no abre nada.
+const concesionariaOpcional = z.preprocess(
+    (v) => (v === 0 || v === '' || v === null ? undefined : v),
+    z.coerce.number().int().positive().optional(),
+);
+
+/**
+ * Encender el modo demostración / sembrar sus preguntas de ejemplo. No lleva
+ * ningún campo propio a propósito: qué cuenta se crea y con qué datos lo decide
+ * el servidor (mlUserId, nickname y site son fijos), así que el body sólo sirve
+ * para que un super_admin elija concesionaria. El schema existe para que Zod
+ * descarte cualquier otra clave: sin él, un body con `modo: 'real'` o
+ * `accessToken` llegaría crudo al controller.
+ *
+ * El preprocess NO es cosmético: son botones que se aprietan sin datos, y en
+ * Express 5 un POST sin cuerpo deja `req.body` en `undefined` (body-parser ya no
+ * lo inicializa en `{}`). Sin esto, `z.object` rechazaría la llamada con un 400
+ * de validación por un body que nunca hizo falta mandar.
+ */
+export const demoSchema = z.preprocess(
+    (v) => (v === undefined || v === null ? {} : v),
+    z.object({
+        concesionariaId: concesionariaOpcional,
+    }),
+);
+
 /**
  * Publicar un vehículo. El `listingTypeId` es obligatorio a propósito: cada tipo
  * de publicación tiene un costo distinto (los trae en vivo GET

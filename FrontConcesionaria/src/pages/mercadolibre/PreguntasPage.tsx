@@ -11,7 +11,7 @@ import {
     ExternalLink,
     Car,
 } from 'lucide-react';
-import mercadolibreApi from '../../api/mercadolibre.api';
+import mercadolibreApi, { esCuentaDemo } from '../../api/mercadolibre.api';
 import type {
     CrearLeadDto,
     EstadoPreguntaMl,
@@ -60,6 +60,21 @@ interface VendedorRef {
     id: number;
     nombre: string;
 }
+
+/**
+ * Rótulo del modo demostración. La cuenta demo no sale nunca a la red: sus
+ * preguntas las siembra el sistema y las respuestas no se publican en ningún
+ * lado, así que hay que decirlo en pantalla y no sólo en Ajustes.
+ *
+ * Se mira el id porque el simulador los emite con prefijo DEMO- justamente para
+ * que se distingan a simple vista de un MLA real: sirve para el vendedor, que no
+ * puede consultar la cuenta (GET /mercadolibre/cuenta es admin-only), y también
+ * rotula fila por fila si en la bandeja quedaron preguntas reales de antes.
+ */
+const ID_SIMULADO = /^DEMO-/i;
+
+const esSimulada = (p: PreguntaMl): boolean =>
+    ID_SIMULADO.test(p.mlQuestionId ?? '') || ID_SIMULADO.test(p.itemId ?? '');
 
 const dosDigitos = (n: number) => String(n).padStart(2, '0');
 
@@ -112,6 +127,13 @@ const PreguntasPage = () => {
 
     const [seleccionadaId, setSeleccionadaId] = useState<number | null>(null);
     const [borrador, setBorrador] = useState('');
+    // Última pregunta contestada en esta pantalla. El filtro por defecto es "Sin
+    // responder", así que al confirmar la respuesta la fila sale del listado y el
+    // detalle se quedaba sin nada que mostrar: el panel decía "La pregunta ya no
+    // está en el listado" justo donde tenía que verse el hilo con la respuesta
+    // recién escrita. Se guarda la fila devuelta (mezclada con la que ya
+    // teníamos, que trae el vehículo) para que el hilo siga en pantalla.
+    const [respondida, setRespondida] = useState<PreguntaMl | null>(null);
 
     // Alta del lead: el formulario vive acá y no en un componente aparte porque el
     // footer del Modal (fuera del children) necesita leerlo para guardar.
@@ -122,7 +144,7 @@ const PreguntasPage = () => {
     // borrador: se resuelve en el handler (no en un efecto, que encadenaría renders).
     const cambiarEstado = (valor: '' | EstadoPreguntaMl) => { setEstado(valor); setPage(1); };
     const cambiarSoloMias = (valor: boolean) => { setSoloMias(valor); setPage(1); };
-    const seleccionar = (id: number | null) => { setSeleccionadaId(id); setBorrador(''); };
+    const seleccionar = (id: number | null) => { setSeleccionadaId(id); setBorrador(''); setRespondida(null); };
 
     const filtros = useMemo<PreguntasFilter>(() => ({
         ...(estado ? { estado } : {}),
@@ -144,24 +166,55 @@ const PreguntasPage = () => {
     });
     const vendedores = ((usuariosData as { results?: VendedorRef[] })?.results ?? []);
 
+    // Sólo el admin puede consultar la cuenta: al vendedor no se le pide (daría
+    // 403) y para él el rótulo sale de los ids DEMO- de las propias preguntas.
+    const { data: cuentaMl } = useQuery({
+        queryKey: ['ml-cuenta'],
+        queryFn: () => mercadolibreApi.getCuenta(),
+        enabled: esAdmin,
+        staleTime: 5 * 60 * 1000,
+        retry: false,
+    });
+
     const preguntas = listaQuery.data?.results ?? [];
     // El contrato de listarPreguntas devuelve el total crudo, no totalPages.
     const total = listaQuery.data?.total ?? 0;
     const totalPages = Math.max(1, Math.ceil(total / LIMITE_LISTA));
 
+    // ¿La cuenta con la que opera el tenant es la simulada? El listado lo dice
+    // (lo lee también el vendedor); `esCuentaDemo` es el mismo dato para el admin,
+    // que además lo tiene cacheado. No depende de que haya filas: con la bandeja
+    // vacía el rótulo tiene que estar igual.
+    const cuentaEsDemo = listaQuery.data?.demo === true || esCuentaDemo(cuentaMl);
+    // La cabecera se rotula cuando TODO lo que se ve es simulado. El flag de la
+    // CUENTA no alcanza para rotular una fila: si la bandeja mezclara preguntas
+    // reales (ingeridas con una cuenta anterior), el rótulo global las estaría
+    // llamando fingidas — ahí queda sólo el chip de cada fila simulada.
+    const bandejaSimulada = cuentaEsDemo && !preguntas.some((p) => !esSimulada(p));
+
     // No hay endpoint de detalle: la pregunta abierta sale del listado ya cargado.
-    // Si un cambio de filtro la deja afuera, el panel lo avisa en vez de colgarse.
-    const seleccionada = preguntas.find((p) => p.id === seleccionadaId) ?? null;
+    // Si un cambio de filtro la deja afuera, el panel lo avisa en vez de colgarse
+    // (salvo que sea la que se acaba de contestar: esa se sigue mostrando).
+    const seleccionada = preguntas.find((p) => p.id === seleccionadaId)
+        ?? (respondida?.id === seleccionadaId ? respondida : null);
 
     // ── Mutaciones ───────────────────────────────────────────────────────────
 
-    // Responder impacta en vivo contra Mercado Libre (no hay cola): sin burbuja
-    // optimista, se refresca la lista cuando la API confirma.
+    // Responder impacta en vivo contra Mercado Libre (no hay cola): no hay burbuja
+    // optimista, la lista se refresca cuando la API confirma. Lo que sí se guarda
+    // es la fila confirmada, para que el hilo no desaparezca del panel al salir
+    // del filtro "Sin responder" (ver `respondida`).
     const responder = useMutation({
-        mutationFn: ({ id, texto }: { id: number; texto: string }) =>
+        mutationFn: ({ id, texto }: { id: number; texto: string; previa: PreguntaMl }) =>
             mercadolibreApi.responder(id, texto),
-        onSuccess: () => {
-            addToast('Respuesta publicada en Mercado Libre', 'success');
+        onSuccess: (p, vars) => {
+            // Con la cuenta simulada la respuesta no se publica en ningún lado:
+            // el aviso, aunque dure tres segundos, tampoco puede decir que sí.
+            addToast(esSimulada(p) ? 'Respuesta registrada (simulada, no salió a Mercado Libre)' : 'Respuesta publicada en Mercado Libre', 'success');
+            // La fila que devuelve el endpoint no trae las relaciones (vehículo,
+            // asignado): se apoya sobre la que ya estaba en pantalla para que el
+            // detalle no pierda el título ni el vendedor al salir del filtro.
+            setRespondida({ ...vars.previa, ...p });
             qc.invalidateQueries({ queryKey: ['ml-preguntas'] });
         },
         onError: (e, vars) => {
@@ -182,9 +235,14 @@ const PreguntasPage = () => {
         mutationFn: ({ id, datos }: { id: number; datos: CrearLeadDto }) =>
             mercadolibreApi.crearLead(id, datos),
         onSuccess: (res) => {
+            // El único paso por el que algo simulado se vuelve un dato permanente
+            // del CRM: el aviso lo dice, igual que el de responder.
+            const simulada = res.simulada === true;
             addToast(
                 res.creado
-                    ? 'Lead creado y vinculado a la pregunta'
+                    ? (simulada
+                        ? 'Lead creado a partir de una pregunta simulada: queda en Clientes rotulado como SIMULACIÓN'
+                        : 'Lead creado y vinculado a la pregunta')
                     : 'La pregunta quedó vinculada a un cliente que ya existía',
                 'success',
             );
@@ -197,16 +255,28 @@ const PreguntasPage = () => {
 
     const sincronizar = useMutation({
         mutationFn: () => mercadolibreApi.sincronizarAhora(),
+        // Con la cuenta simulada la pasada no sale a la red: la contesta el
+        // simulador leyendo nuestra propia tabla, así que `nuevas` es siempre 0.
+        // Decir "no había preguntas nuevas en Mercado Libre" afirmaría que se
+        // consultó Mercado Libre, que es exactamente lo que no pasó — y el toast
+        // se emite justo cuando el que mira acaba de apretar el botón.
         onSuccess: (res) => {
             addToast(
                 res.nuevas > 0
-                    ? `Entraron ${res.nuevas} preguntas nuevas`
-                    : 'No había preguntas nuevas en Mercado Libre',
+                    ? `Entraron ${res.nuevas} preguntas nuevas${cuentaEsDemo ? ' (simuladas)' : ''}`
+                    : (cuentaEsDemo
+                        ? 'Pasada simulada: no se consultó Mercado Libre y no entró ninguna pregunta'
+                        : 'No había preguntas nuevas en Mercado Libre'),
                 'success',
             );
             qc.invalidateQueries({ queryKey: ['ml-preguntas'] });
         },
-        onError: (e) => addToast(getErrorMessage(e, 'No se pudo sincronizar con Mercado Libre'), 'error'),
+        onError: (e) => addToast(
+            getErrorMessage(e, cuentaEsDemo
+                ? 'No se pudo correr la pasada simulada'
+                : 'No se pudo sincronizar con Mercado Libre'),
+            'error',
+        ),
     });
 
     // Mercado Libre no acepta dos respuestas sobre la misma pregunta: una vez
@@ -217,7 +287,7 @@ const PreguntasPage = () => {
         const texto = borrador.trim();
         if (!texto || !seleccionada || !puedeResponder) return;
         setBorrador('');
-        responder.mutate({ id: seleccionada.id, texto });
+        responder.mutate({ id: seleccionada.id, texto, previa: seleccionada });
     };
 
     const abrirLead = (p: PreguntaMl) => {
@@ -256,8 +326,15 @@ const PreguntasPage = () => {
                             <ShoppingBag size={22} />
                         </div>
                         <h1>Mercado Libre</h1>
+                        {bandejaSimulada && <Badge variant="warning">SIMULACIÓN</Badge>}
                     </div>
                     <p>Preguntas de tus publicaciones: respondé, asigná el vendedor y convertí la consulta en un lead.</p>
+                    {bandejaSimulada && (
+                        <p className="preguntas-nota-simulacion">
+                            <strong>Modo demostración:</strong> estas consultas las generó el sistema para mostrar
+                            el circuito. No vienen de Mercado Libre y lo que se responda no se publica en ningún lado.
+                        </p>
+                    )}
                 </div>
                 {esAdmin && (
                     <div className="header-actions">
@@ -265,7 +342,9 @@ const PreguntasPage = () => {
                             variant="secondary"
                             size="sm"
                             loading={sincronizar.isPending}
-                            title="Trae las preguntas nuevas sin esperar al worker"
+                            title={cuentaEsDemo
+                                ? 'Corre la pasada de ingesta contra la cuenta simulada: no se consulta Mercado Libre'
+                                : 'Trae las preguntas nuevas sin esperar al worker'}
                             onClick={() => sincronizar.mutate()}
                         >
                             <RefreshCw size={14} /> Sincronizar
@@ -324,6 +403,7 @@ const PreguntasPage = () => {
                                     </span>
                                     <span className="preguntas-item-texto line-clamp-2">{p.texto}</span>
                                     <span className="preguntas-item-badges">
+                                        {esSimulada(p) && <Badge variant="warning">SIMULACIÓN</Badge>}
                                         <Badge variant={ESTADO_BADGE[p.estado]}>{ESTADO_LABEL[p.estado]}</Badge>
                                         {p.asignadoA ? (
                                             <Badge variant="violet">{primerNombre(p.asignadoA.nombre)}</Badge>
@@ -349,9 +429,13 @@ const PreguntasPage = () => {
                         <div className="preguntas-vacio">
                             <ShoppingBag size={40} className="text-secondary" />
                             <h2>Elegí una pregunta</h2>
+                            {/* El panel vacío es lo único que se lee cuando no hay
+                                nada abierto: con la cuenta simulada no puede
+                                describirse como una bandeja de Mercado Libre. */}
                             <p className="text-secondary">
-                                Las consultas de tus publicaciones de Mercado Libre aparecen a la izquierda.
-                                Abrí una para leerla completa y responder.
+                                {bandejaSimulada
+                                    ? 'Las consultas simuladas de tus publicaciones de demostración aparecen a la izquierda. Abrí una para leerla completa y responder: nada de esto sale a Mercado Libre.'
+                                    : 'Las consultas de tus publicaciones de Mercado Libre aparecen a la izquierda. Abrí una para leerla completa y responder.'}
                             </p>
                         </div>
                     ) : !seleccionada ? (
@@ -378,9 +462,15 @@ const PreguntasPage = () => {
                                         <ArrowLeft size={16} />
                                     </button>
                                     <div className="preguntas-detalle-datos">
-                                        <div className="preguntas-detalle-titulo truncate">{vehiculoDe(seleccionada)}</div>
+                                        <div className="flex items-center gap-2">
+                                            {/* minWidth 0: sin eso el título no cede espacio y el chip se sale. */}
+                                            <div className="preguntas-detalle-titulo truncate" style={{ minWidth: 0 }}>{vehiculoDe(seleccionada)}</div>
+                                            {esSimulada(seleccionada) && <Badge variant="warning">SIMULACIÓN</Badge>}
+                                        </div>
                                         <div className="preguntas-detalle-sub">
-                                            {seleccionada.nombreContacto || 'Comprador de Mercado Libre'} · {fechaHora(seleccionada.preguntadaEn)}
+                                            {/* El apodo de fantasía no puede leerse como un comprador real. */}
+                                            {seleccionada.nombreContacto || (esSimulada(seleccionada) ? 'Comprador simulado' : 'Comprador de Mercado Libre')}
+                                            {' · '}{fechaHora(seleccionada.preguntadaEn)}
                                         </div>
                                     </div>
                                 </div>
@@ -391,7 +481,11 @@ const PreguntasPage = () => {
                                             <Car size={14} /> Ver vehículo
                                         </Link>
                                     )}
-                                    {seleccionada.publicacion?.permalink && (
+                                    {/* De una pregunta simulada no hay aviso que abrir: en vez del
+                                        link va el texto, nunca algo que parezca ir a Mercado Libre. */}
+                                    {esSimulada(seleccionada) ? (
+                                        <span className="text-xs text-muted">Publicación simulada: no existe en Mercado Libre</span>
+                                    ) : seleccionada.publicacion?.permalink && (
                                         <a
                                             href={seleccionada.publicacion.permalink}
                                             target="_blank"
@@ -464,8 +558,15 @@ const PreguntasPage = () => {
 
                             {!puedeResponder && (
                                 <p className="preguntas-aviso">
+                                    {/* Sobre una pregunta simulada, "Mercado Libre
+                                        admite una sola respuesta" daba a entender que
+                                        la respuesta quedó publicada allá y que es
+                                        Mercado Libre el que bloquea: el bloqueo es de
+                                        acá y la respuesta no salió a ningún lado. */}
                                     {seleccionada.estado === 'respondida'
-                                        ? 'Mercado Libre admite una sola respuesta por pregunta: esta ya fue contestada.'
+                                        ? (esSimulada(seleccionada)
+                                            ? 'Esta pregunta simulada ya fue contestada dentro del sistema: la respuesta no se publicó en ningún lado. La demostración respeta la regla real de una sola respuesta por pregunta.'
+                                            : 'Mercado Libre admite una sola respuesta por pregunta: esta ya fue contestada.')
                                         : 'El comprador eliminó la pregunta, así que no se puede responder.'}
                                 </p>
                             )}
@@ -524,9 +625,26 @@ const PreguntasPage = () => {
                     </>
                 }
             >
+                {/* El modal tapa la pantalla rotulada que quedó atrás (el overlay
+                    la desenfoca), y es el ÚNICO paso del circuito por el que algo
+                    simulado se convierte en un dato permanente del CRM: el rótulo
+                    tiene que estar acá adentro, no sólo detrás. */}
+                {seleccionada && esSimulada(seleccionada) && (
+                    <div className="preguntas-lead-simulada">
+                        <Badge variant="warning">SIMULACIÓN</Badge>
+                        <p>
+                            Esta consulta la <strong>generó el sistema</strong>: no hay ningún interesado del otro
+                            lado. El cliente que se cree queda en el CRM marcado como simulación y{' '}
+                            <strong>sobrevive a apagar el modo demostración</strong>, así que conviene borrarlo a
+                            mano cuando la demostración termine.
+                        </p>
+                    </div>
+                )}
+
                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 'var(--space-4)' }}>
-                    Mercado Libre <strong>no comparte el teléfono ni el email</strong> de quien pregunta: si los dejó
-                    escritos en la consulta, cargalos a mano acá abajo.
+                    {seleccionada && esSimulada(seleccionada)
+                        ? 'Los datos de contacto los cargás vos: en el circuito real Mercado Libre no comparte el teléfono ni el email de quien pregunta.'
+                        : (<>Mercado Libre <strong>no comparte el teléfono ni el email</strong> de quien pregunta: si los dejó escritos en la consulta, cargalos a mano acá abajo.</>)}
                 </p>
 
                 {seleccionada && (
@@ -572,6 +690,18 @@ const PreguntasPage = () => {
             </Modal>
 
             <style>{`
+                /* El aviso de simulación va DEBAJO del subtítulo y tiene que leerse
+                   más apagado que él. Con .text-sm/.text-muted no alcanza: index.css
+                   trae '.header-title p' (una clase + un elemento) y le gana a
+                   cualquier utilidad de una sola clase, así que el aviso salía
+                   idéntico al subtítulo. Por eso el selector repite '.header-title p'. */
+                .header-title p.preguntas-nota-simulacion {
+                    font-size: var(--text-sm);
+                    color: var(--text-muted);
+                    line-height: 1.5;
+                    max-width: 68ch;
+                }
+
                 .preguntas-layout {
                     display: grid;
                     grid-template-columns: 340px minmax(0, 1fr);
@@ -647,6 +777,27 @@ const PreguntasPage = () => {
                 .preguntas-vacio h2 { font-size: var(--text-lg); }
                 .preguntas-vacio p { font-size: var(--text-sm); max-width: 42ch; }
                 .preguntas-hint { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding: 1.25rem; text-align: center; font-size: var(--text-sm); color: var(--text-secondary); }
+
+                /* Rótulo de simulación DENTRO del modal del lead. Va con el mismo
+                   lenguaje visual que el aviso de la cabecera, pero acá el aviso es
+                   más fuerte: lo que sale de este modal no se borra al apagar la
+                   demostración. */
+                .preguntas-lead-simulada {
+                    display: flex;
+                    gap: 0.6rem;
+                    align-items: flex-start;
+                    margin-bottom: var(--space-4);
+                    padding: 0.6rem 0.75rem;
+                    border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+                    border-radius: var(--radius-sm);
+                    background: color-mix(in srgb, var(--warning) 10%, transparent);
+                }
+                .preguntas-lead-simulada p {
+                    margin: 0;
+                    font-size: var(--text-sm);
+                    color: var(--text-secondary);
+                    line-height: 1.5;
+                }
 
                 /* Cita de la pregunta dentro del modal del lead: de ahí se copian
                    el teléfono o el mail que Mercado Libre no manda. */

@@ -350,11 +350,12 @@ export async function opcionesDePublicacion(cuentaId: number, vehiculoId: number
         try {
             const atributos = await atributosDeCategoria(cuentaId, categoriaId);
             faltantes = atributosFaltantes(valoresDeAtributos(vehiculo), atributos);
-            if (faltantes.length > 0) {
-                advertencias.push(
-                    `Mercado Libre pide estos datos obligatorios que el vehículo no tiene cargados: ${faltantes.map((a) => a.nombre).join(', ')}.`,
-                );
-            }
+            // Los faltantes viajan SÓLO en `atributosFaltantes` (estructurado) y no
+            // además como una advertencia de texto. Antes iban por los dos lados: el
+            // modal mostraba lo mismo dos veces y, sobre todo, la frase afirmaba que
+            // "Mercado Libre pide" unos atributos que en modo demostración los
+            // devuelve el simulador desde una lista fija. Quien arma la frase es la
+            // pantalla, que es la que sabe si la cuenta es simulada y lo rotula.
         } catch (err) {
             advertencias.push(`No se pudieron consultar los atributos obligatorios de la categoría: ${mensajeCorto(err)}`);
         }
@@ -580,6 +581,9 @@ export async function publicarVehiculo(p: {
                 monedaPublicada: item.currency_id ?? moneda,
                 ultimoError: null,
                 ultimaSyncAt: new Date(),
+                // Aviso nuevo: la fila puede venir reusada de un intento anterior
+                // que quedó con la marca de pausa manual puesta.
+                pausadaManualmenteEn: null,
             },
         });
     } catch (err) {
@@ -602,15 +606,20 @@ export async function sincronizarPublicacion(publicacionId: number): Promise<Pub
 
     try {
         const item = await llamarApi<ItemMl>(publicacion.cuentaId, `/items/${itemId}`);
+        const estado = estadoDesdeMl(item.status) ?? publicacion.estado;
         return await prisma.publicacionMl.update({
             where: { id: publicacion.id },
             data: {
-                estado: estadoDesdeMl(item.status) ?? publicacion.estado,
+                estado,
                 permalink: item.permalink ?? publicacion.permalink,
                 precioPublicado: typeof item.price === 'number' ? item.price : publicacion.precioPublicado,
                 monedaPublicada: item.currency_id ?? publicacion.monedaPublicada,
                 ultimoError: null,
                 ultimaSyncAt: new Date(),
+                // El aviso ya no está pausado (lo reactivaron desde la app de
+                // Mercado Libre): la marca de pausa manual quedó vieja y hay que
+                // sacarla, o bloquearía para siempre la reactivación automática.
+                ...(estado !== 'pausada' ? { pausadaManualmenteEn: null } : {}),
             },
         });
     } catch (err) {
@@ -631,6 +640,13 @@ async function cambiarEstadoEnMl(
     publicacionId: number,
     status: 'paused' | 'active' | 'closed',
     estadoLocal: EstadoPublicacionMl,
+    /**
+     * Qué hacer con la marca de pausa manual. La pausa que dispara el usuario la
+     * PONE; reactivar la saca (es la única forma de volver a ofrecer la unidad);
+     * la pausa automática por "reservado" no la toca, porque no la decidió nadie
+     * a mano y el vehículo sí puede reabrirla cuando vuelve a estar disponible.
+     */
+    marcaManual: 'poner' | 'limpiar' | 'dejar' = 'dejar',
 ): Promise<PublicacionMl> {
     const publicacion = await buscarPublicacion(publicacionId);
 
@@ -654,6 +670,8 @@ async function cambiarEstadoEnMl(
                 permalink: item.permalink ?? publicacion.permalink,
                 ultimoError: null,
                 ultimaSyncAt: new Date(),
+                ...(marcaManual === 'poner' ? { pausadaManualmenteEn: new Date() } : {}),
+                ...(marcaManual === 'limpiar' ? { pausadaManualmenteEn: null } : {}),
             },
         });
     } catch (err) {
@@ -663,14 +681,22 @@ async function cambiarEstadoEnMl(
     }
 }
 
-export const pausarPublicacion = (publicacionId: number): Promise<PublicacionMl> =>
-    cambiarEstadoEnMl(publicacionId, 'paused', 'pausada');
+/**
+ * Pausa el aviso. `manual` distingue quién lo pidió y NO es cosmético: deja la
+ * marca que impide que la sincronización lo reabra sola (ver
+ * `sincronizarPorVehiculo`). Sin ella, el botón "Pausar" duraba hasta el
+ * siguiente "Sincronizar" (o hasta el próximo tick del worker) y el aviso volvía
+ * a estar activo sin que nadie lo pidiera.
+ */
+export const pausarPublicacion = (publicacionId: number, manual = false): Promise<PublicacionMl> =>
+    cambiarEstadoEnMl(publicacionId, 'paused', 'pausada', manual ? 'poner' : 'dejar');
 
+/** Reactivar es siempre una decisión explícita: limpia la marca de pausa manual. */
 export const reactivarPublicacion = (publicacionId: number): Promise<PublicacionMl> =>
-    cambiarEstadoEnMl(publicacionId, 'active', 'activa');
+    cambiarEstadoEnMl(publicacionId, 'active', 'activa', 'limpiar');
 
 export const cerrarPublicacion = (publicacionId: number): Promise<PublicacionMl> =>
-    cambiarEstadoEnMl(publicacionId, 'closed', 'cerrada');
+    cambiarEstadoEnMl(publicacionId, 'closed', 'cerrada', 'limpiar');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sincronización automática (efecto lateral del stock)
@@ -733,7 +759,15 @@ export async function sincronizarPorVehiculo(vehiculoId: number): Promise<void> 
             await pausarPublicacion(publicacion.id);
         } else if (vehiculo.estado === 'vendido') {
             await cerrarPublicacion(publicacion.id);
-        } else if (vehiculo.estado === 'publicado' && publicacion.estado === 'pausada') {
+        } else if (
+            vehiculo.estado === 'publicado'
+            && publicacion.estado === 'pausada'
+            // Una pausa MANUAL no se deshace sola. Pausar a mano no cambia el
+            // estado del vehículo (sigue 'publicado'), así que sin esta condición
+            // cada reconciliación —el botón "Sincronizar" y cada tick del
+            // worker— reactivaba el aviso que el usuario acababa de pausar.
+            && publicacion.pausadaManualmenteEn == null
+        ) {
             await reactivarPublicacion(publicacion.id);
         }
     } catch (err) {

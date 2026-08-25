@@ -195,6 +195,12 @@ model Cliente {
   /// Canal por el que entró la consulta (DeRuedas, redes, mostrador...).
   /// Nullable: los clientes históricos no registraron origen.
   origenLead              OrigenLead?             @map("origen_lead")
+  /// El lead nació de una interacción SIMULADA (una pregunta del modo
+  /// demostración de Mercado Libre), no de un interesado real. La ficha queda
+  /// en el CRM —puede haber datos cargados a mano— pero tiene que verse
+  /// rotulada en pantalla y quedar afuera de los reportes comerciales: si no,
+  /// una consulta que fabricó el sistema se cuenta como una consulta de verdad.
+  origenSimulado          Boolean                 @default(false) @map("origen_simulado")
   /// Vendedor "dueño" del cliente (ownership CRM). Nullable: un cliente puede
   /// no tener vendedor asignado todavía.
   vendedorAsignadoId      Int?                    @map("vendedor_asignado_id")
@@ -1025,6 +1031,14 @@ enum EstadoPreguntaMl {
   eliminada
 }
 
+/// Cómo se atienden las llamadas a la API de una cuenta. Mismo criterio que
+/// `EntornoAfip.mock`: `demo` = respuestas simuladas dentro del sistema, sin red
+/// y sin credenciales; `real` = la API de Mercado Libre de verdad.
+enum ModoCuentaMl {
+  real
+  demo
+}
+
 /// Cuenta de Mercado Libre vinculada por OAuth. Los tokens se guardan CIFRADOS
 /// en reposo (secretBox, misma clave que las integraciones): con ellos se puede
 /// publicar y responder en nombre del vendedor.
@@ -1035,6 +1049,9 @@ model MercadoLibreCuenta {
   mlUserId        String    @map("ml_user_id")
   nickname        String?
   siteId          String    @default("MLA") @map("site_id")
+  /// Una cuenta 'demo' NUNCA sale a la red: sus llamadas las responde el
+  /// simulador. Existe para mostrar el circuito completo sin credenciales.
+  modo            ModoCuentaMl @default(real)
   /// Cifrados en reposo (AES-256-GCM): la vinculación se rechaza si falta
   /// INTEGRACIONES_SECRET_KEY, así que acá NUNCA hay texto plano (a diferencia
   /// de las integraciones viejas, que sí admiten filas legadas sin cifrar).
@@ -1077,6 +1094,12 @@ model PublicacionMl {
   monedaPublicada String?             @map("moneda_publicada")
   ultimoError     String?             @map("ultimo_error")
   ultimaSyncAt    DateTime?           @map("ultima_sync_at")
+  /// Cuándo se pausó el aviso A MANO desde el panel. Distingue esa pausa de la
+  /// automática (vehículo reservado): la sincronización toma al vehículo como
+  /// fuente de verdad y, con el vehículo en 'publicado', reactivaba sola lo que
+  /// el usuario acababa de pausar. Con la marca puesta nadie reabre el aviso
+  /// salvo un "Reactivar" explícito, que es lo único que la limpia.
+  pausadaManualmenteEn DateTime?      @map("pausada_manualmente_en")
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
   deletedAt       DateTime?           @map("deleted_at")

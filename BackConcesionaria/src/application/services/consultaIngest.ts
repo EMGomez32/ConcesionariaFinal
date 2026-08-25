@@ -30,6 +30,13 @@ export interface ConsultaEntrante {
     vehiculoId?: number | null;
     /** Vendedor elegido a mano; si falta se asigna por round-robin. */
     vendedorId?: number | null;
+    /**
+     * La consulta la fabricó el sistema (modo demostración de Mercado Libre), no
+     * un interesado real. Marca la ficha y la línea de observaciones: el lead
+     * queda en el CRM —y sobrevive a apagar la demostración— así que tiene que
+     * poder distinguirse de una consulta de verdad en cualquier pantalla.
+     */
+    simulada?: boolean;
 }
 
 export interface ResultadoIngesta {
@@ -91,7 +98,14 @@ export async function buscarClientePorContacto(telefono?: string | null, email?:
 const lineaConsulta = (c: ConsultaEntrante): string => {
     const fecha = new Date().toISOString().slice(0, 10);
     const texto = (c.texto ?? '').trim().slice(0, 600);
-    return `[${fecha}] Consulta por ${c.origen}${texto ? `: ${texto}` : ''}`;
+    // Una consulta simulada NO puede quedar escrita como "Consulta por
+    // mercadolibre": el texto es el de una pregunta que sembró el sistema y la
+    // línea sobrevive a apagar la demostración, así que afirmaría para siempre
+    // un origen que nunca existió.
+    const encabezado = c.simulada
+        ? `Consulta SIMULADA (modo demostración de ${c.origen}: no la hizo ningún interesado real)`
+        : `Consulta por ${c.origen}`;
+    return `[${fecha}] ${encabezado}${texto ? `: ${texto}` : ''}`;
 };
 
 export async function ingestarConsulta(consulta: ConsultaEntrante): Promise<ResultadoIngesta> {
@@ -139,6 +153,11 @@ export async function ingestarConsulta(consulta: ConsultaEntrante): Promise<Resu
             estadoLead: 'nuevo',
             vendedorAsignadoId,
             observaciones: lineaConsulta(consulta),
+            // La marca va SÓLO en la ficha nueva. En la rama de dedupe de arriba
+            // el cliente puede ser uno REAL preexistente (el operador cargó un
+            // teléfono ya conocido): rotularlo de simulado sería el error
+            // inverso, así que ahí el rastro queda en las observaciones.
+            origenSimulado: consulta.simulada === true,
         } as never,
     });
     if (consulta.vehiculoId) await upsertInteres(creado.id, consulta.vehiculoId, consulta.texto);

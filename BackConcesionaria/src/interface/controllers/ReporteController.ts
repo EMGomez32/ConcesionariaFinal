@@ -1531,8 +1531,11 @@ export class ReporteController {
                 prisma.postventaCaso.count({ where: { fechaTurno: inicioHoy, estado: { not: 'resuelto' } } }),
                 prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desdeSeg, lt: finVentana }, proximoContactoHecho: false } }),
                 prisma.vehiculo.count({ where: { estado: { in: ['preparacion', 'publicado', 'reservado'] }, OR: [{ vencimientoVtv: { lt: finVentanaDoc } }, { vencimientoSeguro: { lt: finVentanaDoc } }] } }),
-                // Consultas sin atender: leads en 'nuevo' sin ningún contacto registrado.
-                prisma.cliente.count({ where: { estadoLead: 'nuevo', seguimientos: { none: { deletedAt: null } } } }),
+                // Consultas sin atender: leads en 'nuevo' sin ningún contacto
+                // registrado. Los simulados quedan afuera: la alerta es trabajo
+                // pendiente de verdad y mandaría a un vendedor a llamar a un
+                // comprador que fabricó el modo demostración.
+                prisma.cliente.count({ where: { estadoLead: 'nuevo', origenSimulado: false, seguimientos: { none: { deletedAt: null } } } }),
             ]);
 
             res.json({
@@ -1621,6 +1624,10 @@ export class ReporteController {
         try {
             const grupos = await prisma.cliente.groupBy({
                 by: ['estadoLead'],
+                // Los leads nacidos de una pregunta simulada no engordan el embudo:
+                // la ficha existe y se ve rotulada en Clientes, pero contarla acá
+                // sería contar una consulta que no hizo nadie.
+                where: { origenSimulado: false },
                 _count: { _all: true },
             });
             const base: Record<string, number> = { nuevo: 0, contactado: 0, negociando: 0, ganado: 0, perdido: 0 };
@@ -1841,7 +1848,9 @@ export class ReporteController {
             const usuario = context.getUser();
             const roles = usuario?.roles ?? [];
             const esSoloVendedor = roles.includes('vendedor') && !roles.includes('admin') && !roles.includes('super_admin');
-            const where: any = { estadoLead: 'nuevo', seguimientos: { none: { deletedAt: null } } };
+            // `origenSimulado: false` por el mismo motivo que en el reporte
+            // completo: un lead que generó la demostración no es trabajo pendiente.
+            const where: any = { estadoLead: 'nuevo', origenSimulado: false, seguimientos: { none: { deletedAt: null } } };
             if (esSoloVendedor && usuario) where.vendedorAsignadoId = usuario.userId;
             const [sinAtender, masVieja] = await Promise.all([
                 prisma.cliente.count({ where }),
@@ -1861,7 +1870,12 @@ export class ReporteController {
             const { desde, hasta } = parseRango(req.query);
             // createdAt es un DateTime con hora: mismo criterio de día LOCAL
             // completo que los cobros (ver filtroInstante).
-            const where: any = { ...filtroInstante('createdAt', desde, hasta) };
+            // Los leads nacidos de una pregunta SIMULADA (modo demostración de
+            // Mercado Libre) quedan afuera del reporte: la ficha existe en el CRM
+            // y se ve rotulada en Clientes, pero contarla acá metería una consulta
+            // que nunca hizo nadie en el embudo por vendedor y en el balde
+            // "mercadolibre" de la performance por canal.
+            const where: any = { ...filtroInstante('createdAt', desde, hasta), origenSimulado: false };
 
             // Rol vendedor puro: sólo sus clientes asignados. admin/super_admin
             // (authorize deja pasar ambos) ven el equipo completo.

@@ -501,11 +501,41 @@ export async function responderPregunta(preguntaId: number, texto: string, usuar
         throw new BaseException(400, 'La respuesta no puede estar vacía', 'RESPUESTA_VACIA');
     }
 
-    const pregunta = await prisma.preguntaMl.findFirst({ where: { id: preguntaId } });
+    const pregunta = await prisma.preguntaMl.findFirst({
+        where: { id: preguntaId },
+        include: { cuenta: { select: { modo: true } } },
+    });
     if (!pregunta) throw new NotFoundException('Pregunta');
     assertPuedeAtender(pregunta.asignadoAId);
+    // Los dos rechazos de abajo son reglas de Mercado Libre, y sobre una pregunta
+    // SIMULADA decirlo sería afirmar algo falso: no hay nada allá que las imponga.
+    // El usuario ve estos mensajes delante de un comprador (alcanza con apretar
+    // "Responder" dos veces), así que el texto tiene que decir quién rechazó.
+    const simulada = esPreguntaSimulada(pregunta);
     if (pregunta.estado === 'eliminada') {
-        throw new BaseException(409, 'La pregunta ya no se puede responder en Mercado Libre', 'PREGUNTA_ELIMINADA');
+        throw new BaseException(
+            409,
+            simulada
+                ? 'La pregunta simulada quedó marcada como eliminada y ya no se puede responder.'
+                : 'La pregunta ya no se puede responder en Mercado Libre',
+            'PREGUNTA_ELIMINADA',
+        );
+    }
+    // Mercado Libre admite UNA sola respuesta por pregunta. Antes el invariante lo
+    // imponía sólo el upstream (el segundo POST /answers rebotaba) y el front, que
+    // deshabilita el composer: dos pestañas abiertas —o cualquier llamada directa a
+    // la API— pisaban la respuesta y el autor sin un solo error. En modo
+    // demostración era peor: el simulador ES la plataforma, así que aceptaba la
+    // segunda y la demo quedaba siendo más permisiva que la plataforma que dice
+    // reproducir (y que la propia pantalla afirma que sólo admite una).
+    if (pregunta.estado === 'respondida') {
+        throw new BaseException(
+            409,
+            simulada
+                ? 'La pregunta simulada ya fue respondida. El simulador reproduce la regla de Mercado Libre, que admite una sola respuesta por pregunta.'
+                : 'La pregunta ya fue respondida: Mercado Libre admite una sola respuesta por pregunta.',
+            'PREGUNTA_YA_RESPONDIDA',
+        );
     }
 
     // La MeliError sube tal cual (con el mensaje de ML y sus `cause`): los
@@ -555,6 +585,23 @@ export async function asignarPregunta(preguntaId: number, usuarioId: number | nu
     });
 }
 
+/** Ids que emite el modo demostración: se distinguen a simple vista de un MLA real. */
+const ID_SIMULADO_ML = /^DEMO-/i;
+
+/**
+ * Si la pregunta la fabricó el modo demostración. El modo de la cuenta manda; los
+ * ids `DEMO-` lo confirman fila por fila, porque una pregunta sembrada sigue
+ * siendo simulada aunque después se vincule una cuenta real.
+ */
+const esPreguntaSimulada = (p: {
+    mlQuestionId?: string | null;
+    itemId?: string | null;
+    cuenta?: { modo: string } | null;
+}): boolean =>
+    p.cuenta?.modo === 'demo'
+    || ID_SIMULADO_ML.test(p.mlQuestionId ?? '')
+    || ID_SIMULADO_ML.test(p.itemId ?? '');
+
 /**
  * Convierte la pregunta en un lead del CRM (ingesta común de consultas).
  *
@@ -563,11 +610,17 @@ export async function asignarPregunta(preguntaId: number, usuarioId: number | nu
  * usuario no carga el contacto a mano en `datos`, no hay con qué matchear y
  * cada registro crea un cliente nuevo. Por eso la UI pide esos campos: son la
  * única forma de que dos consultas del mismo interesado caigan en una ficha.
+ *
+ * Este es el ÚNICO punto por el que algo simulado sale de la simulación: el
+ * cliente que se crea acá sobrevive a "Salir del modo demostración" (ya es un
+ * dato del CRM). Por eso la marca de simulación viaja con la consulta: sin ella
+ * una pregunta que fabricó el sistema terminaba como una ficha indistinguible
+ * de un interesado real, contada en el reporte de leads por origen.
  */
 export async function registrarPreguntaComoLead(
     preguntaId: number,
     datos: { nombre?: string; telefono?: string; email?: string; vendedorId?: number | null },
-): Promise<{ clienteId: number; creado: boolean }> {
+): Promise<{ clienteId: number; creado: boolean; simulada: boolean }> {
     const pregunta = await prisma.preguntaMl.findFirst({
         where: { id: preguntaId },
         select: {
@@ -576,11 +629,19 @@ export async function registrarPreguntaComoLead(
             nombreContacto: true,
             asignadoAId: true,
             clienteId: true,
+            mlQuestionId: true,
+            itemId: true,
             publicacion: { select: { vehiculoId: true } },
+            // El modo de la cuenta es la fuente de verdad del rótulo; los ids
+            // DEMO- lo confirman fila por fila (una pregunta sembrada sigue
+            // siendo simulada aunque después se vincule una cuenta real).
+            cuenta: { select: { modo: true } },
         },
     });
     if (!pregunta) throw new NotFoundException('Pregunta');
     assertPuedeAtender(pregunta.asignadoAId);
+
+    const simulada = esPreguntaSimulada(pregunta);
 
     // Idempotente: una pregunta ya convertida devuelve SU cliente. Sin esto,
     // dos vendedores mirando la misma pregunta sin asignar (o un reintento tras
@@ -589,7 +650,7 @@ export async function registrarPreguntaComoLead(
     // siempre en el create. El lead viejo quedaba huérfano y desbalanceaba el
     // round-robin.
     if (pregunta.clienteId != null) {
-        return { clienteId: pregunta.clienteId, creado: false };
+        return { clienteId: pregunta.clienteId, creado: false, simulada };
     }
 
     const resultado = await ingestarConsulta({
@@ -598,6 +659,10 @@ export async function registrarPreguntaComoLead(
         telefono: datos.telefono ?? null,
         email: datos.email ?? null,
         texto: pregunta.texto,
+        // Rótulo de punta a punta: marca la ficha nueva y deja escrito en las
+        // observaciones que la consulta la generó el modo demostración, en vez de
+        // afirmar que llegó por Mercado Libre.
+        simulada,
         // Si la pregunta está enlazada a una publicación nuestra, el interés
         // por ese vehículo queda registrado solo.
         vehiculoId: pregunta.publicacion?.vehiculoId ?? null,
@@ -612,9 +677,9 @@ export async function registrarPreguntaComoLead(
             data: { clienteId: resultado.clienteId },
         });
     }
-    logger.info(`[meli-preguntas] pregunta ${preguntaId} registrada como consulta (cliente ${resultado.clienteId})`);
+    logger.info(`[meli-preguntas] pregunta ${preguntaId} registrada como consulta (cliente ${resultado.clienteId})${simulada ? ' [SIMULADA]' : ''}`);
 
-    return { clienteId: resultado.clienteId, creado: resultado.creado };
+    return { clienteId: resultado.clienteId, creado: resultado.creado, simulada };
 }
 
 export interface FiltroPreguntas {

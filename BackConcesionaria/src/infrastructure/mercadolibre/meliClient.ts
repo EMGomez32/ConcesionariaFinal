@@ -2,6 +2,7 @@ import prisma from '../database/prisma';
 import { cifrarSecreto, descifrarSecreto, hayClaveDeSecretos } from '../security/secretBox';
 import { logger } from '../logging/logger';
 import { BaseException } from '../../domain/exceptions/BaseException';
+import { simularLlamada } from './meliSimulador';
 
 /**
  * Cliente de la API de Mercado Libre con OAuth y refresh transparente.
@@ -258,6 +259,21 @@ export async function llamarApi<T>(
     ruta: string,
     init: { method?: string; body?: unknown; query?: Record<string, string | number | undefined> } = {},
 ): Promise<T> {
+    // ÚNICO desvío del modo demostración en todo el sistema. Va ACÁ y no en los
+    // servicios porque esta función es el embudo por el que sale TODA la
+    // comunicación con Mercado Libre: enganchando el simulador en este punto, la
+    // demo recorre exactamente el mismo código de negocio que el modo real
+    // (publicar, pausar, cerrar, reconciliar, responder) y no hay ni una regla
+    // duplicada en un `if (demo)` que después se desincronice de la de verdad.
+    //
+    // Y va ANTES de `accessTokenVigente`: esa función exige tokens vigentes y
+    // dispararía una renovación contra ML. Una cuenta demo no tiene tokens de
+    // verdad (guarda un centinela), así que ahí reventaría antes de llegar al
+    // fetch. El costo es una lectura extra de la fila por llamada; es la misma
+    // que `accessTokenVigente` hace a continuación para las cuentas reales.
+    const cuenta = await prisma.mercadoLibreCuenta.findFirst({ where: { id: cuentaId } });
+    if (cuenta?.modo === 'demo') return simularLlamada<T>(cuenta, ruta, init);
+
     const ejecutar = async (token: string): Promise<Response> => {
         const url = new URL(ruta.startsWith('http') ? ruta : `${API}${ruta}`);
         for (const [k, v] of Object.entries(init.query ?? {})) {

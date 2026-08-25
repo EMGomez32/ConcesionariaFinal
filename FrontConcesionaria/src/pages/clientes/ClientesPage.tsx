@@ -335,6 +335,10 @@ const ClientesPage: React.FC = () => {
                         <Badge variant={e.variant}>{e.label}</Badge>
                         {/* Canal de entrada del lead (null = sin registrar → nada). */}
                         {c.origenLead && <Badge variant="default" className="canal-badge">{ORIGEN_LEAD_LABEL[c.origenLead]}</Badge>}
+                        {/* La consulta la fabricó el modo demostración: la ficha
+                            queda en el CRM y sin este rótulo es indistinguible
+                            de un interesado real (el nombre lo edita el usuario). */}
+                        {c.origenSimulado && <Badge variant="warning">SIMULACIÓN</Badge>}
                     </div>
                 );
             }

@@ -19,7 +19,7 @@ const router = Router();
  *       - { $ref: '#/components/parameters/limitParam' }
  *       - { in: query, name: search, schema: { type: string } }
  *       - { in: query, name: estadoLead, schema: { type: string, enum: [nuevo, contactado, negociando, ganado, perdido] } }
- *       - { in: query, name: origenLead, schema: { type: string, enum: [deruedas, instagram, facebook, whatsapp, web, mostrador, referido, otro] } }
+ *       - { in: query, name: origenLead, schema: { type: string, enum: [deruedas, mercadolibre, instagram, facebook, whatsapp, web, mostrador, referido, otro] } }
  *       - { in: query, name: vendedorAsignadoId, schema: { type: integer } }
  *     responses:
  *       200:
@@ -69,7 +69,7 @@ router.get('/export/csv', authenticate, authorize('admin', 'vendedor'), ClienteC
  *             type: object
  *             required: [origen, nombre]
  *             properties:
- *               origen: { type: string, enum: [deruedas, instagram, facebook, whatsapp, web, mostrador, referido, otro] }
+ *               origen: { type: string, enum: [deruedas, mercadolibre, instagram, facebook, whatsapp, web, mostrador, referido, otro] }
  *               nombre: { type: string }
  *               telefono: { type: string }
  *               email: { type: string, format: email }
@@ -123,7 +123,7 @@ router.post('/consulta', authenticate, authorize('admin', 'vendedor'), validateB
  *                     email: { type: string }
  *                     dni: { type: string }
  *                     observaciones: { type: string }
- *                     origenLead: { type: string, enum: [deruedas, instagram, facebook, whatsapp, web, mostrador, referido, otro] }
+ *                     origenLead: { type: string, enum: [deruedas, mercadolibre, instagram, facebook, whatsapp, web, mostrador, referido, otro] }
  *                     vendedorAsignadoId: { type: integer }
  *               opciones:
  *                 type: object

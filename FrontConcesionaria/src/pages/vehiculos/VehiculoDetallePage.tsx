@@ -7,7 +7,7 @@ import { gastosApi, type GastoVehiculo } from '../../api/gastos.api';
 import { gastosCategoriaApi, type GastoCategoria } from '../../api/gastos-categorias.api';
 import { vehiculoInteresApi, type VehiculoInteres } from '../../api/vehiculoInteres.api';
 import { vehiculoPreciosApi, type VehiculoPrecioHistorial } from '../../api/vehiculoPrecios.api';
-import mercadolibreApi from '../../api/mercadolibre.api';
+import mercadolibreApi, { esCuentaDemo } from '../../api/mercadolibre.api';
 import type {
     EstadoCuentaMl,
     EstadoPublicacionMl,
@@ -1191,6 +1191,17 @@ const costoMl = (valor: number | null, moneda: string | null | undefined, cero: 
 /** Estados en los que el vehículo no está disponible: el backend no los publica. */
 const ESTADOS_NO_PUBLICABLES_ML: EstadoVehiculo[] = ['reservado', 'vendido', 'devuelto'];
 
+/**
+ * Una cuenta en modo demostración NUNCA sale a la red: sus llamadas las contesta
+ * el simulador del backend. Todo lo que muestra la tarjeta con esa cuenta es
+ * simulado y se rotula, porque el sistema se muestra a terceros y tienen que
+ * poder distinguir sin esfuerzo lo conectado de lo fingido.
+ *
+ * El simulador emite los ids con prefijo DEMO- para que se distingan a simple
+ * vista de un MLA real: rotula el aviso aunque el estado de la cuenta no lo diga.
+ */
+const esItemSimuladoMl = (itemId?: string | null): boolean => /^DEMO-/i.test(itemId ?? '');
+
 type AccionMl = 'pausar' | 'reactivar' | 'cerrar' | 'sincronizar';
 
 const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: number; estadoVehiculo: EstadoVehiculo }) => {
@@ -1212,6 +1223,19 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
     const [listingTypeId, setListingTypeId] = useState('');
     const [publicando, setPublicando] = useState(false);
     const [errorMl, setErrorMl] = useState<string | null>(null);
+
+    // Se calcula acá arriba porque además de rotular la tarjeta cambia lo que
+    // dicen los avisos de las acciones: en demostración nada sale a la red.
+    //
+    // El AVISO se rotula por SU id, no por el modo de la cuenta: un item MLA…
+    // existe en Mercado Libre, está publicado y puede estar cobrando, así que
+    // jamás puede mostrarse como simulado ni escondérsele el permalink aunque la
+    // cuenta vigente sea la de demostración. El modo de la cuenta sólo alcanza
+    // para decir qué va a pasar cuando todavía no hay ningún aviso.
+    const cuentaDemo = esCuentaDemo(cuenta);
+    const avisoSimulado = esItemSimuladoMl(publicacion?.itemId);
+    const avisoReal = !!publicacion?.itemId && !avisoSimulado;
+    const simulado = avisoSimulado || (cuentaDemo && !avisoReal);
 
     const cargar = useCallback(async () => {
         setCargando(true);
@@ -1264,7 +1288,9 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
             });
             setPublicacion(pub);
             setModalAbierto(false);
-            addToast('Vehículo publicado en Mercado Libre', 'success');
+            // El aviso efímero tampoco puede afirmar algo que no pasó: con la
+            // cuenta simulada el vehículo no se publicó en ningún lado.
+            addToast(cuentaDemo || esItemSimuladoMl(pub.itemId) ? 'Publicación simulada creada (no salió a Mercado Libre)' : 'Vehículo publicado en Mercado Libre', 'success');
         } catch (err: unknown) {
             // El mensaje es el de Mercado Libre y dice qué atributo falta: va TEXTUAL.
             setErrorMl(getApiErrorMessage(err, 'Mercado Libre rechazó la publicación.'));
@@ -1275,8 +1301,14 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
 
     const ejecutar = async (cual: AccionMl) => {
         if (!publicacion) return;
-        // Cerrar es definitivo del lado de Mercado Libre: no hay reapertura del ítem.
-        if (cual === 'cerrar' && !window.confirm('Cerrar la publicación es definitivo en Mercado Libre: para volver a ofrecer la unidad hay que publicarla de nuevo. ¿Cerrarla?')) return;
+        // El confirm es un diálogo del navegador: aparece tapando la tarjeta, sin
+        // el chip SIMULACIÓN cerca, y con la autoridad visual de un modal del
+        // sistema. Sobre un aviso simulado no puede afirmar que la baja impacta
+        // en Mercado Libre — no hay ningún aviso allá que cerrar.
+        const confirmarCierre = avisoSimulado
+            ? 'Cerrar la publicación simulada. No hay ningún aviso en Mercado Libre: el cierre pasa sólo adentro del sistema y, para volver a ofrecer la unidad, hay que publicarla de nuevo. ¿Cerrarla?'
+            : 'Cerrar la publicación es definitivo en Mercado Libre: para volver a ofrecer la unidad hay que publicarla de nuevo. ¿Cerrarla?';
+        if (cual === 'cerrar' && !window.confirm(confirmarCierre)) return;
         setAccion(cual);
         try {
             const fn = {
@@ -1287,14 +1319,21 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
             }[cual];
             const pub = await fn(publicacion.id);
             setPublicacion(pub);
+            // Las cuatro acciones se rotulan igual: si la operación la resolvió el
+            // simulador, el aviso de éxito lo dice. Antes sólo lo hacía
+            // 'sincronizar' y las otras tres salían idénticas al modo real.
             addToast({
-                pausar: 'Publicación pausada',
-                reactivar: 'Publicación reactivada',
-                cerrar: 'Publicación cerrada',
-                sincronizar: 'Publicación sincronizada con Mercado Libre',
+                pausar: avisoSimulado ? 'Publicación simulada pausada (no salió a Mercado Libre)' : 'Publicación pausada',
+                reactivar: avisoSimulado ? 'Publicación simulada reactivada (no salió a Mercado Libre)' : 'Publicación reactivada',
+                cerrar: avisoSimulado ? 'Publicación simulada cerrada (no había ningún aviso en Mercado Libre)' : 'Publicación cerrada',
+                sincronizar: avisoSimulado ? 'Publicación sincronizada (simulada)' : 'Publicación sincronizada con Mercado Libre',
             }[cual], 'success');
         } catch (err: unknown) {
-            addToast(getApiErrorMessage(err, 'Mercado Libre rechazó la operación.'), 'error');
+            // El rechazo lo emitió el simulador, no Mercado Libre: adjudicárselo a
+            // Mercado Libre sería afirmar que hubo una llamada que no existió.
+            addToast(getApiErrorMessage(err, avisoSimulado
+                ? 'El simulador rechazó la operación.'
+                : 'Mercado Libre rechazó la operación.'), 'error');
         } finally {
             setAccion(null);
         }
@@ -1327,7 +1366,20 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
     return (
         <div className="card ml-card">
             <div>
-                <h3 className="ml-card-titulo"><ShoppingBag size={18} /> Mercado Libre</h3>
+                <h3 className="ml-card-titulo">
+                    <ShoppingBag size={18} /> Mercado Libre
+                    {simulado && <Badge variant="warning">SIMULACIÓN</Badge>}
+                </h3>
+                {simulado && (
+                    <p className="ml-card-nota">
+                        <strong>Modo demostración:</strong> la integración está simulada. Se recorre el
+                        circuito completo (publicar eligiendo tipo y costo, pausar, reactivar, cerrar,
+                        sincronizar), pero no se llama a Mercado Libre.{' '}
+                        {avisoSimulado
+                            ? (<>La publicación <strong>no existe fuera del sistema</strong> y nadie la ve.</>)
+                            : (<>Lo que se publique desde acá <strong>no va a salir a Mercado Libre</strong>.</>)}
+                    </p>
+                )}
                 <p className="ml-card-nota">
                     El precio y la baja se sincronizan solos: si cambiás el precio del vehículo o lo pasás a
                     reservado o vendido, la publicación se actualiza sola.
@@ -1373,7 +1425,23 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
                             <span className="ml-dato-label">Última sincronización</span>
                             <span className="ml-dato-valor">{fechaHoraMl(publicacion.ultimaSyncAt)}</span>
                         </div>
-                        {publicacion.permalink && (
+                        {/* El id del aviso sólo se muestra en demostración: ahí importa que
+                            se vea el DEMO- y que no se confunda con un MLA de verdad. */}
+                        {avisoSimulado && (
+                            <div className="ml-dato">
+                                <span className="ml-dato-label">Id simulado</span>
+                                <span className="ml-dato-valor font-mono">{publicacion.itemId}</span>
+                            </div>
+                        )}
+                        {/* En demostración no hay aviso publicado: donde iría el link va el
+                            texto que lo dice, nunca algo que parezca un link a Mercado Libre.
+                            Se decide por el id del AVISO: un permalink real no se esconde. */}
+                        {avisoSimulado ? (
+                            <div className="ml-dato">
+                                <span className="ml-dato-label">Publicación</span>
+                                <span className="ml-dato-valor text-muted">Simulada: no existe en Mercado Libre</span>
+                            </div>
+                        ) : publicacion.permalink && (
                             <div className="ml-dato">
                                 <span className="ml-dato-label">Publicación</span>
                                 <span className="ml-dato-valor">
@@ -1434,7 +1502,9 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
                 isOpen={modalAbierto}
                 onClose={() => setModalAbierto(false)}
                 title="Publicar en Mercado Libre"
-                subtitle="Elegí el tipo de publicación: cada uno cobra distinto."
+                subtitle={cuentaDemo
+                    ? 'Modo demostración: los costos de abajo son simulados, no se cobra nada y el aviso no sale a Mercado Libre.'
+                    : 'Elegí el tipo de publicación: cada uno cobra distinto.'}
                 maxWidth="640px"
                 footer={
                     <>
@@ -1490,19 +1560,46 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
                             </div>
                         )}
 
+                        {/* Quién pide estos atributos NO es lo mismo en los dos modos:
+                            con la cuenta simulada la lista sale del simulador, no de
+                            una consulta a Mercado Libre. Decir "Mercado Libre pide"
+                            ahí daba a entender que la cuenta está conectada de verdad,
+                            que es justo el equívoco que la demostración evita. */}
                         {opciones.atributosFaltantes.length > 0 && (
                             <div className="ml-aviso">
                                 <AlertTriangle size={16} />
                                 <div>
-                                    Mercado Libre pide estos datos obligatorios para la categoría y el vehículo no los tiene cargados:{' '}
-                                    <strong>{opciones.atributosFaltantes.map((a) => a.nombre).join(', ')}</strong>.
-                                    Si los rechaza, cargalos en la ficha del vehículo y volvé a intentar.
+                                    {cuentaDemo ? (
+                                        <>
+                                            <Badge variant="warning">SIMULACIÓN</Badge>{' '}
+                                            El simulador pide estos datos obligatorios para la categoría y el vehículo no los tiene cargados:{' '}
+                                            <strong>{opciones.atributosFaltantes.map((a) => a.nombre).join(', ')}</strong>.
+                                            La lista es la que usaría Mercado Libre para autos, pero no se consultó Mercado Libre.
+                                        </>
+                                    ) : (
+                                        <>
+                                            Mercado Libre pide estos datos obligatorios para la categoría y el vehículo no los tiene cargados:{' '}
+                                            <strong>{opciones.atributosFaltantes.map((a) => a.nombre).join(', ')}</strong>.
+                                            Si los rechaza, cargalos en la ficha del vehículo y volvé a intentar.
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         )}
 
                         <div>
-                            <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, marginBottom: '0.6rem' }}>Tipo de publicación</h4>
+                            <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                Tipo de publicación
+                                {cuentaDemo && <Badge variant="warning">SIMULACIÓN</Badge>}
+                            </h4>
+                            {/* Los costos son el corazón de la elección: si son simulados hay
+                                que decirlo justo al lado, no en otra parte de la pantalla. */}
+                            {cuentaDemo && (
+                                <p className="ml-hint" style={{ marginBottom: '0.6rem' }}>
+                                    Costos y comisiones <strong>simulados</strong>: los devuelve el simulador del
+                                    sistema, no la tarifa real de Mercado Libre.
+                                </p>
+                            )}
                             {opciones.tipos.length === 0 ? (
                                 <p className="ml-hint">Mercado Libre no devolvió tipos de publicación para esta categoría y precio.</p>
                             ) : (

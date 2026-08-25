@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt, Plug, Plus, Edit, Copy, Link2, ChevronRight, ChevronDown, MessageCircle, QrCode, Unplug, LogOut, Smartphone, ShoppingBag, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt, Plug, Plus, Edit, Copy, Link2, ChevronRight, ChevronDown, MessageCircle, QrCode, Unplug, LogOut, Smartphone, ShoppingBag, AlertTriangle, ExternalLink, FlaskConical } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
@@ -11,7 +11,7 @@ import { integracionesApi } from '../../api/integraciones.api';
 import type { Integracion, IntegracionConfig, IntegracionTipo } from '../../api/integraciones.api';
 import { whatsappApi } from '../../api/whatsapp.api';
 import type { EstadoSesionWhatsapp, EstadoWhatsappCuenta, SaludNumeroWhatsapp, WhatsappCuenta } from '../../api/whatsapp.api';
-import { mercadolibreApi } from '../../api/mercadolibre.api';
+import { mercadolibreApi, esCuentaDemo } from '../../api/mercadolibre.api';
 import type { CuentaMlResumen, EstadoCuentaMl } from '../../api/mercadolibre.api';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -955,6 +955,10 @@ function CuentasMercadoLibre() {
     const [desvinculando, setDesvinculando] = useState<CuentaMlResumen | null>(null);
     const [desvinculandoBusy, setDesvinculandoBusy] = useState(false);
     const [pasosVisibles, setPasosVisibles] = useState(false);
+    const [activandoDemo, setActivandoDemo] = useState(false);
+    const [sembrandoDemo, setSembrandoDemo] = useState(false);
+    const [saliendoDemo, setSaliendoDemo] = useState(false);
+    const [saliendoDemoBusy, setSaliendoDemoBusy] = useState(false);
 
     const cargar = useCallback(() => {
         mercadolibreApi.getCuenta()
@@ -1017,16 +1021,87 @@ function CuentasMercadoLibre() {
             .catch(() => addToast('No se pudo copiar la Redirect URI', 'error'));
     };
 
+    // Alta de la cuenta simulada: no hay OAuth, así que no se va a ninguna parte;
+    // se recarga el estado y la pantalla pasa a mostrarse rotulada como simulación.
+    const activarDemo = async () => {
+        setActivandoDemo(true);
+        try {
+            await mercadolibreApi.activarDemo();
+            addToast('Modo demostración activado: nada sale a Mercado Libre', 'success');
+            cargar();
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'No se pudo activar el modo demostración'), 'error');
+        } finally {
+            setActivandoDemo(false);
+        }
+    };
+
+    const sembrarPreguntasDemo = async () => {
+        setSembrandoDemo(true);
+        try {
+            const res = await mercadolibreApi.sembrarPreguntasDemo();
+            // La siembra es idempotente: volver a apretar el botón sobre las mismas
+            // publicaciones no crea nada. El aviso tiene que decirlo, si no anuncia
+            // preguntas nuevas que no existen (y antes, además, las duplicaba).
+            const creadas = res?.creadas;
+            const yaExistian = res?.yaExistian ?? 0;
+            addToast(typeof creadas === 'number'
+                ? (creadas === 0
+                    ? 'Las preguntas de ejemplo ya estaban generadas: no se agregó ninguna'
+                    : `${creadas} preguntas de ejemplo generadas${yaExistian > 0 ? ` (${yaExistian} ya estaban)` : ''}`)
+                : 'Preguntas de ejemplo generadas', 'success');
+        } catch (err) {
+            // El backend responde 409 con el motivo útil ("primero publicá un
+            // vehículo"): va textual, es lo que le dice al usuario qué hacer.
+            addToast(getApiErrorMessage(err, 'No se pudieron generar las preguntas de ejemplo'), 'error');
+        } finally {
+            setSembrandoDemo(false);
+        }
+    };
+
+    const confirmarSalirDemo = async () => {
+        setSaliendoDemoBusy(true);
+        try {
+            const res = await mercadolibreApi.desactivarDemo();
+            // Los leads que salieron de una pregunta simulada NO se borran: se
+            // nombran acá para que nadie los descubra después mezclados con los
+            // clientes de verdad (en Clientes salen rotulados como SIMULACIÓN).
+            const clientes = res?.clientesConservados ?? 0;
+            addToast(clientes > 0
+                ? `Modo demostración desactivado. Quedaron ${clientes} cliente(s) registrados desde preguntas simuladas: están en Clientes con el rótulo SIMULACIÓN.`
+                : 'Modo demostración desactivado', 'success');
+            setSaliendoDemo(false);
+            cargar();
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'No se pudo salir del modo demostración'), 'error');
+        } finally {
+            setSaliendoDemoBusy(false);
+        }
+    };
+
     // Dos cosas distintas: `configurada` es del servidor (las credenciales de la
     // app de ML) y `conectada` es de esta concesionaria (la autorización OAuth).
     const configurada = estado?.configurada ?? false;
-    const cuenta = estado?.conectada ? (estado.cuenta ?? null) : null;
+    const demo = esCuentaDemo(estado);
+    // Se muestra la fila que haya, esté activa o no. Con el vínculo caído
+    // (`activa: false`, lo que deja meliClient cuando Mercado Libre rechaza el
+    // refresh) la pantalla caía en el estado vacío y decía "todavía no hay
+    // ninguna cuenta vinculada": escondía el `ultimoError`, escondía el botón de
+    // volver a autorizar y encima ofrecía activar la demostración — con los
+    // avisos de esa cuenta todavía vivos y cobrando en Mercado Libre.
+    // Desvincular sí borra la fila, así que ahí el estado vacío es correcto.
+    const cuenta = estado?.cuenta ?? null;
+    /** Vínculo real caído: hay fila, no es la demo y Mercado Libre dejó de aceptarla. */
+    const vinculoCaido = !!cuenta && !demo && !cuenta.activa;
 
     return (
         <div className="card" style={{ marginTop: 'var(--space-6)' }}>
             <div style={{ marginBottom: 'var(--space-4)' }}>
                 <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                     <ShoppingBag size={18} /> Mercado Libre
+                    {/* El rótulo va en el título de la sección para que se vea sin
+                        buscarlo: es lo que distingue lo conectado de lo simulado. */}
+                    {demo && <Badge variant="warning">SIMULACIÓN</Badge>}
                 </h2>
                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 'var(--space-1)', lineHeight: 1.5, maxWidth: 560 }}>
                     Vinculá la cuenta de Mercado Libre para publicar los vehículos desde el sistema y
@@ -1042,9 +1117,29 @@ function CuentasMercadoLibre() {
                 </div>
             ) : (
                 <>
+                    {/* Con la demostración encendida el aviso de credenciales sobra: la
+                        cuenta simulada existe justamente para no necesitarlas. */}
+                    {demo && (
+                        <div style={{
+                            display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start',
+                            padding: 'var(--space-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+                            background: 'var(--bg-secondary)', marginBottom: 'var(--space-4)', maxWidth: 620,
+                        }}>
+                            <FlaskConical size={16} style={{ color: 'var(--accent-2)', flexShrink: 0, marginTop: 2 }} />
+                            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                                <strong>Modo demostración</strong> (cuenta simulada, sin conexión con Mercado Libre).
+                                Se puede publicar, pausar, sincronizar y contestar preguntas igual que con una cuenta
+                                real, pero todo eso vive únicamente adentro del sistema: no se hace ninguna llamada a
+                                Mercado Libre, no hay avisos publicados y no se cobra ningún cargo. Los identificadores
+                                simulados se ven como <span className="font-mono">DEMO-…</span> y las publicaciones no
+                                tienen link, porque no hay nada que abrir afuera.
+                            </p>
+                        </div>
+                    )}
+
                     {/* Sin credenciales de servidor no hay OAuth posible: se avisa qué falta
                         y el botón queda deshabilitado (el secret NO se carga desde la UI). */}
-                    {!configurada && (
+                    {!configurada && !demo && (
                         <div style={{
                             display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start',
                             padding: 'var(--space-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
@@ -1078,15 +1173,24 @@ function CuentasMercadoLibre() {
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td style={{ fontWeight: 600 }}>{cuenta.nickname || '—'}</td>
+                                        <td style={{ fontWeight: 600 }}>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                                                {cuenta.nickname || '—'}
+                                                {demo && <Badge variant="warning">SIMULACIÓN</Badge>}
+                                            </span>
+                                        </td>
                                         <td className="font-mono" style={{ fontSize: 'var(--text-sm)' }}>{cuenta.mlUserId}</td>
                                         <td>{cuenta.siteId}</td>
                                         <td>
-                                            {cuenta.activa
-                                                ? (cuenta.ultimoError
-                                                    ? <Badge variant="warning">Con problemas</Badge>
-                                                    : <Badge variant="success">Conectada</Badge>)
-                                                : <Badge variant="danger">Inactiva</Badge>}
+                                            {/* Una cuenta simulada NO está "Conectada": decirlo sería
+                                                exactamente lo que el rótulo tiene que evitar. */}
+                                            {demo
+                                                ? <Badge variant="warning">Demostración</Badge>
+                                                : cuenta.activa
+                                                    ? (cuenta.ultimoError
+                                                        ? <Badge variant="warning">Con problemas</Badge>
+                                                        : <Badge variant="success">Conectada</Badge>)
+                                                    : <Badge variant="danger">Inactiva</Badge>}
                                         </td>
                                         <td>
                                             {cuenta.ultimoError ? (
@@ -1100,13 +1204,28 @@ function CuentasMercadoLibre() {
                                             ) : '—'}
                                         </td>
                                         <td style={{ textAlign: 'right' }}>
+                                            {/* En demostración no hay nada que re-autorizar ni que
+                                                desvincular: las acciones son las de la simulación. */}
                                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                                                <Button variant="secondary" size="sm" onClick={conectar} loading={conectando} disabled={!configurada}>
-                                                    <RefreshCw size={14} /> Volver a autorizar
-                                                </Button>
-                                                <Button variant="ghost" size="sm" onClick={() => setDesvinculando(cuenta)} disabled={conectando}>
-                                                    <Unplug size={14} /> Desvincular
-                                                </Button>
+                                                {demo ? (
+                                                    <>
+                                                        <Button variant="secondary" size="sm" onClick={sembrarPreguntasDemo} loading={sembrandoDemo}>
+                                                            <MessageCircle size={14} /> Generar preguntas de ejemplo
+                                                        </Button>
+                                                        <Button variant="ghost" size="sm" onClick={() => setSaliendoDemo(true)} disabled={sembrandoDemo}>
+                                                            <Unplug size={14} /> Salir del modo demostración
+                                                        </Button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Button variant="secondary" size="sm" onClick={conectar} loading={conectando} disabled={!configurada}>
+                                                            <RefreshCw size={14} /> Volver a autorizar
+                                                        </Button>
+                                                        <Button variant="ghost" size="sm" onClick={() => setDesvinculando(cuenta)} disabled={conectando}>
+                                                            <Unplug size={14} /> Desvincular
+                                                        </Button>
+                                                    </>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -1119,10 +1238,46 @@ function CuentasMercadoLibre() {
                                 Todavía no hay ninguna cuenta vinculada. Al conectar te vamos a llevar a Mercado Libre
                                 para que autorices con el usuario de la concesionaria; después volvés solo a esta pantalla.
                             </p>
-                            <Button variant="primary" onClick={conectar} loading={conectando} disabled={!configurada}>
-                                <Plug size={16} /> Conectar con Mercado Libre
-                            </Button>
+                            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                                <Button variant="primary" onClick={conectar} loading={conectando} disabled={!configurada}>
+                                    <Plug size={16} /> Conectar con Mercado Libre
+                                </Button>
+                                {/* A propósito NO depende de `configurada`: la demostración existe
+                                    justamente para el caso en que todavía no hay credenciales. */}
+                                <Button variant="secondary" onClick={activarDemo} loading={activandoDemo} disabled={conectando}>
+                                    <FlaskConical size={16} /> Activar modo demostración
+                                </Button>
+                            </div>
+                            <p style={{ marginTop: 'var(--space-3)', color: 'var(--text-muted)', fontSize: 'var(--text-xs)', lineHeight: 1.6, maxWidth: 560 }}>
+                                El <strong>modo demostración</strong> sirve para mostrar cómo funciona la integración
+                                sin credenciales: publica, sincroniza precios y contesta preguntas contra una cuenta
+                                simulada dentro del sistema. No se conecta con Mercado Libre y no publica ningún aviso
+                                real. Se puede apagar en cualquier momento.
+                            </p>
                         </div>
+                    )}
+
+                    {/* Un vínculo caído no es "no hay cuenta": las publicaciones que
+                        ya salieron siguen vivas (y cobrando) en Mercado Libre aunque
+                        el sistema haya dejado de sincronizarlas. Se dice acá, que es
+                        además el motivo por el que no se ofrece el modo demostración
+                        mientras exista esta cuenta. */}
+                    {vinculoCaido && (
+                        <p style={{ marginTop: 'var(--space-3)', color: 'var(--text-muted)', fontSize: 'var(--text-xs)', lineHeight: 1.6, maxWidth: 620 }}>
+                            El vínculo con Mercado Libre está caído: el sistema dejó de publicar y de traer
+                            preguntas, pero <strong>los avisos que ya estaban publicados siguen vivos allá</strong>.
+                            Volvé a autorizar para retomar, o desvinculá si no la vas a usar más (los avisos
+                            quedan igual: hay que cerrarlos desde Mercado Libre o desde la ficha de cada unidad).
+                        </p>
+                    )}
+
+                    {/* La bandeja de preguntas simuladas necesita algo a qué colgarse:
+                        se dice acá para que el 409 de la siembra no sorprenda. */}
+                    {cuenta && demo && (
+                        <p style={{ marginTop: 'var(--space-3)', color: 'var(--text-muted)', fontSize: 'var(--text-xs)', lineHeight: 1.6, maxWidth: 620 }}>
+                            Publicá primero un vehículo desde su ficha; después <strong>Generar preguntas de ejemplo</strong> crea
+                            consultas de compradores ficticios sobre esas publicaciones simuladas.
+                        </p>
                     )}
 
                     {/* El último error es lo que avisa que ML dejó de aceptar el permiso:
@@ -1198,6 +1353,18 @@ function CuentasMercadoLibre() {
                 onConfirm={confirmarDesvincular}
                 onCancel={() => setDesvinculando(null)}
                 loading={desvinculandoBusy}
+            />
+
+            <ConfirmDialog
+                isOpen={saliendoDemo}
+                title="Salir del modo demostración"
+                message="Se borra la cuenta simulada junto con TODAS las publicaciones y preguntas de ejemplo que generó. Nada de eso existe fuera del sistema, así que en Mercado Libre no se toca nada. Lo único que NO se borra son los clientes que se hayan registrado como lead desde una pregunta simulada: ya son fichas del CRM (pueden tener datos cargados a mano), quedan en Clientes con el rótulo SIMULACIÓN y los borrás vos si querés. Podés volver a activar la demostración cuando quieras."
+                confirmLabel="Salir y borrar lo simulado"
+                cancelLabel="Cancelar"
+                type="danger"
+                onConfirm={confirmarSalirDemo}
+                onCancel={() => setSaliendoDemo(false)}
+                loading={saliendoDemoBusy}
             />
         </div>
     );
