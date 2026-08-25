@@ -3,7 +3,7 @@ import {
     MetaError,
     VentanaMetaCerradaError,
     estadoVentanaMeta,
-} from '../../src/infrastructure/integraciones/metaEnvio';
+} from '../../src/domain/services/metaErrores';
 
 /**
  * Unit tests PUROS (sin DB ni red) del contrato `ErrorDeEnvio`: qué lee el

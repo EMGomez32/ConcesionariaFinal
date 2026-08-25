@@ -6,7 +6,7 @@ import {
     normalizarMensajeria,
     type ContextoNotificacion,
     type EventoEntranteMeta,
-} from '../../src/infrastructure/integraciones/metaCanales';
+} from '../../src/domain/services/metaNormalizacion';
 
 // Unit tests PUROS (sin DB ni red): validan la NORMALIZACIÓN de los cuatro
 // payloads de Meta que caen en la bandeja. Corren standalone:

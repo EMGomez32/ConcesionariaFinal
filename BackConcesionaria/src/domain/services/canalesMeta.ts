@@ -1,3 +1,4 @@
+import { CanalConversacion } from '@prisma/client';
 /**
  * Qué puede hacer una integración de Meta con lo que tiene cargado.
  *
@@ -272,3 +273,35 @@ export function idDeCuentaMeta(config: unknown, objeto: ObjetoWebhookMeta): stri
     const id = objeto === 'page' ? c.pageId : c.igBusinessAccountId;
     return cargado(id) ? (id as string).trim() : null;
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canales conversacionales
+//
+// Viven en el dominio y no en `infrastructure/integraciones/metaEnvio` porque son
+// PUROS y los usa la normalización de los payloads entrantes, que se testea sin
+// base: metaEnvio arrastra prisma y `env`, que hace `process.exit` al importarse.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Meta sólo deja responder dentro de las 24 h del último mensaje del usuario. */
+export const VENTANA_MENSAJERIA_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Los canales CONVERSACIONALES de Meta. Se deriva del enum de Prisma en vez de
+ * listarlos a mano: agregar un canal al schema lo suma acá solo, y el nombre no
+ * choca con el `CanalMeta` de este mismo módulo (que además incluye 'leadgen',
+ * que no es una conversación).
+ */
+export type CanalMetaConversacion = Exclude<CanalConversacion, 'whatsapp'>;
+
+/** Todo lo que no es WhatsApp sale por Meta, no por la cola de Baileys. */
+export const esCanalMeta = (canal: CanalConversacion): canal is CanalMetaConversacion =>
+    canal !== 'whatsapp';
+
+/** Mensajería DIRECTA: son los ÚNICOS canales sujetos a la ventana de 24 h. */
+export const esCanalDeMensajeria = (canal: CanalConversacion): boolean =>
+    canal === 'instagram' || canal === 'messenger';
+
+/** Comentarios: la respuesta se publica a la vista de todos. */
+export const esCanalDeComentarios = (canal: CanalConversacion): boolean =>
+    canal === 'instagram_comentario' || canal === 'facebook_comentario';
