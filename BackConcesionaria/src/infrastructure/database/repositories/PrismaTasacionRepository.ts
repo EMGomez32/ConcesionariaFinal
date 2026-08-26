@@ -7,17 +7,24 @@ import { QueryOptions, PaginatedResponse } from '../../../types/common';
 // RLS (o lo setea el controller para super_admin); `tasadorId` lo estampa el use
 // case desde el token. Whitelist = segunda barrera anti mass-assignment.
 const EDITABLE = ['clienteId', 'tasadorId', 'marca', 'modelo', 'anio', 'km', 'dominio', 'condicion', 'valorEstimado', 'moneda', 'fecha', 'observaciones'] as const;
+// Campos que se pueden tocar al ACTUALIZAR (tasar una pendiente). No incluye
+// marca/modelo/fecha/clienteId: identifican la tasación y no se re-escriben acá.
+// `estado` y `tasadorId` NO vienen del body: los deriva el use case, pero se
+// escriben en la fila, así que van en la whitelist.
+const EDITABLE_UPDATE = ['anio', 'km', 'dominio', 'condicion', 'valorEstimado', 'moneda', 'observaciones', 'estado', 'tasadorId'] as const;
 // @db.Date: el <input type="date"> manda 'YYYY-MM-DD' y Prisma espera DateTime.
 const DATE_KEYS = ['fecha'];
 
-function pickEditable(data: any = {}): Record<string, any> {
+function pickFrom(whitelist: readonly string[], data: any = {}): Record<string, any> {
     const out: Record<string, any> = {};
-    for (const key of EDITABLE) {
+    for (const key of whitelist) {
         if (data[key] === undefined) continue;
         out[key] = DATE_KEYS.includes(key) && data[key] !== null ? new Date(data[key]) : data[key];
     }
     return out;
 }
+
+const pickEditable = (data: any = {}) => pickFrom(EDITABLE, data);
 
 const includeRefs = {
     cliente: { select: { id: true, nombre: true, telefono: true } },
@@ -74,6 +81,15 @@ export class PrismaTasacionRepository implements ITasacionRepository {
         // se setea explícito, fuera de la whitelist.
         if (data.concesionariaId != null) payload.concesionariaId = Number(data.concesionariaId);
         const t = await prisma.tasacion.create({ data: payload as any, include: includeRefs });
+        return this.mapToEntity(t);
+    }
+
+    async update(id: number, data: any): Promise<Tasacion> {
+        const t = await prisma.tasacion.update({
+            where: { id },
+            data: pickFrom(EDITABLE_UPDATE, data) as any,
+            include: includeRefs,
+        });
         return this.mapToEntity(t);
     }
 

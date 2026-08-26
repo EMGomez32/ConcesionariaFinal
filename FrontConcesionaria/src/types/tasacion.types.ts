@@ -39,10 +39,22 @@ export interface CreateTasacionDto {
     clienteId?: number;
     anio?: number;
     km?: number;
+    /** Obligatorio: sin la patente el tasador no sabe qué auto revisar. */
     dominio?: string;
     condicion?: CondicionTasacion;
     valorEstimado?: number;
     moneda?: 'ARS' | 'USD';
+    observaciones?: string;
+}
+
+/** PATCH parcial para completar una tasación existente (el tasador le pone el valor). */
+export interface UpdateTasacionDto {
+    valorEstimado?: number;
+    moneda?: 'ARS' | 'USD';
+    condicion?: CondicionTasacion;
+    dominio?: string;
+    anio?: number;
+    km?: number;
     observaciones?: string;
 }
 

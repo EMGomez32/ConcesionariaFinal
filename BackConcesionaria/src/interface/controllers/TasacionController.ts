@@ -3,6 +3,7 @@ import { PrismaTasacionRepository } from '../../infrastructure/database/reposito
 import { GetTasaciones } from '../../application/use-cases/tasaciones/GetTasaciones';
 import { GetTasacionById } from '../../application/use-cases/tasaciones/GetTasacionById';
 import { CreateTasacion } from '../../application/use-cases/tasaciones/CreateTasacion';
+import { UpdateTasacion } from '../../application/use-cases/tasaciones/UpdateTasacion';
 import { DeleteTasacion } from '../../application/use-cases/tasaciones/DeleteTasacion';
 import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
@@ -11,6 +12,7 @@ const repository = new PrismaTasacionRepository();
 const getAllUC = new GetTasaciones(repository);
 const getByIdUC = new GetTasacionById(repository);
 const createUC = new CreateTasacion(repository);
+const updateUC = new UpdateTasacion(repository);
 const deleteUC = new DeleteTasacion(repository);
 
 // Espejo del enum: un ?condicion arbitrario reventaría Prisma con un 500 (no es
@@ -55,6 +57,25 @@ export class TasacionController {
                 detalle: `Tasación ${(result as any)?.marca} ${(result as any)?.modelo}`,
             });
             res.status(201).json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    static async update(req: Request, res: Response, next: NextFunction) {
+        try {
+            const id = parseInt(req.params.id as string, 10);
+            const result = await updateUC.execute(id, req.body);
+            await audit({
+                entidad: 'Tasacion',
+                accion: 'update',
+                entidadId: id,
+                detalle:
+                    req.body?.valorEstimado != null
+                        ? `Tasación ${id} tasada en ${req.body.valorEstimado}`
+                        : `Tasación ${id} actualizada`,
+            });
+            res.json(result);
         } catch (error) {
             next(error);
         }
