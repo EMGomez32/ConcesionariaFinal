@@ -476,12 +476,32 @@ async function seedModuloVendedor(cid: number) {
                 await prisma.usuarioRol.create({ data: { usuarioId: u.id, rolId: rolVendedor.id } });
                 console.log(`   ${v.email}: se le agregó el rol vendedor`);
             }
+            // OJO con el soft-delete: `deletedAt` seteado significa que el login
+            // lo rechaza, por mas que la contrasena sea correcta y `activo` sea
+            // true. Reponer la clave y avisar "listo" sobre una cuenta borrada es
+            // un log que miente: el usuario despues no puede entrar y no sabe por que.
+            const borrado = u.deletedAt != null;
             if (RESET_PASS) {
                 await prisma.usuario.update({
                     where: { id: u.id },
-                    data: { passwordHash: await bcrypt.hash('demo1234', 10), activo: true },
+                    data: {
+                        passwordHash: await bcrypt.hash('demo1234', 10),
+                        activo: true,
+                        // Revivirlo sale del MISMO permiso explicito que pisar la
+                        // contrasena: SEED_DEMO_RESET_PASS ya es "me apropio de
+                        // esta cuenta". Sin el flag no se toca.
+                        deletedAt: null,
+                    },
                 });
-                console.log(`   ${v.email}: contraseña repuesta a demo1234`);
+                console.log(
+                    `   ${v.email}: contraseña repuesta a demo1234` +
+                    (borrado ? ' + estaba BORRADO (soft-delete) y se revivió' : ''),
+                );
+            } else if (borrado) {
+                console.log(
+                    `   ⚠ ${v.email}: existe pero está BORRADO (soft-delete) — NO va a poder ` +
+                    'entrar. Correr con SEED_DEMO_RESET_PASS=true para revivirlo.',
+                );
             } else {
                 console.log(`   ${v.email}: ya existía, contraseña intacta (SEED_DEMO_RESET_PASS=true para reponerla)`);
             }
