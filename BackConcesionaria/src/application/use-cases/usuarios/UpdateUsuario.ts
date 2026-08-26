@@ -21,7 +21,23 @@ export class UpdateUsuario {
         await assertRolesAsignables(updateData.roleIds);
 
         // Reasignar la sucursal no puede sacar al usuario de su tenant.
-        await assertMismoTenant('sucursal', updateData.sucursalId, exists.concesionariaId);
+        //
+        // El tenant contra el que se valida es el DESTINO, no el actual. Sólo
+        // super_admin llega a cambiarlo (el controller borra concesionariaId del
+        // body para todos los demás), y puede moverlo de concesionaria y
+        // reasignarle sucursal en el MISMO PATCH. Validar contra el tenant actual
+        // deja el guard justo al revés: rechaza el movimiento coherente —sucursal
+        // del tenant nuevo— y deja pasar el incoherente —sucursal del viejo—, que
+        // es exactamente la FK cruzada que este chequeo existe para impedir.
+        //
+        // Se preserva el null: un usuario de plataforma puede no tener tenant, y
+        // assertMismoTenant con expectedTenantId null sólo chequea existencia.
+        const tenantDestino = updateData.concesionariaId ?? exists.concesionariaId ?? null;
+        await assertMismoTenant(
+            'sucursal',
+            updateData.sucursalId,
+            tenantDestino != null ? Number(tenantDestino) : null,
+        );
 
         // HU-11: si cambia el email, validar unicidad antes de tirar P2002. El email
         // es @unique GLOBAL, así que el chequeo es global (no acotado al tenant).
