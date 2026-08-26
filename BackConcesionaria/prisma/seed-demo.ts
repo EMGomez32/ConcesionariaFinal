@@ -14,6 +14,7 @@ import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { normalizarTelefono } from '../src/domain/services/telefono';
 
 if (process.env.NODE_ENV === 'production' && process.env.SEED_DEMO_FORCE !== 'true') {
     console.error('Rechazado: NODE_ENV=production. Usá SEED_DEMO_FORCE=true si es una instancia de demo.');
@@ -32,8 +33,13 @@ const enDias = (n: number) => new Date(hoy.getTime() + n * 86400000);
 async function main() {
     await prisma.$executeRawUnsafe(`SELECT set_config('app.is_super_admin', 'true', false)`);
 
-    if (await prisma.concesionaria.findFirst({ where: { nombre: NOMBRE_DEMO } })) {
-        console.log('La concesionaria demo ya existe. Nada que hacer.');
+    // La demo puede existir de ANTES del modulo del vendedor. En ese caso no se
+    // rehace nada de lo viejo (seria duplicar ventas, cuotas y casos), pero si se
+    // completa lo que falte: el bloque de atencion presencial es idempotente aparte.
+    const existente = await prisma.concesionaria.findFirst({ where: { nombre: NOMBRE_DEMO } });
+    if (existente) {
+        console.log('La concesionaria demo ya existe: se completa solo lo que falte.');
+        await seedModuloVendedor(existente.id);
         return;
     }
 
@@ -371,11 +377,255 @@ async function main() {
         });
     }
 
+    await seedModuloVendedor(cid);
+
     console.log('✅ Datos demo cargados:');
     console.log(`   Concesionaria: ${NOMBRE_DEMO}`);
-    console.log('   Login: admin@autosdelvalle.test / demo1234');
+    console.log('   Login admin:    admin@autosdelvalle.test / demo1234');
+    console.log('   Login vendedor: vendedor@autosdelvalle.test / demo1234');
+    console.log('   (2do vendedor:  vendedor2@autosdelvalle.test / demo1234)');
     console.log(`   ${vehiculos.length} vehículos, ${clientes.length} clientes, ${ventas.length} ventas, 1 financiación (2 cuotas en mora).`);
     console.log(`   ${financieras.length} financieras, ${solicitudesDef.length} solicitudes de financiación externa.`);
+}
+
+/**
+ * Módulo del vendedor / atención presencial.
+ *
+ * Va aparte del bloque de arriba y es IDEMPOTENTE POR SU CUENTA, a propósito: la
+ * concesionaria demo puede haberse creado ANTES de que este módulo existiera, y
+ * en ese caso rehacer el bloque grande duplicaría ventas, cuotas y casos de
+ * postventa. Por eso esta función no recibe los arrays en memoria — busca en la
+ * base lo que necesita y crea sólo lo que falta.
+ */
+async function seedModuloVendedor(cid: number) {
+    const sucursal = await prisma.sucursal.findFirst({ where: { concesionariaId: cid } });
+    const sid = sucursal?.id ?? undefined;
+
+    const rolVendedor = await prisma.rol.findUnique({ where: { nombre: 'vendedor' as any } });
+    if (!rolVendedor) throw new Error('Falta el rol vendedor: corré el bloque de roles primero.');
+
+    // DOS vendedores, no uno. Con uno solo no se puede mostrar la mitad de la
+    // lógica de cartera: el aviso de "este cliente lo atendió otro vendedor" y la
+    // reasignación que sólo autoriza un supervisor necesitan un segundo dueño.
+    const vendedoresDef = [
+        { nombre: 'Sofía Ramírez', email: 'vendedor@autosdelvalle.test' },
+        { nombre: 'Martín Acuña', email: 'vendedor2@autosdelvalle.test' },
+    ];
+    const vendedores = [];
+    for (const v of vendedoresDef) {
+        let u = await prisma.usuario.findFirst({ where: { email: v.email } });
+        if (!u) {
+            u = await prisma.usuario.create({
+                data: {
+                    nombre: v.nombre, email: v.email,
+                    passwordHash: await bcrypt.hash('demo1234', 10),
+                    concesionariaId: cid, sucursalId: sid,
+                    roles: { create: { rolId: rolVendedor.id } },
+                },
+            });
+            console.log(`   vendedor creado: ${v.email} / demo1234`);
+        }
+        vendedores.push(u);
+    }
+
+    // El plazo de retención de cartera lo define cada concesionaria. 21 días en
+    // vez del default de 30 para que la demo tenga un número propio y se vea que
+    // el campo existe y es configurable.
+    await prisma.concesionaria.update({
+        where: { id: cid },
+        data: { diasRetencionCliente: 21 },
+    });
+
+    // Si ya hay atenciones, el módulo ya se sembró: no se duplica.
+    if (await prisma.atencion.count({ where: { concesionariaId: cid } }) > 0) {
+        console.log('   atenciones demo ya presentes: no se duplican.');
+        return;
+    }
+
+    // Clientes existentes: se les completa lo que el módulo necesita para
+    // funcionar (teléfono normalizado, dueño de cartera, última interacción).
+    // NO se les inventa `apellido`: partir el `nombre` viejo por el primer espacio
+    // adivina mal, que es justo lo que la migración decidió no hacer.
+    const clientesViejos = await prisma.cliente.findMany({
+        where: { concesionariaId: cid }, orderBy: { id: 'asc' },
+    });
+    for (const [i, c] of clientesViejos.entries()) {
+        await prisma.cliente.update({
+            where: { id: c.id },
+            data: {
+                telefonoNormalizado: normalizarTelefono(c.telefono),
+                // Alternados entre los dos vendedores; el último queda SIN dueño
+                // para mostrar el caso "cliente libre" del filtro de cartera.
+                vendedorAsignadoId: i < clientesViejos.length - 1 ? vendedores[i % 2].id : null,
+                vendedorAsignadoEn: i < clientesViejos.length - 1 ? diasAtras(15 + i) : null,
+                ultimaInteraccionEn: diasAtras(5 + i * 3),
+                consentimientoContacto: true,
+                consentimientoEn: diasAtras(15 + i),
+            },
+        });
+    }
+
+    // Clientes NUEVOS con nombre y apellido separados: así se ve la forma nueva
+    // de la ficha conviviendo con las viejas, que siguen mostrando el nombre entero.
+    const nuevosDef = [
+        { nombre: 'Valeria', apellido: 'Sosa', dni: '35876123', tel: '2615557788', email: 'vsosa@mail.test', vend: 0 },
+        { nombre: 'Ignacio', apellido: 'Ledesma', dni: '31229087', tel: '+54 9 261 555-4433', email: 'iledesma@mail.test', vend: 1 },
+    ];
+    const clientesNuevos = [];
+    for (const c of nuevosDef) {
+        // Por email: si el modulo se resembro parcialmente, no se duplican.
+        const ya = await prisma.cliente.findFirst({ where: { concesionariaId: cid, email: c.email } });
+        if (ya) { clientesNuevos.push(ya); continue; }
+        clientesNuevos.push(await prisma.cliente.create({
+            data: {
+                concesionariaId: cid, nombre: c.nombre, apellido: c.apellido,
+                dni: c.dni, telefono: c.tel, telefonoNormalizado: normalizarTelefono(c.tel),
+                email: c.email,
+                vendedorAsignadoId: vendedores[c.vend].id,
+                vendedorAsignadoEn: diasAtras(9),
+                ultimaInteraccionEn: diasAtras(2),
+                consentimientoContacto: true, consentimientoEn: diasAtras(9),
+            },
+        }));
+    }
+
+    const clientes = [...clientesViejos, ...clientesNuevos];
+    const vehiculos = await prisma.vehiculo.findMany({
+        where: { concesionariaId: cid }, orderBy: { id: 'asc' },
+    });
+    if (!vehiculos.length || !clientes.length) {
+        console.log('   sin vehículos o clientes: se omiten las atenciones.');
+        return;
+    }
+    const veh = (i: number) => vehiculos[i % vehiculos.length];
+    const cli = (i: number) => clientes[i % clientes.length];
+
+    // Una atención por cada estado interesante del flujo del salón.
+    const visitaAbierta = await prisma.atencion.create({
+        data: {
+            concesionariaId: cid, clienteId: cli(0).id, vendedorId: vendedores[0].id,
+            motivo: 'consulta_general', estado: 'abierta',
+            iniciadaEn: new Date(Date.now() - 40 * 60000),
+            modoBusqueda: 'presupuesto', moneda: 'ARS',
+            presupuestoMin: 12000000, presupuestoMax: 18000000,
+            anticipo: 4000000, cuotaMaxima: 450000, tipoFinanciamiento: 'credito',
+            presupuestoRealCalculado: 16000000,
+            observaciones: 'Vino con la señora. Busca algo familiar, prioriza baúl grande.',
+            vehiculos: {
+                create: [
+                    { concesionariaId: cid, vehiculoId: veh(2).id, tipo: 'buscada', accion: 'vista', nivelInteres: 'alto' },
+                    {
+                        concesionariaId: cid, vehiculoId: veh(4).id, tipo: 'sugerida', accion: 'vista',
+                        nivelInteres: 'medio', motivoSugerencia: 'Mismo segmento, más equipada y dentro del presupuesto real.',
+                    },
+                ],
+            },
+        },
+    });
+
+    const visitaTestDrive = await prisma.atencion.create({
+        data: {
+            concesionariaId: cid, clienteId: cli(1).id, vendedorId: vendedores[0].id,
+            motivo: 'unidad_puntual', estado: 'cerrada', resultado: 'test_drive',
+            iniciadaEn: diasAtras(6), cerradaEn: diasAtras(6),
+            modoBusqueda: 'unidad', moneda: 'USD',
+            presupuestoMin: 18000, presupuestoMax: 24000, tipoFinanciamiento: 'contado',
+            observaciones: 'Probó la unidad. Queda en confirmar con la esposa esta semana.',
+            vehiculos: {
+                create: [
+                    { concesionariaId: cid, vehiculoId: veh(1).id, tipo: 'buscada', accion: 'test_drive', nivelInteres: 'alto' },
+                ],
+            },
+        },
+    });
+
+    // Vuelve por una visita anterior: es el caso que encadena atenciones y el que
+    // dispara el aviso de cartera si lo atiende otro vendedor.
+    await prisma.atencion.create({
+        data: {
+            concesionariaId: cid, clienteId: cli(1).id, vendedorId: vendedores[1].id,
+            motivo: 'vuelve_por_atencion_anterior', atencionAnteriorId: visitaTestDrive.id,
+            estado: 'abierta', iniciadaEn: new Date(Date.now() - 15 * 60000),
+            modoBusqueda: 'unidad', moneda: 'USD',
+            observaciones: 'Volvió por la unidad que probó. Lo atendió otro vendedor: el dueño es Sofía.',
+            vehiculos: {
+                create: [
+                    { concesionariaId: cid, vehiculoId: veh(1).id, tipo: 'buscada', accion: 'cotizada', nivelInteres: 'alto' },
+                ],
+            },
+        },
+    });
+
+    // Permuta a tasar: la atención enlaza la Tasacion, no la duplica.
+    const visitaPermuta = await prisma.atencion.create({
+        data: {
+            concesionariaId: cid, clienteId: cli(2).id, vendedorId: vendedores[1].id,
+            motivo: 'consulta_general', estado: 'cerrada', resultado: 'permuta_a_tasar',
+            iniciadaEn: diasAtras(3), cerradaEn: diasAtras(3),
+            modoBusqueda: 'modelo', moneda: 'ARS',
+            presupuestoMin: 9000000, presupuestoMax: 15000000, tipoFinanciamiento: 'contado',
+            observaciones: 'Entrega su usado. Queda pendiente la tasación del taller.',
+            vehiculos: {
+                create: [
+                    { concesionariaId: cid, vehiculoId: veh(4).id, tipo: 'buscada', accion: 'vista', nivelInteres: 'medio' },
+                ],
+            },
+        },
+    });
+    await prisma.tasacion.create({
+        data: {
+            concesionariaId: cid, clienteId: cli(2).id, atencionId: visitaPermuta.id,
+            marca: 'Volkswagen', modelo: 'Gol Trend', anio: 2016, km: 118000, dominio: 'AA456BC',
+            condicion: 'regular', estado: 'sin_tasar', moneda: 'ARS', fecha: diasAtras(3),
+            observaciones: 'Permuta ofrecida en el mostrador. Falta que la vea el taller.',
+        },
+    });
+
+    // Cerrada POR EL SISTEMA: es lo que alimenta la alerta "dejaste N atenciones
+    // sin cerrar". Sin esta marca no hay forma de distinguirla de un cierre real.
+    await prisma.atencion.create({
+        data: {
+            concesionariaId: cid, clienteId: cli(3).id, vendedorId: vendedores[0].id,
+            motivo: 'consulta_general', estado: 'cerrada', resultado: 'se_retiro',
+            cerradaAutomaticamente: true,
+            iniciadaEn: diasAtras(2), cerradaEn: diasAtras(2),
+            observaciones: 'La cerró el barrido de fin de día.',
+        },
+    });
+
+    // Autorización de precio mínimo: una por estado, para ver el circuito entero.
+    // La PENDIENTE es la que deja algo para hacer al entrar como admin.
+    await prisma.solicitudPrecioMinimo.create({
+        data: {
+            concesionariaId: cid, vehiculoId: veh(1).id, atencionId: visitaTestDrive.id,
+            solicitanteId: vendedores[0].id, estado: 'pendiente',
+            motivo: 'El cliente ofrece USD 27.500 y se lo lleva hoy. ¿Lo autorizás?',
+            moneda: 'USD', solicitadaEn: new Date(Date.now() - 90 * 60000),
+        },
+    });
+    const adminDemo = await prisma.usuario.findFirst({ where: { email: 'admin@autosdelvalle.test' } });
+    await prisma.solicitudPrecioMinimo.create({
+        data: {
+            concesionariaId: cid, vehiculoId: veh(2).id,
+            solicitanteId: vendedores[1].id, resueltaPorId: adminDemo?.id,
+            estado: 'autorizada', precioAutorizado: 11800000, moneda: 'ARS',
+            motivo: 'Pide un descuento por pago contado.',
+            respuesta: 'Autorizado hasta ese número, vence en 48 hs.',
+            solicitadaEn: diasAtras(4), resueltaEn: diasAtras(4), venceEl: enDias(1),
+        },
+    });
+    await prisma.solicitudPrecioMinimo.create({
+        data: {
+            concesionariaId: cid, vehiculoId: veh(4).id,
+            solicitanteId: vendedores[0].id, resueltaPorId: adminDemo?.id,
+            estado: 'rechazada', moneda: 'ARS',
+            motivo: 'Ofrece 10.500.000 en efectivo.',
+            respuesta: 'No llega: la unidad tiene gastos de preparación arriba.',
+            solicitadaEn: diasAtras(7), resueltaEn: diasAtras(6),
+        },
+    });
+
+    console.log('   módulo del vendedor: 5 atenciones, 1 tasación de permuta, 3 solicitudes de precio mínimo.');
 }
 
 main()
