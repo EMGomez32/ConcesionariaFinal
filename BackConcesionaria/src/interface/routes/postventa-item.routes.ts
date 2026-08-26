@@ -43,7 +43,14 @@ router.post('/', authorize('admin', 'postventa'), validateBody(createItemSchema)
  *       200: { description: Listado de items, content: { application/json: { schema: { type: array, items: { type: object } } } } }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/caso/:casoId', PostventaItemController.getByCaso);
+
+/*
+ * Criterio de aceptación 7: `item.monto` es lo que se le pagó al proveedor por el
+ * arreglo — costo puro. La ruta no tenía `authorize`. Se abre a `postventa`
+ * porque es quien carga y controla esos ítems (sus altas ya eran admin+postventa),
+ * y se cierra al vendedor.
+ */
+router.get('/caso/:casoId', authorize('admin', 'postventa'), PostventaItemController.getByCaso);
 
 /**
  * @openapi

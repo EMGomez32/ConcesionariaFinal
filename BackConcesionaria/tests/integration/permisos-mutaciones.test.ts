@@ -325,6 +325,118 @@ describe('Permisos de mutación — el gate de rol por HTTP', () => {
             expect(PASO_EL_GATE).toContain(res.status);
         });
     });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CAMPOS SENSIBLES DENTRO DE UN BODY PERMITIDO.
+    //
+    // Los bloques de arriba prueban el gate de RUTA: quién puede pegarle a qué
+    // endpoint. Este prueba el hueco que un gate de ruta NO puede tapar: la ruta
+    // está bien abierta al vendedor (editar el teléfono de un cliente en el
+    // mostrador es su trabajo) y el agujero está en UN CAMPO del body.
+    //
+    // `vendedorAsignadoId` es la llave de la cartera: quien lo escribe decide de
+    // quién es el cliente, y con eso decide quién lo ve en el listado, en el
+    // export CSV (DNI, teléfono, email, dirección), en el buscador global y en el
+    // historial completo de atenciones. "La reasignación la autoriza un
+    // supervisor, NUNCA el vendedor" es una decisión del dueño, y hasta acá vivía
+    // sólo en `PATCH /atenciones/:id/reasignar-cliente`; `PATCH /clientes/:id` la
+    // salteaba entera.
+    // ─────────────────────────────────────────────────────────────────────────
+    describe('campos sensibles: la reasignación de cartera es del supervisor', () => {
+        let clienteId: number;
+
+        beforeAll(async () => {
+            const res = await api.post(
+                '/api/clientes',
+                { nombre: unique('cartera'), telefono: `261${Date.now() % 10000000}` },
+                authHeaders(adminToken),
+            );
+            expect(res.status).toBe(201);
+            clienteId = res.data.id;
+        });
+
+        afterAll(async () => {
+            if (clienteId) await tryDelete(`/api/clientes/${clienteId}`, adminToken);
+        });
+
+        test('vendedor NO se puede autoasignar un cliente (PATCH /clientes/:id)', async () => {
+            const res = await api.patch(
+                `/api/clientes/${clienteId}`,
+                { vendedorAsignadoId: sesiones.vendedor.id },
+                authHeaders(token('vendedor')),
+            );
+            // 403 EXACTO: un 200 sería la cartera abierta de par en par. Se comprueba
+            // además que NO quedó escrito, porque un 403 devuelto después de haber
+            // persistido sería el mismo agujero con mejor cara.
+            expect(res.status).toBe(403);
+            const ficha = await api.get(`/api/clientes/${clienteId}`, authHeaders(adminToken));
+            expect(ficha.data.vendedorAsignadoId ?? null).toBeNull();
+        });
+
+        test('vendedor NO puede desasignar un cliente tampoco', async () => {
+            // Desasignar es el otro lado de la misma moneda: deja al cliente sin dueño
+            // y por lo tanto visible para todo el salón (rama 2 del filtro de cartera).
+            await api.patch(
+                `/api/clientes/${clienteId}`,
+                { vendedorAsignadoId: sesiones.vendedor.id },
+                authHeaders(adminToken),
+            );
+            const res = await api.patch(
+                `/api/clientes/${clienteId}`,
+                { vendedorAsignadoId: null },
+                authHeaders(token('vendedor')),
+            );
+            expect(res.status).toBe(403);
+        });
+
+        test('el vendedor SÍ sigue pudiendo editar el resto de la ficha', async () => {
+            // La contracara: el candado es sobre UN campo, no sobre la ruta. Si esto
+            // se rompe, el vendedor no puede corregir un teléfono en el mostrador.
+            const res = await api.patch(
+                `/api/clientes/${clienteId}`,
+                { telefono: '2615550000' },
+                authHeaders(token('vendedor')),
+            );
+            expect(res.status).toBe(200);
+            expect(res.data.telefono).toBe('2615550000');
+        });
+
+        test('reenviar el MISMO vendedor asignado no es una reasignación', async () => {
+            // El formulario manda el campo siempre, con el valor que ya estaba. Si eso
+            // contara como reasignación, el vendedor no podría guardar ningún cambio.
+            const actual = await api.get(`/api/clientes/${clienteId}`, authHeaders(adminToken));
+            const res = await api.patch(
+                `/api/clientes/${clienteId}`,
+                { vendedorAsignadoId: actual.data.vendedorAsignadoId, direccion: 'San Martín 100' },
+                authHeaders(token('vendedor')),
+            );
+            expect(res.status).toBe(200);
+        });
+
+        test('el admin SÍ reasigna, y la FECHA de asignación se mueve con ella', async () => {
+            // `vendedorAsignadoEn` es contra lo que se mide la retención cuando no hay
+            // interacción posterior. Si no se estampa, la ficha dice "es de Pérez desde
+            // el 3 de marzo" después de habérsela pasado a González, y el plazo del
+            // nuevo dueño arranca corrido (o vencido).
+            const antes = await api.get(`/api/clientes/${clienteId}`, authHeaders(adminToken));
+            const fechaAntes = antes.data.vendedorAsignadoEn ?? null;
+
+            const res = await api.patch(
+                `/api/clientes/${clienteId}`,
+                { vendedorAsignadoId: sesiones.cobrador.id },
+                authHeaders(adminToken),
+            );
+            expect(res.status).toBe(200);
+
+            const despues = await api.get(`/api/clientes/${clienteId}`, authHeaders(adminToken));
+            expect(despues.data.vendedorAsignadoId).toBe(sesiones.cobrador.id);
+            expect(despues.data.vendedorAsignadoEn).toBeTruthy();
+            if (fechaAntes) {
+                expect(new Date(despues.data.vendedorAsignadoEn).getTime())
+                    .toBeGreaterThanOrEqual(new Date(fechaAntes).getTime());
+            }
+        });
+    });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════

@@ -70,12 +70,16 @@ const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
 // puede consultar. Cada rol ve SÓLO los tabs que su endpoint le permite.
 const TAB_ROLES: Record<Tab, string[]> = {
     ventas: ['admin', 'super_admin', 'vendedor'],
-    caja: ['admin', 'super_admin', 'vendedor', 'cobrador'],
+    // Publica `egresos.gastosVehiculos` y `egresos.gastosFijos`: costo, no caja del
+    // vendedor. El backend le sacó 'vendedor' al authorize; esto lo espeja.
+    caja: ['admin', 'super_admin', 'cobrador'],
     mora: ['admin', 'super_admin', 'vendedor', 'cobrador'],
     proximos: ['admin', 'super_admin', 'vendedor', 'cobrador'],
     ranking: ['admin', 'super_admin'],
     comisiones: ['admin', 'super_admin'],
-    postventa: ['admin', 'super_admin', 'vendedor', 'postventa'],
+    // Publica costo, facturado y margen por caso: es un reporte de margen con otro
+    // nombre. Sale 'vendedor'; queda 'postventa', que es quien lo gestiona.
+    postventa: ['admin', 'super_admin', 'postventa'],
     documentacion: ['admin', 'super_admin', 'vendedor', 'postventa'],
     'proximos-service': ['admin', 'super_admin', 'vendedor', 'postventa'],
     objetivos: ['admin', 'super_admin'],

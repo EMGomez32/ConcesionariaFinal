@@ -84,12 +84,31 @@ export interface Permisos {
     // ── Datos sensibles ──────────────────────────────────────────────────────
     /**
      * En un ingreso por compra, `valorTomado` ES el precio de compra de la unidad.
-     * El backend se lo recorta a quien no sea admin/vendedor
-     * (IngresoVehiculoController.sanitizarValorTomado): sin ese recorte, cruzar
-     * `GET /vehiculo-ingresos` con `GET /ventas` por vehiculoId reconstruía el
-     * margen unidad por unidad, que es lo que /reportes/rentabilidad reserva a admin.
+     *
+     * CORREGIDO: antes este flag era `esAdmin || esVendedor`, espejando un backend
+     * que también dejaba al vendedor adentro. Con el criterio de aceptación 7 en la
+     * mano eso no se sostiene: con el listado abierto, un vendedor barría los
+     * ingresos `compra_proveedor` y reconstruía el margen del inventario entero.
+     *
+     * El backend ahora recorta más fino que un booleano —el vendedor sí ve el
+     * importe de los ingresos que registró ÉL y que son de mostrador (permuta /
+     * compra a particular)— y eso no se puede espejar con un flag de rol, porque
+     * depende de la fila. Así que acá el flag es `esAdmin` y la grilla lo usa para
+     * decidir si MUESTRA la columna; para las filas propias del vendedor, el valor
+     * llega igual y se puede mostrar en el detalle.
      */
     veValorDeIngreso: boolean;
+
+    /**
+     * PISO DE VENTA. Nunca viaja junto al precio de lista: el vendedor lo PIDE
+     * (`POST /precio-minimo`) y un admin lo autoriza con vigencia. El flag dice
+     * quién lo ve sin pedirlo — sólo admin. Para el vendedor, la ficha del
+     * vehículo trae `precioMinimoSolicitud` (en qué estado está su pedido) y, si
+     * hay autorización vigente, `precioMinimo` + `precioMinimoAutorizacion`.
+     */
+    vePrecioMinimo: boolean;
+    /** ¿Este usuario tiene que pedir autorización para ver el piso? */
+    pidePrecioMinimo: boolean;
 
     /**
      * El backend borra `precioCompra` para no-admin en las DOS pantallas donde
@@ -143,7 +162,9 @@ export function usePermisos(): Permisos {
 
         seguimientosVer: esAdmin || esVendedor,
 
-        veValorDeIngreso: esAdmin || esVendedor,
+        veValorDeIngreso: esAdmin,
         vePrecioDeCompra: esAdmin,
+        vePrecioMinimo: esAdmin,
+        pidePrecioMinimo: !esAdmin && esVendedor,
     };
 }

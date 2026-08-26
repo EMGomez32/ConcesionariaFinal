@@ -119,7 +119,9 @@ export class PrismaVehiculoRepository implements IVehiculoRepository {
             v.vencimientoSeguro ?? null,
             v.precioCompra ? Number(v.precioCompra) : null,
             v.fechaCompra ?? null,
-            v.proveedorCompra ?? null
+            v.proveedorCompra ?? null,
+            v.precioMinimo ? Number(v.precioMinimo) : null,
+            v.segmento ?? null
         );
     }
 }

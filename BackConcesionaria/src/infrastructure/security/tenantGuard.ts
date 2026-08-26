@@ -35,6 +35,7 @@ const MODEL_LABELS = {
     financiera: 'Financiera',
     presupuesto: 'Presupuesto',
     postventaCaso: 'Caso de postventa',
+    atencion: 'Atención',
 } as const;
 
 export type TenantScopedModel = keyof typeof MODEL_LABELS;

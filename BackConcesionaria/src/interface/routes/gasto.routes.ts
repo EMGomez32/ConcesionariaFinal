@@ -30,7 +30,21 @@ const router = Router();
  *                 totalResults: { type: integer }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/', GastoController.getAll);
+
+/*
+ * CRITERIO DE ACEPTACIÓN 7 — "el vendedor no accede a costos ni márgenes POR
+ * NINGUNA VÍA, INCLUIDA LA API".
+ *
+ * `gasto.monto` ES el costo de preparación de la unidad. Estas tres lecturas no
+ * tenían `authorize`, así que las alcanzaba cualquier autenticado: con
+ * `GET /gastos?vehiculoId=` un vendedor sumaba lo invertido en un auto y, cruzado
+ * con `GET /ventas`, reconstruía el margen que `/reportes/rentabilidad` reserva a
+ * admin. No alcanzaba con recortar un campo: acá TODA la fila es el costo.
+ *
+ * Las ALTAS siguen siendo admin+vendedor (cargar un gasto de preparación es
+ * trabajo de mostrador); lo que se cierra es la LECTURA agregada.
+ */
+router.get('/', authorize('admin'), GastoController.getAll);
 
 // /total antes de /:id para que Express no tome "total" como id.
 /**
@@ -57,7 +71,7 @@ router.get('/', GastoController.getAll);
  *                 filters: { type: object }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/total', GastoController.total);
+router.get('/total', authorize('admin'), GastoController.total);
 
 /**
  * @openapi
@@ -72,7 +86,7 @@ router.get('/total', GastoController.total);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id', GastoController.getById);
+router.get('/:id', authorize('admin'), GastoController.getById);
 
 /**
  * @openapi

@@ -28,6 +28,8 @@ const VehiculosPage = lazy(() => import('./pages/vehiculos/VehiculosPage'));
 const VehiculoFormPage = lazy(() => import('./pages/vehiculos/VehiculoFormPage'));
 const VehiculoDetallePage = lazy(() => import('./pages/vehiculos/VehiculoDetallePage'));
 const ComparadorPage = lazy(() => import('./pages/vehiculos/ComparadorPage'));
+const AtencionesPage = lazy(() => import('./pages/atenciones/AtencionesPage'));
+const AtencionPage = lazy(() => import('./pages/atenciones/AtencionPage'));
 const ClientesPage = lazy(() => import('./pages/clientes/ClientesPage'));
 const ClienteDetallePage = lazy(() => import('./pages/clientes/ClienteDetallePage'));
 const SeguimientosPage = lazy(() => import('./pages/seguimientos/SeguimientosPage'));
@@ -119,6 +121,16 @@ function App() {
                   cae en el catch-all. Mismo recurso que /plataforma. */}
               <Route path="/mercadolibre" element={<Navigate to="/mercadolibre/preguntas" replace />} />
               <Route path="/mercadolibre/preguntas" element={<RequireRole allowedRoles={['admin', 'super_admin', 'vendedor']}><PreguntasMlPage /></RequireRole>} />
+              {/* Mostrador (atención presencial). Va con RequireRole y no "suelta"
+                  como /consultas: acá el vendedor VE stock con precio de lista y
+                  marca lo que le mostró al cliente. Postventa, cobrador y lectura
+                  no tienen nada que hacer en esta pantalla. `/atenciones/:id` lleva
+                  el MISMO gate: sin él, un rol sin permiso entraba por la URL
+                  directa a una atención concreta. TAMPOCO super_admin: el backend
+                  (authorize('admin','vendedor') + SIN_CONCESIONARIA) no lo deja abrir
+                  una visita, así que dejarlo entrar era ofrecerle una pantalla rota. */}
+              <Route path="/atenciones" element={<RequireRole allowedRoles={['admin', 'vendedor']}><AtencionesPage /></RequireRole>} />
+              <Route path="/atenciones/:id" element={<RequireRole allowedRoles={['admin', 'vendedor']}><AtencionPage /></RequireRole>} />
               <Route path="/clientes" element={<ClientesPage />} />
               <Route path="/clientes/:id" element={<ClienteDetallePage />} />
               {/* Agenda de seguimientos del CRM: admin y vendedor (no postventa). */}

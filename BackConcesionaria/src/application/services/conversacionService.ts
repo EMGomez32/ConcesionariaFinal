@@ -374,7 +374,7 @@ async function obtenerOCrearConversacion(cuentaId: number, msg: MensajeEntranteN
     const existente = await buscar();
     if (existente) return existente;
 
-    const cliente = await buscarClientePorContacto(msg.telefono);
+    const cliente = await buscarClientePorContacto({ telefono: msg.telefono });
     try {
         return await prisma.conversacion.create({
             data: {
@@ -1157,7 +1157,7 @@ export async function registrarConsulta(id: number, datos: DatosConsultaManual =
     const telefonoCargado = opcional(datos.telefono);
     const telefono = telefonoCargado ?? conversacion.telefono;
 
-    // El dedupe de la ingesta es por teléfono o email EXACTOS. Un hilo de Meta
+    // El dedupe de la ingesta necesita teléfono, DNI o email. Un hilo de Meta
     // no tiene ninguno de los dos, así que una segunda llamada crearía otra
     // ficha del mismo contacto: si ya quedó vinculado, se respeta ese vínculo.
     if (!telefono && conversacion.clienteId) {

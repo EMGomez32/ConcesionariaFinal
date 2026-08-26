@@ -47,6 +47,9 @@ const TENANT_TABLES = [
     'preguntas_ml',
     'cliente_seguimientos',
     'tasaciones',
+    'atenciones',
+    'atencion_vehiculos',
+    'solicitudes_precio_minimo',
     'vehiculo_intereses',
     'vehiculo_precio_historial',
     'proveedores',
@@ -104,6 +107,10 @@ type BackfillEntry = {
 };
 
 const BACKFILL_PLAN: BackfillEntry[] = [
+    // atencion_vehiculos: el detalle de unidades mostradas en una visita. Hereda
+    // el tenant de la atención, igual que presupuesto_items del presupuesto.
+    { table: 'atencion_vehiculos', fk: 'atencion_id', parentTable: 'atenciones', parentKey: 'id',
+      backfillSql: `UPDATE atencion_vehiculos c SET concesionaria_id = p.concesionaria_id FROM atenciones p WHERE c.atencion_id = p.id AND c.concesionaria_id IS NULL;` },
     { table: 'vehiculo_archivos', fk: 'vehiculo_id', parentTable: 'vehiculos', parentKey: 'id',
       backfillSql: `UPDATE vehiculo_archivos c SET concesionaria_id = p.concesionaria_id FROM vehiculos p WHERE c.vehiculo_id = p.id AND c.concesionaria_id IS NULL;` },
     { table: 'presupuesto_items', fk: 'presupuesto_id', parentTable: 'presupuestos', parentKey: 'id',

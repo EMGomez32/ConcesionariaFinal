@@ -87,7 +87,14 @@ router.get('/:id', PostventaCasoController.getById);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id/total', PostventaCasoController.total);
+
+/*
+ * Criterio de aceptación 7: `/:id/total` devuelve el COSTO acumulado del caso
+ * (suma de los ítems) y el facturado. El listado y el detalle quedan abiertos —el
+ * vendedor da de alta reclamos y necesita verlos— pero el número de plata se
+ * cierra, igual que en postventa-items.
+ */
+router.get('/:id/total', authorize('admin', 'postventa'), PostventaCasoController.total);
 
 /**
  * @openapi

@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../../infrastructure/database/prisma';
+import { conFiltroCartera } from '../../application/services/carteraCliente';
+import { actorEsVendedorPuro } from '../../infrastructure/security/roles';
 
 // Búsqueda global para el command palette (Ctrl/⌘+K). Busca en las entidades con
 // página de detalle: vehículos, clientes y proveedores. El aislamiento por tenant
@@ -17,6 +19,13 @@ export class SearchController {
             const contains = { contains: q, mode: 'insensitive' as const };
             const TAKE = 6;
 
+            // El command palette era la puerta de atrás del recorte de cartera: con
+            // `?q=` de dos letras un vendedor sacaba nombre, DNI, teléfono y email de
+            // clientes ajenos sin pasar por `/clientes`. Mismo filtro, misma fuente.
+            const whereClientes = await conFiltroCartera({
+                OR: [{ nombre: contains }, { dni: contains }, { telefono: contains }, { email: contains }],
+            });
+
             const [vehiculos, clientes, proveedores] = await Promise.all([
                 prisma.vehiculo.findMany({
                     where: { OR: [{ marca: contains }, { modelo: contains }, { version: contains }, { dominio: contains }] },
@@ -25,12 +34,16 @@ export class SearchController {
                     select: { id: true, marca: true, modelo: true, version: true, anio: true, dominio: true, estado: true },
                 }),
                 prisma.cliente.findMany({
-                    where: { OR: [{ nombre: contains }, { dni: contains }, { telefono: contains }, { email: contains }] },
+                    where: whereClientes,
                     take: TAKE,
                     orderBy: { updatedAt: 'desc' },
                     select: { id: true, nombre: true, dni: true, telefono: true, email: true },
                 }),
-                prisma.proveedor.findMany({
+                // El vendedor puro no busca proveedores: su ficha (`GET /proveedores/:id`)
+                // ahora es admin+postventa, así que devolverle el resultado sólo le
+                // ofrecería un link a un 403. Se devuelve la lista vacía en vez de
+                // recortar campos: acá el dato que sobra es la ENTIDAD, no una columna.
+                actorEsVendedorPuro() ? Promise.resolve([]) : prisma.proveedor.findMany({
                     where: { OR: [{ nombre: contains }, { email: contains }, { telefono: contains }] },
                     take: TAKE,
                     orderBy: { updatedAt: 'desc' },

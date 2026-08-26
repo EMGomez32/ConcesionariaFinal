@@ -1,6 +1,7 @@
 import { IPostventaCasoRepository } from '../../../domain/repositories/IPostventaCasoRepository';
 import { PostventaCaso } from '../../../domain/entities/PostventaCaso';
 import prisma from '../prisma';
+import { VEHICULO_PUBLICO } from '../proyecciones';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 
@@ -49,7 +50,7 @@ export class PrismaPostventaCasoRepository implements IPostventaCasoRepository {
             orderBy: { [orderKey]: orderDir },
             include: {
                 cliente: true,
-                vehiculo: true,
+                vehiculo: { select: VEHICULO_PUBLICO },
                 sucursal: true,
                 tipoRef: true,
                 items: { where: { deletedAt: null } }
@@ -70,7 +71,7 @@ export class PrismaPostventaCasoRepository implements IPostventaCasoRepository {
     async findById(id: number): Promise<PostventaCaso | null> {
         const c = await prisma.postventaCaso.findUnique({
             where: { id },
-            include: { cliente: true, vehiculo: true, sucursal: true, tipoRef: true, items: { where: { deletedAt: null } } }
+            include: { cliente: true, vehiculo: { select: VEHICULO_PUBLICO }, sucursal: true, tipoRef: true, items: { where: { deletedAt: null } } }
         });
         return c ? this.mapToEntity(c) : null;
     }

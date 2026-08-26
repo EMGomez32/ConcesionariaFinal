@@ -30,7 +30,14 @@ const router = Router();
  *                 totalResults: { type: integer }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/', GastoFijoController.getAll);
+
+/*
+ * Criterio de aceptación 7: los gastos fijos son los costos operativos del
+ * negocio (alquiler, sueldos, servicios). Las escrituras ya eran admin; las
+ * lecturas quedaban abiertas a cualquier autenticado, o sea que el vendedor tenía
+ * la estructura de costos del tenant a un GET de distancia.
+ */
+router.get('/', authorize('admin'), GastoFijoController.getAll);
 
 /**
  * @openapi
@@ -58,7 +65,7 @@ router.get('/', GastoFijoController.getAll);
  *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/total', GastoFijoController.total);
+router.get('/total', authorize('admin'), GastoFijoController.total);
 
 /**
  * @openapi
@@ -73,7 +80,7 @@ router.get('/total', GastoFijoController.total);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id', GastoFijoController.getById);
+router.get('/:id', authorize('admin'), GastoFijoController.getById);
 
 /**
  * @openapi

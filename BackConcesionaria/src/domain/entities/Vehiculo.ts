@@ -39,13 +39,43 @@ export class Vehiculo {
         public readonly precioCompra: number | null = null,
         public readonly fechaCompra: Date | null = null,
         /**
-         * A quién se le compró la unidad. A diferencia del precio, esto NO se
-         * recorta por rol: la lista de proveedores la ve todo el equipo (hay que
-         * saber a quién se le compra y a quién se le manda un auto al taller), y
-         * el criterio ya está escrito así en ProveedorController — lo que ahí se
-         * esconde a los no-admin es la columna de plata, no el proveedor.
+         * A quién se le compró la unidad.
+         *
+         * CORREGIDO: antes esto NO se recortaba por rol, con el argumento de que
+         * "la lista de proveedores la ve todo el equipo". La especificación del
+         * módulo del vendedor dice lo contrario y en forma explícita — "El vendedor
+         * NO VE: precio de compra, costo de preparación, margen, PROVEEDOR" — y
+         * entre una decisión escrita en un comentario y un criterio de aceptación,
+         * manda el criterio. `sanitizarDatosDeCompra` ahora lo recorta junto con
+         * `proveedorCompraId` y `formaPagoCompra`: el vínculo unidad→proveedor es
+         * media cadena de compra, y con la ficha del proveedor abierta se
+         * reconstruye la otra media.
+         *
+         * Lo que sigue abierto al vendedor es el PADRÓN (`GET /proveedores`), que
+         * necesita para mandar una unidad al taller. La ficha del proveedor
+         * (`GET /proveedores/:id`) pasó a admin+postventa.
          */
-        public readonly proveedorCompra?: { id: number; nombre: string } | null
+        public readonly proveedorCompra?: { id: number; nombre: string } | null,
+        /**
+         * PISO DE VENTA AUTORIZADO. Se mapea para que el ADMIN lo vea en la ficha
+         * (si no, la columna quedaría guardada e invisible, el mismo bug que tuvo
+         * `precioCompra`), pero es el dato más restringido del modelo: el dueño
+         * decidió que "requiere autorización por sistema".
+         *
+         * Quién lo puede ver: `VehiculoController.sanitizarDatosDeCompra` se lo
+         * recorta a TODO el que no sea admin, y la única forma de que llegue a un
+         * vendedor es `application/services/precioAutorizacion.ts` — una solicitud
+         * suya, para esa unidad, autorizada y no vencida. NO está en
+         * VEHICULO_PUBLICO y no puede entrar: ningún include anidado lo lleva.
+         */
+        public readonly precioMinimo: number | null = null,
+        /**
+         * Segmento comercial (texto libre: "sedán", "SUV compacta", "pick-up"). Lo
+         * consume el motor de sugerencias para los criterios "mismo segmento y
+         * ±15%" y "competencia directa del segmento". Sin mapearlo, la columna se
+         * cargaba y el motor la leía siempre en null, degradando a banda de precio.
+         */
+        public readonly segmento: string | null = null
     ) { }
 
     public isAvailable(): boolean {

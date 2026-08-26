@@ -78,6 +78,22 @@ const envSchema = z.object({
         (v) => (v === undefined || v === '' ? undefined : Number(v)),
         z.number().int().min(30_000).default(300_000),
     ),
+    // ── Cierre automático de atenciones (módulo del vendedor) ────────────────
+    // Hora local a la que se considera cerrado el día. A partir de ahí, toda
+    // atención que siga `abierta` la cierra el sistema y el vendedor recibe la
+    // alerta con cuántas dejó sin cerrar. 21 h es el cierre típico de un salón.
+    ATENCION_CIERRE_HORA: z.preprocess(
+        (v) => (v === undefined || v === '' ? undefined : Number(v)),
+        z.number().int().min(0).max(23).default(21),
+    ),
+    // Offset horario del salón respecto de UTC. Argentina es UTC−3 todo el año
+    // (no hay horario de verano desde 2009). Es un número y no un nombre de zona
+    // a propósito: sin `Intl`/tzdata garantizados en el contenedor, un offset fijo
+    // es más predecible que una zona que puede resolver mal y correr el corte.
+    ATENCION_CIERRE_UTC_OFFSET: z.preprocess(
+        (v) => (v === undefined || v === '' ? undefined : Number(v)),
+        z.number().int().min(-12).max(14).default(-3),
+    ),
 }).superRefine((data, ctx) => {
     // ML_CLIENT_ID y ML_CLIENT_SECRET van juntas o ninguna: con una sola el
     // OAuth falla recién al canjear el code, muy lejos del error real.

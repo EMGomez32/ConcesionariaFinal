@@ -450,13 +450,25 @@ export interface LeadsResumen {
 /** Conteos livianos para la campanita de notificaciones (un solo request). */
 export interface AlertasResumen {
     dias: number;
-    umbral: number;
-    mora: number;
-    proximos: number;
-    reservas: number;
-    estancados: number;
-    turnos: number;
-    turnosHoy: number;
+    /**
+     * Alcance de la respuesta. El endpoint pasó a ser role-aware: para un
+     * VENDEDOR PURO devuelve sólo lo suyo (`alcance: 'vendedor'`) y omite las
+     * señales de capital del tenant —mora, reservas, stock estancado,
+     * documentación—, que son admin. Por eso todos esos campos son opcionales.
+     */
+    alcance?: 'tenant' | 'vendedor';
+    /**
+     * Atenciones que el sistema le cerró por fin de día porque quedaron abiertas.
+     * Es LA alerta del módulo del vendedor; para el admin, el conteo del tenant.
+     */
+    atencionesSinCerrar?: number;
+    umbral?: number;
+    mora?: number;
+    proximos?: number;
+    reservas?: number;
+    estancados?: number;
+    turnos?: number;
+    turnosHoy?: number;
     /** Próximos seguimientos del CRM en la ventana ±dias. */
     seguimientos: number;
     /** Vehículos en stock con VTV/seguro vencido o por vencer. */

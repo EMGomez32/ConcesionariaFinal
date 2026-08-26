@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, AlertTriangle, Clock, Bookmark, Wrench, Car, CalendarClock, ShieldCheck, Inbox, X } from 'lucide-react';
+import { Bell, AlertTriangle, Clock, Bookmark, Wrench, Car, CalendarClock, ShieldCheck, Inbox, UserRoundCheck, X } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { reportesApi } from '../../api/reportes.api';
 import { dashboardKeys } from '../../hooks/useDashboard';
@@ -12,12 +12,22 @@ import { dashboardKeys } from '../../hooks/useDashboard';
  * pantalla, las señales accionables (mora, cuotas/reservas por vencer, turnos de
  * taller, stock estancado) que hoy sólo estaban en el Dashboard.
  *
- * Sólo admin: el resumen incluye stock-antiguedad (capital), admin-only en el
- * backend; para el resto el componente no renderiza nada (ni dispara la query).
+ * Admin Y VENDEDOR. Antes era sólo admin porque el resumen incluía señales de
+ * capital (stock estancado, mora) que el backend reserva a admin. Ahora el
+ * endpoint es role-aware: al vendedor puro le devuelve SÓLO lo suyo —las
+ * atenciones que el sistema le cerró sin cerrar, sus seguimientos, sus consultas—
+ * y omite todo lo demás. Por eso el componente puede renderizar para los dos sin
+ * mostrarle a nadie algo que su API no le daría.
+ *
+ * La alerta "dejaste N atenciones sin cerrar" vive acá y no en un canal nuevo:
+ * es donde el vendedor ya mira, y se apaga sola al pasar el corte del día
+ * siguiente (el backend la deriva de `cerradaAutomaticamente`, no la persiste).
  */
 const NotificationBell = () => {
     const { user } = useAuthStore();
     const isAdmin = !!(user?.roles?.includes('admin') || user?.roles?.includes('super_admin'));
+    const esVendedor = !!user?.roles?.includes('vendedor');
+    const puedeVer = isAdmin || esVendedor;
     const [open, setOpen] = useState(false);
     const [pos, setPos] = useState<{ top: number; right: number }>({ top: 60, right: 16 });
     const btnRef = useRef<HTMLButtonElement>(null);
@@ -27,7 +37,7 @@ const NotificationBell = () => {
     const { data } = useQuery({
         queryKey: dashboardKeys.alertasResumen(),
         queryFn: () => reportesApi.alertasResumen(),
-        enabled: isAdmin,
+        enabled: puedeVer,
         staleTime: 1000 * 60 * 2,
         refetchInterval: 1000 * 60 * 5,
     });
@@ -40,20 +50,33 @@ const NotificationBell = () => {
         return () => window.removeEventListener('keydown', onKey);
     }, [open]);
 
-    if (!isAdmin) return null;
+    if (!puedeVer) return null;
 
     // Mismos tokens que las cards de "Acciones del día" del Dashboard: la misma
     // señal debe verse del mismo color en ambas superficies (y virar en dark,
     // cosa que los hex hardcodeados no hacían).
+    // Las señales del tenant sólo se arman cuando el backend las mandó
+    // (`alcance: 'tenant'`). Con `alcance: 'vendedor'` esos campos vienen
+    // `undefined` y las filas ni se construyen: nada de renderizar un "0" que
+    // sugiera que el dato existe y está en cero.
+    const soloLoMio = data?.alcance === 'vendedor';
     const items = data ? [
+        // La alerta del cierre de fin de día va PRIMERA: es trabajo que el
+        // vendedor dejó a medias ayer y lo primero que tiene que resolver hoy.
+        // La etiqueta sigue al `alcance`: con 'tenant' el conteo es de TODO el
+        // salón (vista del admin), y rotularlo "sin cerrar por vos" le atribuía a
+        // quien mira el trabajo a medias de doce vendedores.
+        { key: 'atenciones', label: soloLoMio ? 'Atenciones que cerró el sistema (sin cerrar por vos)' : 'Atenciones que cerró el sistema (del equipo)', count: data.atencionesSinCerrar ?? 0, icon: UserRoundCheck, color: 'var(--danger)', to: '/atenciones' },
         { key: 'consultas', label: 'Consultas sin atender', count: data.consultas ?? 0, icon: Inbox, color: 'var(--danger)', to: '/consultas' },
-        { key: 'mora', label: 'Cuotas en mora', count: data.mora, icon: AlertTriangle, color: 'var(--danger)', to: '/reportes?tab=mora' },
-        { key: 'proximos', label: `Cuotas vencen en ${data.dias} días`, count: data.proximos, icon: Clock, color: 'var(--warning)', to: '/reportes?tab=proximos' },
-        { key: 'reservas', label: `Reservas vencen en ${data.dias} días`, count: data.reservas, icon: Bookmark, color: 'var(--warning)', to: '/reservas' },
-        { key: 'turnos', label: `Turnos de taller (${data.dias} días)`, count: data.turnos, icon: Wrench, color: 'var(--info)', to: '/postventa?tab=agenda' },
-        { key: 'seguimientos', label: `Seguimientos CRM (${data.dias} días)`, count: data.seguimientos, icon: CalendarClock, color: 'var(--info)', to: '/seguimientos' },
-        { key: 'documentacion', label: 'Documentación por vencer (VTV/seguro)', count: data.documentacion, icon: ShieldCheck, color: 'var(--warning)', to: '/reportes?tab=documentacion' },
-        { key: 'estancados', label: `Unidades estancadas (+${data.umbral} días)`, count: data.estancados, icon: Car, color: 'var(--warning)', to: '/vehiculos' },
+        { key: 'seguimientos', label: `Seguimientos CRM (${data.dias} días)`, count: data.seguimientos ?? 0, icon: CalendarClock, color: 'var(--info)', to: '/seguimientos' },
+        ...(soloLoMio ? [] : [
+            { key: 'mora', label: 'Cuotas en mora', count: data.mora ?? 0, icon: AlertTriangle, color: 'var(--danger)', to: '/reportes?tab=mora' },
+            { key: 'proximos', label: `Cuotas vencen en ${data.dias} días`, count: data.proximos ?? 0, icon: Clock, color: 'var(--warning)', to: '/reportes?tab=proximos' },
+            { key: 'reservas', label: `Reservas vencen en ${data.dias} días`, count: data.reservas ?? 0, icon: Bookmark, color: 'var(--warning)', to: '/reservas' },
+            { key: 'turnos', label: `Turnos de taller (${data.dias} días)`, count: data.turnos ?? 0, icon: Wrench, color: 'var(--info)', to: '/postventa?tab=agenda' },
+            { key: 'documentacion', label: 'Documentación por vencer (VTV/seguro)', count: data.documentacion ?? 0, icon: ShieldCheck, color: 'var(--warning)', to: '/reportes?tab=documentacion' },
+            { key: 'estancados', label: `Unidades estancadas (+${data.umbral ?? 60} días)`, count: data.estancados ?? 0, icon: Car, color: 'var(--warning)', to: '/vehiculos' },
+        ]),
     ].filter(i => i.count > 0) : [];
     const total = data?.total ?? 0;
 

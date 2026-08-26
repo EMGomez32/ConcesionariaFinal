@@ -3,6 +3,8 @@ import prisma from '../../infrastructure/database/prisma';
 import { BaseException } from '../../domain/exceptions/BaseException';
 import { Col, sendCsv } from '../../utils/csv';
 import { context } from '../../infrastructure/security/context';
+import { actorEsVendedorPuro } from '../../infrastructure/security/roles';
+import { contarAtencionesCerradasPorSistema } from '../../infrastructure/atencion/cierreDiarioWorker';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Reportes: consultas de solo lectura sobre datos ya existentes. Como el resto
@@ -1501,6 +1503,50 @@ export class ReporteController {
     static async alertasResumen(req: Request, res: Response, next: NextFunction) {
         try {
             const DIAS = 7;
+            // ── Alerta del módulo del vendedor ───────────────────────────────
+            // "Al vendedor le tiene que saltar una ALERTA con cuántas dejó abiertas
+            // sin cerrar". Se engancha ACÁ, en el endpoint que ya alimenta la
+            // campanita del TopBar, en vez de inventar un canal nuevo: es por donde
+            // el vendedor ya mira, se refresca solo cada 5 minutos y no necesita
+            // ninguna tabla de notificaciones.
+            //
+            // Para el VENDEDOR PURO la respuesta se recorta a lo suyo y se corta acá:
+            // el resto del resumen (mora, reservas por vencer, stock estancado,
+            // documentación) es capital y cartera del tenant — los mismos datos que
+            // /reportes/rentabilidad y /stock-antiguedad reservan a admin. Antes esta
+            // ruta era admin-only justamente por eso; ahora se abre al vendedor SIN
+            // ensanchar lo que ve, que es la única forma de abrirla.
+            const esSoloVendedor = actorEsVendedorPuro();
+            if (esSoloVendedor) {
+                const userId = context.getUser()?.userId ?? 0;
+                const [atencionesSinCerrar, seguimientosMios, consultasMias] = await Promise.all([
+                    contarAtencionesCerradasPorSistema(userId),
+                    prisma.clienteSeguimiento.count({
+                        where: {
+                            proximoContacto: { lt: new Date(Date.now() + DIAS * 24 * 60 * 60 * 1000) },
+                            proximoContactoHecho: false,
+                            usuarioId: userId,
+                        },
+                    }),
+                    prisma.cliente.count({
+                        where: {
+                            estadoLead: 'nuevo',
+                            origenSimulado: false,
+                            vendedorAsignadoId: userId,
+                            seguimientos: { none: { deletedAt: null } },
+                        },
+                    }),
+                ]);
+                return res.json({
+                    dias: DIAS,
+                    alcance: 'vendedor',
+                    atencionesSinCerrar,
+                    seguimientos: seguimientosMios,
+                    consultas: consultasMias,
+                    total: atencionesSinCerrar + seguimientosMios + consultasMias,
+                });
+            }
+
             const UMBRAL = 60;
             const ahora = new Date();
             const inicioHoy = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
@@ -1538,11 +1584,17 @@ export class ReporteController {
                 prisma.cliente.count({ where: { estadoLead: 'nuevo', origenSimulado: false, seguimientos: { none: { deletedAt: null } } } }),
             ]);
 
+            // Para el admin, el conteo del tenant entero: cuántas atenciones tuvo que
+            // cerrar el sistema anoche es una señal de proceso, no sólo del vendedor.
+            const atencionesSinCerrar = await contarAtencionesCerradasPorSistema(null);
+
             res.json({
                 dias: DIAS,
                 umbral: UMBRAL,
+                alcance: 'tenant',
                 mora, proximos, reservas, estancados, turnos, turnosHoy, seguimientos, documentacion, consultas,
-                total: mora + proximos + reservas + estancados + turnos + seguimientos + documentacion + consultas,
+                atencionesSinCerrar,
+                total: mora + proximos + reservas + estancados + turnos + seguimientos + documentacion + consultas + atencionesSinCerrar,
             });
         } catch (error) {
             next(error);

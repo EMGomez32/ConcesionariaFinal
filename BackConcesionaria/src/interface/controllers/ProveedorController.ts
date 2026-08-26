@@ -20,14 +20,33 @@ import { actorEsAdmin } from '../../infrastructure/security/roles';
  * abierta, un perfil `lectura` (el contador externo, el socio consignatario) se
  * llevaba la lista completa de compras con lo que se pagó por cada auto.
  */
+/*
+ * AMPLIADO (criterio de aceptación 7): el recorte original tocaba SÓLO
+ * `vehiculosCompra`, y la misma ficha lista además `gastosVehiculo[].monto` (lo
+ * que se le pagó a ese proveedor por preparar cada unidad) y
+ * `postventaItems[].monto` (lo que se le pagó por cada arreglo). Son el mismo
+ * dato —costo— por dos relaciones que el recorte no miraba, así que el número que
+ * la función existe para tapar salía igual dos renglones más abajo.
+ */
 function sanitizarVehiculosComprados(p: any, esAdmin: boolean) {
-    if (esAdmin || !p || typeof p !== 'object' || !Array.isArray(p.vehiculosCompra)) return p;
+    if (esAdmin || !p || typeof p !== 'object') return p;
+    const sinMonto = (fila: any) => {
+        if (!fila || typeof fila !== 'object') return fila;
+        const { monto, montoFacturado, ...resto } = fila;
+        void monto; void montoFacturado;
+        return resto;
+    };
     return {
         ...p,
-        vehiculosCompra: p.vehiculosCompra.map(({ precioCompra, fechaCompra, ...resto }: any) => {
-            void precioCompra; void fechaCompra;
-            return resto;
-        }),
+        vehiculosCompra: Array.isArray(p.vehiculosCompra)
+            ? p.vehiculosCompra.map(({ precioCompra, fechaCompra, precioMinimo, ...resto }: any) => {
+                void precioCompra; void fechaCompra; void precioMinimo;
+                return resto;
+            })
+            : p.vehiculosCompra,
+        gastosVehiculo: Array.isArray(p.gastosVehiculo) ? p.gastosVehiculo.map(sinMonto) : p.gastosVehiculo,
+        gastosFijos: Array.isArray(p.gastosFijos) ? p.gastosFijos.map(sinMonto) : p.gastosFijos,
+        postventaItems: Array.isArray(p.postventaItems) ? p.postventaItems.map(sinMonto) : p.postventaItems,
     };
 }
 

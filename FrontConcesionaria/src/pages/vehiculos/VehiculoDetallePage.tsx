@@ -252,15 +252,26 @@ const VehiculoDetallePage = () => {
         }
     }, [id, addToast]);
 
+    /*
+     * La tarjeta "Total gastos" de la cabecera lee de `gastosList`, y `gastosList`
+     * sólo lo llenaba el efecto de la pestaña: hasta que el admin no entraba a
+     * "Gastos", la cabecera mostraba "$0 ARS" sobre una unidad con preparación
+     * cargada. Se carga la lista apenas se sabe que este usuario puede verla; las
+     * CATEGORÍAS (que sólo sirven para el formulario de alta) siguen esperando a
+     * la pestaña, que es cuando hacen falta.
+     */
+    useEffect(() => {
+        if (permisos.vePrecioDeCompra) loadGastos();
+    }, [permisos.vePrecioDeCompra, loadGastos]);
+
     useEffect(() => {
         if (activeTab === 'gastos') {
-            loadGastos();
             gastosCategoriaApi.getAll().then(res => {
                 if (Array.isArray(res)) setGastosCat(res);
                 else setGastosCat(res?.results ?? []);
             }).catch(() => { });
         }
-    }, [activeTab, loadGastos]);
+    }, [activeTab]);
 
     const loadInteresados = useCallback(async () => {
         if (!id) return;
@@ -657,7 +668,11 @@ const VehiculoDetallePage = () => {
     const tabs: { key: Tab; label: string; icon: LucideIcon; count?: number }[] = [
         { key: 'info', label: 'Información', icon: Car },
         { key: 'archivos', label: 'Archivos', icon: FileImage, count: archivos.length },
-        { key: 'gastos', label: 'Gastos', icon: Wrench, count: gastosList.length },
+        // La pestaña de gastos es el costo de preparación de la unidad: el backend
+        // cerró `GET /gastos` a admin (criterio de aceptación 7), así que sin este
+        // gate el vendedor abría una pestaña que sólo le devuelve un 403 y un toast
+        // de error. Se saca la pestaña, no se tapa el número.
+        ...(permisos.vePrecioDeCompra ? [{ key: 'gastos' as Tab, label: 'Gastos', icon: Wrench, count: gastosList.length }] : []),
         { key: 'movimientos', label: 'Movimientos', icon: ArrowLeftRight, count: movList.length },
         { key: 'presupuestos', label: 'Presupuestos', icon: FileText, count: presupuestos.length },
         { key: 'reservas', label: 'Reservas', icon: Bookmark, count: reservas.length },
@@ -725,13 +740,23 @@ const VehiculoDetallePage = () => {
                         </div>
                     </div>
                 )}
-                <div className="stat-card glass">
-                    <Wrench size={20} style={{ color: 'var(--danger)' }} />
-                    <div>
-                        <div className="stat-value">{totalGastosLabel}</div>
-                        <div className="stat-label">Total gastos</div>
+                {/* Mismo gate que "Precio compra", y por el mismo motivo. El total
+                    se calcula SÓLO desde `gastosList`, que se carga al abrir la
+                    pestaña "Gastos" — pestaña que ya está detrás de este permiso.
+                    Sin el gate, la tarjeta se quedaba con su fallback y afirmaba
+                    "$0 ARS" sobre una unidad con $800.000 de preparación: no es una
+                    fuga (el dato nunca se pide) pero es un número falso, y un
+                    vendedor que lo use para negociar trabaja con información que
+                    inventó la pantalla. */}
+                {permisos.vePrecioDeCompra && (
+                    <div className="stat-card glass">
+                        <Wrench size={20} style={{ color: 'var(--danger)' }} />
+                        <div>
+                            <div className="stat-value">{totalGastosLabel}</div>
+                            <div className="stat-label">Total gastos</div>
+                        </div>
                     </div>
-                </div>
+                )}
                 <div className="stat-card glass">
                     <Hash size={20} style={{ color: 'var(--accent-2)' }} />
                     <div>
@@ -784,7 +809,10 @@ const VehiculoDetallePage = () => {
                             { icon: Calendar, label: 'Fecha compra', value: permisos.vePrecioDeCompra && vehiculo.fechaCompra ? new Date(vehiculo.fechaCompra).toLocaleDateString('es-AR') : undefined },
                             { icon: DollarSign, label: 'Precio compra', value: permisos.vePrecioDeCompra && vehiculo.precioCompra ? `$${Number(vehiculo.precioCompra).toLocaleString('es-AR')}` : undefined },
                             { icon: DollarSign, label: 'Precio lista', value: vehiculo.precioLista ? `$${Number(vehiculo.precioLista).toLocaleString('es-AR')}` : undefined },
-                            { icon: Car, label: 'Proveedor', value: vehiculo.proveedorCompra?.nombre },
+                            // "El vendedor NO VE: … proveedor": el backend lo recorta en
+                            // `sanitizarDatosDeCompra`, y el renglón se gatea acá para que no
+                            // quede un campo vacío sin explicación.
+                            { icon: Car, label: 'Proveedor', value: permisos.vePrecioDeCompra ? vehiculo.proveedorCompra?.nombre : undefined },
                         ]} />
                         <InfoSection title="Documentación" rows={[
                             { icon: Calendar, label: 'Vencimiento VTV', value: fmtDia(vehiculo.vencimientoVtv) },

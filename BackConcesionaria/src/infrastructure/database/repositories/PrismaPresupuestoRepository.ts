@@ -1,6 +1,7 @@
 import { IPresupuestoRepository } from '../../../domain/repositories/IPresupuestoRepository';
 import { Presupuesto } from '../../../domain/entities/Presupuesto';
 import prisma from '../prisma';
+import { USUARIO_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 
@@ -21,10 +22,10 @@ export class PrismaPresupuestoRepository implements IPresupuestoRepository {
             include: {
                 cliente: true,
                 sucursal: true,
-                vendedor: { select: { nombre: true, email: true } },
+                vendedor: { select: USUARIO_PUBLICO },
                 // extras y canje entran en el total: sin ellos la lista mostraría
                 // un importe distinto al del detalle.
-                items: { where: { deletedAt: null }, include: { vehiculo: true } },
+                items: { where: { deletedAt: null }, include: { vehiculo: { select: VEHICULO_PUBLICO } } },
                 extras: { where: { deletedAt: null } },
                 canje: { where: { deletedAt: null } }
             }
@@ -48,10 +49,10 @@ export class PrismaPresupuestoRepository implements IPresupuestoRepository {
                 cliente: true,
                 sucursal: true,
                 // El detalle lista cada unidad cotizada por marca/modelo, no por id.
-                items: { where: { deletedAt: null }, include: { vehiculo: true } },
+                items: { where: { deletedAt: null }, include: { vehiculo: { select: VEHICULO_PUBLICO } } },
                 extras: { where: { deletedAt: null } },
                 canje: { where: { deletedAt: null } },
-                vendedor: true
+                vendedor: { select: USUARIO_PUBLICO }
             }
         });
         return p ? this.mapToEntity(p) : null;

@@ -3,7 +3,7 @@ import { Reserva } from '../../../domain/entities/Reserva';
 import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
-import { VEHICULO_PUBLICO } from '../proyecciones';
+import { USUARIO_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
 
 export class PrismaReservaRepository implements IReservaRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Reserva>> {
@@ -22,7 +22,7 @@ export class PrismaReservaRepository implements IReservaRepository {
             include: {
                 cliente: true,
                 vehiculo: { select: VEHICULO_PUBLICO },
-                creadaPor: { select: { nombre: true, email: true } },
+                creadaPor: { select: USUARIO_PUBLICO },
                 sucursal: true
             }
         });
@@ -41,7 +41,7 @@ export class PrismaReservaRepository implements IReservaRepository {
     async findById(id: number): Promise<Reserva | null> {
         const r = await prisma.reserva.findUnique({
             where: { id },
-            include: { cliente: true, vehiculo: { select: VEHICULO_PUBLICO }, sucursal: true, creadaPor: true }
+            include: { cliente: true, vehiculo: { select: VEHICULO_PUBLICO }, sucursal: true, creadaPor: { select: USUARIO_PUBLICO } }
         });
         return r ? this.mapToEntity(r) : null;
     }

@@ -91,6 +91,16 @@ export const createVehiculoSchema = z.object({
     precioCompra: optionalDecimal,
     proveedorCompraId: optionalFk,
     formaPagoCompra: optionalStr,
+    // PISO DE VENTA. Se acepta en el schema para que el ADMIN pueda cargarlo desde
+    // el mismo formulario, pero VehiculoController llama a
+    // `assertPuedeEscribirPrecioMinimo` antes del use-case: si lo manda alguien que
+    // no es admin, es 403. Zod valida la forma; quién puede escribirlo no es
+    // trabajo de un schema (el schema no conoce el rol del actor).
+    precioMinimo: optionalDecimal,
+    // Segmento comercial (texto libre): lo consume el motor de sugerencias para
+    // los criterios "mismo segmento" y "competencia directa". Sin esto acá, el
+    // strip de Zod borraba el campo y la columna nunca se cargaba.
+    segmento: optionalStr,
     observaciones: optionalStr,
 
     // Dato del INGRESO, no del vehículo: el use-case lo separa y lo consume. Debe
@@ -135,6 +145,16 @@ export const updateVehiculoSchema = z.object({
     precioCompra: optionalDecimal,
     proveedorCompraId: optionalFk,
     formaPagoCompra: optionalStr,
+    // PISO DE VENTA. Se acepta en el schema para que el ADMIN pueda cargarlo desde
+    // el mismo formulario, pero VehiculoController llama a
+    // `assertPuedeEscribirPrecioMinimo` antes del use-case: si lo manda alguien que
+    // no es admin, es 403. Zod valida la forma; quién puede escribirlo no es
+    // trabajo de un schema (el schema no conoce el rol del actor).
+    precioMinimo: optionalDecimal,
+    // Segmento comercial (texto libre): lo consume el motor de sugerencias para
+    // los criterios "mismo segmento" y "competencia directa". Sin esto acá, el
+    // strip de Zod borraba el campo y la columna nunca se cargaba.
+    segmento: optionalStr,
     observaciones: optionalStr,
     clienteOrigenId: optionalFk,
 });

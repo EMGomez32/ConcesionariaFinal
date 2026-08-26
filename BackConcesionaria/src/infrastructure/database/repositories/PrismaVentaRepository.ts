@@ -5,7 +5,7 @@ import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../security/tenantGuard';
-import { VEHICULO_PUBLICO } from '../proyecciones';
+import { USUARIO_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
 
 export class PrismaVentaRepository implements IVentaRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Venta>> {
@@ -22,7 +22,7 @@ export class PrismaVentaRepository implements IVentaRepository {
             include: {
                 cliente: true,
                 vehiculo: { select: VEHICULO_PUBLICO },
-                vendedor: { select: { nombre: true, email: true } }
+                vendedor: { select: USUARIO_PUBLICO }
             }
         });
 
@@ -46,7 +46,7 @@ export class PrismaVentaRepository implements IVentaRepository {
                 extras: { where: { deletedAt: null } },
                 pagos: { where: { deletedAt: null } },
                 canjes: { where: { deletedAt: null } },
-                vendedor: true,
+                vendedor: { select: USUARIO_PUBLICO },
                 presupuesto: true
             }
         });

@@ -2,6 +2,10 @@ import { IFinanciacionRepository } from '../../../domain/repositories/IFinanciac
 import { Prisma } from '@prisma/client';
 import { Financiacion, Cuota } from '../../../domain/entities/Financiacion';
 import prisma from '../prisma';
+// El detalle de una financiación arrastra la venta y la venta el vehículo: con
+// `vehiculo: true` el `precioCompra` de la unidad salía por `GET /financiaciones`,
+// que no lleva authorize. Ver proyecciones.ts.
+import { VEHICULO_PUBLICO } from '../proyecciones';
 import { withTenantTransaction } from '../unitOfWork';
 import { coerceFilter } from '../queryFilter';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
@@ -89,7 +93,7 @@ export class PrismaFinanciacionRepository implements IFinanciacionRepository {
             skip: (pageNum - 1) * limitNum,
             orderBy: { [sortBy as string]: sortOrder },
             include: {
-                venta: { include: { vehiculo: true } },
+                venta: { include: { vehiculo: { select: VEHICULO_PUBLICO } } },
                 cliente: true,
                 cuotasPlan: { where: { deletedAt: null }, orderBy: { nroCuota: 'asc' } }
             }
@@ -113,7 +117,7 @@ export class PrismaFinanciacionRepository implements IFinanciacionRepository {
             // linkea con el contrato que refinancia / que lo refinanció.
             include: {
                 cuotasPlan: { where: { deletedAt: null }, orderBy: { nroCuota: 'asc' } },
-                venta: { include: { vehiculo: true } },
+                venta: { include: { vehiculo: { select: VEHICULO_PUBLICO } } },
                 cliente: true,
                 refinanciaA: { select: { id: true, estado: true, montoFinanciado: true, moneda: true } },
                 refinanciadaPor: { where: { deletedAt: null }, select: { id: true, estado: true, montoFinanciado: true, moneda: true, cuotas: true } },
@@ -130,7 +134,7 @@ export class PrismaFinanciacionRepository implements IFinanciacionRepository {
             // linkea con el contrato que refinancia / que lo refinanció.
             include: {
                 cuotasPlan: { where: { deletedAt: null }, orderBy: { nroCuota: 'asc' } },
-                venta: { include: { vehiculo: true } },
+                venta: { include: { vehiculo: { select: VEHICULO_PUBLICO } } },
                 cliente: true,
                 refinanciaA: { select: { id: true, estado: true, montoFinanciado: true, moneda: true } },
                 refinanciadaPor: { where: { deletedAt: null }, select: { id: true, estado: true, montoFinanciado: true, moneda: true, cuotas: true } },
@@ -364,7 +368,7 @@ export class PrismaFinanciacionRepository implements IFinanciacionRepository {
 
             const completa = await tx.financiacion.findUnique({
                 where: { id: nueva.id },
-                include: { cuotasPlan: { where: { deletedAt: null }, orderBy: { nroCuota: 'asc' } }, venta: { include: { vehiculo: true } }, cliente: true },
+                include: { cuotasPlan: { where: { deletedAt: null }, orderBy: { nroCuota: 'asc' } }, venta: { include: { vehiculo: { select: VEHICULO_PUBLICO } } }, cliente: true },
             });
             return this.mapToEntity(completa);
         });

@@ -30,3 +30,24 @@ export function actorTieneRol(...roles: string[]): boolean {
     const propios = context.getUser()?.roles ?? [];
     return propios.includes('super_admin') || roles.some(r => propios.includes(r));
 }
+
+/**
+ * Vendedor "puro": tiene el rol vendedor y NINGUNO de los que ven todo el tenant.
+ *
+ * Es el sujeto del criterio de aceptación 7 ("el vendedor no accede a costos ni
+ * márgenes por ninguna vía") y del recorte de cartera: un admin que además tenga
+ * el rol vendedor sigue viendo todo, porque su potestad no viene del rol vendedor.
+ *
+ * Misma definición que `esVendedorPuro()` de conversacionService y que el
+ * `esSoloVendedor` de ReporteController; vive acá para que los tres recortes
+ * (bandeja, reportes, cartera) no puedan divergir.
+ */
+export function actorEsVendedorPuro(): boolean {
+    const roles = context.getUser()?.roles ?? [];
+    return roles.includes('vendedor') && !roles.includes('admin') && !roles.includes('super_admin');
+}
+
+/** Id del usuario logueado (0 si no hay contexto: nunca matchea una FK real). */
+export function actorUserId(): number {
+    return context.getUser()?.userId ?? 0;
+}

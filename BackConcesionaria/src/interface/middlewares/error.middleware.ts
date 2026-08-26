@@ -1,9 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
-import { BaseException } from '../../domain/exceptions/BaseException';
+import { BaseException, DetalleDeError } from '../../domain/exceptions/BaseException';
 import ApiError from '../../utils/ApiError';
 import { logger } from '../../infrastructure/logging/logger';
 import { env } from '../../config/env';
 import { context } from '../../infrastructure/security/context';
+
+interface RespuestaDeError {
+    error: string;
+    message: string;
+    correlationId?: string;
+    stack?: string;
+    details?: DetalleDeError;
+}
 
 export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
     const correlationId = context.get()?.correlationId;
@@ -16,8 +24,11 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
     });
 
     // 2. Determine response status and message
+    // El tipo es explícito (y no inferido del literal) porque la rama de
+    // BaseException agrega `details`: con el tipo inferido del primer objeto, ese
+    // campo sólo compilaba escondiéndolo detrás de un `as any`.
     let statusCode = 500;
-    let response = {
+    let response: RespuestaDeError = {
         error: 'INTERNAL_SERVER_ERROR',
         message: 'Ha ocurrido un error inesperado.',
         correlationId,
@@ -30,7 +41,7 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
             error: err.errorCode,
             message: err.message,
             correlationId,
-            ...(err as any).details && { details: (err as any).details },
+            ...(err.details ? { details: err.details } : {}),
         };
     }
 
