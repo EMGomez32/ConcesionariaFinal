@@ -29,6 +29,16 @@ const SOFT_DELETE_MODELS = [
     'Cliente',
     'ClienteSeguimiento',
     'Tasacion',
+    'Atencion',
+    'SolicitudPrecioMinimo',
+    // OJO — AtencionVehiculo NO va acá, a propósito, por el mismo motivo que
+    // VehiculoInteres: tiene `@@unique([atencionId, vehiculoId])` y una fila
+    // soft-deleted quedaría de fantasma chocando contra el unique al volver a
+    // registrar la misma unidad en la misma visita. El borrado es DURO.
+    // Consecuencia para quien lea la atención: el `include: { vehiculos: true }`
+    // NO necesita filtro de borrados (no hay borrados lógicos), pero el
+    // `include` de `tasaciones` y `seguimientos` SÍ lo necesita — los dos están
+    // en esta lista y la extensión no filtra las relaciones de un include.
     'Proveedor',
     'Vehiculo',
     'VehiculoArchivo',

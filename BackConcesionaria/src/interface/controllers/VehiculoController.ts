@@ -9,6 +9,7 @@ import { TransferVehiculo } from '../../application/use-cases/vehiculos/Transfer
 import { audit } from '../../infrastructure/security/audit';
 import { Col, sendCsv } from '../../utils/csv';
 import { actorEsAdmin } from '../../infrastructure/security/roles';
+import { adjuntarPrecioMinimo, assertPuedeEscribirPrecioMinimo, sanitizarPrecioMinimo } from '../../application/services/precioAutorizacion';
 
 /**
  * Recorta los datos de compra para todo el que no sea admin.
@@ -26,9 +27,27 @@ import { actorEsAdmin } from '../../infrastructure/security/roles';
  */
 function sanitizarDatosDeCompra<T>(vehiculo: T, esAdmin: boolean): T {
     if (esAdmin || !vehiculo || typeof vehiculo !== 'object') return vehiculo;
-    const { precioCompra, fechaCompra, ...resto } = vehiculo as any;
+    const {
+        precioCompra, fechaCompra,
+        // El PROVEEDOR de la unidad está en la lista de lo que el vendedor NO VE
+        // de la especificación del módulo. `proveedorCompra` es el objeto que
+        // arrastra el include del detalle; `proveedorCompraId` y `formaPagoCompra`
+        // son la misma información escrita de otra forma, y dejarlos afuera del
+        // recorte hacía que el criterio se cumpliera sólo en la pantalla.
+        // (Esto REVIERTE la decisión escrita en Vehiculo.ts —"la lista de
+        // proveedores la ve todo el equipo"—, que chocaba de frente con la spec.
+        // El padrón de /proveedores sigue existiendo; lo que se cierra es el
+        // vínculo unidad→proveedor, que es lo que permite reconstruir la compra.)
+        proveedorCompra, proveedorCompraId, formaPagoCompra,
+        ...resto
+    } = vehiculo as any;
     void precioCompra; void fechaCompra;
-    return resto as T;
+    void proveedorCompra; void proveedorCompraId; void formaPagoCompra;
+    // `precioMinimo` sale por su propio camino: NUNCA junto al precio de lista,
+    // sólo por una SolicitudPrecioMinimo autorizada y vigente. Lo recorta
+    // `sanitizarPrecioMinimo` y lo vuelve a poner —si corresponde—
+    // `adjuntarPrecioMinimo`, únicamente en el detalle.
+    return sanitizarPrecioMinimo(resto, esAdmin) as T;
 }
 
 const repository = new PrismaVehiculoRepository();
@@ -148,7 +167,13 @@ export class VehiculoController {
         try {
             const id = parseInt(req.params.id as string, 10);
             const result = await getVehiculoByIdUC.execute(id);
-            res.json(sanitizarDatosDeCompra(result, actorEsAdmin()));
+            const esAdmin = actorEsAdmin();
+            // El detalle es el ÚNICO lugar donde el piso de venta puede aparecer, y
+            // sólo si este usuario tiene una autorización vigente para esta unidad.
+            // En el listado no se consulta: una autorización por fila sobre una
+            // grilla de miles de unidades no tiene sentido y el piso no es dato de
+            // grilla.
+            res.json(await adjuntarPrecioMinimo(sanitizarDatosDeCompra(result, esAdmin)));
         } catch (error) {
             next(error);
         }
@@ -156,6 +181,10 @@ export class VehiculoController {
 
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
+            // `POST /vehiculos` es authorize('admin','vendedor'): sin este chequeo un
+            // vendedor se fija el piso de venta que quiera al dar de alta la unidad y
+            // se saltea la autorización entera escribiendo en vez de leyendo.
+            assertPuedeEscribirPrecioMinimo(req.body);
             const result = await createVehiculoUC.execute(req.body);
             const label = (result as any)?.patente ?? (result as any)?.marca ?? (result as any)?.id;
             await audit({
@@ -164,7 +193,10 @@ export class VehiculoController {
                 entidadId: (result as any)?.id,
                 detalle: `Vehiculo ${label} creado`,
             });
-            res.status(201).json(result);
+            // Era la única de las cuatro respuestas del controller que devolvía la
+            // fila cruda: el vendedor que daba de alta una unidad recibía de vuelta
+            // su propio `precioCompra` (y ahora también habría recibido el piso).
+            res.status(201).json(sanitizarDatosDeCompra(result, actorEsAdmin()));
         } catch (error) {
             next(error);
         }
@@ -173,6 +205,7 @@ export class VehiculoController {
     static async update(req: Request, res: Response, next: NextFunction) {
         try {
             const id = parseInt(req.params.id as string, 10);
+            assertPuedeEscribirPrecioMinimo(req.body);
             const result = await updateVehiculoUC.execute(id, req.body);
             await audit({
                 entidad: 'Vehiculo',

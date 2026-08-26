@@ -79,6 +79,24 @@ export const createConcesionariaSchema = z.object({
 // (autogestión admin): mismos campos, todos opcionales. `nombre`, si viene, no
 // puede quedar vacío (columna NOT NULL en DB; además ambos forms garantizan que
 // se manda non-empty, así que este .min(1) nunca rechaza un request real).
+// ── Parámetros del módulo del vendedor (atención presencial) ────────────────
+// `diasRetencionCliente`: cuánto tiempo un cliente le "pertenece" al vendedor que
+// lo atendió primero. El dueño decidió que lo define cada concesionaria; el
+// sugerido es 30. El tope de 365 no es capricho: una retención de años equivale a
+// "para siempre" y hace inútil el pozo común.
+// `tasacionSoloTasador`: en algunas concesionarias el vendedor estima la permuta,
+// en otras sólo el tasador. Booleano, default false (el vendedor puede estimar).
+const diasRetencionOpcional = z.preprocess(
+    (v) => (v === '' || v === null ? undefined : v),
+    z.coerce.number().int().min(1, 'La retención debe ser de al menos 1 día').max(365, 'La retención no puede superar los 365 días').optional(),
+);
+const tasacionSoloTasadorOpcional = z.preprocess(
+    // El form manda 'true'/'false' como string; z.coerce.boolean() convierte
+    // CUALQUIER string no vacío en true, así que 'false' entraría como true.
+    (v) => (v === 'true' ? true : v === 'false' ? false : v === '' || v === null ? undefined : v),
+    z.boolean().optional(),
+);
+
 export const updateConcesionariaSchema = z.object({
     nombre: z.string().min(1, 'El nombre no puede quedar vacío').optional(),
     cuit: textoOpcional,
@@ -96,4 +114,7 @@ export const updateConcesionariaSchema = z.object({
     razonSocial: textoOpcional,
     condicionIva: condicionIvaOpcional,
     puntoVenta: puntoVentaOpcional,
+    // Módulo del vendedor.
+    diasRetencionCliente: diasRetencionOpcional,
+    tasacionSoloTasador: tasacionSoloTasadorOpcional,
 });

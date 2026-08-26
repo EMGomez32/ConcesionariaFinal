@@ -39,7 +39,13 @@ router.get('/ventas', authorize('admin', 'vendedor'), ReporteController.ventas);
  *       - { in: query, name: mes, schema: { type: integer } }
  *       - { in: query, name: format, schema: { type: string, enum: [csv] } }
  */
-router.get('/caja', authorize('admin', 'vendedor', 'cobrador'), ReporteController.caja);
+/*
+ * Criterio de aceptación 7: el flujo de caja publica `egresos.gastosVehiculos` y
+ * `egresos.gastosFijos` — el costo de preparación y la estructura de costos del
+ * tenant, agregados y exportables a CSV. Sale 'vendedor'. Queda 'cobrador', que
+ * es el rol de caja y cuya tarea ES el movimiento de dinero.
+ */
+router.get('/caja', authorize('admin', 'cobrador'), ReporteController.caja);
 
 /**
  * @openapi
@@ -209,7 +215,14 @@ router.get('/proximos-service', authorize('admin', 'vendedor', 'postventa'), Rep
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
-router.get('/alertas-resumen', authorize('admin'), ReporteController.alertasResumen);
+/*
+ * Se abre al vendedor porque es donde vive su alerta de atenciones sin cerrar (la
+ * campanita del TopBar consume este endpoint). NO se ensancha lo que ve: el
+ * controller detecta al vendedor puro y devuelve un payload recortado a lo suyo
+ * —atenciones, sus seguimientos, sus consultas— sin mora, sin reservas, sin stock
+ * estancado y sin documentación, que son señales de capital del tenant.
+ */
+router.get('/alertas-resumen', authorize('admin', 'vendedor'), ReporteController.alertasResumen);
 
 /**
  * @openapi
@@ -285,7 +298,12 @@ router.get('/consultas', authorize('admin', 'vendedor'), ReporteController.consu
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
-router.get('/postventa', authorize('admin', 'vendedor', 'postventa'), ReporteController.postventa);
+/*
+ * Criterio de aceptación 7: este reporte publica `costo`, `facturado`, `margen` y
+ * `margenTotal` por caso. Es un reporte de MARGEN con otro nombre. Sale
+ * 'vendedor'; queda 'postventa', que es quien lo gestiona.
+ */
+router.get('/postventa', authorize('admin', 'postventa'), ReporteController.postventa);
 
 /**
  * @openapi

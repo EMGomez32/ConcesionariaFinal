@@ -1,6 +1,7 @@
 import { IGastoFijoRepository } from '../../../domain/repositories/IGastoFijoRepository';
 import { GastoFijo } from '../../../domain/entities/GastoFijo';
 import prisma from '../prisma';
+import { PROVEEDOR_PUBLICO } from '../proyecciones';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 
@@ -48,7 +49,7 @@ export class PrismaGastoFijoRepository implements IGastoFijoRepository {
             include: {
                 categoria: true,
                 sucursal: true,
-                proveedor: true
+                proveedor: { select: PROVEEDOR_PUBLICO }
             }
         });
 
@@ -66,7 +67,7 @@ export class PrismaGastoFijoRepository implements IGastoFijoRepository {
     async findById(id: number): Promise<GastoFijo | null> {
         const g = await prisma.gastoFijo.findUnique({
             where: { id },
-            include: { categoria: true, sucursal: true, proveedor: true }
+            include: { categoria: true, sucursal: true, proveedor: { select: PROVEEDOR_PUBLICO } }
         });
         return g ? this.mapToEntity(g) : null;
     }
@@ -80,7 +81,7 @@ export class PrismaGastoFijoRepository implements IGastoFijoRepository {
         }
         const g = await prisma.gastoFijo.create({
             data: payload as any,
-            include: { categoria: true, sucursal: true, proveedor: true },
+            include: { categoria: true, sucursal: true, proveedor: { select: PROVEEDOR_PUBLICO } },
         });
         return this.mapToEntity(g);
     }
@@ -89,7 +90,7 @@ export class PrismaGastoFijoRepository implements IGastoFijoRepository {
         const g = await prisma.gastoFijo.update({
             where: { id },
             data: pickEditable(data),
-            include: { categoria: true, sucursal: true, proveedor: true },
+            include: { categoria: true, sucursal: true, proveedor: { select: PROVEEDOR_PUBLICO } },
         });
         return this.mapToEntity(g);
     }

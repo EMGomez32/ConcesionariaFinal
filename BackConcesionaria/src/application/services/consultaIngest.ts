@@ -1,5 +1,13 @@
-import { OrigenLead } from '@prisma/client';
+import { OrigenLead, Prisma } from '@prisma/client';
 import prisma from '../../infrastructure/database/prisma';
+import {
+    ContactoDedupe,
+    elegirPorPrioridad,
+    normalizarEmail,
+    normalizarDni,
+    variantesDni,
+} from '../../domain/services/dedupeContacto';
+import { normalizarTelefono, sufijoTelefono } from '../../domain/services/telefono';
 import { context } from '../../infrastructure/security/context';
 import { assertMismoTenant } from '../../infrastructure/security/tenantGuard';
 
@@ -9,9 +17,10 @@ import { assertMismoTenant } from '../../infrastructure/security/tenantGuard';
  * lector de emails de DeRuedas (contexto sistema).
  *
  * Reglas:
- *  - Dedupe por teléfono o email dentro del tenant: una consulta repetida NO
- *    crea otro cliente; reabre el lead si estaba ganado/perdido y anota la
- *    consulta en observaciones. EXCEPCIÓN: una consulta `simulada` que cae sobre
+ *  - Dedupe por TELÉFONO → DNI → EMAIL dentro del tenant (ver
+ *    `buscarClientePorContacto`): una consulta repetida NO crea otro cliente;
+ *    reabre el lead si estaba ganado/perdido y anota la consulta en
+ *    observaciones. EXCEPCIÓN: una consulta `simulada` que cae sobre
  *    una ficha real sólo anota la línea (ver `sobreFichaReal`).
  *  - Asignación round-robin real: el vendedor activo con menos leads en
  *    'nuevo' (empate → menor id), salvo que venga vendedorId explícito.
@@ -25,6 +34,12 @@ export interface ConsultaEntrante {
     nombre: string;
     telefono?: string | null;
     email?: string | null;
+    /**
+     * Documento, si el canal lo trae. No lo pide ninguna consulta de redes, pero
+     * participa del dedupe (TELÉFONO → DNI → EMAIL) y lo van a traer la apertura
+     * de atención presencial y el import de cartera.
+     */
+    dni?: string | null;
     /** Texto libre de la consulta (mensaje del lead, cuerpo del email, etc.). */
     texto?: string | null;
     /** Vehículo consultado, si se pudo identificar. */
@@ -93,17 +108,74 @@ export async function elegirVendedorRoundRobin(): Promise<number | null> {
 }
 
 /**
- * Dedupe compartido (consultas + import masivo): busca un cliente del tenant
- * por teléfono o email exactos (el que esté presente). Null si no hay match.
+ * Tope de candidatos que se traen de la base antes de resolver la prioridad en
+ * memoria. El sufijo de 4 dígitos acota a ~1 de cada 10.000 fichas: con 500 el
+ * margen alcanza para una cartera de cientos de miles de clientes.
  */
-export async function buscarClientePorContacto(telefono?: string | null, email?: string | null) {
-    const tel = telefono?.trim() || null;
-    const mail = email?.trim().toLowerCase() || null;
-    const or: object[] = [];
-    if (tel) or.push({ telefono: tel });
-    if (mail) or.push({ email: mail });
+const TOPE_CANDIDATOS = 500;
+
+/**
+ * Dedupe compartido (consultas de los 4 canales + import masivo): busca el
+ * cliente del tenant que corresponde a este contacto, con prioridad
+ * TELÉFONO → DNI → EMAIL. El primero que matchea gana. Null si no hay match.
+ *
+ * POR QUÉ NO ES UN `findFirst` CON UN OR: el teléfono se compara por su forma
+ * CANÓNICA (ver domain/services/telefono.ts), no por el texto, y eso Postgres no
+ * lo puede evaluar sin una columna normalizada. Entonces el query TRAE
+ * candidatos y `elegirPorPrioridad` —puro y testeado sin base— decide cuál gana.
+ *
+ * LA COMPARACIÓN SE NORMALIZA ACÁ, AL CONSULTAR — la decisión y su motivo:
+ *  - El criterio que decide el dedupe es `normalizarTelefono` corriendo sobre los
+ *    candidatos, no la columna `telefono_normalizado`. Así el resultado no depende
+ *    de que TODOS los caminos de escritura se hayan acordado de mantenerla: el día
+ *    que uno se olvide, el duplicado volvería EN SILENCIO, que es exactamente el
+ *    bug que este punto viene a cerrar.
+ *  - El texto que se guarda sigue siendo el que tipeó el vendedor (es lo que se
+ *    muestra y lo que se disca); la forma canónica es sólo criterio de
+ *    comparación, no un dato del cliente.
+ *  - El costo está acotado: un query por dedupe, filtrado por los últimos 4
+ *    dígitos, con tope de filas.
+ *
+ * Y LA COLUMNA IGUAL SE MANTIENE, desde TODOS los caminos de escritura (esta
+ * ingesta, el import de cartera, el alta/edición de cliente y la atención
+ * presencial). No es redundancia: es la precondición de la salida documentada
+ * para cuando el LIKE pese —columna indexada + igualdad—. Una columna a medio
+ * cablear haría que ese cambio, hecho de buena fe siguiendo el comentario del
+ * schema, dejara sin match a todo cliente creado por un canal que no la escribía.
+ * Si se cambia `normalizarTelefono`, se cambia también `normalizar_telefono_ar()`
+ * (la función SQL del backfill).
+ */
+export async function buscarClientePorContacto(contacto: ContactoDedupe) {
+    const telefono = contacto.telefono?.trim() || null;
+    const dni = contacto.dni?.trim() || null;
+    const email = normalizarEmail(contacto.email);
+
+    const or: Prisma.ClienteWhereInput[] = [];
+    if (telefono) {
+        // Igualdad literal: red de seguridad para los teléfonos que NO se pueden
+        // normalizar (un interno, texto de una importación vieja) y para las
+        // escrituras raras donde los últimos 4 dígitos no quedan pegados. Es el
+        // criterio que regía antes: así no se pierde ningún match que hoy ande.
+        or.push({ telefono });
+        const sufijo = sufijoTelefono(telefono);
+        if (sufijo) or.push({ telefono: { contains: sufijo } });
+    }
+    if (dni) {
+        or.push({ dni });
+        const dniNormalizado = normalizarDni(dni);
+        if (dniNormalizado) or.push({ dni: { in: variantesDni(dniNormalizado) } });
+    }
+    if (email) or.push({ email });
     if (!or.length) return null;
-    return prisma.cliente.findFirst({ where: { OR: or }, orderBy: { id: 'asc' } });
+
+    // La extensión de Prisma acota al tenant y descarta los borrados.
+    const candidatos = await prisma.cliente.findMany({
+        where: { OR: or },
+        orderBy: { id: 'asc' },
+        take: TOPE_CANDIDATOS,
+    });
+
+    return elegirPorPrioridad({ telefono, dni, email }, candidatos)?.cliente ?? null;
 }
 
 /**
@@ -147,7 +219,10 @@ const lineaConsulta = (c: ConsultaEntrante): string => {
 
 export async function ingestarConsulta(consulta: ConsultaEntrante): Promise<ResultadoIngesta> {
     const telefono = consulta.telefono?.trim() || null;
-    const email = consulta.email?.trim().toLowerCase() || null;
+    const email = normalizarEmail(consulta.email);
+    const dni = consulta.dni?.trim() || null;
+    const telefonoCanonico = normalizarTelefono(telefono);
+    const ahora = new Date();
 
     // `vendedorId` llega del body (modal de consulta, lead de Mercado Libre) y
     // termina en cliente.vendedorAsignadoId. La RLS valida el concesionaria_id
@@ -158,10 +233,11 @@ export async function ingestarConsulta(consulta: ConsultaEntrante): Promise<Resu
     // round-robin. Mismo candado que CreateCliente/UpdateCliente.
     await assertMismoTenant('usuario', consulta.vendedorId, context.getTenantId() ?? null);
 
-    // Dedupe: mismo teléfono o email en el tenant (la extensión filtra tenant).
-    // Si la consulta es SIMULADA y no trae contacto, el segundo escalón la ata a
-    // la ficha que dejó la demostración anterior en vez de crear otra igual.
-    const existente = await buscarClientePorContacto(telefono, email)
+    // Dedupe: teléfono (normalizado), después DNI, después email, dentro del
+    // tenant (la extensión filtra tenant). Si la consulta es SIMULADA y no trae
+    // contacto, el segundo escalón la ata a la ficha que dejó la demostración
+    // anterior en vez de crear otra igual.
+    const existente = await buscarClientePorContacto({ telefono, dni, email })
         ?? (consulta.simulada === true ? await buscarFichaSimuladaSinContacto(consulta.nombre) : null);
 
     if (existente) {
@@ -192,6 +268,28 @@ export async function ingestarConsulta(consulta: ConsultaEntrante): Promise<Resu
                 origenLead: sobreFichaReal ? existente.origenLead : (existente.origenLead ?? consulta.origen),
                 vendedorAsignadoId,
                 observaciones: [existente.observaciones, lineaConsulta(consulta)].filter(Boolean).join('\n'),
+                // EL RELOJ DE LA RETENCIÓN. Una consulta que entra por un canal ES
+                // un contacto real (lo dice el propio contrato de
+                // `tocarUltimaInteraccion`), y hasta ahora ningún canal lo tocaba:
+                // sólo lo escribía el mostrador. Eso dejaba a todo lead de
+                // Instagram/Messenger/WhatsApp/ML/DeRuedas con el reloj sin correr
+                // y la regla de retención sin efecto fuera del salón. Se escribe
+                // en la MISMA sentencia (no con una llamada aparte) para que no
+                // haya una ventana en la que la ficha quede actualizada y el reloj
+                // no.
+                ultimaInteraccionEn: ahora,
+                // La asignación se estrena acá cuando la ficha no tenía dueño: la
+                // fecha es lo que después mide la retención si nunca hay otro
+                // contacto.
+                ...(existente.vendedorAsignadoId == null && vendedorAsignadoId != null
+                    ? { vendedorAsignadoEn: ahora }
+                    : {}),
+                // Forma canónica del teléfono: el dedupe de hoy la calcula al
+                // consultar, pero la columna existe y está indexada, así que tiene
+                // que quedar en sintonía con el teléfono guardado.
+                ...(telefonoCanonico && existente.telefonoNormalizado !== telefonoCanonico
+                    ? { telefonoNormalizado: telefonoCanonico }
+                    : {}),
             },
         });
         // El interés por un vehículo tampoco: sería una ficha real "interesada"
@@ -209,9 +307,19 @@ export async function ingestarConsulta(consulta: ConsultaEntrante): Promise<Resu
             nombre: consulta.nombre.trim() || 'Consulta sin nombre',
             telefono,
             email,
+            // El teléfono se guarda TAL CUAL lo tipearon: es lo que se muestra y
+            // lo que se disca. La forma canónica va aparte, en su columna: es
+            // criterio de comparación del dedupe, no un dato del cliente.
+            telefonoNormalizado: telefonoCanonico,
+            dni,
             origenLead: consulta.origen,
             estadoLead: 'nuevo',
             vendedorAsignadoId,
+            // El reloj de la retención arranca con el contacto que creó la ficha.
+            // Sin esto la asignación del round-robin nacía "vencida" y el lead caía
+            // al pozo común de todos los vendedores desde el minuto cero.
+            ultimaInteraccionEn: ahora,
+            vendedorAsignadoEn: vendedorAsignadoId != null ? ahora : null,
             observaciones: lineaConsulta(consulta),
             // La marca va SÓLO en la ficha nueva. En la rama de dedupe de arriba
             // el cliente puede ser uno REAL preexistente (el operador cargó un

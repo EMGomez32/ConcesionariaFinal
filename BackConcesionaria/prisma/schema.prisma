@@ -37,6 +37,20 @@ model Concesionaria {
   // concesionaria; null = sin límite. El admin del tenant no puede crear
   // usuarios por encima de este número (enforcement en CreateUsuario).
   limiteUsuarios          Int?                       @map("limite_usuarios")
+  // ── Módulo del vendedor / atención presencial ─────────────────────────────
+  // Cuántos días le "pertenece" un cliente al vendedor que lo atendió primero.
+  // Lo define cada concesionaria (decisión del dueño). NOT NULL con default 30
+  // para que las filas vivas queden configuradas sin backfill y el cálculo de
+  // retención nunca tenga que resolver un null.
+  // OJO — el plazo se cuenta contra `Cliente.ultimaInteraccionEn`, NO contra
+  // `vendedorAsignadoEn`: la asignación se renueva con cada contacto real.
+  diasRetencionCliente    Int                        @default(30) @map("dias_retencion_cliente")
+  // Quién puede poner el valor de una permuta. false (default) = el vendedor
+  // puede estimarla; true = sólo un tasador/admin carga `valorEstimado` y el
+  // vendedor deja la Tasacion en `sin_tasar`. Default false = comportamiento
+  // actual (hoy POST /tasaciones es admin+vendedor), así que ningún tenant vivo
+  // cambia de conducta al migrar.
+  tasacionSoloTasador     Boolean                    @default(false) @map("tasacion_solo_tasador")
   createdAt               DateTime                   @default(now()) @map("created_at")
   updatedAt               DateTime                   @updatedAt @map("updated_at")
   deletedAt               DateTime?                  @map("deleted_at")
@@ -53,6 +67,8 @@ model Concesionaria {
   clientes                Cliente[]
   clienteSeguimientos     ClienteSeguimiento[]
   tasaciones              Tasacion[]
+  atenciones              Atencion[]
+  solicitudesPrecioMinimo SolicitudPrecioMinimo[]
   vehiculoIntereses       VehiculoInteres[]
   vehiculoPrecioHistorial VehiculoPrecioHistorial[]
   cotizaciones            Cotizacion[]
@@ -122,41 +138,44 @@ model Rol {
 }
 
 model Usuario {
-  id                     Int                  @id @default(autoincrement())
-  concesionariaId        Int?                 @map("concesionaria_id")
-  sucursalId             Int?                 @map("sucursal_id")
-  nombre                 String
+  id                       Int                       @id @default(autoincrement())
+  concesionariaId          Int?                      @map("concesionaria_id")
+  sucursalId               Int?                      @map("sucursal_id")
+  nombre                   String
   // Email GLOBALMENTE único (una persona = una cuenta = un tenant). Antes era
   // `@@unique([concesionariaId, email])`: el mismo email podía existir en varios
   // tenants y el login (findFirst por email) resolvía a un tenant NO determinístico.
-  email                  String               @unique
-  passwordHash           String?              @map("password_hash")
-  activo                 Boolean              @default(true)
+  email                    String                    @unique
+  passwordHash             String?                   @map("password_hash")
+  activo                   Boolean                   @default(true)
   // Comisión del vendedor: % sobre el facturado de sus ventas. Null = sin comisión.
-  comisionPorcentaje     Decimal?             @map("comision_porcentaje") @db.Decimal(5, 2)
-  createdAt              DateTime             @default(now()) @map("created_at")
-  updatedAt              DateTime             @updatedAt @map("updated_at")
-  deletedAt              DateTime?            @map("deleted_at")
-  auditLogs              AuditLog[]
-  financiacionesCobrador Financiacion[]       @relation("FinanciacionCobrador")
-  ingresosVehiculo       IngresoVehiculo[]    @relation("IngresoRegistradoPor")
-  presupuestos           Presupuesto[]        @relation("PresupuestoVendedor")
-  reservasCreadas        Reserva[]            @relation("ReservaCreadaPor")
-  roles                  UsuarioRol[]
-  concesionaria          Concesionaria?       @relation(fields: [concesionariaId], references: [id])
-  sucursal               Sucursal?            @relation(fields: [sucursalId], references: [id])
-  vehiculoMovimientos    VehiculoMovimiento[] @relation("MovimientoRegistradoPor")
-  ventas                 Venta[]              @relation("VentaVendedor")
-  objetivos              ObjetivoVendedor[]
-  seguimientos           ClienteSeguimiento[]
-  tasaciones             Tasacion[]           @relation("TasacionTasador")
+  comisionPorcentaje       Decimal?                  @map("comision_porcentaje") @db.Decimal(5, 2)
+  createdAt                DateTime                  @default(now()) @map("created_at")
+  updatedAt                DateTime                  @updatedAt @map("updated_at")
+  deletedAt                DateTime?                 @map("deleted_at")
+  auditLogs                AuditLog[]
+  financiacionesCobrador   Financiacion[]            @relation("FinanciacionCobrador")
+  ingresosVehiculo         IngresoVehiculo[]         @relation("IngresoRegistradoPor")
+  presupuestos             Presupuesto[]             @relation("PresupuestoVendedor")
+  reservasCreadas          Reserva[]                 @relation("ReservaCreadaPor")
+  roles                    UsuarioRol[]
+  concesionaria            Concesionaria?            @relation(fields: [concesionariaId], references: [id])
+  sucursal                 Sucursal?                 @relation(fields: [sucursalId], references: [id])
+  vehiculoMovimientos      VehiculoMovimiento[]      @relation("MovimientoRegistradoPor")
+  ventas                   Venta[]                   @relation("VentaVendedor")
+  objetivos                ObjetivoVendedor[]
+  seguimientos             ClienteSeguimiento[]
+  tasaciones               Tasacion[]                @relation("TasacionTasador")
+  atenciones               Atencion[]                @relation("AtencionVendedor")
+  precioMinimoSolicitado   SolicitudPrecioMinimo[]   @relation("PrecioMinimoSolicitante")
+  precioMinimoResuelto     SolicitudPrecioMinimo[]   @relation("PrecioMinimoResolutor")
   historialPreciosVehiculo VehiculoPrecioHistorial[] @relation("PrecioHistorialUsuario")
-  clientesAsignados      Cliente[]            @relation("ClienteVendedorAsignado")
-  conversacionesAsignadas Conversacion[]     @relation("ConversacionAsignada")
-  preguntasMlAsignadas   PreguntaMl[]         @relation("PreguntaMlAsignada")
-  preguntasMlRespondidas PreguntaMl[]         @relation("PreguntaMlRespondida")
-  mensajesWhatsapp       MensajeWhatsapp[]    @relation("MensajeEnviadoPor")
-  refreshTokens          RefreshToken[]
+  clientesAsignados        Cliente[]                 @relation("ClienteVendedorAsignado")
+  conversacionesAsignadas  Conversacion[]            @relation("ConversacionAsignada")
+  preguntasMlAsignadas     PreguntaMl[]              @relation("PreguntaMlAsignada")
+  preguntasMlRespondidas   PreguntaMl[]              @relation("PreguntaMlRespondida")
+  mensajesWhatsapp         MensajeWhatsapp[]         @relation("MensajeEnviadoPor")
+  refreshTokens            RefreshToken[]
 
   @@index([concesionariaId])
   @@map("usuarios")
@@ -180,6 +199,11 @@ model Cliente {
   id                      Int                     @id @default(autoincrement())
   concesionariaId         Int                     @map("concesionaria_id")
   nombre                  String
+  /// Apellido, separado del nombre. Nullable y SIN backfill a propósito: partir
+  /// el `nombre` histórico por el primer espacio adivina mal ("Juan Carlos Paz")
+  /// y no hay forma de deshacerlo. Las fichas viejas siguen mostrando `nombre`
+  /// tal cual; el apellido se completa cuando alguien edita la ficha.
+  apellido                String?
   dni                     String?
   // Datos fiscales del receptor (facturación AFIP). `dni` es el número de doc;
   // `tipoDoc` dice qué es (DNI/CUIT/CUIL); `condicionIva` determina A vs B y si el
@@ -187,9 +211,34 @@ model Cliente {
   tipoDoc                 TipoDocumento?          @map("tipo_doc")
   condicionIva            CondicionIva?           @map("condicion_iva")
   telefono                String?
+  /// Teléfono reducido a su forma canónica (sólo dígitos, sin +54 / 0 / 9 / 15).
+  /// Es la forma con la que se COMPARAN dos teléfonos: sin ella "2615551234",
+  /// "261 555-1234" y "+54 9 261 555-1234" son TRES clientes distintos y el
+  /// criterio de aceptación 2 (el que consultó por redes no se duplica al venir
+  /// al salón) no se cumple.
+  ///
+  /// OJO — HOY EL DEDUPE NO LEE ESTA COLUMNA: `consultaIngest.buscarClientePorContacto`
+  /// trae candidatos por el sufijo de 4 dígitos y normaliza EN MEMORIA, para que
+  /// el match no dependa de que todos los caminos de escritura hayan mantenido la
+  /// columna. La columna se escribe igual desde todos ellos (ingesta, import,
+  /// alta/edición de cliente, atención presencial) y está indexada junto al
+  /// tenant: es la precondición para cambiar el `contains` por una igualdad el
+  /// día que la cartera crezca. NO cambies la lectura sin verificar que sigue
+  /// poblada en todos esos caminos.
+  ///
+  /// La forma canónica la produce `domain/services/telefono.normalizarTelefono`
+  /// y la función `normalizar_telefono_ar()` que crea la migración: si se cambia
+  /// una, se cambia la otra.
+  telefonoNormalizado     String?                 @map("telefono_normalizado")
   email                   String?
   direccion               String?
   observaciones           String?
+  /// Consentimiento del titular para ser contactado (Ley 25.326 de Protección de
+  /// Datos Personales). Default false: la ausencia de registro NO es consentimiento.
+  /// Se exige recién cuando aparece interés real (cotización, test drive,
+  /// tasación o reserva), nunca para abrir la atención.
+  consentimientoContacto  Boolean                 @default(false) @map("consentimiento_contacto")
+  consentimientoEn        DateTime?               @map("consentimiento_en")
   /// Etapa del cliente en el embudo comercial (pipeline de leads).
   estadoLead              EstadoLead              @default(nuevo) @map("estado_lead")
   /// Canal por el que entró la consulta (DeRuedas, redes, mostrador...).
@@ -204,6 +253,15 @@ model Cliente {
   /// Vendedor "dueño" del cliente (ownership CRM). Nullable: un cliente puede
   /// no tener vendedor asignado todavía.
   vendedorAsignadoId      Int?                    @map("vendedor_asignado_id")
+  /// Cuándo se hizo esa asignación. Es dato de auditoría de la cartera (desde
+  /// cuándo es de este vendedor); el PLAZO de retención NO se mide contra esto
+  /// sino contra `ultimaInteraccionEn` (decisión del contrato).
+  vendedorAsignadoEn      DateTime?               @map("vendedor_asignado_en")
+  /// Último contacto REAL con el cliente (atención, seguimiento, consulta que
+  /// entra por un canal). Distinto de `updatedAt`, que se mueve por cualquier
+  /// edición de la ficha —corregir una dirección haría parecer "caliente" a un
+  /// cliente de hace un año— y por eso no sirve para calcular la retención.
+  ultimaInteraccionEn     DateTime?               @map("ultima_interaccion_en")
   createdAt               DateTime                @default(now()) @map("created_at")
   updatedAt               DateTime                @updatedAt @map("updated_at")
   deletedAt               DateTime?               @map("deleted_at")
@@ -216,6 +274,7 @@ model Cliente {
   reservas                Reserva[]
   seguimientos            ClienteSeguimiento[]
   tasaciones              Tasacion[]
+  atenciones              Atencion[]
   vehiculosInteres        VehiculoInteres[]
   solicitudesFinanciacion SolicitudFinanciacion[]
   conversaciones          Conversacion[]
@@ -227,6 +286,9 @@ model Cliente {
   @@index([vendedorAsignadoId])
   @@index([dni])
   @@index([telefono])
+  // El dedupe siempre corre con el tenant ya inyectado por la extensión, así que
+  // el índice útil es el compuesto, no uno suelto por teléfono normalizado.
+  @@index([concesionariaId, telefonoNormalizado])
   @@map("clientes")
 }
 
@@ -234,27 +296,36 @@ model Cliente {
 /// WhatsApp, email, visita) con su nota y, opcional, la fecha del próximo contacto.
 /// Tenant-scoped y soft-delete, como el resto de lo operativo.
 model ClienteSeguimiento {
-  id              Int             @id @default(autoincrement())
-  concesionariaId Int             @map("concesionaria_id")
-  clienteId       Int             @map("cliente_id")
+  id                   Int             @id @default(autoincrement())
+  concesionariaId      Int             @map("concesionaria_id")
+  clienteId            Int             @map("cliente_id")
   // Quién registró el contacto: se estampa del usuario logueado (no del body).
-  usuarioId       Int             @map("usuario_id")
-  tipo            TipoSeguimiento @default(otro)
-  fecha           DateTime        @db.Date
-  nota            String
-  proximoContacto DateTime?       @map("proximo_contacto") @db.Date
+  usuarioId            Int             @map("usuario_id")
+  tipo                 TipoSeguimiento @default(otro)
+  fecha                DateTime        @db.Date
+  nota                 String
+  proximoContacto      DateTime?       @map("proximo_contacto") @db.Date
   /// El próximo contacto ya se realizó: sale de la agenda de seguimientos.
-  proximoContactoHecho Boolean    @default(false) @map("proximo_contacto_hecho")
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-  deletedAt       DateTime?       @map("deleted_at")
-  cliente         Cliente         @relation(fields: [clienteId], references: [id])
-  usuario         Usuario         @relation(fields: [usuarioId], references: [id])
-  concesionaria   Concesionaria   @relation(fields: [concesionariaId], references: [id])
+  proximoContactoHecho Boolean         @default(false) @map("proximo_contacto_hecho")
+  /// Atención que originó este seguimiento. Nullable: la enorme mayoría de los
+  /// seguimientos se cargan a mano desde la ficha del cliente y no vienen de una
+  /// visita. Se agrega en vez de inventar una segunda agenda: cuando una atención
+  /// cierra con un resultado NO definitivo, el próximo contacto obligatorio se
+  /// materializa como una fila de ACÁ y cae solo en /seguimientos, en el reporte
+  /// proximos-seguimientos y en la campanita, sin pantalla nueva.
+  atencionId           Int?            @map("atencion_id")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+  deletedAt            DateTime?       @map("deleted_at")
+  cliente              Cliente         @relation(fields: [clienteId], references: [id])
+  usuario              Usuario         @relation(fields: [usuarioId], references: [id])
+  atencion             Atencion?       @relation(fields: [atencionId], references: [id])
+  concesionaria        Concesionaria   @relation(fields: [concesionariaId], references: [id])
 
   @@index([concesionariaId])
   @@index([clienteId])
   @@index([usuarioId])
+  @@index([atencionId])
   @@map("cliente_seguimientos")
 }
 
@@ -275,17 +346,30 @@ model Tasacion {
   condicion       CondicionTasacion @default(bueno)
   valorEstimado   Decimal?          @map("valor_estimado") @db.Decimal(12, 2)
   moneda          String            @default("ARS")
+  /// Estado de la valuación. Hoy una tasación "existe" con o sin `valorEstimado`
+  /// y no había forma de decir "la miramos y la rechazamos". `sin_tasar` es el
+  /// caso del vendedor que carga los datos del usado en el mostrador y deja el
+  /// valor al tasador (ver Concesionaria.tasacionSoloTasador).
+  estado          EstadoTasacion    @default(sin_tasar)
   fecha           DateTime          @db.Date
   observaciones   String?
+  /// Atención (visita) en la que el cliente ofreció este usado en permuta.
+  /// Nullable: las tasaciones sueltas de /tasaciones siguen existiendo. La
+  /// permuta del encargo se materializa ACÁ y no en un modelo nuevo porque este
+  /// ya tiene marca, modelo, año, km, condición, valor, moneda, tasador, PDF y
+  /// pantalla; sólo le faltaban el estado y el vínculo a la visita.
+  atencionId      Int?              @map("atencion_id")
   createdAt       DateTime          @default(now()) @map("created_at")
   updatedAt       DateTime          @updatedAt @map("updated_at")
   deletedAt       DateTime?         @map("deleted_at")
   cliente         Cliente?          @relation(fields: [clienteId], references: [id])
   tasador         Usuario?          @relation("TasacionTasador", fields: [tasadorId], references: [id])
+  atencion        Atencion?         @relation(fields: [atencionId], references: [id])
   concesionaria   Concesionaria     @relation(fields: [concesionariaId], references: [id])
 
   @@index([concesionariaId])
   @@index([clienteId])
+  @@index([atencionId])
   @@map("tasaciones")
 }
 
@@ -312,6 +396,128 @@ model VehiculoInteres {
   @@index([concesionariaId])
   @@index([vehiculoId])
   @@map("vehiculo_intereses")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Módulo del vendedor / atención presencial
+//
+// La ATENCIÓN es la unidad de trabajo: cada vez que el cliente pisa el salón se
+// abre una nueva. El CLIENTE existe una sola vez (lo garantiza el dedupe de
+// consultaIngest); lo que se repite es la visita.
+//
+// Por qué un modelo nuevo y no ampliar VehiculoInteres: ese pivot tiene
+// `@@unique([clienteId, vehiculoId])` —a propósito, es el "favorito" del CRM y
+// lo alimentan cuatro integraciones vía `upsert({ where: { clienteId_vehiculoId } })`
+// en consultaIngest— así que PROHÍBE registrar la misma unidad en dos visitas,
+// que es exactamente el criterio de aceptación 8. Tocar ese unique rompe la
+// ingesta de los 4 canales, la idempotencia del POST y las pestañas "Interés" /
+// "Interesados". Queda como agregado cliente↔vehículo y el detalle POR VISITA
+// vive en AtencionVehiculo; al registrar una unidad mostrada se hace además el
+// upsert del agregado, así las pantallas actuales siguen funcionando iguales.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Una visita del cliente al salón, de la apertura al cierre.
+model Atencion {
+  id                       Int                     @id @default(autoincrement())
+  concesionariaId          Int                     @map("concesionaria_id")
+  clienteId                Int                     @map("cliente_id")
+  /// Quién lo atendió REALMENTE en esta visita. Puede no ser el dueño del cliente
+  /// (`Cliente.vendedorAsignadoId`): si vuelve alguien de otro vendedor, el
+  /// sistema avisa, deja atender, y acá queda registrado quién lo hizo.
+  vendedorId               Int                     @map("vendedor_id")
+  /// Enum de un solo valor por ahora, abierto a futuro (video llamada, visita a
+  /// domicilio). El canal DIGITAL no viene por acá: eso ya lo resuelven las
+  /// conversaciones y `OrigenLead`.
+  canal                    CanalAtencion           @default(presencial)
+  motivo                   MotivoAtencion          @default(consulta_general)
+  /// Cuando el motivo es `vuelve_por_atencion_anterior`, cuál.
+  atencionAnteriorId       Int?                    @map("atencion_anterior_id")
+  estado                   EstadoAtencion          @default(abierta)
+  /// Obligatorio para cerrar (criterio de aceptación 6). Nullable en la base
+  /// porque mientras la atención está `abierta` todavía no hay resultado: la
+  /// exigencia la impone el caso de uso de cierre, no la columna.
+  resultado                ResultadoAtencion?
+  iniciadaEn               DateTime                @default(now()) @map("iniciada_en")
+  cerradaEn                DateTime?               @map("cerrada_en")
+  /// La cerró el barrido de fin de día, no el vendedor. Es lo que alimenta la
+  /// alerta "dejaste N atenciones sin cerrar": sin esta marca no hay forma de
+  /// distinguir un cierre real de uno por sistema.
+  cerradaAutomaticamente   Boolean                 @default(false) @map("cerrada_automaticamente")
+  observaciones            String?
+  // ── Relevamiento (paso 3 del flujo) ───────────────────────────────────────
+  modoBusqueda             ModoBusqueda?           @map("modo_busqueda")
+  presupuestoMin           Decimal?                @map("presupuesto_min") @db.Decimal(12, 2)
+  presupuestoMax           Decimal?                @map("presupuesto_max") @db.Decimal(12, 2)
+  anticipo                 Decimal?                @db.Decimal(12, 2)
+  cuotaMaxima              Decimal?                @map("cuota_maxima") @db.Decimal(12, 2)
+  tipoFinanciamiento       TipoFinanciamiento?     @map("tipo_financiamiento")
+  /// (valor de la permuta + anticipo). Es el número que MANDA el filtro, no lo
+  /// que el cliente dijo al principio. Se guarda calculado —en vez de derivarlo
+  /// en cada lectura— porque el valor de la permuta puede cambiar después (la
+  /// tasación se corrige, se rechaza) y el histórico de la visita tiene que
+  /// seguir explicando por qué se le mostraron ESAS unidades.
+  presupuestoRealCalculado Decimal?                @map("presupuesto_real_calculado") @db.Decimal(12, 2)
+  /// Moneda de los importes de arriba. Sin esto no se pueden comparar contra
+  /// `Vehiculo.precioLista`, que también tiene su moneda.
+  moneda                   String                  @default("ARS")
+  createdAt                DateTime                @default(now()) @map("created_at")
+  updatedAt                DateTime                @updatedAt @map("updated_at")
+  deletedAt                DateTime?               @map("deleted_at")
+  concesionaria            Concesionaria           @relation(fields: [concesionariaId], references: [id])
+  cliente                  Cliente                 @relation(fields: [clienteId], references: [id])
+  vendedor                 Usuario                 @relation("AtencionVendedor", fields: [vendedorId], references: [id])
+  atencionAnterior         Atencion?               @relation("AtencionPrevia", fields: [atencionAnteriorId], references: [id])
+  atencionesPosteriores    Atencion[]              @relation("AtencionPrevia")
+  vehiculos                AtencionVehiculo[]
+  /// Los "resultados" que ya son entidades se ENLAZAN, no se duplican.
+  seguimientos             ClienteSeguimiento[]
+  tasaciones               Tasacion[]
+  solicitudesPrecioMinimo  SolicitudPrecioMinimo[]
+
+  @@index([concesionariaId])
+  @@index([clienteId])
+  @@index([vendedorId])
+  // El barrido de fin de día y la alerta del vendedor buscan siempre por
+  // (tenant, estado): sin este compuesto es un seq scan sobre toda la tabla.
+  @@index([concesionariaId, estado])
+  @@map("atenciones")
+}
+
+/// Cada unidad que se le MOSTRÓ al cliente en una visita, con si la buscó él o
+/// se la sugirió el sistema y qué se hizo con ella. Es el registro que hace
+/// consultable "lo ya mostrado" en la próxima visita (criterio 8) y el que
+/// alimenta la regla de no repetir sugerencias.
+model AtencionVehiculo {
+  id               Int                    @id @default(autoincrement())
+  /// Nullable + trigger que lo deriva de `atenciones` (ver init-rls.ts), igual
+  /// que presupuesto_items: si un super_admin crea la fila, la extensión no le
+  /// inyecta tenant y sin el trigger la RLS la rechazaría.
+  concesionariaId  Int?                   @map("concesionaria_id")
+  atencionId       Int                    @map("atencion_id")
+  vehiculoId       Int                    @map("vehiculo_id")
+  tipo             TipoAtencionVehiculo
+  accion           AccionAtencionVehiculo @default(vista)
+  nivelInteres     NivelInteres?          @map("nivel_interes")
+  /// El texto legible que el sistema le mostró al vendedor ("mismo modelo, 2 años
+  /// más nuevo, +8% de precio"). Se guarda el texto y no sólo la regla porque el
+  /// motivo depende del stock del momento y tiene que poder releerse tal cual.
+  motivoSugerencia String?                @map("motivo_sugerencia")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+  atencion         Atencion               @relation(fields: [atencionId], references: [id])
+  vehiculo         Vehiculo               @relation(fields: [vehiculoId], references: [id])
+
+  // Dentro de UNA visita la misma unidad es una sola fila: mostrarla otra vez
+  // sube la `accion` (vista → test_drive → cotizada → reservada), no duplica.
+  // La repetición legítima es entre visitas distintas, y eso el unique lo permite.
+  @@unique([atencionId, vehiculoId])
+  // Igual que VehiculoInteres, NO va en SOFT_DELETE_MODELS: con el @@unique de
+  // arriba, una fila borrada en lógico dejaría un fantasma que choca al volver a
+  // registrar la misma unidad en la misma visita. El borrado es duro.
+  @@index([concesionariaId])
+  @@index([atencionId])
+  @@index([vehiculoId])
+  @@map("atencion_vehiculos")
 }
 
 model Proveedor {
@@ -341,49 +547,64 @@ model Proveedor {
 }
 
 model Vehiculo {
-  id                       Int                  @id @default(autoincrement())
-  concesionariaId          Int                  @map("concesionaria_id")
-  sucursalId               Int                  @map("sucursal_id")
-  tipo                     TipoVehiculo         @default(USADO)
-  origen                   OrigenVehiculo       @default(compra)
+  id                       Int                       @id @default(autoincrement())
+  concesionariaId          Int                       @map("concesionaria_id")
+  sucursalId               Int                       @map("sucursal_id")
+  tipo                     TipoVehiculo              @default(USADO)
+  origen                   OrigenVehiculo            @default(compra)
   marca                    String
   modelo                   String
   version                  String?
   anio                     Int?
   dominio                  String?
   vin                      String?
-  kmIngreso                Int?                 @map("km_ingreso")
+  kmIngreso                Int?                      @map("km_ingreso")
   color                    String?
-  estado                   EstadoVehiculo       @default(preparacion)
-  fechaIngreso             DateTime             @map("fecha_ingreso") @db.Date
-  fechaCompra              DateTime?            @map("fecha_compra") @db.Date
+  estado                   EstadoVehiculo            @default(preparacion)
+  fechaIngreso             DateTime                  @map("fecha_ingreso") @db.Date
+  fechaCompra              DateTime?                 @map("fecha_compra") @db.Date
   /// Vencimiento de la VTV y del seguro (documentación del vehículo en stock).
-  vencimientoVtv           DateTime?            @map("vencimiento_vtv") @db.Date
-  vencimientoSeguro        DateTime?            @map("vencimiento_seguro") @db.Date
-  precioCompra             Decimal?             @map("precio_compra") @db.Decimal(12, 2)
-  precioLista              Decimal?             @map("precio_lista") @db.Decimal(12, 2)
-  moneda                   String               @default("ARS")
-  proveedorCompraId        Int?                 @map("proveedor_compra_id")
-  formaPagoCompra          String?              @map("forma_pago_compra")
+  vencimientoVtv           DateTime?                 @map("vencimiento_vtv") @db.Date
+  vencimientoSeguro        DateTime?                 @map("vencimiento_seguro") @db.Date
+  precioCompra             Decimal?                  @map("precio_compra") @db.Decimal(12, 2)
+  precioLista              Decimal?                  @map("precio_lista") @db.Decimal(12, 2)
+  /// Piso autorizado de venta. DATO SENSIBLE: se trata como `precioCompra` —
+  /// fuera de VEHICULO_PUBLICO y sanitizado por rol— porque quien lo ve conoce
+  /// el margen. Decisión del dueño: NO se le muestra al vendedor junto al precio
+  /// de lista; lo pide y un admin lo autoriza (ver SolicitudPrecioMinimo).
+  precioMinimo             Decimal?                  @map("precio_minimo") @db.Decimal(12, 2)
+  /// Segmento comercial de la unidad ("hatch chico", "sedán", "SUV compacta",
+  /// "pickup"). No estaba y sin él dos criterios de cercanía del encargo
+  /// ("mismo segmento y rango ±15%", "competencia directa del segmento") no
+  /// tienen dato sobre el que operar. Texto libre y nullable: imponer un enum
+  /// obliga a una taxonomía única a todos los tenants y migrarla después duele.
+  /// El motor de sugerencias normaliza para comparar y DEBE degradar al criterio
+  /// de banda de precio cuando está en null (que es como arranca todo el stock vivo).
+  segmento                 String?
+  moneda                   String                    @default("ARS")
+  proveedorCompraId        Int?                      @map("proveedor_compra_id")
+  formaPagoCompra          String?                   @map("forma_pago_compra")
   observaciones            String?
-  createdAt                DateTime             @default(now()) @map("created_at")
-  updatedAt                DateTime             @updatedAt @map("updated_at")
-  deletedAt                DateTime?            @map("deleted_at")
+  createdAt                DateTime                  @default(now()) @map("created_at")
+  updatedAt                DateTime                  @updatedAt @map("updated_at")
+  deletedAt                DateTime?                 @map("deleted_at")
   gastos                   GastoVehiculo[]
   ingresos                 IngresoVehiculo[]
-  postventaCasos           PostventaCaso[]      @relation("CasoVehiculo")
-  presupuestoCanjeGenerado PresupuestoCanje[]   @relation("VehiculoGeneradoDesdeCanje")
+  postventaCasos           PostventaCaso[]           @relation("CasoVehiculo")
+  presupuestoCanjeGenerado PresupuestoCanje[]        @relation("VehiculoGeneradoDesdeCanje")
   presupuestoItems         PresupuestoItem[]
   reservas                 Reserva[]
   solicitudesFinanciacion  SolicitudFinanciacion[]
   archivos                 VehiculoArchivo[]
   movimientos              VehiculoMovimiento[]
-  concesionaria            Concesionaria        @relation(fields: [concesionariaId], references: [id])
-  proveedorCompra          Proveedor?           @relation("VehiculoProveedorCompra", fields: [proveedorCompraId], references: [id])
-  sucursal                 Sucursal             @relation(fields: [sucursalId], references: [id])
+  concesionaria            Concesionaria             @relation(fields: [concesionariaId], references: [id])
+  proveedorCompra          Proveedor?                @relation("VehiculoProveedorCompra", fields: [proveedorCompraId], references: [id])
+  sucursal                 Sucursal                  @relation(fields: [sucursalId], references: [id])
   ventaCanjeVehiculo       VentaCanjeVehiculo[]
   ventas                   Venta?
   interesados              VehiculoInteres[]
+  atencionVehiculos        AtencionVehiculo[]
+  solicitudesPrecioMinimo  SolicitudPrecioMinimo[]
   publicacionesMl          PublicacionMl[]
   historialPrecios         VehiculoPrecioHistorial[]
 
@@ -418,6 +639,59 @@ model VehiculoPrecioHistorial {
   @@index([concesionariaId])
   @@index([vehiculoId])
   @@map("vehiculo_precio_historial")
+}
+
+/// Pedido de un vendedor para ver el PISO de venta de una unidad, y su
+/// autorización. Existe porque el dueño decidió que el precio mínimo "requiere
+/// autorización por sistema": `Vehiculo.precioMinimo` nunca viaja junto al
+/// precio de lista, sólo cuando hay una solicitud `autorizada` y vigente para
+/// ese vendedor y esa unidad.
+///
+/// Se guarda `precioAutorizado` (snapshot) y no sólo un permiso porque el admin
+/// puede autorizar un piso puntual para ESTE negocio, distinto del que tiene
+/// cargado la ficha; y porque si mañana cambia `Vehiculo.precioMinimo`, lo que
+/// se le mostró al vendedor tiene que seguir siendo auditable.
+model SolicitudPrecioMinimo {
+  id               Int                         @id @default(autoincrement())
+  concesionariaId  Int                         @map("concesionaria_id")
+  vehiculoId       Int                         @map("vehiculo_id")
+  /// Atención en la que se pidió, si vino del mostrador. Nullable: también se
+  /// puede pedir desde la ficha del vehículo, sin visita en curso.
+  atencionId       Int?                        @map("atencion_id")
+  /// Quién pide (el vendedor) y quién resuelve (admin). Nunca la misma persona
+  /// en el flujo normal; eso lo hace cumplir el caso de uso, no la base.
+  solicitanteId    Int                         @map("solicitante_id")
+  resueltaPorId    Int?                        @map("resuelta_por_id")
+  estado           EstadoSolicitudPrecioMinimo @default(pendiente)
+  motivo           String?
+  respuesta        String?
+  /// Valor que efectivamente se autorizó, con su moneda. Null mientras está
+  /// pendiente o si se rechazó.
+  precioAutorizado Decimal?                    @map("precio_autorizado") @db.Decimal(12, 2)
+  moneda           String                      @default("ARS")
+  solicitadaEn     DateTime                    @default(now()) @map("solicitada_en")
+  resueltaEn       DateTime?                   @map("resuelta_en")
+  /// Vencimiento de la autorización. Pasado este momento el valor deja de viajar
+  /// al front aunque el estado siga en `autorizada`: una autorización de hace
+  /// tres meses no puede seguir destapando el piso de venta.
+  venceEl          DateTime?                   @map("vence_el")
+  createdAt        DateTime                    @default(now()) @map("created_at")
+  updatedAt        DateTime                    @updatedAt @map("updated_at")
+  deletedAt        DateTime?                   @map("deleted_at")
+  concesionaria    Concesionaria               @relation(fields: [concesionariaId], references: [id])
+  vehiculo         Vehiculo                    @relation(fields: [vehiculoId], references: [id])
+  atencion         Atencion?                   @relation(fields: [atencionId], references: [id])
+  solicitante      Usuario                     @relation("PrecioMinimoSolicitante", fields: [solicitanteId], references: [id])
+  resueltaPor      Usuario?                    @relation("PrecioMinimoResolutor", fields: [resueltaPorId], references: [id])
+
+  @@index([concesionariaId])
+  @@index([vehiculoId])
+  @@index([atencionId])
+  // La bandeja del admin lista las pendientes del tenant; el sanitizador
+  // pregunta por (tenant, estado) antes de decidir si manda el precio.
+  @@index([concesionariaId, estado])
+  @@index([solicitanteId])
+  @@map("solicitudes_precio_minimo")
 }
 
 model VehiculoArchivo {
@@ -1855,6 +2129,95 @@ enum CondicionTasacion {
   bueno
   regular
   malo
+}
+
+/// Etapa de la valuación de un usado. `sin_tasar` es la permuta que el vendedor
+/// cargó en el mostrador y todavía no tiene valor; `rechazada` es la que se miró
+/// y no se toma (antes no se podía expresar: sólo existía "con valor" o "sin valor").
+enum EstadoTasacion {
+  sin_tasar
+  tasada
+  rechazada
+}
+
+// ── Módulo del vendedor / atención presencial ───────────────────────────────
+
+/// Por dónde llegó la atención. Hoy sólo `presencial` —el resto de los canales
+/// ya los cubren las conversaciones y OrigenLead—, pero queda como enum y no
+/// como booleano para poder sumar video llamada o visita a domicilio sin migrar
+/// la forma de la tabla.
+enum CanalAtencion {
+  presencial
+}
+
+enum MotivoAtencion {
+  consulta_general
+  unidad_puntual
+  vuelve_por_atencion_anterior
+}
+
+enum EstadoAtencion {
+  abierta
+  cerrada
+}
+
+/// Cómo termina la visita. Los tres primeros son DEFINITIVOS; los cuatro
+/// últimos no, y el cierre exige próximo contacto (fecha + medio) para poder
+/// guardarse. Esa clasificación vive en el dominio, no acá: el enum sólo
+/// enumera los desenlaces.
+enum ResultadoAtencion {
+  reserva
+  cotizacion
+  test_drive
+  permuta_a_tasar
+  en_analisis
+  sin_unidad
+  se_retiro
+}
+
+enum ModoBusqueda {
+  presupuesto
+  modelo
+  unidad
+}
+
+/// Cómo dice el cliente que va a pagar. NO es `SolicitudFinanciacion`: eso es la
+/// gestión ante un banco y exige `financieraId`. Esto es la pregunta de
+/// mostrador, antes de que haya banco ni unidad elegida.
+enum TipoFinanciamiento {
+  contado
+  credito
+  plan_de_ahorro
+}
+
+/// La unidad la trajo el cliente o se la propuso el sistema. Es lo que permite
+/// medir después si las sugerencias sirven para algo.
+enum TipoAtencionVehiculo {
+  buscada
+  sugerida
+}
+
+enum AccionAtencionVehiculo {
+  vista
+  test_drive
+  cotizada
+  reservada
+}
+
+enum NivelInteres {
+  bajo
+  medio
+  alto
+}
+
+/// Estado del pedido de precio mínimo. `expirada` la estampa el barrido cuando
+/// pasa `venceEl`, para que la bandeja no muestre autorizaciones que ya no
+/// destapan nada.
+enum EstadoSolicitudPrecioMinimo {
+  pendiente
+  autorizada
+  rechazada
+  expirada
 }
 
 // Etapa del cliente en el embudo comercial (pipeline de leads).

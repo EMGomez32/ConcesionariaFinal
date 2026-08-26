@@ -12,6 +12,9 @@ import { importarClientes } from '../../application/services/clienteImport';
 import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import { Col, sendCsv } from '../../utils/csv';
+import { avisoDeAsignacion } from '../../application/services/carteraCliente';
+import { logger } from '../../infrastructure/logging/logger';
+import { actorEsVendedorPuro } from '../../infrastructure/security/roles';
 
 const repository = new PrismaClienteRepository();
 const getClientesUC = new GetClientes(repository);
@@ -91,8 +94,27 @@ export class ClienteController {
     static async getById(req: Request, res: Response, next: NextFunction) {
         try {
             const id = parseInt(req.params.id as string, 10);
-            const result = await getClienteByIdUC.execute(id);
-            res.json(result);
+            const result: any = await getClienteByIdUC.execute(id);
+
+            // LA FICHA PUNTUAL NO SE BLOQUEA. El listado y el CSV sí están recortados
+            // por cartera (PrismaClienteRepository), pero la especificación pide que,
+            // si un cliente de otro vendedor vuelve al salón, el sistema AVISE y deje
+            // atender registrando quién lo atendió. Un 403 acá haría imposible ese
+            // flujo — y lo que hay que evitar es el barrido de la cartera ajena, no la
+            // atención de la persona que está parada en el mostrador.
+            const asignacion = await avisoDeAsignacion(result);
+
+            // HUELLA del acceso cruzado. Va al log y NO al audit log: el enum
+            // `AccionAudit` de la base no tiene 'read' y agregarle un valor es una
+            // migración con `ALTER TYPE`, que no corresponde meter acá. El registro
+            // que la especificación pide de verdad —"registra quién lo atendió
+            // realmente"— es `Atencion.vendedorId`, que ya existe y es el que va a
+            // ver el supervisor. Esto es sólo la señal previa.
+            if (asignacion.esDeOtroVendedor && actorEsVendedorPuro()) {
+                logger.info(`[cartera] cliente ${id} (de ${asignacion.vendedorAsignado ?? asignacion.vendedorAsignadoId}) abierto por otro vendedor${asignacion.retencionVencida ? ' — retención vencida' : ''}`);
+            }
+
+            res.json({ ...result, asignacion });
         } catch (error) {
             next(error);
         }

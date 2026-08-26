@@ -1,6 +1,7 @@
 import { IGastoRepository } from '../../../domain/repositories/IGastoRepository';
 import { Gasto } from '../../../domain/entities/Gasto';
 import prisma from '../prisma';
+import { PROVEEDOR_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 
 export class PrismaGastoRepository implements IGastoRepository {
@@ -29,8 +30,8 @@ export class PrismaGastoRepository implements IGastoRepository {
             orderBy: { [sortBy as string]: sortOrder },
             include: {
                 categoria: true,
-                vehiculo: { include: { sucursal: true } },
-                proveedor: true
+                vehiculo: { select: { ...VEHICULO_PUBLICO, sucursal: { select: { id: true, nombre: true } } } },
+                proveedor: { select: PROVEEDOR_PUBLICO }
             }
         });
 
@@ -50,8 +51,8 @@ export class PrismaGastoRepository implements IGastoRepository {
             where: { id },
             include: {
                 categoria: true,
-                vehiculo: { include: { sucursal: true } },
-                proveedor: true
+                vehiculo: { select: { ...VEHICULO_PUBLICO, sucursal: { select: { id: true, nombre: true } } } },
+                proveedor: { select: PROVEEDOR_PUBLICO }
             }
         });
         return g ? this.mapToEntity(g) : null;

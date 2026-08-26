@@ -35,3 +35,50 @@ export const VEHICULO_PUBLICO = {
     precioLista: true,
     moneda: true,
 } as const;
+
+/**
+ * `Vehiculo.precioMinimo` NO entra en VEHICULO_PUBLICO, y tampoco en ningún
+ * `select` de conveniencia: el dueño decidió que el piso de venta "requiere
+ * autorización por sistema", así que no puede viajar junto al precio de lista ni
+ * siquiera para el admin en un include anidado (si el admin lo necesita, lo tiene
+ * en la ficha del vehículo, que es la ruta que sabe a quién se lo muestra).
+ * El único camino por el que ese número llega a un vendedor es una
+ * SolicitudPrecioMinimo autorizada y vigente — ver precioAutorizacion.ts.
+ */
+
+/**
+ * Proyección pública de un Usuario para los `include` anidados.
+ *
+ * POR QUÉ: `include: { vendedor: true }` / `{ creadaPor: true }` /
+ * `{ registradoPor: true }` devuelven la fila ENTERA de Usuario — con
+ * `passwordHash`, `email` y **`comisionPorcentaje`**. `sanitizeUsuario` de
+ * UsuarioController tapa exactamente esos campos, pero sólo mira las rutas
+ * `/usuarios`: el mismo dato salía entero por `GET /ventas/:id`,
+ * `GET /reservas/:id` y `GET /presupuestos/:id`, ninguna de las cuales lleva
+ * `authorize`. La comisión del vendedor es dato de remuneración y el hash es una
+ * credencial: ninguno de los dos tiene nada que hacer en el detalle de una venta.
+ *
+ * `email` tampoco entra: para mostrar "quién lo hizo" alcanza el nombre, y el
+ * padrón de mails del equipo es dato personal que no necesita viajar en cada fila.
+ *
+ * REGLA: en cualquier `include` de un usuario anidado, usar esto y no `true`.
+ */
+export const USUARIO_PUBLICO = {
+    id: true,
+    nombre: true,
+} as const;
+
+/**
+ * Proyección pública de un Proveedor para los `include` anidados.
+ *
+ * El padrón de proveedores es dato comercial (a quién se le compra, a qué taller
+ * se manda) y la especificación del módulo del vendedor lo pone explícitamente en
+ * la lista de lo que el vendedor NO VE. Donde la pantalla necesita mostrar un
+ * destino o un origen alcanza con el nombre; el resto (email, teléfono, tipo,
+ * dirección) es la agenda de compras y sale sólo por `/proveedores`, que está
+ * gateada.
+ */
+export const PROVEEDOR_PUBLICO = {
+    id: true,
+    nombre: true,
+} as const;

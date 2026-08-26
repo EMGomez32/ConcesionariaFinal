@@ -30,5 +30,21 @@ export class Cliente {
          * indistinguible de un interesado real.
          */
         public readonly origenSimulado: boolean = false,
+        // ── Módulo del vendedor (atención presencial) ────────────────────────
+        // Los cinco campos que sumó la migración del módulo. Van mapeados porque,
+        // sin esto, `mapToEntity` los perdía y la ficha los devolvía siempre en
+        // null: el aviso de "este cliente es de otro vendedor" calculaba la
+        // retención contra un `ultimaInteraccionEn` inexistente y daba SIEMPRE
+        // "vencida" — o sea, se comía la regla entera. Es el mismo bug que ya
+        // había tenido `precioCompra`.
+        /** Apellido, separado del nombre. Sin backfill: partir el histórico adivina mal. */
+        public readonly apellido?: string | null,
+        /** Ley 25.326: obligatorio antes de guardar datos de contacto. */
+        public readonly consentimientoContacto: boolean = false,
+        public readonly consentimientoEn?: Date | null,
+        /** Cuándo se asignó el vendedor. NO es contra esto que se cuenta la retención. */
+        public readonly vendedorAsignadoEn?: Date | null,
+        /** Reloj de la retención: se renueva con cada contacto real. */
+        public readonly ultimaInteraccionEn?: Date | null,
     ) { }
 }

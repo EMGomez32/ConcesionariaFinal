@@ -30,7 +30,25 @@ const router = Router();
  *                 totalResults: { type: integer }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/', ProveedorController.getAll);
+
+/*
+ * Criterio de aceptación 7 + "el vendedor NO VE: … proveedor".
+ *
+ * Se separan las dos cosas que antes eran una sola ruta abierta:
+ *   - EL PADRÓN (`GET /`) es una agenda operativa: el vendedor la necesita para
+ *     mandar una unidad al taller (`POST /vehiculo-movimientos` es
+ *     admin+vendedor). Queda accesible para los roles que operan, no para todos
+ *     los autenticados.
+ *   - LA FICHA (`GET /:id`) es la relación comercial: trae `vehiculosCompra` (qué
+ *     unidades vinieron de ese proveedor), `gastosVehiculo[].monto` y
+ *     `postventaItems[].monto`. Eso es la cadena de compra y su costo, y se cierra
+ *     al vendedor. Los montos, además, se recortan por rol en el controller.
+ *
+ * Esto REVIERTE la decisión que estaba escrita en `Vehiculo.ts` ("la lista de
+ * proveedores la ve todo el equipo"): chocaba de frente con la especificación del
+ * módulo, y entre las dos manda la especificación.
+ */
+router.get('/', authorize('admin', 'vendedor', 'postventa'), ProveedorController.getAll);
 
 /**
  * @openapi
@@ -45,7 +63,7 @@ router.get('/', ProveedorController.getAll);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id', ProveedorController.getById);
+router.get('/:id', authorize('admin', 'postventa'), ProveedorController.getById);
 
 /**
  * @openapi

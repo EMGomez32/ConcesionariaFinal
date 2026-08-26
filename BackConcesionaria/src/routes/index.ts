@@ -6,9 +6,11 @@ import usuarioRoutes from '../interface/routes/usuario.routes';
 import rolRoutes from '../interface/routes/rol.routes';
 import clienteRoutes from '../interface/routes/cliente.routes';
 import clienteSeguimientoRoutes from '../interface/routes/cliente-seguimiento.routes';
+import atencionRoutes from '../interface/routes/atencion.routes';
 import tasacionRoutes from '../interface/routes/tasacion.routes';
 import vehiculoInteresRoutes from '../interface/routes/vehiculo-interes.routes';
 import vehiculoPrecioRoutes from '../interface/routes/vehiculo-precio.routes';
+import precioMinimoRoutes from '../interface/routes/precio-minimo.routes';
 import proveedorRoutes from '../interface/routes/proveedor.routes';
 import searchRoutes from '../interface/routes/search.routes';
 import vehiculoRoutes from '../interface/routes/vehiculo.routes';
@@ -75,6 +77,12 @@ router.use('/roles', rolRoutes);
 // CRM
 router.use('/clientes', clienteRoutes);
 router.use('/cliente-seguimientos', clienteSeguimientoRoutes);
+// Atención presencial (el módulo del vendedor: apertura, relevamiento, sugerencias
+// y cierre de la visita). SIN authorize a nivel de montaje: el gating es POR RUTA
+// dentro del router, porque conviven dos audiencias — admin + vendedor para todo
+// el flujo del salón, y SÓLO admin para la reasignación de cartera, que le cambia
+// el dueño a un cliente de otro vendedor.
+router.use('/atenciones', atencionRoutes);
 router.use('/tasaciones', tasacionRoutes);
 router.use('/vehiculo-intereses', vehiculoInteresRoutes);
 router.use('/proveedores', proveedorRoutes);
@@ -86,6 +94,11 @@ router.use('/vehiculo-archivos', archivoRoutes);
 router.use('/vehiculo-movimientos', movimientoRoutes);
 router.use('/vehiculo-ingresos', ingresoRoutes);
 router.use('/vehiculo-precios', vehiculoPrecioRoutes);
+
+// Autorización del PRECIO MÍNIMO de venta. SIN authorize de montaje: el gating es
+// por-ruta (pedir es admin+vendedor, RESOLVER es admin puro), porque la resolución
+// es la única que destapa el número y no puede compartir guard con el pedido.
+router.use('/precio-minimo', precioMinimoRoutes);
 
 // Operaciones
 router.use('/reservas', reservaRoutes);

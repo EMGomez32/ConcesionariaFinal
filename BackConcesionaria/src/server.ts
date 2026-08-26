@@ -2,6 +2,7 @@ import app from './app';
 import config from './config';
 import logger from './utils/logger';
 import { iniciarWorkerIngestaEmail } from './infrastructure/integraciones/emailIngest';
+import { iniciarWorkerCierreAtenciones } from './infrastructure/atencion/cierreDiarioWorker';
 import { iniciarWorkerEnvioWhatsapp } from './infrastructure/whatsapp/envioWorker';
 import { iniciarWorkerMercadoLibre } from './infrastructure/mercadolibre/meliSyncWorker';
 import { iniciarCuentasActivas } from './application/services/whatsappManager';
@@ -20,6 +21,13 @@ const server = app.listen(config.port, () => {
             logger.warn('INTEGRACIONES_SECRET_KEY no está seteada: los secretos de integraciones se guardan EN CLARO (los protege sólo la RLS). Generar con openssl rand -hex 32.');
         }
         iniciarWorkerIngestaEmail();
+
+        // Cierre de fin de día del módulo del vendedor: pasada la hora de corte
+        // (ATENCION_CIERRE_HORA, 21 h por defecto) cierra por sistema las atenciones
+        // que quedaron abiertas y las marca `cerradaAutomaticamente`, que es de
+        // donde la campanita saca la alerta "dejaste N sin cerrar". Idempotente:
+        // sólo toca las que siguen en `abierta` y no escribe ninguna notificación.
+        iniciarWorkerCierreAtenciones();
 
         // Cola de salida de WhatsApp: despacha los mensajes pendientes con el
         // espaciado anti-ban (reemplaza a BullMQ; AUTENZA no tiene Redis).

@@ -9,6 +9,31 @@ import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import prisma from '../../infrastructure/database/prisma';
 import { Col, sendCsv } from '../../utils/csv';
+import { actorTieneRol } from '../../infrastructure/security/roles';
+
+/**
+ * Recorte de los importes del caso para quien no gestiona postventa.
+ *
+ * `montoFacturado` es la venta del trabajo y `items[].monto` es lo que se le pagó
+ * al proveedor por hacerlo: la resta de los dos ES el margen de postventa, el
+ * mismo que `/reportes/postventa` acaba de cerrarle al vendedor. `GET
+ * /postventa-casos` y `/:id` quedan abiertos a propósito —el vendedor da de alta
+ * reclamos de sus clientes y tiene que poder seguirlos— pero salen sin la plata.
+ *
+ * admin + postventa ven los importes; el resto ve el caso completo salvo esos dos
+ * campos.
+ */
+function sanitizarImportesCaso<T>(caso: T, veImportes: boolean): T {
+    if (veImportes || !caso || typeof caso !== 'object') return caso;
+    const { montoFacturado, items, ...resto } = caso as any;
+    void montoFacturado;
+    return {
+        ...resto,
+        items: Array.isArray(items)
+            ? items.map(({ monto, ...item }: any) => { void monto; return item; })
+            : items,
+    } as T;
+}
 
 const repository = new PrismaPostventaCasoRepository();
 const getCasosUC = new GetCasos(repository);
@@ -21,8 +46,9 @@ export class PostventaCasoController {
     static async getAll(req: Request, res: Response, next: NextFunction) {
         try {
             const { limit, page, sortBy, sortOrder, ...filters } = req.query;
-            const result = await getCasosUC.execute(filters, { limit, page, sortBy, sortOrder } as any);
-            res.json(result);
+            const result: any = await getCasosUC.execute(filters, { limit, page, sortBy, sortOrder } as any);
+            const veImportes = actorTieneRol('admin', 'postventa');
+            res.json({ ...result, results: (result.results ?? []).map((c: any) => sanitizarImportesCaso(c, veImportes)) });
         } catch (error) {
             next(error);
         }
@@ -34,6 +60,7 @@ export class PostventaCasoController {
     static async exportCsv(req: Request, res: Response, next: NextFunction) {
         try {
             const CAP = 5000;
+            const veImportes = actorTieneRol('admin', 'postventa');
             const { limit, page, sortBy, sortOrder, ...filters } = req.query;
             void limit; void page; void sortBy; void sortOrder;
             const result: any = await getCasosUC.execute(
@@ -59,7 +86,11 @@ export class PostventaCasoController {
                 { key: 'turno', header: 'Turno' },
                 { key: 'hora', header: 'Hora turno' },
                 { key: 'cierre', header: 'Cierre' },
-                { key: 'facturado', header: 'Facturado' },
+                // La columna de plata sólo se emite para quien puede verla en
+                // pantalla: un export que la lleve siempre convierte el recorte de
+                // `sanitizarImportesCaso` en decorativo (la ruta es
+                // admin+postventa+vendedor).
+                ...(veImportes ? [{ key: 'facturado', header: 'Facturado' } as Col] : []),
                 { key: 'service', header: 'Próximo service' },
             ];
 
@@ -88,7 +119,7 @@ export class PostventaCasoController {
         try {
             const id = parseInt(req.params.id as string, 10);
             const result = await getCasoByIdUC.execute(id);
-            res.json(result);
+            res.json(sanitizarImportesCaso(result, actorTieneRol('admin', 'postventa')));
         } catch (error) {
             next(error);
         }

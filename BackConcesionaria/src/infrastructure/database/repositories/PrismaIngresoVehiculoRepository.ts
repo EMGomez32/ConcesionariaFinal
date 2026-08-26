@@ -7,7 +7,7 @@ import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../security/tenantGuard';
-import { VEHICULO_PUBLICO } from '../proyecciones';
+import { PROVEEDOR_PUBLICO, USUARIO_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
 
 export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<IngresoVehiculo>> {
@@ -26,8 +26,8 @@ export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoReposito
                 vehiculo: { select: VEHICULO_PUBLICO },
                 sucursal: true,
                 clienteOrigen: true,
-                proveedorOrigen: true,
-                registradoPor: { select: { nombre: true, email: true } }
+                proveedorOrigen: { select: PROVEEDOR_PUBLICO },
+                registradoPor: { select: USUARIO_PUBLICO }
             }
         });
 
@@ -49,8 +49,8 @@ export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoReposito
                 vehiculo: { select: VEHICULO_PUBLICO },
                 sucursal: true,
                 clienteOrigen: true,
-                proveedorOrigen: true,
-                registradoPor: { select: { nombre: true, email: true } }
+                proveedorOrigen: { select: PROVEEDOR_PUBLICO },
+                registradoPor: { select: USUARIO_PUBLICO }
             }
         });
         return i ? this.mapToEntity(i) : null;

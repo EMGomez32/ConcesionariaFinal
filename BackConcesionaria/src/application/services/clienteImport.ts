@@ -1,6 +1,7 @@
 import { OrigenLead } from '@prisma/client';
 import prisma from '../../infrastructure/database/prisma';
 import { buscarClientePorContacto } from './consultaIngest';
+import { normalizarTelefono } from '../../domain/services/telefono';
 
 /**
  * Import masivo de clientes (carga de cartera) — POST /clientes/import.
@@ -12,8 +13,9 @@ import { buscarClientePorContacto } from './consultaIngest';
  *  - Validación FINA por fila (el Zod del body es laxo a propósito): una fila
  *    mala se reporta en `errores` con su índice 0-based dentro del lote y NO
  *    aborta a las demás. Por eso tampoco hay transacción global.
- *  - Dedupe por teléfono/email dentro del tenant (buscarClientePorContacto, el
- *    mismo camino que las consultas). Si el cliente existe:
+ *  - Dedupe por teléfono (normalizado) → DNI → email dentro del tenant
+ *    (buscarClientePorContacto, el mismo camino que las consultas). Si el
+ *    cliente existe:
  *      · actualizarExistentes=true → completar SOLO los campos vacíos/null del
  *        existente (nunca pisar datos cargados) → 'actualizado' si algo cambió,
  *        'salteado' si no había nada para completar.
@@ -111,7 +113,10 @@ export async function importarClientes(filas: FilaImport[], opciones: OpcionesIm
             const observaciones = limpiar(fila.observaciones);
             const origenLead = (origenFila as OrigenLead | null) ?? origenDefault;
 
-            const existente = await buscarClientePorContacto(telefono, email);
+            // Dedupe TELÉFONO → DNI → EMAIL: la fila del import sí trae DNI, así
+            // que una cartera vieja que se re-importa con los teléfonos escritos
+            // de otra forma cae igual sobre la ficha que ya existe.
+            const existente = await buscarClientePorContacto({ telefono, dni, email });
 
             if (existente) {
                 if (!opciones.actualizarExistentes) {
@@ -120,12 +125,23 @@ export async function importarClientes(filas: FilaImport[], opciones: OpcionesIm
                 }
                 // Completar SOLO lo vacío/null del existente — nunca pisar datos.
                 const data: Record<string, unknown> = {};
-                if (!limpiar(existente.telefono) && telefono) data.telefono = telefono;
+                // La forma canónica acompaña SIEMPRE al teléfono: si se completa el
+                // texto y la columna queda vieja (o en null), el índice del dedupe
+                // afirma un número que no es el de este cliente.
+                if (!limpiar(existente.telefono) && telefono) {
+                    data.telefono = telefono;
+                    data.telefonoNormalizado = normalizarTelefono(telefono);
+                }
                 if (!limpiar(existente.email) && email) data.email = email;
                 if (!limpiar(existente.dni) && dni) data.dni = dni;
                 if (!limpiar(existente.observaciones) && observaciones) data.observaciones = observaciones;
                 if (existente.origenLead == null && origenFila) data.origenLead = origenFila as OrigenLead;
-                if (existente.vendedorAsignadoId == null && fila.vendedorAsignadoId != null) data.vendedorAsignadoId = fila.vendedorAsignadoId;
+                if (existente.vendedorAsignadoId == null && fila.vendedorAsignadoId != null) {
+                    data.vendedorAsignadoId = fila.vendedorAsignadoId;
+                    // La fecha va con la asignación: es contra ella que se mide la
+                    // retención mientras no haya un contacto real posterior.
+                    data.vendedorAsignadoEn = new Date();
+                }
 
                 if (Object.keys(data).length === 0) {
                     resultado.salteados++;
@@ -141,6 +157,7 @@ export async function importarClientes(filas: FilaImport[], opciones: OpcionesIm
                     // concesionariaId lo inyecta la extensión desde el contexto.
                     nombre,
                     telefono,
+                    telefonoNormalizado: normalizarTelefono(telefono),
                     email,
                     dni,
                     observaciones,
@@ -148,6 +165,10 @@ export async function importarClientes(filas: FilaImport[], opciones: OpcionesIm
                     estadoLead: opciones.estadoInicial,
                     // SIN round-robin: carga de cartera, no consulta entrante.
                     vendedorAsignadoId: fila.vendedorAsignadoId ?? null,
+                    // Un import ASIGNA cartera, no registra un contacto: el reloj
+                    // de la retención arranca en la fecha de la asignación, no en
+                    // una "última interacción" que nunca existió.
+                    vendedorAsignadoEn: fila.vendedorAsignadoId != null ? new Date() : null,
                 } as never,
             });
             resultado.creados++;

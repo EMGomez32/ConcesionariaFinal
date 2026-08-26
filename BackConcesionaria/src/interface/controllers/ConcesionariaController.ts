@@ -7,6 +7,7 @@ import { UpdateConcesionaria } from '../../application/use-cases/concesionarias/
 import { DeleteConcesionaria } from '../../application/use-cases/concesionarias/DeleteConcesionaria';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
+import { invalidarConfigCartera } from '../../application/services/carteraCliente';
 import { storage } from '../../infrastructure/storage/LocalStorageAdapter';
 import { sniffImageType } from '../middlewares/upload.middleware';
 import { BaseException, NotFoundException } from '../../domain/exceptions/BaseException';
@@ -74,7 +75,12 @@ export class ConcesionariaController {
                 'colorPrimario', 'colorSecundario', 'pdfPie', 'sitioWeb',
                 // Datos fiscales del emisor (AFIP). afipEntorno NO se expone acá:
                 // queda en 'mock' hasta que el Corte 2 sume la carga del certificado.
-                'razonSocial', 'condicionIva', 'puntoVenta'];
+                'razonSocial', 'condicionIva', 'puntoVenta',
+                // Módulo del vendedor: plazo de retención de la cartera y quién puede
+                // tasar la permuta. Sin estos dos nombres acá, el PATCH los acepta por
+                // Zod y el controller los descarta en silencio — la pantalla de Ajustes
+                // guardaría "bien" y el valor nunca cambiaría.
+                'diasRetencionCliente', 'tasacionSoloTasador'];
             const data: Record<string, any> = {};
             for (const campo of CAMPOS) {
                 if (req.body?.[campo] !== undefined) {
@@ -85,6 +91,10 @@ export class ConcesionariaController {
                 throw new BaseException(400, 'El nombre no puede quedar vacío', 'VALIDATION_ERROR');
             }
             const result = await updateConcesionariaUC.execute(cid, data);
+            // El recorte de cartera cachea `diasRetencionCliente` 60s: sin esta
+            // invalidación, cambiar el plazo en Ajustes no se ve hasta el minuto
+            // siguiente y parece que no guardó.
+            invalidarConfigCartera(cid);
             await audit({
                 entidad: 'Concesionaria',
                 accion: 'update',

@@ -22,6 +22,7 @@ import {
     Inbox,
     MessageCircle,
     ShoppingBag,
+    UserRoundCheck,
     // BadgeCheck, // Billing deshabilitado temporalmente (ver ítem comentado abajo)
     BarChart3,
 } from 'lucide-react';
@@ -71,12 +72,23 @@ export const NAV_SECTIONS: NavSection[] = [
             { label: 'Ingresos', path: '/ingresos', icon: LogIn, keywords: ['compras', 'recepcion'] },
             { label: 'Movimientos', path: '/movimientos', icon: ArrowLeftRight, keywords: ['traslados'] },
             { label: 'Reservas', path: '/reservas', icon: Bookmark, keywords: ['señas', 'reservar'] },
-            { label: 'Gastos Unidades', path: '/gastos', icon: DollarSign, keywords: ['gastos vehículos'] },
+            // Criterio de aceptación 7: `gasto.monto` es el costo de preparación de la
+            // unidad. El backend cerró `GET /gastos` a admin; el nav lo espeja para que
+            // el vendedor no vea un ítem que sólo lo lleva a un 403.
+            { label: 'Gastos Unidades', path: '/gastos', icon: DollarSign, keywords: ['gastos vehículos'], roles: ['admin', 'super_admin'] },
         ],
     },
     {
         title: 'Operaciones',
         items: [
+            // Primero de la sección a propósito: es la puerta de entrada del
+            // vendedor. Cuando entra alguien al salón, la visita se abre acá, y
+            // todo lo demás (cliente, presupuesto, reserva) cuelga de esa visita.
+            // SIN super_admin, a diferencia de sus vecinos: la atención presencial la
+            // abre un usuario DEL salón (el vendedorId es una FK a un usuario del
+            // tenant), y el backend le contesta 400 SIN_CONCESIONARIA a la cuenta de
+            // plataforma. Ofrecerle el ítem era mandarlo a una pantalla que no puede usar.
+            { label: 'Atenciones', path: '/atenciones', icon: UserRoundCheck, keywords: ['atencion', 'atención', 'visita', 'mostrador', 'salón', 'salon', 'presencial', 'recepción', 'recepcion', 'cliente en el salón', 'test drive', 'permuta'], roles: ['admin', 'vendedor'] },
             { label: 'Consultas', path: '/consultas', icon: Inbox, keywords: ['leads', 'consultas', 'deruedas', 'instagram'], roles: ['admin', 'super_admin', 'vendedor'] },
             // "WhatsApp" quedó corto: la bandeja ahora es multi-canal (WhatsApp,
             // DM de Instagram y Messenger, comentarios de IG y de Facebook). Se
@@ -88,7 +100,10 @@ export const NAV_SECTIONS: NavSection[] = [
             { label: 'Clientes', path: '/clientes', icon: Users, keywords: ['compradores', 'leads'] },
             { label: 'Seguimientos', path: '/seguimientos', icon: CalendarClock, keywords: ['crm', 'contactos', 'agenda', 'próximo contacto', 'llamar'], roles: ['admin', 'super_admin', 'vendedor'] },
             { label: 'Tasaciones', path: '/tasaciones', icon: Gauge, keywords: ['tasación', 'valuación', 'usado', 'permuta', 'cotizar auto'], roles: ['admin', 'super_admin', 'vendedor'] },
-            { label: 'Proveedores', path: '/proveedores', icon: Truck, keywords: ['suppliers'] },
+            // "El vendedor NO VE: … proveedor". El PADRÓN sigue disponible por API para el
+            // formulario de movimientos (mandar una unidad al taller), pero la pantalla —que
+            // entra a la ficha, con vehículos comprados y montos pagados— es admin+postventa.
+            { label: 'Proveedores', path: '/proveedores', icon: Truck, keywords: ['suppliers'], roles: ['admin', 'super_admin', 'postventa'] },
             { label: 'Presupuestos', path: '/presupuestos', icon: FileText, keywords: ['cotización', 'quote'] },
             { label: 'Ventas', path: '/ventas', icon: BadgeDollarSign, keywords: ['vender'] },
         ],
@@ -98,7 +113,8 @@ export const NAV_SECTIONS: NavSection[] = [
         items: [
             { label: 'Financiación', path: '/financiaciones', icon: Wallet, keywords: ['cuotas', 'préstamos'] },
             { label: 'Fin. Externa', path: '/solicitudes', icon: CreditCard, keywords: ['banco', 'solicitudes'] },
-            { label: 'Gastos Fijos', path: '/gastos-fijos', icon: FileText, keywords: ['operativos'] },
+            // Estructura de costos operativos del tenant: `GET /gastos-fijos` es admin.
+            { label: 'Gastos Fijos', path: '/gastos-fijos', icon: FileText, keywords: ['operativos'], roles: ['admin', 'super_admin'] },
             { label: 'Postventa', path: '/postventa', icon: Wrench, keywords: ['reclamos', 'service'] },
             { label: 'Reportes', path: '/reportes', icon: BarChart3, keywords: ['informes', 'analytics', 'ventas', 'caja', 'mora', 'rentabilidad'] },
         ],

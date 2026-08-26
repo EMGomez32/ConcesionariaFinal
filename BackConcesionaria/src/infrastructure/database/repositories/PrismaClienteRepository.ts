@@ -2,6 +2,8 @@ import { IClienteRepository } from '../../../domain/repositories/IClienteReposit
 import { Cliente } from '../../../domain/entities/Cliente';
 import prisma from '../prisma';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { conFiltroCartera } from '../../../application/services/carteraCliente';
+import { normalizarTelefono } from '../../../domain/services/telefono';
 
 export class PrismaClienteRepository implements IClienteRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Cliente>> {
@@ -60,8 +62,16 @@ export class PrismaClienteRepository implements IClienteRepository {
             whereClause.vendedorAsignadoId = Number(filter.vendedorAsignadoId);
         }
 
+        // RECORTE DE CARTERA (criterio de aceptación 7 / "el vendedor no ve clientes
+        // que no tenga asignados"). Va ACÁ y no en el controller a propósito: por
+        // este findAll pasan el listado, el export CSV y cualquier caso de uso que
+        // liste clientes, y un recorte en el controller lo tendría que repetir cada
+        // uno. El día que alguien agregue un consumidor nuevo, entra recortado.
+        // Para admin/super_admin devuelve el where sin tocar.
+        const whereScoped = await conFiltroCartera(whereClause);
+
         const results = await prisma.cliente.findMany({
-            where: whereClause,
+            where: whereScoped,
             take: limit,
             skip: (page - 1) * limit,
             orderBy: { [sortBy as string]: sortOrder },
@@ -76,7 +86,10 @@ export class PrismaClienteRepository implements IClienteRepository {
             }
         });
 
-        const total = await prisma.cliente.count({ where: whereClause });
+        // El count usa el MISMO where recortado: si contara sobre el where amplio,
+        // el vendedor vería "mostrando 20 de 4230" y el total ya le estaría contando
+        // la cartera ajena.
+        const total = await prisma.cliente.count({ where: whereScoped });
 
         return {
             results: results.map(this.mapToEntity),
@@ -115,6 +128,26 @@ export class PrismaClienteRepository implements IClienteRepository {
             if (data[campo] !== undefined) {
                 payload[campo] = data[campo] === '' ? null : data[campo];
             }
+        }
+        /*
+         * `vendedorAsignadoEn` NO está en la whitelist a propósito: no es un campo
+         * del formulario, es una marca de auditoría que estampa el CASO DE USO
+         * cuando comprueba que la asignación cambió y que quien la cambia puede
+         * hacerlo (ver UpdateCliente). Aceptarla del body dejaría al cliente
+         * elegir la fecha desde cuándo "es" de un vendedor, que es justamente el
+         * dato con el que se mide la retención.
+         */
+        if (data.vendedorAsignadoEn instanceof Date) {
+            payload.vendedorAsignadoEn = data.vendedorAsignadoEn;
+        }
+        /*
+         * La forma canónica del teléfono se DERIVA, nunca se acepta del body: es
+         * criterio de comparación del dedupe, no un dato que el usuario cargue.
+         * Si el teléfono cambia y esto no se recalcula, la columna (y su índice)
+         * quedan afirmando el número viejo del cliente.
+         */
+        if (payload.telefono !== undefined) {
+            payload.telefonoNormalizado = normalizarTelefono(payload.telefono);
         }
         return payload;
     }
@@ -175,6 +208,11 @@ export class PrismaClienteRepository implements IClienteRepository {
             // No entra en `pickEditable`: la marca la pone la ingesta de la
             // consulta simulada, no el body de un PUT.
             c.origenSimulado === true,
+            c.apellido ?? null,
+            c.consentimientoContacto === true,
+            c.consentimientoEn ?? null,
+            c.vendedorAsignadoEn ?? null,
+            c.ultimaInteraccionEn ?? null,
         );
     }
 }

@@ -95,6 +95,10 @@ export class PrismaConcesionariaRepository implements IConcesionariaRepository {
             c.pdfPie ?? null,
             c.sitioWeb ?? null,
             c.limiteUsuarios ?? null,
+            // Defaults del contrato si la fila viene de un camino que no los trae
+            // (un `select` parcial): 30 días y el vendedor puede tasar.
+            c.diasRetencionCliente ?? 30,
+            Boolean(c.tasacionSoloTasador),
             c.createdAt,
             c.updatedAt,
             c.deletedAt,

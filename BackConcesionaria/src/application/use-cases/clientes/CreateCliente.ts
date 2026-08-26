@@ -13,6 +13,11 @@ export class CreateCliente {
         // (anti FK cross-tenant: la RLS valida la fila del cliente, no sus FKs).
         const tenantId = resolveTenantDestino(data?.concesionariaId);
         await assertMismoTenant('usuario', data?.vendedorAsignadoId, tenantId);
-        return this.clienteRepository.create(data);
+        // La fecha de asignación se estampa acá, no llega del body: es contra ella
+        // que se mide la retención mientras no haya un contacto real posterior.
+        // Sin esto, una ficha creada a mano con vendedor nacía sin reloj y caía al
+        // pozo común de todos los vendedores del tenant desde el minuto cero.
+        const vendedorAsignadoEn = data?.vendedorAsignadoId ? new Date() : undefined;
+        return this.clienteRepository.create({ ...data, vendedorAsignadoEn });
     }
 }

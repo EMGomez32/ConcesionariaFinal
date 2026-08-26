@@ -1,6 +1,7 @@
 import { IPostventaItemRepository } from '../../../domain/repositories/IPostventaItemRepository';
 import { PostventaItem } from '../../../domain/entities/PostventaItem';
 import prisma from '../prisma';
+import { PROVEEDOR_PUBLICO } from '../proyecciones';
 
 // `concesionariaId` lo inyecta la extensión RLS desde el token: no se toma del body.
 const EDITABLE = ['casoId', 'fecha', 'descripcion', 'monto', 'proveedorId', 'comprobanteUrl'] as const;
@@ -20,7 +21,7 @@ export class PrismaPostventaItemRepository implements IPostventaItemRepository {
         const results = await prisma.postventaItem.findMany({
             where: { casoId },
             orderBy: { fecha: 'asc' },
-            include: { proveedor: true },
+            include: { proveedor: { select: PROVEEDOR_PUBLICO } },
         });
         return results.map(this.mapToEntity);
     }
@@ -28,7 +29,7 @@ export class PrismaPostventaItemRepository implements IPostventaItemRepository {
     async findById(id: number): Promise<PostventaItem | null> {
         const i = await prisma.postventaItem.findUnique({
             where: { id },
-            include: { proveedor: true },
+            include: { proveedor: { select: PROVEEDOR_PUBLICO } },
         });
         return i ? this.mapToEntity(i) : null;
     }
@@ -36,7 +37,7 @@ export class PrismaPostventaItemRepository implements IPostventaItemRepository {
     async create(data: any): Promise<PostventaItem> {
         const i = await prisma.postventaItem.create({
             data: pickEditable(data) as any,
-            include: { proveedor: true },
+            include: { proveedor: { select: PROVEEDOR_PUBLICO } },
         });
         return this.mapToEntity(i);
     }
