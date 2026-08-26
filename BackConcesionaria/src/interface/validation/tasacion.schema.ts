@@ -31,10 +31,31 @@ export const createTasacionSchema = z.object({
     clienteId: optionalFk,
     anio: optionalInt,
     km: optionalInt,
-    dominio: optionalStr,
+    // Dominio OBLIGATORIO: una tasación es la orden de revisar un auto físico, y sin
+    // la patente el tasador no sabe cuál. Se pide en el alta y en la permuta (mismo
+    // criterio en registrarPermutaSchema).
+    dominio: z.string({ error: 'El dominio es obligatorio' }).trim().min(1, 'El dominio es obligatorio'),
     condicion: condicionEnum.optional(),
     valorEstimado: optionalMonto,
     moneda: monedaEnum.optional(),
     observaciones: optionalStr,
     concesionariaId: optionalFk,
+});
+
+/**
+ * ACTUALIZAR una tasación EXISTENTE — es lo que usa el tasador para completar una
+ * que quedó "sin tasar" (nació de una permuta en el mostrador): la encuentra por
+ * el dominio y le pone el valor. Todo opcional: es un PATCH parcial. El `estado`
+ * y el `tasadorId` NO se aceptan del body: los deriva el use case (estado del
+ * valor, tasador del token). El valor sólo lo puede poner quien corresponda
+ * (`tasacionSoloTasador`), y eso también lo hace cumplir el use case.
+ */
+export const updateTasacionSchema = z.object({
+    valorEstimado: optionalMonto,
+    moneda: monedaEnum.optional(),
+    condicion: condicionEnum.optional(),
+    dominio: optionalStr,
+    anio: optionalInt,
+    km: optionalInt,
+    observaciones: optionalStr,
 });

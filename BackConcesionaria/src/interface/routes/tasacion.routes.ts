@@ -3,7 +3,7 @@ import { TasacionController } from '../controllers/TasacionController';
 import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
-import { createTasacionSchema } from '../validation/tasacion.schema';
+import { createTasacionSchema, updateTasacionSchema } from '../validation/tasacion.schema';
 
 const router = Router();
 
@@ -65,6 +65,27 @@ router.get('/:id/pdf', authorize('admin', 'vendedor'), ComprobanteController.tas
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
 router.post('/', authorize('admin', 'vendedor'), validateBody(createTasacionSchema), TasacionController.create);
+
+/**
+ * @openapi
+ * /tasaciones/{id}:
+ *   patch:
+ *     tags: [Tasaciones]
+ *     summary: Completar/actualizar una tasación (el tasador le pone el valor a una pendiente)
+ *     description: >-
+ *       Actualiza la MISMA tasación (no crea otra). Poner el valor es "tasar":
+ *       donde la concesionaria configuró `tasacionSoloTasador`, sólo admin puede.
+ *       El estado y el tasador los deriva el servidor. Solo admin/vendedor.
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     responses:
+ *       200: { description: Tasación actualizada }
+ *       400: { $ref: '#/components/responses/ValidationError' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { description: El valor lo carga el tasador (tasacionSoloTasador) }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updateTasacionSchema), TasacionController.update);
 
 /**
  * @openapi

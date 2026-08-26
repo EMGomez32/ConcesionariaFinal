@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Gauge, Plus, Search, FileDown, MessageCircle, Trash2, Car, User } from 'lucide-react';
+import { Gauge, Plus, Search, FileDown, MessageCircle, Trash2, Car, User, Coins } from 'lucide-react';
 import { tasacionesApi } from '../../api/tasaciones.api';
 import { clientesApi } from '../../api/clientes.api';
-import { CONDICION_MAP, CONDICIONES, type Tasacion, type CreateTasacionDto, type CondicionTasacion } from '../../types/tasacion.types';
+import { CONDICION_MAP, CONDICIONES, type Tasacion, type CreateTasacionDto, type UpdateTasacionDto, type CondicionTasacion } from '../../types/tasacion.types';
 import type { PaginatedResponse } from '../../types/api.types';
 import type { Cliente } from '../../types/cliente.types';
 import Badge from '../../components/ui/Badge';
@@ -48,6 +48,14 @@ const TasacionesPage = () => {
     const [form, setForm] = useState<CreateTasacionDto>(emptyForm());
     const [descargando, setDescargando] = useState<number | null>(null);
 
+    // "Tasar" una pendiente: el tasador le pone el valor a una que ya existe (nació
+    // de una permuta en el mostrador). NO crea otra — actualiza la misma.
+    const [tasarTarget, setTasarTarget] = useState<Tasacion | null>(null);
+    const [tasarDominio, setTasarDominio] = useState('');
+    const [tasarValor, setTasarValor] = useState('');
+    const [tasarMoneda, setTasarMoneda] = useState<'ARS' | 'USD'>('ARS');
+    const [tasarObs, setTasarObs] = useState('');
+
     const { data, isLoading } = useQuery<PaginatedResponse<Tasacion>>({
         queryKey: ['tasaciones', page, debouncedSearch],
         queryFn: () => tasacionesApi.getAll(debouncedSearch.trim() ? { search: debouncedSearch } : {}, { page, limit: 12 }) as unknown as Promise<PaginatedResponse<Tasacion>>,
@@ -82,6 +90,16 @@ const TasacionesPage = () => {
         onError: (e) => addToast(getErrorMessage(e, 'Error al registrar la tasación'), 'error'),
     });
 
+    const updateMut = useMutation({
+        mutationFn: ({ id, data }: { id: number; data: UpdateTasacionDto }) => tasacionesApi.update(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['tasaciones'] });
+            addToast('Tasación completada', 'success');
+            setTasarTarget(null);
+        },
+        onError: (e) => addToast(getErrorMessage(e, 'No se pudo completar la tasación'), 'error'),
+    });
+
     const deleteMut = useMutation({
         mutationFn: (id: number) => tasacionesApi.delete(id),
         onSuccess: () => {
@@ -91,9 +109,45 @@ const TasacionesPage = () => {
         onError: (e) => addToast(getErrorMessage(e, 'Error al eliminar la tasación'), 'error'),
     });
 
+    const abrirTasar = (t: Tasacion) => {
+        setTasarTarget(t);
+        setTasarDominio(t.dominio ?? '');
+        setTasarValor(t.valorEstimado != null ? String(t.valorEstimado) : '');
+        setTasarMoneda(t.moneda);
+        setTasarObs(t.observaciones ?? '');
+    };
+
+    const guardarTasar = () => {
+        if (!tasarTarget) return;
+        // Dominio: sin la patente el tasador no sabe qué auto revisar. Se exige acá
+        // también, porque una permuta vieja pudo quedar sin él.
+        if (!tasarDominio.trim()) {
+            addToast('El dominio es obligatorio para tasar', 'error');
+            return;
+        }
+        const valor = Number(tasarValor);
+        if (!tasarValor.trim() || !Number.isFinite(valor) || valor < 0) {
+            addToast('Poné un valor de tasación válido', 'error');
+            return;
+        }
+        updateMut.mutate({
+            id: tasarTarget.id,
+            data: {
+                dominio: tasarDominio.trim(),
+                valorEstimado: valor,
+                moneda: tasarMoneda,
+                observaciones: tasarObs.trim() || undefined,
+            },
+        });
+    };
+
     const handleCrear = () => {
         if (!form.marca.trim() || !form.modelo.trim()) {
             addToast('Marca y modelo son obligatorios', 'error');
+            return;
+        }
+        if (!form.dominio?.trim()) {
+            addToast('El dominio es obligatorio: sin la patente el tasador no sabe qué auto revisar', 'error');
             return;
         }
         const payload: CreateTasacionDto = {
@@ -199,6 +253,11 @@ const TasacionesPage = () => {
                                     {t.cliente && <div className="tas-cliente"><User size={13} /> {t.cliente.nombre}</div>}
                                     {t.observaciones && <p className="tas-obs">{t.observaciones}</p>}
                                     <div className="tas-actions">
+                                        {t.valorEstimado == null && (
+                                            <button className="btn btn-primary btn-sm" type="button" onClick={() => abrirTasar(t)}>
+                                                <Coins size={14} /> Tasar
+                                            </button>
+                                        )}
                                         <button className="btn btn-secondary btn-sm" type="button" disabled={descargando === t.id} onClick={() => handlePdf(t)}>
                                             <FileDown size={14} /> {descargando === t.id ? 'Generando…' : 'PDF'}
                                         </button>
@@ -250,7 +309,7 @@ const TasacionesPage = () => {
                         <Input dense label="Modelo *" value={form.modelo} onChange={(e) => set('modelo', e.target.value)} placeholder="Corolla" />
                         <Input dense label="Año" type="number" value={form.anio ?? ''} onChange={(e) => set('anio', e.target.value ? Number(e.target.value) : undefined)} placeholder="2018" />
                         <Input dense label="Kilómetros" type="number" value={form.km ?? ''} onChange={(e) => set('km', e.target.value ? Number(e.target.value) : undefined)} placeholder="85000" />
-                        <Input dense label="Dominio" value={form.dominio ?? ''} onChange={(e) => set('dominio', e.target.value)} placeholder="AB123CD" />
+                        <Input dense label="Dominio *" value={form.dominio ?? ''} onChange={(e) => set('dominio', e.target.value)} placeholder="AB123CD" />
                         <Select dense label="Condición" value={form.condicion} onChange={(e) => set('condicion', e.target.value as CondicionTasacion)}>
                             {CONDICIONES.map((k) => <option key={k} value={k}>{CONDICION_MAP[k].label}</option>)}
                         </Select>
@@ -262,6 +321,33 @@ const TasacionesPage = () => {
                     </div>
                     <div style={{ marginTop: '0.75rem' }}>
                         <Textarea dense label="Observaciones" rows={2} value={form.observaciones ?? ''} onChange={(e) => set('observaciones', e.target.value)} placeholder="Detalles del estado, detalles a reparar, etc." style={{ resize: 'vertical' }} />
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Tasar una pendiente: completa la MISMA tasación (no crea otra). */}
+            <Modal
+                isOpen={!!tasarTarget}
+                onClose={() => setTasarTarget(null)}
+                title="Tasar el usado"
+                subtitle={tasarTarget ? `${tasarTarget.marca} ${tasarTarget.modelo}${tasarTarget.anio ? ` · ${tasarTarget.anio}` : ''}${tasarTarget.cliente?.nombre ? ` — ${tasarTarget.cliente.nombre}` : ''}` : ''}
+                maxWidth="480px"
+                footer={<>
+                    <Button variant="secondary" onClick={() => setTasarTarget(null)}>Cancelar</Button>
+                    <Button variant="primary" onClick={guardarTasar} loading={updateMut.isPending} disabled={updateMut.isPending}>Guardar tasación</Button>
+                </>}
+            >
+                <div className="tas-form">
+                    <div className="tas-form-grid">
+                        <Input dense label="Dominio *" value={tasarDominio} onChange={(e) => setTasarDominio(e.target.value)} placeholder="AB123CD" />
+                        <Input dense label="Valor estimado *" type="number" value={tasarValor} onChange={(e) => setTasarValor(e.target.value)} placeholder="12000000" />
+                        <Select dense label="Moneda" value={tasarMoneda} onChange={(e) => setTasarMoneda(e.target.value as 'ARS' | 'USD')}>
+                            <option value="ARS">Pesos (ARS)</option>
+                            <option value="USD">Dólares (USD)</option>
+                        </Select>
+                    </div>
+                    <div style={{ marginTop: '0.75rem' }}>
+                        <Textarea dense label="Observaciones" rows={2} value={tasarObs} onChange={(e) => setTasarObs(e.target.value)} placeholder="Ajustes al valor, detalles a reparar, etc." style={{ resize: 'vertical' }} />
                     </div>
                 </div>
             </Modal>

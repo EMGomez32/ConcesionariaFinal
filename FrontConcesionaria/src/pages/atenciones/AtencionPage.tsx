@@ -244,6 +244,7 @@ const AtencionPage = () => {
     // Permuta (alta nueva; la ya cargada se muestra aparte).
     const [pMarca, setPMarca] = useState('');
     const [pModelo, setPModelo] = useState('');
+    const [pDominio, setPDominio] = useState('');
     const [pAnio, setPAnio] = useState('');
     const [pKm, setPKm] = useState('');
     const [pCondicion, setPCondicion] = useState<CondicionTasacion>('bueno');
@@ -359,6 +360,7 @@ const AtencionPage = () => {
             atencionesApi.registrarPermuta(atencionId, {
                 marca: pMarca.trim(),
                 modelo: pModelo.trim(),
+                dominio: pDominio.trim(),
                 anio: numOrUndef(pAnio),
                 km: numOrUndef(pKm),
                 condicion: pCondicion,
@@ -368,7 +370,7 @@ const AtencionPage = () => {
         networkMode: 'always',
         onSuccess: () => {
             addToast('Permuta cargada', 'success');
-            setPMarca(''); setPModelo(''); setPAnio(''); setPKm(''); setPValor('');
+            setPMarca(''); setPModelo(''); setPDominio(''); setPAnio(''); setPKm(''); setPValor('');
             qc.invalidateQueries({ queryKey: detalleKey });
         },
         onError: (e) => {
@@ -859,6 +861,9 @@ const AtencionPage = () => {
                                                 <div className="at-grid-4">
                                                     <Input dense label="Marca" placeholder="Del usado" value={pMarca} onChange={(e) => setPMarca(e.target.value)} disabled={soloLectura} />
                                                     <Input dense label="Modelo" value={pModelo} onChange={(e) => setPModelo(e.target.value)} disabled={soloLectura} />
+                                                    {/* Dominio OBLIGATORIO: la permuta se va a tasar y sin la patente el
+                                                        tasador no sabe qué auto revisar. */}
+                                                    <Input dense label="Dominio *" placeholder="AB123CD" value={pDominio} onChange={(e) => setPDominio(e.target.value)} disabled={soloLectura} />
                                                     <Input dense label="Año" type="number" inputMode="numeric" value={pAnio} onChange={(e) => setPAnio(e.target.value)} disabled={soloLectura} />
                                                     <Input dense label="Km" type="number" inputMode="numeric" value={pKm} onChange={(e) => setPKm(e.target.value)} disabled={soloLectura} />
                                                 </div>
@@ -883,7 +888,7 @@ const AtencionPage = () => {
                                                             variant="secondary"
                                                             type="button"
                                                             loading={guardarPermuta.isPending}
-                                                            disabled={soloLectura || !pMarca.trim() || !pModelo.trim()}
+                                                            disabled={soloLectura || !pMarca.trim() || !pModelo.trim() || !pDominio.trim()}
                                                             onClick={() => guardarPermuta.mutate(soloTasador)}
                                                         >
                                                             Cargar permuta

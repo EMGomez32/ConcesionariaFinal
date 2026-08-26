@@ -224,7 +224,10 @@ export const registrarPermutaSchema = z.object({
     modelo: z.string({ error: 'El modelo del usado es obligatorio' }).trim().min(1, 'El modelo del usado es obligatorio'),
     anio: enteroOpcional,
     km: enteroOpcional,
-    dominio: textoOpcional,
+    // Dominio OBLIGATORIO: la permuta se materializa como una Tasacion que después
+    // revisa el tasador, y sin la patente no sabe qué auto revisar. Mismo criterio
+    // que createTasacionSchema.
+    dominio: z.string({ error: 'El dominio del usado es obligatorio' }).trim().min(1, 'El dominio del usado es obligatorio'),
     condicion: condicionTasacionEnum.optional(),
     valorEstimado: montoOpcional,
     moneda: monedaEnum.optional(),
