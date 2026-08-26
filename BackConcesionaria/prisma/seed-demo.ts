@@ -28,10 +28,13 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(pool) } as any);
 const NOMBRE_DEMO = 'Automotores del Valle (DEMO)';
 // Llenar una concesionaria QUE YA EXISTE en vez de crear una nueva por nombre.
 const TENANT_OBJETIVO = process.env.SEED_DEMO_TENANT_ID ? Number(process.env.SEED_DEMO_TENANT_ID) : null;
-// Emails de los dos vendedores demo. Se puede pasar la lista para respetar la
-// convencion de un tenant que ya existe (p.ej. vendedor@demo.com).
-const VENDEDOR_EMAILS = (process.env.SEED_DEMO_VENDEDOR_EMAILS || 'vendedor@autosdelvalle.test,vendedor2@autosdelvalle.test')
-    .split(',').map((e) => e.trim()).filter(Boolean);
+// Dominio de los emails demo. Se pasa para respetar la convencion de un tenant
+// que ya existe (p.ej. demo.com -> admin@demo.com, vendedor@demo.com, ...).
+const EMAIL_DOMAIN = (process.env.SEED_DEMO_EMAIL_DOMAIN || 'autosdelvalle.test').trim();
+// Contrasena de TODAS las cuentas demo. Es conocida y compartida a proposito:
+// son cuentas de demostracion. Configurable para no dejar la del repo en una
+// instancia accesible desde afuera.
+const PASSWORD_DEMO = process.env.SEED_DEMO_PASSWORD || 'demo1234';
 // Pisar la contrasena de un usuario que YA existe es destructivo, asi que no
 // pasa por default: hay que pedirlo explicito.
 const RESET_PASS = process.env.SEED_DEMO_RESET_PASS === 'true';
@@ -41,6 +44,106 @@ let nombreCargado = NOMBRE_DEMO;
 const hoy = new Date();
 const diasAtras = (n: number) => new Date(hoy.getTime() - n * 86400000);
 const enDias = (n: number) => new Date(hoy.getTime() + n * 86400000);
+
+/**
+ * Crea (o repone) UN usuario demo con un rol.
+ *
+ * Centraliza los tres casos que aparecen al sembrar sobre una base que ya vive:
+ * el usuario no existe, existe sano, o existe pero está apagado — `activo=false`
+ * o con `deletedAt`. Los dos últimos se ven igual desde afuera (el login devuelve
+ * 401) y son la razón por la que este bloque no puede ser un simple `create`.
+ */
+async function asegurarUsuarioDemo(opts: {
+    email: string; nombre: string; rol: string; cid: number; sid?: number;
+}): Promise<any> {
+    const rol = await prisma.rol.findUnique({ where: { nombre: opts.rol as any } });
+    if (!rol) throw new Error(`Falta el rol ${opts.rol}: corré el bloque de roles primero.`);
+
+    const existente = await prisma.usuario.findFirst({ where: { email: opts.email } });
+    if (!existente) {
+        const creado = await prisma.usuario.create({
+            data: {
+                nombre: opts.nombre, email: opts.email,
+                passwordHash: await bcrypt.hash(PASSWORD_DEMO, 10),
+                concesionariaId: opts.cid, sucursalId: opts.sid,
+                roles: { create: { rolId: rol.id } },
+            },
+        });
+        console.log(`   ${opts.rol.padEnd(9)} creado:  ${opts.email}`);
+        return creado;
+    }
+
+    // El vínculo usuario-rol también tiene soft-delete, y el UNIQUE(usuario, rol)
+    // impide recrearlo: si está borrado hay que revivirlo, no insertarlo de nuevo.
+    const vinculo = await prisma.usuarioRol.findFirst({
+        where: { usuarioId: existente.id, rolId: rol.id },
+    });
+    if (!vinculo) {
+        await prisma.usuarioRol.create({ data: { usuarioId: existente.id, rolId: rol.id } });
+        console.log(`   ${opts.email}: se le agregó el rol ${opts.rol}`);
+    } else if (vinculo.deletedAt != null) {
+        await prisma.usuarioRol.update({ where: { id: vinculo.id }, data: { deletedAt: null } });
+        console.log(`   ${opts.email}: se revivió el rol ${opts.rol}`);
+    }
+
+    // `activo=false` y `deletedAt` son dos apagados distintos y hay que mirar los
+    // dos: una cuenta puede estar viva y desactivada, o activa y borrada. En
+    // producción aparecieron las dos formas.
+    const apagado = existente.deletedAt != null || !existente.activo;
+    if (RESET_PASS) {
+        await prisma.usuario.update({
+            where: { id: existente.id },
+            data: {
+                passwordHash: await bcrypt.hash(PASSWORD_DEMO, 10),
+                activo: true,
+                deletedAt: null,
+                concesionariaId: existente.concesionariaId ?? opts.cid,
+                sucursalId: existente.sucursalId ?? opts.sid,
+            },
+        });
+        console.log(
+            `   ${opts.rol.padEnd(9)} repuesto: ${opts.email}` +
+            (apagado ? ' (estaba apagado — se reactivó)' : ''),
+        );
+    } else if (apagado) {
+        console.log(
+            `   ⚠ ${opts.email}: existe pero está APAGADO (${existente.deletedAt ? 'borrado' : 'inactivo'}) ` +
+            '— NO va a poder entrar. Correr con SEED_DEMO_RESET_PASS=true para reactivarlo.',
+        );
+    } else {
+        console.log(`   ${opts.rol.padEnd(9)} ya existía: ${opts.email} (contraseña intacta)`);
+    }
+    return prisma.usuario.findUnique({ where: { id: existente.id } });
+}
+
+/**
+ * Una cuenta por rol, para poder mirar la app desde cada puesto.
+ *
+ * Son cuentas de DEMOSTRACIÓN: comparten una contraseña conocida. No van en una
+ * instancia con datos reales — para eso está el aviso del encabezado del archivo.
+ */
+async function seedUsuariosPorRol(cid: number, sid?: number) {
+    const def = [
+        { rol: 'admin', nombre: 'Admin Demo' },
+        { rol: 'vendedor', nombre: 'Sofía Ramírez' },
+        { rol: 'cobrador', nombre: 'Nadia Bustos' },
+        { rol: 'postventa', nombre: 'Hernán Villalba' },
+        { rol: 'lectura', nombre: 'Consulta Demo' },
+    ];
+    const creados: Record<string, any> = {};
+    for (const d of def) {
+        creados[d.rol] = await asegurarUsuarioDemo({
+            email: `${d.rol}@${EMAIL_DOMAIN}`, nombre: d.nombre, rol: d.rol, cid, sid,
+        });
+    }
+    // El SEGUNDO vendedor va aparte: no es "otro rol", es lo que hace visible la
+    // cartera. Sin dos vendedores no hay aviso de "este cliente es de otro" ni
+    // reasignación que mirar.
+    creados.vendedor2 = await asegurarUsuarioDemo({
+        email: `vendedor2@${EMAIL_DOMAIN}`, nombre: 'Martín Acuña', rol: 'vendedor', cid, sid,
+    });
+    return creados;
+}
 
 async function main() {
     await prisma.$executeRawUnsafe(`SELECT set_config('app.is_super_admin', 'true', false)`);
@@ -434,7 +537,10 @@ async function main() {
     console.log('✅ Datos demo cargados:');
     console.log(`   Concesionaria: ${nombreCargado}${TENANT_OBJETIVO ? ` (id ${TENANT_OBJETIVO})` : ''}`);
     if (!TENANT_OBJETIVO) console.log('   Login admin:    admin@autosdelvalle.test / demo1234');
-    console.log(`   Vendedores:     ${VENDEDOR_EMAILS.join(', ')}`);
+    console.log(`   Cuentas (contraseña ${PASSWORD_DEMO}):`);
+    for (const r of ['admin', 'vendedor', 'vendedor2', 'cobrador', 'postventa', 'lectura']) {
+        console.log(`     ${r.padEnd(10)} ${r}@${EMAIL_DOMAIN}`);
+    }
     console.log(`   ${vehiculos.length} vehículos, ${clientes.length} clientes, ${ventas.length} ventas, 1 financiación (2 cuotas en mora).`);
     console.log(`   ${financieras.length} financieras, ${solicitudesDef.length} solicitudes de financiación externa.`);
 }
@@ -452,72 +558,10 @@ async function seedModuloVendedor(cid: number) {
     const sucursal = await prisma.sucursal.findFirst({ where: { concesionariaId: cid } });
     const sid = sucursal?.id ?? undefined;
 
-    const rolVendedor = await prisma.rol.findUnique({ where: { nombre: 'vendedor' as any } });
-    if (!rolVendedor) throw new Error('Falta el rol vendedor: corré el bloque de roles primero.');
-
-    // DOS vendedores, no uno. Con uno solo no se puede mostrar la mitad de la
-    // lógica de cartera: el aviso de "este cliente lo atendió otro vendedor" y la
-    // reasignación que sólo autoriza un supervisor necesitan un segundo dueño.
-    const vendedoresDef = [
-        { nombre: 'Sofía Ramírez', email: VENDEDOR_EMAILS[0] },
-        { nombre: 'Martín Acuña', email: VENDEDOR_EMAILS[1] ?? 'vendedor2@autosdelvalle.test' },
-    ];
-    const vendedores = [];
-    for (const v of vendedoresDef) {
-        let u = await prisma.usuario.findFirst({ where: { email: v.email } });
-        if (u) {
-            // Ya existía — el caso normal al apuntar a un tenant real. Se le
-            // asegura el rol vendedor, pero la contraseña NO se pisa salvo que
-            // se pida: podría ser una cuenta que alguien usa de verdad.
-            const tieneRol = await prisma.usuarioRol.findFirst({
-                where: { usuarioId: u.id, rolId: rolVendedor.id },
-            });
-            if (!tieneRol) {
-                await prisma.usuarioRol.create({ data: { usuarioId: u.id, rolId: rolVendedor.id } });
-                console.log(`   ${v.email}: se le agregó el rol vendedor`);
-            }
-            // OJO con el soft-delete: `deletedAt` seteado significa que el login
-            // lo rechaza, por mas que la contrasena sea correcta y `activo` sea
-            // true. Reponer la clave y avisar "listo" sobre una cuenta borrada es
-            // un log que miente: el usuario despues no puede entrar y no sabe por que.
-            const borrado = u.deletedAt != null;
-            if (RESET_PASS) {
-                await prisma.usuario.update({
-                    where: { id: u.id },
-                    data: {
-                        passwordHash: await bcrypt.hash('demo1234', 10),
-                        activo: true,
-                        // Revivirlo sale del MISMO permiso explicito que pisar la
-                        // contrasena: SEED_DEMO_RESET_PASS ya es "me apropio de
-                        // esta cuenta". Sin el flag no se toca.
-                        deletedAt: null,
-                    },
-                });
-                console.log(
-                    `   ${v.email}: contraseña repuesta a demo1234` +
-                    (borrado ? ' + estaba BORRADO (soft-delete) y se revivió' : ''),
-                );
-            } else if (borrado) {
-                console.log(
-                    `   ⚠ ${v.email}: existe pero está BORRADO (soft-delete) — NO va a poder ` +
-                    'entrar. Correr con SEED_DEMO_RESET_PASS=true para revivirlo.',
-                );
-            } else {
-                console.log(`   ${v.email}: ya existía, contraseña intacta (SEED_DEMO_RESET_PASS=true para reponerla)`);
-            }
-        } else {
-            u = await prisma.usuario.create({
-                data: {
-                    nombre: v.nombre, email: v.email,
-                    passwordHash: await bcrypt.hash('demo1234', 10),
-                    concesionariaId: cid, sucursalId: sid,
-                    roles: { create: { rolId: rolVendedor.id } },
-                },
-            });
-            console.log(`   vendedor creado: ${v.email} / demo1234`);
-        }
-        vendedores.push(u);
-    }
+    // Una cuenta por rol (y el segundo vendedor). Es lo que permite mirar la app
+    // desde cada puesto en vez de deducir los permisos leyendo el codigo.
+    const usuarios = await seedUsuariosPorRol(cid, sid);
+    const vendedores = [usuarios.vendedor, usuarios.vendedor2];
 
     // El plazo de retención de cartera lo define cada concesionaria. 21 días en
     // vez del default de 30 para que la demo tenga un número propio y se vea que
