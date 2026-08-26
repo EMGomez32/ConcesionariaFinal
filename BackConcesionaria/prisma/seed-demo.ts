@@ -26,6 +26,18 @@ const pool = new Pool({ connectionString, max: 1 });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) } as any);
 
 const NOMBRE_DEMO = 'Automotores del Valle (DEMO)';
+// Llenar una concesionaria QUE YA EXISTE en vez de crear una nueva por nombre.
+const TENANT_OBJETIVO = process.env.SEED_DEMO_TENANT_ID ? Number(process.env.SEED_DEMO_TENANT_ID) : null;
+// Emails de los dos vendedores demo. Se puede pasar la lista para respetar la
+// convencion de un tenant que ya existe (p.ej. vendedor@demo.com).
+const VENDEDOR_EMAILS = (process.env.SEED_DEMO_VENDEDOR_EMAILS || 'vendedor@autosdelvalle.test,vendedor2@autosdelvalle.test')
+    .split(',').map((e) => e.trim()).filter(Boolean);
+// Pisar la contrasena de un usuario que YA existe es destructivo, asi que no
+// pasa por default: hay que pedirlo explicito.
+const RESET_PASS = process.env.SEED_DEMO_RESET_PASS === 'true';
+// Nombre de la concesionaria que se termino cargando: con SEED_DEMO_TENANT_ID
+// no es NOMBRE_DEMO, y el resumen final tiene que decir la verdad.
+let nombreCargado = NOMBRE_DEMO;
 const hoy = new Date();
 const diasAtras = (n: number) => new Date(hoy.getTime() - n * 86400000);
 const enDias = (n: number) => new Date(hoy.getTime() + n * 86400000);
@@ -33,17 +45,8 @@ const enDias = (n: number) => new Date(hoy.getTime() + n * 86400000);
 async function main() {
     await prisma.$executeRawUnsafe(`SELECT set_config('app.is_super_admin', 'true', false)`);
 
-    // La demo puede existir de ANTES del modulo del vendedor. En ese caso no se
-    // rehace nada de lo viejo (seria duplicar ventas, cuotas y casos), pero si se
-    // completa lo que falte: el bloque de atencion presencial es idempotente aparte.
-    const existente = await prisma.concesionaria.findFirst({ where: { nombre: NOMBRE_DEMO } });
-    if (existente) {
-        console.log('La concesionaria demo ya existe: se completa solo lo que falte.');
-        await seedModuloVendedor(existente.id);
-        return;
-    }
-
-    // Roles y plan (idempotente).
+    // Roles y plan (idempotente). Van primero porque los necesitan los DOS
+    // caminos de abajo, no sólo el que crea la concesionaria.
     for (const nombre of ['admin', 'vendedor', 'cobrador', 'postventa', 'lectura', 'super_admin']) {
         await prisma.rol.upsert({ where: { nombre: nombre as any }, update: {}, create: { nombre: nombre as any } });
     }
@@ -52,26 +55,75 @@ async function main() {
         create: { nombre: 'Free', precio: 0, moneda: 'ARS', maxUsuarios: 5, maxSucursales: 1, maxVehiculos: 50 },
     });
 
-    const conc = await prisma.concesionaria.create({
-        data: {
-            nombre: NOMBRE_DEMO, cuit: '30-71234567-9', email: 'demo@autosdelvalle.test',
-            subscription: { create: { planId: plan.id, status: 'active' } },
-            sucursales: { create: { nombre: 'Casa Central', direccion: 'Av. San Martín 1250, Mendoza' } },
-        },
-        include: { sucursales: true },
-    });
-    const cid = conc.id;
-    const sid = conc.sucursales[0].id;
+    let cid: number;
+    let sid: number;
+    let admin: any;
 
-    const adminRol = await prisma.rol.findUnique({ where: { nombre: 'admin' } });
-    const admin = await prisma.usuario.create({
-        data: {
-            nombre: 'Admin Demo', email: 'admin@autosdelvalle.test',
-            passwordHash: await bcrypt.hash('demo1234', 10),
-            concesionariaId: cid, sucursalId: sid,
-            roles: { create: { rolId: adminRol!.id } },
-        },
-    });
+    if (TENANT_OBJETIVO) {
+        // ── Modo "llenar una concesionaria QUE YA EXISTE" ─────────────────────
+        // Para eso está `SEED_DEMO_TENANT_ID`. En la instancia de producción la
+        // concesionaria de demostración ya está creada, con otro nombre y con
+        // usuarios reales colgando, así que crear una nueva por nombre dejaría
+        // dos demos y llenaría la equivocada.
+        const t = await prisma.concesionaria.findUnique({ where: { id: TENANT_OBJETIVO } });
+        if (!t) throw new Error(`No existe la concesionaria ${TENANT_OBJETIVO}.`);
+        const suc = await prisma.sucursal.findFirst({
+            where: { concesionariaId: t.id }, orderBy: { id: 'asc' },
+        });
+        if (!suc) throw new Error(`La concesionaria ${t.id} no tiene sucursales: creá una antes.`);
+        // Usuario al que se le atribuyen los registros demo (vendedor de las
+        // ventas, cobrador de la financiación, quien registró los movimientos).
+        // Se exige ACTIVO a propósito: colgar las ventas de una cuenta
+        // deshabilitada deja las fichas mostrando a alguien que no puede entrar.
+        const ref = await prisma.usuario.findFirst({
+            where: { concesionariaId: t.id, activo: true, deletedAt: null },
+            orderBy: { id: 'asc' },
+        });
+        if (!ref) throw new Error(`La concesionaria ${t.id} no tiene usuarios activos.`);
+        cid = t.id; sid = suc.id; admin = ref; nombreCargado = t.nombre;
+        console.log(`Llenando la concesionaria ${cid} — ${t.nombre}`);
+        console.log(`   sucursal ${sid}, registros a nombre de ${ref.email}`);
+
+        // Si ya tiene stock, el bloque grande ya corrió alguna vez: repetirlo
+        // duplicaría vehículos y ventas. Sólo se completa el módulo nuevo.
+        if (await prisma.vehiculo.count({ where: { concesionariaId: cid } }) > 0) {
+            console.log('   ya tiene vehículos: se completa sólo el módulo del vendedor.');
+            await seedModuloVendedor(cid);
+            return;
+        }
+    } else {
+        // ── Modo "crear la concesionaria demo por nombre" (el de siempre) ─────
+        // La demo puede existir de ANTES del módulo del vendedor. En ese caso no
+        // se rehace nada de lo viejo (sería duplicar ventas, cuotas y casos de
+        // postventa), pero sí se completa lo que falte.
+        const existente = await prisma.concesionaria.findFirst({ where: { nombre: NOMBRE_DEMO } });
+        if (existente) {
+            console.log('La concesionaria demo ya existe: se completa sólo lo que falte.');
+            await seedModuloVendedor(existente.id);
+            return;
+        }
+
+        const conc = await prisma.concesionaria.create({
+            data: {
+                nombre: NOMBRE_DEMO, cuit: '30-71234567-9', email: 'demo@autosdelvalle.test',
+                subscription: { create: { planId: plan.id, status: 'active' } },
+                sucursales: { create: { nombre: 'Casa Central', direccion: 'Av. San Martín 1250, Mendoza' } },
+            },
+            include: { sucursales: true },
+        });
+        cid = conc.id;
+        sid = conc.sucursales[0].id;
+
+        const adminRol = await prisma.rol.findUnique({ where: { nombre: 'admin' } });
+        admin = await prisma.usuario.create({
+            data: {
+                nombre: 'Admin Demo', email: 'admin@autosdelvalle.test',
+                passwordHash: await bcrypt.hash('demo1234', 10),
+                concesionariaId: cid, sucursalId: sid,
+                roles: { create: { rolId: adminRol!.id } },
+            },
+        });
+    }
 
     // Vehículos (mezcla de monedas y estados).
     const vehData = [
@@ -380,10 +432,9 @@ async function main() {
     await seedModuloVendedor(cid);
 
     console.log('✅ Datos demo cargados:');
-    console.log(`   Concesionaria: ${NOMBRE_DEMO}`);
-    console.log('   Login admin:    admin@autosdelvalle.test / demo1234');
-    console.log('   Login vendedor: vendedor@autosdelvalle.test / demo1234');
-    console.log('   (2do vendedor:  vendedor2@autosdelvalle.test / demo1234)');
+    console.log(`   Concesionaria: ${nombreCargado}${TENANT_OBJETIVO ? ` (id ${TENANT_OBJETIVO})` : ''}`);
+    if (!TENANT_OBJETIVO) console.log('   Login admin:    admin@autosdelvalle.test / demo1234');
+    console.log(`   Vendedores:     ${VENDEDOR_EMAILS.join(', ')}`);
     console.log(`   ${vehiculos.length} vehículos, ${clientes.length} clientes, ${ventas.length} ventas, 1 financiación (2 cuotas en mora).`);
     console.log(`   ${financieras.length} financieras, ${solicitudesDef.length} solicitudes de financiación externa.`);
 }
@@ -408,13 +459,33 @@ async function seedModuloVendedor(cid: number) {
     // lógica de cartera: el aviso de "este cliente lo atendió otro vendedor" y la
     // reasignación que sólo autoriza un supervisor necesitan un segundo dueño.
     const vendedoresDef = [
-        { nombre: 'Sofía Ramírez', email: 'vendedor@autosdelvalle.test' },
-        { nombre: 'Martín Acuña', email: 'vendedor2@autosdelvalle.test' },
+        { nombre: 'Sofía Ramírez', email: VENDEDOR_EMAILS[0] },
+        { nombre: 'Martín Acuña', email: VENDEDOR_EMAILS[1] ?? 'vendedor2@autosdelvalle.test' },
     ];
     const vendedores = [];
     for (const v of vendedoresDef) {
         let u = await prisma.usuario.findFirst({ where: { email: v.email } });
-        if (!u) {
+        if (u) {
+            // Ya existía — el caso normal al apuntar a un tenant real. Se le
+            // asegura el rol vendedor, pero la contraseña NO se pisa salvo que
+            // se pida: podría ser una cuenta que alguien usa de verdad.
+            const tieneRol = await prisma.usuarioRol.findFirst({
+                where: { usuarioId: u.id, rolId: rolVendedor.id },
+            });
+            if (!tieneRol) {
+                await prisma.usuarioRol.create({ data: { usuarioId: u.id, rolId: rolVendedor.id } });
+                console.log(`   ${v.email}: se le agregó el rol vendedor`);
+            }
+            if (RESET_PASS) {
+                await prisma.usuario.update({
+                    where: { id: u.id },
+                    data: { passwordHash: await bcrypt.hash('demo1234', 10), activo: true },
+                });
+                console.log(`   ${v.email}: contraseña repuesta a demo1234`);
+            } else {
+                console.log(`   ${v.email}: ya existía, contraseña intacta (SEED_DEMO_RESET_PASS=true para reponerla)`);
+            }
+        } else {
             u = await prisma.usuario.create({
                 data: {
                     nombre: v.nombre, email: v.email,
