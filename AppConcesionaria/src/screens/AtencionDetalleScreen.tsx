@@ -246,6 +246,13 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
                             Se filtró con {money(busq.relevamiento.presupuestoQueMandaElFiltro, moneda)} ({busq.relevamiento.origenDelFiltro}).
                         </T.Muted>
                     ) : null}
+                    {/* Autos de otra moneda convertidos al blue para poder compararlos.
+                        El equivalente en pesos es orientativo; el precio real sigue en su moneda. */}
+                    {busq.relevamiento.cotizacion && (busq.relevamiento.unidadesConvertidas ?? 0) > 0 ? (
+                        <T.Muted style={{ marginTop: spacing.xs, color: colors.accent3 }}>
+                            {busq.relevamiento.unidadesConvertidas} en otra moneda, convertida{(busq.relevamiento.unidadesConvertidas ?? 0) === 1 ? '' : 's'} al dólar {busq.relevamiento.cotizacion.tipo} (${busq.relevamiento.cotizacion.valor.toLocaleString('es-AR')}) para compararlas.
+                        </T.Muted>
+                    ) : null}
 
                     {busq.exacta ? (
                         <UnidadRow u={busq.exacta} tag={busq.exactaPorEncimaDelMaximo ? 'sobre el máximo' : 'la buscada'}
@@ -388,6 +395,13 @@ function UnidadRow({ u, motivo, tag, onRegistrar }: { u: UnidadSugerida; motivo?
             <View style={{ flex: 1 }}>
                 <T.Body style={{ fontWeight: '700' }}>{tituloUnidad(u)}</T.Body>
                 <T.Muted>{u.dominio ? `${u.dominio} · ` : ''}{money(u.precioLista, u.moneda)}{u.kmIngreso != null ? ` · ${Number(u.kmIngreso).toLocaleString('es-AR')} km` : ''}</T.Muted>
+                {/* Precio equivalente en la moneda del presupuesto (blue). Sólo cuando el
+                    auto está en otra moneda y se lo convirtió. ORIENTATIVO: el de arriba es el real. */}
+                {u.precioEnMonedaPresupuesto != null && u.monedaPresupuesto ? (
+                    <T.Muted style={{ marginTop: 2, color: colors.accent3, fontWeight: '600' }}>
+                        ≈ {money(u.precioEnMonedaPresupuesto, u.monedaPresupuesto)} · {u.cotizacionAplicada?.tipo ?? 'blue'}
+                    </T.Muted>
+                ) : null}
                 {motivo ? <T.Muted style={{ marginTop: 2, color: colors.accent3 }}>{motivo}</T.Muted> : null}
                 <View style={{ marginTop: spacing.xs }}><Badge label={tag} tone={tag === 'sugerida' ? 'violet' : tag === 'sobre el máximo' ? 'warning' : 'accent'} /></View>
             </View>
