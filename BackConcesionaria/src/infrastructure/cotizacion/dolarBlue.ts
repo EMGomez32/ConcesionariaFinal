@@ -1,5 +1,3 @@
-import logger from '../../utils/logger';
-
 /**
  * Cotización del dólar BLUE (informal), que es como se manejan los usados en
  * Argentina. Se usa SÓLO para que un presupuesto en pesos pueda competir contra
@@ -10,6 +8,11 @@ import logger from '../../utils/logger';
  * Fuente: dolarapi.com (pública, gratis, sin API-key). Se cachea en memoria con
  * un TTL corto: no tiene sentido pegarle a la API en cada búsqueda, y el blue no
  * se mueve tanto en minutos.
+ *
+ * A propósito NO importa `logger`/`config`/`env`: esos validan variables de
+ * entorno y hacen `process.exit(1)` en el import, lo que voltearía a los unit
+ * tests que importan la conversión pura de este módulo. Por eso el único log
+ * (best-effort) va por `console.warn`.
  */
 
 const FUENTE = 'https://dolarapi.com/v1/dolares/blue';
@@ -35,7 +38,7 @@ async function traer(): Promise<Cotizacion | null> {
         if (!Number.isFinite(valor) || valor <= 0) throw new Error('venta inválida');
         return { valor, actualizado: j.fechaActualizacion ?? '', tipo: 'blue' };
     } catch (e) {
-        logger.warn(`[cotizacion] no se pudo traer el dólar blue: ${(e as Error).message}`);
+        console.warn(`[cotizacion] no se pudo traer el dólar blue: ${(e as Error).message}`);
         return null;
     }
 }
