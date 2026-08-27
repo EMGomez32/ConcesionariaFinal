@@ -51,6 +51,28 @@ src/
 
 Primera rebanada funcionando de punta a punta: **login → Mostrador (lista de atenciones + alertas) → detalle**. Las secciones Clientes, Vehículos y Tasaciones están como *placeholder* y se van completando por iteración (alcance objetivo: rol vendedor + rol tasador completos).
 
+## Generar un APK para instalar y probar (Android)
+
+Un APK real se comporta como la app instalada (y en nativo **no hay CORS**, así que habla con prod sin vueltas). Se compila en la nube con **EAS Build** — no hace falta Android SDK ni Mac en tu PC.
+
+Requisito: una cuenta de Expo (gratis en [expo.dev](https://expo.dev)).
+
+```bash
+cd AppConcesionaria
+npx eas-cli@latest login          # tu cuenta de Expo (si no tenés, creala en expo.dev)
+npx eas-cli@latest build -p android --profile preview
+```
+
+- La primera vez te pregunta si querés crear/enlazar un proyecto EAS: aceptá (escribe `extra.eas.projectId` en `app.json`).
+- Compila en los servidores de Expo (~10-15 min la primera) y al terminar te da una **URL para descargar el `.apk`**.
+- Abrí esa URL **desde el teléfono**, descargá el APK e instalalo (Android te va a pedir habilitar "instalar apps de orígenes desconocidos" para tu navegador).
+
+El perfil `preview` (en `eas.json`) produce un **APK** instalable directo; el perfil `production` produce un **AAB** para subir a Google Play.
+
+### Alternativa sin compilar: Expo Go
+Si querés probar YA sin esperar el build: `npm start`, y escaneá el QR con **Expo Go** (Play Store / App Store). Corre el mismo código contra prod.
+
 ## Publicar a las tiendas (más adelante)
 
-Con [EAS Build](https://docs.expo.dev/build/introduction/): `npx eas build -p android` / `-p ios`. Requiere cuenta de Expo y, para iOS, credenciales de Apple Developer (la compilación es en la nube, no necesita Mac).
+Android: `npx eas-cli@latest build -p android --profile production` (AAB) → subir a Google Play.
+iOS: `npx eas-cli@latest build -p ios` — requiere credenciales de Apple Developer (la compilación es en la nube, no necesita Mac).
