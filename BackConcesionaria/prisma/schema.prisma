@@ -2005,6 +2005,11 @@ enum RolNombre {
   postventa
   lectura
   super_admin
+  // Tasador: puesto acotado que SÓLO valúa usados. No abre visitas, no vende, no
+  // ve stock ni cartera — su mundo es el módulo de Tasaciones. Habilita que la
+  // concesionaria active `tasacionSoloTasador` y tenga a quién delegarle la
+  // tasación sin darle poderes de admin.
+  tasador
 }
 
 enum TipoVehiculo {

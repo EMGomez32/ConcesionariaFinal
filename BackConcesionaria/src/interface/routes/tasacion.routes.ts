@@ -22,7 +22,7 @@ const router = Router();
  *       200: { description: Listado paginado de tasaciones }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/', authorize('admin', 'vendedor'), TasacionController.getAll);
+router.get('/', authorize('admin', 'vendedor', 'tasador'), TasacionController.getAll);
 
 /**
  * @openapi
@@ -36,7 +36,7 @@ router.get('/', authorize('admin', 'vendedor'), TasacionController.getAll);
  *       200: { description: Tasación }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id', authorize('admin', 'vendedor'), TasacionController.getById);
+router.get('/:id', authorize('admin', 'vendedor', 'tasador'), TasacionController.getById);
 
 /**
  * @openapi
@@ -50,7 +50,7 @@ router.get('/:id', authorize('admin', 'vendedor'), TasacionController.getById);
  *       200: { description: PDF de la tasación, content: { application/pdf: {} } }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id/pdf', authorize('admin', 'vendedor'), ComprobanteController.tasacionPdf);
+router.get('/:id/pdf', authorize('admin', 'vendedor', 'tasador'), ComprobanteController.tasacionPdf);
 
 /**
  * @openapi
@@ -64,7 +64,7 @@ router.get('/:id/pdf', authorize('admin', 'vendedor'), ComprobanteController.tas
  *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.post('/', authorize('admin', 'vendedor'), validateBody(createTasacionSchema), TasacionController.create);
+router.post('/', authorize('admin', 'vendedor', 'tasador'), validateBody(createTasacionSchema), TasacionController.create);
 
 /**
  * @openapi
@@ -85,7 +85,7 @@ router.post('/', authorize('admin', 'vendedor'), validateBody(createTasacionSche
  *       403: { description: El valor lo carga el tasador (tasacionSoloTasador) }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updateTasacionSchema), TasacionController.update);
+router.patch('/:id', authorize('admin', 'vendedor', 'tasador'), validateBody(updateTasacionSchema), TasacionController.update);
 
 /**
  * @openapi

@@ -99,7 +99,7 @@ export const NAV_SECTIONS: NavSection[] = [
             { label: 'Mercado Libre', path: '/mercadolibre/preguntas', icon: ShoppingBag, crumb: 'Preguntas', keywords: ['mercadolibre', 'meli', 'ml', 'preguntas', 'publicaciones', 'publicar'], roles: ['admin', 'super_admin', 'vendedor'] },
             { label: 'Clientes', path: '/clientes', icon: Users, keywords: ['compradores', 'leads'] },
             { label: 'Seguimientos', path: '/seguimientos', icon: CalendarClock, keywords: ['crm', 'contactos', 'agenda', 'próximo contacto', 'llamar'], roles: ['admin', 'super_admin', 'vendedor'] },
-            { label: 'Tasaciones', path: '/tasaciones', icon: Gauge, keywords: ['tasación', 'valuación', 'usado', 'permuta', 'cotizar auto'], roles: ['admin', 'super_admin', 'vendedor'] },
+            { label: 'Tasaciones', path: '/tasaciones', icon: Gauge, keywords: ['tasación', 'valuación', 'usado', 'permuta', 'cotizar auto'], roles: ['admin', 'super_admin', 'vendedor', 'tasador'] },
             // "El vendedor NO VE: … proveedor". El PADRÓN sigue disponible por API para el
             // formulario de movimientos (mandar una unidad al taller), pero la pantalla —que
             // entra a la ficha, con vehículos comprados y montos pagados— es admin+postventa.

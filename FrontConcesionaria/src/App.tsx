@@ -16,6 +16,7 @@ const AppLayout = lazy(() => import('./components/layout/AppLayout'));
 const ProtectedRoute = lazy(() => import('./components/layout/ProtectedRoute'));
 const RequireRole = lazy(() => import('./components/auth/RequireRole'));
 const RedirectSuperAdmin = lazy(() => import('./components/auth/RedirectSuperAdmin'));
+const RedirectTasador = lazy(() => import('./components/auth/RedirectTasador'));
 
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'));
@@ -96,6 +97,8 @@ function App() {
             {/* Shell operativo del tenant. RedirectSuperAdmin manda al super_admin
                 a /plataforma: nunca ve estas pantallas. */}
             <Route element={<RedirectSuperAdmin />}>
+            {/* El tasador puro queda confinado a /tasaciones (ver RedirectTasador). */}
+            <Route element={<RedirectTasador />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<DashboardPage />} />
 
@@ -173,6 +176,7 @@ function App() {
               {/* <Route path="/billing" element={<RequireRole allowedRoles={['admin', 'super_admin']}><BillingPage /></RequireRole>} /> */}
               <Route path="/configuracion" element={<ConfiguracionPage />} />
               <Route path="/403" element={<ForbiddenPage />} />
+            </Route>
             </Route>
             </Route>
           </Route>

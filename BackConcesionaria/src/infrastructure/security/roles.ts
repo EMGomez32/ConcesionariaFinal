@@ -25,6 +25,16 @@ export function actorEsSuperAdmin(): boolean {
     return (context.getUser()?.roles ?? []).includes('super_admin');
 }
 
+/**
+ * El tasador: puesto acotado que valúa usados. Su ÚNICA potestad de más respecto
+ * de un vendedor es poner el valor de una tasación aunque la casa tenga
+ * `tasacionSoloTasador` activo. No agranda ninguna otra superficie: el resto lo
+ * cierran las rutas (no está en sus `authorize`).
+ */
+export function actorEsTasador(): boolean {
+    return (context.getUser()?.roles ?? []).includes('tasador');
+}
+
 /** ¿El actor tiene alguno de estos roles? `super_admin` pasa siempre, igual que en `authorize`. */
 export function actorTieneRol(...roles: string[]): boolean {
     const propios = context.getUser()?.roles ?? [];

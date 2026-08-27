@@ -129,6 +129,7 @@ async function seedUsuariosPorRol(cid: number, sid?: number) {
         { rol: 'cobrador', nombre: 'Nadia Bustos' },
         { rol: 'postventa', nombre: 'Hernán Villalba' },
         { rol: 'lectura', nombre: 'Consulta Demo' },
+        { rol: 'tasador', nombre: 'Diego Peralta' },
     ];
     const creados: Record<string, any> = {};
     for (const d of def) {
@@ -150,7 +151,7 @@ async function main() {
 
     // Roles y plan (idempotente). Van primero porque los necesitan los DOS
     // caminos de abajo, no sólo el que crea la concesionaria.
-    for (const nombre of ['admin', 'vendedor', 'cobrador', 'postventa', 'lectura', 'super_admin']) {
+    for (const nombre of ['admin', 'vendedor', 'cobrador', 'postventa', 'lectura', 'super_admin', 'tasador']) {
         await prisma.rol.upsert({ where: { nombre: nombre as any }, update: {}, create: { nombre: nombre as any } });
     }
     const plan = await prisma.plan.upsert({
