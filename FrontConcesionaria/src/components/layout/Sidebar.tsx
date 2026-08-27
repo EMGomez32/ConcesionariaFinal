@@ -21,6 +21,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
   const toggle = useSidebarStore((s) => s.toggle);
   const isSuperAdmin = user?.roles.includes('super_admin');
   const isAdmin = isSuperAdmin || user?.roles.includes('admin');
+  // El tasador PURO (sólo tasa) no ve el resto del sistema: los ítems sin `roles`
+  // se muestran a todos, así que acá se recorta a mano su única sección.
+  const esTasadorPuro =
+    !!user?.roles.includes('tasador') && !isAdmin && !user?.roles.includes('vendedor');
 
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''} ${collapsed ? 'is-collapsed' : ''}`}>
@@ -42,6 +46,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
       <nav className="sidebar-nav" aria-label="Navegación principal" data-tour="sidebar-nav">
         {sections.map((section) => {
           const visibleItems = section.items.filter((it) =>
+            // Tasador puro: sólo Tasaciones, nada más.
+            (!esTasadorPuro || it.path === '/tasaciones') &&
             (!it.superAdminOnly || isSuperAdmin) &&
             (!it.adminOnly || isAdmin) &&
             (!it.roles || it.roles.some((r) => user?.roles.includes(r))),

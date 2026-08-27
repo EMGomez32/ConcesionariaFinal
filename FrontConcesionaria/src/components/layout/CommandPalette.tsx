@@ -60,6 +60,8 @@ const CommandPalette = ({ sections = NAV_SECTIONS, enableGlobalSearch = true }: 
     const { user } = useAuthStore();
     const isSuper = user?.roles?.includes('super_admin');
     const isAdmin = isSuper || user?.roles?.includes('admin');
+    // Tasador puro: el buscador rápido tampoco lo saca de Tasaciones.
+    const esTasadorPuro = !!user?.roles?.includes('tasador') && !isAdmin && !user?.roles?.includes('vendedor');
 
     const [query, setQuery] = useState('');
     const [activeIdx, setActiveIdx] = useState(0);
@@ -74,6 +76,7 @@ const CommandPalette = ({ sections = NAV_SECTIONS, enableGlobalSearch = true }: 
         const flat: ScoredItem[] = [];
         for (const sec of sections) {
             for (const item of sec.items) {
+                if (esTasadorPuro && item.path !== '/tasaciones') continue;
                 if (item.superAdminOnly && !isSuper) continue;
                 if (item.adminOnly && !isAdmin) continue;
                 // Misma regla que el Sidebar: ítems con `roles` sólo para esos roles.
@@ -84,7 +87,7 @@ const CommandPalette = ({ sections = NAV_SECTIONS, enableGlobalSearch = true }: 
             }
         }
         return flat.sort((a, b) => b.score - a.score);
-    }, [query, isSuper, isAdmin, user, sections]);
+    }, [query, isSuper, isAdmin, esTasadorPuro, user, sections]);
 
     // Filas unificadas: primero los resultados de datos (lo que el usuario suele
     // buscar), después las páginas del nav. Todo navega con ↑↓ + Enter.

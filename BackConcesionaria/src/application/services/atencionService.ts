@@ -19,7 +19,7 @@ import {
     ventanaDeAlerta,
 } from '../../infrastructure/atencion/cierreDiarioWorker';
 import { context } from '../../infrastructure/security/context';
-import { actorEsAdmin, actorEsSuperAdmin, actorEsVendedorPuro, actorUserId } from '../../infrastructure/security/roles';
+import { actorEsAdmin, actorEsSuperAdmin, actorEsTasador, actorEsVendedorPuro, actorUserId } from '../../infrastructure/security/roles';
 import { assertMismoTenant } from '../../infrastructure/security/tenantGuard';
 import { audit } from '../../infrastructure/security/audit';
 import {
@@ -1204,7 +1204,8 @@ export async function registrarPermuta(
     exigirDatosParaInteresReal(atencion.cliente, 'permuta');
 
     const { tasacionSoloTasador } = await configCartera();
-    const puedeTasar = actorEsAdmin() || !tasacionSoloTasador;
+    // El tasador siempre puede tasar; el vendedor sólo si la casa no lo restringe.
+    const puedeTasar = actorEsAdmin() || actorEsTasador() || !tasacionSoloTasador;
     if (datos.valorEstimado !== undefined && !puedeTasar) throw new TasacionSoloTasadorError();
     // Rechazar una permuta es una decisión de la casa, no del vendedor que la trae.
     if (datos.estado === 'rechazada' && !actorEsAdmin()) {
