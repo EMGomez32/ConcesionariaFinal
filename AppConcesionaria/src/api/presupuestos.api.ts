@@ -39,11 +39,23 @@ export interface Presupuesto {
 
 interface Paginado<T> { results: T[]; page: number; limit: number; totalPages: number; totalResults: number }
 
+export interface CreatePresupuestoDto {
+    sucursalId: number;
+    clienteId: number;
+    vendedorId: number;
+    moneda: 'ARS' | 'USD';
+    fechaCreacion: string;
+    validoHasta?: string | null;
+    observaciones?: string | null;
+    items?: { vehiculoId: number; precioLista: number; descuento?: number; precioFinal: number }[];
+}
+
 export const presupuestosApi = {
     list: (search?: string, page = 1, limit = 30) =>
         api.get('/presupuestos', { params: { ...(search ? { search } : {}), page, limit } })
             .then((r) => r.data as Paginado<Presupuesto>),
     getById: (id: number) => api.get(`/presupuestos/${id}`).then((r) => r.data as Presupuesto),
+    create: (data: CreatePresupuestoDto) => api.post('/presupuestos', data).then((r) => r.data as Presupuesto),
 };
 
 export const ESTADO_PRESUPUESTO_LABEL: Record<EstadoPresupuesto, { label: string; tone: BadgeTone }> = {

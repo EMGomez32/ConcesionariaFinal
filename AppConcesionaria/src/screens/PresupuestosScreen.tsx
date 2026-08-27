@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { colors, spacing, fonts, fontSize } from '../theme/tokens';
-import { Card, Badge, Field, T } from '../components/ui';
+import { Card, Badge, Field, GhostButton, T } from '../components/ui';
 import { num } from '../api/atenciones.api';
 import { presupuestosApi, Presupuesto, ESTADO_PRESUPUESTO_LABEL } from '../api/presupuestos.api';
 
@@ -30,7 +30,8 @@ export default function PresupuestosScreen({ navigation }: any) {
                     <View>
                         <T.H1 style={{ marginTop: spacing.sm }}>Presupuestos</T.H1>
                         <T.Muted style={{ marginBottom: spacing.lg, marginTop: spacing.xs }}>Las cotizaciones para el cliente.</T.Muted>
-                        <Field placeholder="Buscar por número o cliente…" value={search} onChangeText={setSearch} />
+                        <GhostButton title="+  Nuevo presupuesto" onPress={() => navigation.navigate('PresupuestoNuevo')} />
+                        <Field placeholder="Buscar por número o cliente…" value={search} onChangeText={setSearch} style={{ marginTop: spacing.md }} />
                     </View>
                 }
                 renderItem={({ item }) => {

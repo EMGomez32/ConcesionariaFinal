@@ -15,8 +15,10 @@ import VehiculosScreen from '../screens/VehiculosScreen';
 import TasacionesScreen from '../screens/TasacionesScreen';
 import VentasScreen from '../screens/VentasScreen';
 import VentaDetalleScreen from '../screens/VentaDetalleScreen';
+import VentaNuevaScreen from '../screens/VentaNuevaScreen';
 import PresupuestosScreen from '../screens/PresupuestosScreen';
 import PresupuestoDetalleScreen from '../screens/PresupuestoDetalleScreen';
+import PresupuestoNuevoScreen from '../screens/PresupuestoNuevoScreen';
 import MasScreen from '../screens/MasScreen';
 
 const navTheme = {
@@ -62,8 +64,10 @@ function MasStack() {
             <Stack.Screen name="Mas" component={MasScreen} options={{ title: 'Más' }} />
             <Stack.Screen name="Presupuestos" component={PresupuestosScreen} />
             <Stack.Screen name="PresupuestoDetalle" component={PresupuestoDetalleScreen} options={{ title: 'Presupuesto' }} />
+            <Stack.Screen name="PresupuestoNuevo" component={PresupuestoNuevoScreen} options={{ title: 'Nuevo presupuesto' }} />
             <Stack.Screen name="Ventas" component={VentasScreen} />
             <Stack.Screen name="VentaDetalle" component={VentaDetalleScreen} options={{ title: 'Venta' }} />
+            <Stack.Screen name="VentaNueva" component={VentaNuevaScreen} options={{ title: 'Registrar venta' }} />
             <Stack.Screen name="Tasaciones" component={TasacionesScreen} />
         </Stack.Navigator>
     );

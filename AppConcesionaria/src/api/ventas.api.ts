@@ -33,12 +33,27 @@ export interface Venta {
 
 interface Paginado<T> { results: T[]; page: number; limit: number; totalPages: number; totalResults: number }
 
+export interface CreateVentaDto {
+    sucursalId: number;
+    clienteId: number;
+    vendedorId: number;
+    vehiculoId: number;
+    precioVenta: number;
+    moneda: 'ARS' | 'USD';
+    formaPago: FormaPagoVenta;
+    fechaVenta: string;
+    observaciones?: string;
+}
+
 export const ventasApi = {
     list: (search?: string, page = 1, limit = 30) =>
         api.get('/ventas', { params: { ...(search ? { search } : {}), page, limit } })
             .then((r) => r.data as Paginado<Venta>),
     getById: (id: number) => api.get(`/ventas/${id}`).then((r) => r.data as Venta),
+    create: (data: CreateVentaDto) => api.post('/ventas', data).then((r) => r.data as Venta),
 };
+
+export const FORMAS_PAGO: FormaPagoVenta[] = ['contado', 'transferencia', 'financiado_propio', 'financiado_externo', 'canje_mas_diferencia', 'mixto'];
 
 export const FORMA_PAGO_LABEL: Record<FormaPagoVenta, string> = {
     contado: 'Contado', transferencia: 'Transferencia', financiado_propio: 'Financiación propia',

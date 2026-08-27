@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } f
 import { useQuery } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
 import { colors, spacing, radius, fonts, fontSize } from '../theme/tokens';
-import { Card, Badge, Field, T } from '../components/ui';
+import { Card, Badge, Field, GhostButton, T } from '../components/ui';
 import { num } from '../api/atenciones.api';
 import { ventasApi, Venta, ESTADO_ENTREGA_LABEL } from '../api/ventas.api';
 
@@ -32,7 +32,8 @@ export default function VentasScreen({ navigation }: any) {
                     <View>
                         <T.H1 style={{ marginTop: spacing.sm }}>Ventas</T.H1>
                         <T.Muted style={{ marginBottom: spacing.lg, marginTop: spacing.xs }}>Las operaciones cerradas.</T.Muted>
-                        <Field placeholder="Buscar por cliente, vehículo o dominio…" value={search} onChangeText={setSearch} />
+                        <GhostButton title="+  Registrar venta" onPress={() => navigation.navigate('VentaNueva')} />
+                        <Field placeholder="Buscar por cliente, vehículo o dominio…" value={search} onChangeText={setSearch} style={{ marginTop: spacing.md }} />
                     </View>
                 }
                 renderItem={({ item }) => {
