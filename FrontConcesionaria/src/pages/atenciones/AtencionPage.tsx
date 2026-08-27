@@ -574,6 +574,18 @@ const AtencionPage = () => {
                     </div>
                     <div className="at-unidad-precio">
                         <span className="at-precio">{money(u.precioLista, u.moneda)}</span>
+                        {/* Precio equivalente en la moneda del presupuesto (blue). Sólo
+                            aparece cuando el auto está en otra moneda y se lo convirtió
+                            para poder compararlo. Es ORIENTATIVO: el de arriba es el real. */}
+                        {u.precioEnMonedaPresupuesto != null && u.monedaPresupuesto && (
+                            <span
+                                className="at-precio-equiv"
+                                title={`Equivalente orientativo al dólar ${u.cotizacionAplicada?.tipo ?? 'blue'}${u.cotizacionAplicada ? ` ($${u.cotizacionAplicada.valor.toLocaleString('es-AR')})` : ''}. El precio real es ${money(u.precioLista, u.moneda)}.`}
+                            >
+                                ≈ {money(u.precioEnMonedaPresupuesto, u.monedaPresupuesto)}
+                                <span className="at-precio-equiv-tag">{u.cotizacionAplicada?.tipo ?? 'blue'}</span>
+                            </span>
+                        )}
                         {porEncima && (
                             <span className="at-sobre-max" title="Supera el máximo que relevó el cliente. El motivo dice por cuánto.">
                                 <TrendingUp size={12} /> sobre el máximo
@@ -1015,6 +1027,20 @@ const AtencionPage = () => {
                                 {resultado.notaFinanciamiento && (
                                     <p className="at-filtro-nota is-suave"><CircleAlert size={14} /> <span>{resultado.notaFinanciamiento}</span></p>
                                 )}
+                                {/* Cuando entraron autos de otra moneda por cotización, se dice
+                                    con qué valor se convirtieron: el equivalente en pesos es una
+                                    referencia, no el precio real (que sigue en su moneda). */}
+                                {resultado.relevamiento.cotizacion && resultado.relevamiento.unidadesConvertidas > 0 && (
+                                    <p className="at-filtro-nota is-suave">
+                                        <CircleAlert size={14} />
+                                        <span>
+                                            {resultado.relevamiento.unidadesConvertidas} unidad{resultado.relevamiento.unidadesConvertidas === 1 ? '' : 'es'} en otra moneda
+                                            {' '}se convirt{resultado.relevamiento.unidadesConvertidas === 1 ? 'ió' : 'ieron'} a {resultado.relevamiento.monedaDelRelevamiento} al
+                                            {' '}dólar {resultado.relevamiento.cotizacion.tipo} (${resultado.relevamiento.cotizacion.valor.toLocaleString('es-AR')}) para poder compararlas.
+                                            {' '}El equivalente es orientativo; el precio real de cada auto sigue en su moneda.
+                                        </span>
+                                    </p>
+                                )}
 
                                 <div className="at-bloque">
                                     <h3 className="at-bloque-title">
@@ -1373,6 +1399,8 @@ const AtencionPage = () => {
                 .at-unidad-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
                 .at-unidad-precio { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; flex-shrink: 0; }
                 .at-precio { font-size: var(--text-xl); font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+                .at-precio-equiv { display: inline-flex; align-items: center; gap: 0.35rem; font-size: var(--text-xs); font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+                .at-precio-equiv-tag { font-size: var(--text-2xs); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-2); background: color-mix(in srgb, var(--accent-2) 14%, transparent); padding: 0.05rem 0.35rem; border-radius: var(--radius-sm); }
                 .at-sobre-max { display: inline-flex; align-items: center; gap: 0.25rem; font-size: var(--text-2xs); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--warning); }
                 .at-piso { display: inline-flex; align-items: center; gap: 0.25rem; font-size: var(--text-xs); font-weight: 700; color: var(--accent-3); }
                 .at-piso-pendiente { display: inline-flex; align-items: center; gap: 0.25rem; font-size: var(--text-xs); color: var(--text-muted); }

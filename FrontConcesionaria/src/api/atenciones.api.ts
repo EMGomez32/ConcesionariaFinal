@@ -271,6 +271,15 @@ export interface UnidadSugerida {
     kmIngreso?: number | null;
     precioLista?: Importe;
     moneda?: string;
+    /**
+     * Precio equivalente en la moneda del presupuesto, al dólar blue. Sólo viene
+     * cuando el auto está en OTRA moneda que el presupuesto y se lo convirtió para
+     * poder compararlo. Es ORIENTATIVO: el precio real es `precioLista` en `moneda`.
+     */
+    precioEnMonedaPresupuesto?: Importe;
+    monedaPresupuesto?: string;
+    /** La cotización con la que se hizo esa conversión (para poder mostrarla). */
+    cotizacionAplicada?: { tipo: string; valor: number; actualizado: string };
     segmento?: string | null;
     /** Con esto se derivan los días en stock; no hay columna calculada. */
     fechaIngreso?: string | null;
@@ -555,6 +564,13 @@ export interface RelevamientoAplicado {
     cuotaMaxima: number | null;
     tipoFinanciamiento: TipoFinanciamiento | null;
     permuta: { id: number; estado: EstadoPermuta; valorEstimado: number | null; moneda: string; unidad: string } | null;
+    /**
+     * Cotización usada para convertir autos de otra moneda y que compitan contra
+     * este presupuesto. Null si no hizo falta o la fuente no respondió.
+     */
+    cotizacion: { tipo: string; valor: number; actualizado: string } | null;
+    /** Cuántas unidades del resultado se convirtieron por cotización. */
+    unidadesConvertidas: number;
 }
 
 export interface ResultadoBusqueda {
