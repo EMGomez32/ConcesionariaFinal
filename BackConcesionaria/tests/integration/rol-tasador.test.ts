@@ -35,14 +35,14 @@ describe('Rol tasador — sólo valúa usados', () => {
         adminToken = ad.token;
         tenantId = ad.user.concesionariaId!;
         // La casa restringe la tasación al tasador: es el escenario donde el rol importa.
-        const flag = await api.patch(`/api/concesionarias/${tenantId}`, { tasacionSoloTasador: true }, authHeaders(adminToken));
+        const flag = await api.patch(`/api/concesionarias/me`, { tasacionSoloTasador: true }, authHeaders(adminToken));
         expect(flag.status).toBe(200);
         tasadorTok = await crearUsuario('tasador', adminToken);
         vendedorTok = await crearUsuario('vendedor', adminToken);
     });
 
     afterAll(async () => {
-        await api.patch(`/api/concesionarias/${tenantId}`, { tasacionSoloTasador: false }, authHeaders(adminToken));
+        await api.patch(`/api/concesionarias/me`, { tasacionSoloTasador: false }, authHeaders(adminToken));
         for (const id of creados) await tryDelete(`/api/usuarios/${id}`, adminToken);
     });
 
