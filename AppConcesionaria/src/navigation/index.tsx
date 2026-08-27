@@ -11,7 +11,8 @@ import LoginScreen from '../screens/LoginScreen';
 import MostradorScreen from '../screens/MostradorScreen';
 import AtencionDetalleScreen from '../screens/AtencionDetalleScreen';
 import TasacionesScreen from '../screens/TasacionesScreen';
-import PlaceholderScreen from '../screens/PlaceholderScreen';
+import ClientesScreen from '../screens/ClientesScreen';
+import VehiculosScreen from '../screens/VehiculosScreen';
 
 const navTheme = {
     ...DefaultTheme,
@@ -56,9 +57,6 @@ function MostradorStack() {
     );
 }
 
-const Clientes = () => <PlaceholderScreen title="Clientes" icon="users" />;
-const Vehiculos = () => <PlaceholderScreen title="Vehículos" icon="truck" />;
-
 const Tab = createBottomTabNavigator();
 function AppTabs() {
     return (
@@ -78,8 +76,8 @@ function AppTabs() {
             })}
         >
             <Tab.Screen name="MostradorTab" component={MostradorStack} options={{ title: 'Mostrador', headerShown: false }} />
-            <Tab.Screen name="Clientes" component={Clientes} />
-            <Tab.Screen name="Vehiculos" component={Vehiculos} options={{ title: 'Vehículos' }} />
+            <Tab.Screen name="Clientes" component={ClientesScreen} />
+            <Tab.Screen name="Vehiculos" component={VehiculosScreen} options={{ title: 'Vehículos' }} />
             <Tab.Screen name="Tasaciones" component={TasacionesScreen} />
         </Tab.Navigator>
     );
