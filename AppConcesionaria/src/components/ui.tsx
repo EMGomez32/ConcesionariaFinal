@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-    View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet,
-    ViewStyle, TextStyle, TextInputProps, PressableProps,
+    View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet, Modal, ScrollView,
+    ViewStyle, TextStyle, TextInputProps,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, radius, spacing, fonts, fontSize, accentGradient } from '../theme/tokens';
@@ -81,6 +81,56 @@ export function Card({ children, style, onPress }: { children: React.ReactNode; 
     return <Comp onPress={onPress} style={[s.card, style]}>{children}</Comp>;
 }
 
+/** Selector segmentado (pestañas tipo pill). */
+export function Segmented<V extends string>({
+    value, options, onChange, style,
+}: {
+    value: V;
+    options: { value: V; label: string }[];
+    onChange: (v: V) => void;
+    style?: ViewStyle;
+}) {
+    return (
+        <View style={[s.seg, style]}>
+            {options.map((o) => {
+                const on = o.value === value;
+                return (
+                    <Pressable key={o.value} onPress={() => onChange(o.value)} style={[s.segItem, on && s.segItemOn]}>
+                        <Text style={[s.segText, on && s.segTextOn]} numberOfLines={1}>{o.label}</Text>
+                    </Pressable>
+                );
+            })}
+        </View>
+    );
+}
+
+/** Modal centrado con título + cuerpo desplazable + botones al pie. */
+export function Sheet({
+    visible, onClose, title, subtitle, children, footer,
+}: {
+    visible: boolean;
+    onClose: () => void;
+    title: string;
+    subtitle?: string;
+    children: React.ReactNode;
+    footer?: React.ReactNode;
+}) {
+    return (
+        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+            <View style={s.backdrop}>
+                <View style={s.sheet}>
+                    <Text style={s.sheetTitle}>{title}</Text>
+                    {subtitle ? <Text style={s.sheetSub}>{subtitle}</Text> : null}
+                    <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ paddingVertical: spacing.md }} keyboardShouldPersistTaps="handled">
+                        {children}
+                    </ScrollView>
+                    {footer ? <View style={s.sheetFooter}>{footer}</View> : null}
+                </View>
+            </View>
+        </Modal>
+    );
+}
+
 export const T = {
     H1: ({ children, style }: { children: React.ReactNode; style?: TextStyle }) => <Text style={[s.h1, style]}>{children}</Text>,
     H2: ({ children, style }: { children: React.ReactNode; style?: TextStyle }) => <Text style={[s.h2, style]}>{children}</Text>,
@@ -105,4 +155,16 @@ const s = StyleSheet.create({
     h2: { color: colors.text, fontFamily: fonts.brand, fontSize: fontSize.lg, fontWeight: '700' },
     body: { color: colors.text, fontSize: fontSize.base },
     muted: { color: colors.textMuted, fontSize: fontSize.sm },
+
+    seg: { flexDirection: 'row', backgroundColor: colors.bgSecondary, borderRadius: radius.pill, padding: 4 },
+    segItem: { flex: 1, paddingVertical: 8, borderRadius: radius.pill, alignItems: 'center' },
+    segItemOn: { backgroundColor: colors.accent },
+    segText: { color: colors.textSecondary, fontWeight: '700', fontSize: fontSize.sm },
+    segTextOn: { color: colors.onAccent },
+
+    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: spacing.lg },
+    sheet: { backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: spacing.xl },
+    sheetTitle: { color: colors.text, fontFamily: fonts.brand, fontSize: fontSize.lg, fontWeight: '700' },
+    sheetSub: { color: colors.textMuted, fontSize: fontSize.sm, marginTop: 2 },
+    sheetFooter: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
 });
