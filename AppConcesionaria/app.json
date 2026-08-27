@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "AUTENZA",
+    "slug": "autenza-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "autenza",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#06080f",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#06080f"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.autenza.app"
+    },
+    "android": {
+      "package": "com.autenza.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#06080f",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-font"
+    ]
+  }
+}
