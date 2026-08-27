@@ -21,6 +21,7 @@ import {
 import { context } from '../../infrastructure/security/context';
 import { actorEsAdmin, actorEsSuperAdmin, actorEsTasador, actorEsVendedorPuro, actorUserId } from '../../infrastructure/security/roles';
 import { assertMismoTenant } from '../../infrastructure/security/tenantGuard';
+import { getDolarBlue, convertirMonto, type Cotizacion } from '../../infrastructure/cotizacion/dolarBlue';
 import { audit } from '../../infrastructure/security/audit';
 import {
     BaseException,
@@ -951,6 +952,38 @@ export async function buscarUnidades(atencionId: number, params: ParamsBusquedaH
     // --- 4. Lo ya mostrado a este cliente en visitas ANTERIORES --------------
     const yaMostradas = await unidadesYaMostradas(atencion.clienteId, atencion.id);
 
+    // --- 4b. Cotización: que un presupuesto en pesos "vea" los autos en dólares
+    // El cliente declara su presupuesto en UNA moneda (monedaDelRelevamiento). Los
+    // autos publicados en la OTRA quedarían afuera, porque el motor no compara
+    // entre monedas. Para que compitan, acá normalizamos su precio a la moneda del
+    // presupuesto al dólar blue (venta) ANTES del motor, y forzamos la comparación
+    // en esa moneda. El precio REAL del auto NO se toca (sigue en su moneda): la
+    // conversión es sólo para rankear y se devuelve aparte, como referencia. Si la
+    // fuente de cotización no responde, no convertimos nada y el buscador se
+    // comporta como siempre (no mezcla monedas). Sólo aplica en modo presupuesto.
+    const conversiones = new Map<number, { valor: number; moneda: string; cotizacion: Cotizacion }>();
+    let stockMotor = stock;
+    let monedaMotor = params.moneda;
+    if (esModoPresupuesto) {
+        const cotiz = await getDolarBlue();
+        if (cotiz) {
+            const convertido = stock.map((u) => {
+                if (u.precio == null || u.moneda === monedaDelRelevamiento) return u;
+                const nuevo = convertirMonto(u.precio, u.moneda, monedaDelRelevamiento, cotiz.valor);
+                if (nuevo == null) return u; // par no soportado → lo descarta el motor, como hoy
+                conversiones.set(u.id, { valor: nuevo, moneda: monedaDelRelevamiento, cotizacion: cotiz });
+                return { ...u, precio: nuevo, moneda: monedaDelRelevamiento };
+            });
+            if (conversiones.size > 0) {
+                stockMotor = convertido;
+                // Con TODO el stock ya expresado en la moneda del presupuesto, la
+                // comparación DEBE hacerse en esa moneda: si el motor infiriera otra
+                // (p.ej. por mayoría), descartaría justo lo que acabamos de convertir.
+                monedaMotor = monedaDelRelevamiento as typeof params.moneda;
+            }
+        }
+    }
+
     // --- 5. El motor decide --------------------------------------------------
     const paramsMotor: ParamsBusqueda = {
         modo: params.modo,
@@ -962,11 +995,13 @@ export async function buscarUnidades(atencionId: number, params: ParamsBusquedaH
         presupuestoMin: minEfectivo,
         presupuestoMax: maxEfectivo,
         // Sin fallback: si el vendedor no eligió moneda, la infiere el motor.
-        moneda: params.moneda,
+        // (Cuando convertimos por cotización, `monedaMotor` la fija en la del
+        // presupuesto para que el stock normalizado no se descarte por moneda.)
+        moneda: monedaMotor,
         monedaPresupuesto: monedaDelRelevamiento,
         incluirYaMostradas: params.incluirYaMostradas,
     };
-    const resultado = sugerir(paramsMotor, stock, yaMostradas);
+    const resultado = sugerir(paramsMotor, stockMotor, yaMostradas);
     // La moneda en la que se comparó DE VERDAD. En modo unidad/modelo la fija la
     // unidad encontrada, así que puede no ser la del relevamiento.
     const moneda = resultado.moneda;
@@ -993,7 +1028,21 @@ export async function buscarUnidades(atencionId: number, params: ParamsBusquedaH
     });
 
     // --- 7. Respuesta: la fila pública completa, no sólo lo que vio el motor --
-    const conFila = (u: UnidadCandidata) => porId.get(u.id) ?? u;
+    // A las unidades que convertimos por cotización les adjuntamos el precio
+    // equivalente en la moneda del presupuesto (ORIENTATIVO: `precioLista` sigue
+    // siendo el precio real, en su moneda) para que la UI lo muestre como "≈ $X".
+    const conFila = (u: UnidadCandidata) => {
+        const fila = porId.get(u.id) ?? u;
+        const conv = conversiones.get(u.id);
+        if (!conv) return fila;
+        return {
+            ...fila,
+            precioEnMonedaPresupuesto: conv.valor,
+            monedaPresupuesto: conv.moneda,
+            cotizacionAplicada: { tipo: conv.cotizacion.tipo, valor: conv.cotizacion.valor, actualizado: conv.cotizacion.actualizado },
+        };
+    };
+    const cotizacionUsada = conversiones.size > 0 ? [...conversiones.values()][0].cotizacion : null;
     const alternativas = resultado.alternativas.map((s: Sugerencia) => ({
         unidad: conFila(s.unidad),
         motivo: s.motivo,
@@ -1020,6 +1069,11 @@ export async function buscarUnidades(atencionId: number, params: ParamsBusquedaH
             cuotaMaxima,
             tipoFinanciamiento: tipoFinanciamiento ?? null,
             permuta: permuta ? { id: permuta.id, estado: permuta.estado, valorEstimado: num(permuta.valorEstimado), moneda: permuta.moneda, unidad: `${permuta.marca} ${permuta.modelo}` } : null,
+            // Cotización con la que se convirtieron autos de otra moneda para que
+            // compitan contra este presupuesto (null si no hizo falta o la fuente
+            // no respondió). `unidadesConvertidas` = cuántas se normalizaron.
+            cotizacion: cotizacionUsada ? { tipo: cotizacionUsada.tipo, valor: cotizacionUsada.valor, actualizado: cotizacionUsada.actualizado } : null,
+            unidadesConvertidas: conversiones.size,
         },
         exacta: resultado.exacta ? conFila(resultado.exacta) : null,
         exactaPorEncimaDelMaximo: resultado.exactaPorEncimaDelMaximo === true,
