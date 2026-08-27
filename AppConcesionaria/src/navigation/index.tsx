@@ -100,11 +100,25 @@ function AppTabs() {
     );
 }
 
+/** El tasador PURO sólo valúa usados: la app se reduce a Tasaciones, sin tabs. */
+function TasadorStack() {
+    return (
+        <Stack.Navigator screenOptions={{ ...headerStyle, headerRight: () => <LogoutButton /> }}>
+            <Stack.Screen name="Tasaciones" component={TasacionesScreen} />
+        </Stack.Navigator>
+    );
+}
+
 export default function RootNavigator() {
     const user = useAuthStore((s) => s.user);
+    const roles = user?.roles ?? [];
+    // Tasador puro: rol tasador y ninguno que lo saque de su único trabajo.
+    const esTasadorPuro =
+        roles.includes('tasador') &&
+        !roles.includes('admin') && !roles.includes('super_admin') && !roles.includes('vendedor');
     return (
         <NavigationContainer theme={navTheme}>
-            {user ? <AppTabs /> : <LoginScreen />}
+            {!user ? <LoginScreen /> : esTasadorPuro ? <TasadorStack /> : <AppTabs />}
         </NavigationContainer>
     );
 }
