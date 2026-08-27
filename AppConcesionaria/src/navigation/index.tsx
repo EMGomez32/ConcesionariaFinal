@@ -10,6 +10,7 @@ import { useAuthStore } from '../store/authStore';
 import LoginScreen from '../screens/LoginScreen';
 import MostradorScreen from '../screens/MostradorScreen';
 import AtencionDetalleScreen from '../screens/AtencionDetalleScreen';
+import TasacionesScreen from '../screens/TasacionesScreen';
 import PlaceholderScreen from '../screens/PlaceholderScreen';
 
 const navTheme = {
@@ -57,7 +58,6 @@ function MostradorStack() {
 
 const Clientes = () => <PlaceholderScreen title="Clientes" icon="users" />;
 const Vehiculos = () => <PlaceholderScreen title="Vehículos" icon="truck" />;
-const Tasaciones = () => <PlaceholderScreen title="Tasaciones" icon="clipboard" />;
 
 const Tab = createBottomTabNavigator();
 function AppTabs() {
@@ -80,7 +80,7 @@ function AppTabs() {
             <Tab.Screen name="MostradorTab" component={MostradorStack} options={{ title: 'Mostrador', headerShown: false }} />
             <Tab.Screen name="Clientes" component={Clientes} />
             <Tab.Screen name="Vehiculos" component={Vehiculos} options={{ title: 'Vehículos' }} />
-            <Tab.Screen name="Tasaciones" component={Tasaciones} />
+            <Tab.Screen name="Tasaciones" component={TasacionesScreen} />
         </Tab.Navigator>
     );
 }
