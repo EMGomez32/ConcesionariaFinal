@@ -1,5 +1,6 @@
 import express from 'express';
 import authRoutes from '../interface/routes/auth.routes';
+import { authEvents } from '../interface/middlewares/authEvents.middleware';
 import concesionariaRoutes from '../interface/routes/concesionaria.routes';
 import sucursalRoutes from '../interface/routes/sucursal.routes';
 import usuarioRoutes from '../interface/routes/usuario.routes';
@@ -34,6 +35,7 @@ import whatsappRoutes from '../interface/routes/whatsapp.routes';
 import conversacionRoutes from '../interface/routes/conversacion.routes';
 import mercadolibreRoutes from '../interface/routes/mercadolibre.routes';
 import auditoriaRoutes from '../interface/routes/audit-log.routes';
+import securityEventRoutes from '../interface/routes/security-event.routes';
 import billingRoutes from '../interface/routes/billing.routes';
 import reporteRoutes from '../interface/routes/reporte.routes';
 import cotizacionRoutes from '../interface/routes/cotizacion.routes';
@@ -60,7 +62,8 @@ if (env.NODE_ENV === 'development') {
 }
 
 // Auth (login/refresh/logout son públicos por definición)
-router.use('/auth', authRoutes);
+// authEvents: rastro de login fallido / recuperación de contraseña (sin tocar los controllers).
+router.use('/auth', authEvents, authRoutes);
 
 // ── A partir de acá, TODO exige autenticación ────────────────────────────────
 // Defensa en profundidad: además del RLS a nivel base de datos, ninguna ruta
@@ -138,6 +141,8 @@ router.use('/mercadolibre', mercadolibreRoutes);
 // pasa por el bypass de authorize). Antes cualquier usuario autenticado
 // (vendedor incluido) podía leerlo y exportarlo.
 router.use('/auditoria', authorize('admin'), auditoriaRoutes);
+// Rastro de plataforma (sin tenant): SÓLO super_admin (authorize('super_admin') no deja pasar a admin).
+router.use('/security-events', authorize('super_admin'), securityEventRoutes);
 
 // Reportes
 router.use('/reportes', reporteRoutes);
