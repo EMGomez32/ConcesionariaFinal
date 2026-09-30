@@ -7,6 +7,10 @@ import { UpdateUsuario } from '../../application/use-cases/usuarios/UpdateUsuari
 import { DeleteUsuario } from '../../application/use-cases/usuarios/DeleteUsuario';
 import { ResetPassword } from '../../application/use-cases/usuarios/ResetPassword';
 import { ChangeMyPassword } from '../../application/use-cases/usuarios/ChangeMyPassword';
+import { UpdateMyProfile } from '../../application/use-cases/usuarios/UpdateMyProfile';
+import { RevokeUserSessions } from '../../application/use-cases/auth/RevokeUserSessions';
+import { JwtTokenService } from '../../infrastructure/security/JwtTokenService';
+import { PrismaRefreshTokenRepository } from '../../infrastructure/database/repositories/PrismaRefreshTokenRepository';
 import { cleanFilters } from '../../utils/cleanFilters';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
@@ -56,10 +60,13 @@ const repository = new PrismaUsuarioRepository();
 const getUsuariosUC = new GetUsuarios(repository);
 const getUsuarioByIdUC = new GetUsuarioById(repository);
 const createUsuarioUC = new CreateUsuario(repository);
-const updateUsuarioUC = new UpdateUsuario(repository);
-const deleteUsuarioUC = new DeleteUsuario(repository);
-const resetPasswordUC = new ResetPassword(repository);
-const changeMyPasswordUC = new ChangeMyPassword(repository);
+// Cerrar sesiones (refresh tokens) cuando cambian credenciales o estado del usuario.
+const revokeSessions = new RevokeUserSessions(new JwtTokenService(), new PrismaRefreshTokenRepository());
+const updateUsuarioUC = new UpdateUsuario(repository, revokeSessions);
+const updateMyProfileUC = new UpdateMyProfile(repository, updateUsuarioUC);
+const deleteUsuarioUC = new DeleteUsuario(repository, revokeSessions);
+const resetPasswordUC = new ResetPassword(repository, revokeSessions);
+const changeMyPasswordUC = new ChangeMyPassword(repository, revokeSessions);
 
 export class UsuarioController {
     static async getAll(req: Request, res: Response, next: NextFunction) {
@@ -193,8 +200,11 @@ export class UsuarioController {
             if (!uid) throw new BaseException(401, 'Sesión no válida', 'UNAUTHORIZED');
             // Sólo nombre y email: roles, activo, sucursal y concesionaria no se
             // tocan desde el perfil propio (eso es administración).
-            const { nombre, email } = req.body ?? {};
-            const result = await updateUsuarioUC.execute(uid, { nombre, email });
+            // Cambiar el email exige la contraseña actual (UpdateMyProfile).
+            // `refreshToken` (opcional) es el de la sesión actual: se conserva al
+            // cerrar las demás.
+            const { nombre, email, currentPassword, refreshToken } = req.body ?? {};
+            const result = await updateMyProfileUC.execute(uid, { nombre, email, currentPassword }, refreshToken);
             await audit({
                 entidad: 'Usuario',
                 accion: 'update',
@@ -215,8 +225,8 @@ export class UsuarioController {
         try {
             const uid = context.getUser()?.userId;
             if (!uid) throw new BaseException(401, 'Sesión no válida', 'UNAUTHORIZED');
-            const { currentPassword, newPassword } = req.body ?? {};
-            await changeMyPasswordUC.execute(uid, currentPassword, newPassword);
+            const { currentPassword, newPassword, refreshToken } = req.body ?? {};
+            await changeMyPasswordUC.execute(uid, currentPassword, newPassword, refreshToken);
             await audit({
                 entidad: 'Usuario',
                 accion: 'update',
