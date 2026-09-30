@@ -1,4 +1,7 @@
 import multer from 'multer';
+import { RequestHandler } from 'express';
+import { BaseException } from '../../domain/exceptions/BaseException';
+import { detectarTipoArchivo } from '../../infrastructure/security/contenidoArchivo';
 
 const ALLOWED_MIME = new Set([
     'image/jpeg',
@@ -18,7 +21,7 @@ const ALLOWED_MIME = new Set([
 
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB per file
 
-export const uploadSingle = multer({
+const multerSingle = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: MAX_BYTES },
     fileFilter: (_req, file, cb) => {
@@ -26,6 +29,44 @@ export const uploadSingle = multer({
         else cb(new Error(`Tipo de archivo no permitido: ${file.mimetype}`));
     },
 }).single('file');
+
+/** Errores de multer → 400/413 con mensaje claro (antes caían en el 500 genérico). */
+const conErroresLimpios: RequestHandler = (req, res, next) => {
+    multerSingle(req, res, (err: unknown) => {
+        if (!err) return next();
+        if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return next(new BaseException(413, 'El archivo supera el máximo de 25 MB', 'ARCHIVO_DEMASIADO_GRANDE'));
+            }
+            return next(new BaseException(400, 'Archivo inválido', 'ARCHIVO_INVALIDO'));
+        }
+        return next(new BaseException(400, err instanceof Error ? err.message : 'Archivo inválido', 'ARCHIVO_INVALIDO'));
+    });
+};
+
+/**
+ * Valida el CONTENIDO del archivo (magic bytes), no el mimetype que declara el cliente. Lo que
+ * no sea de un tipo permitido se rechaza; el mimetype y la extensión guardados salen del
+ * contenido real. Sin esto un .html o un ejecutable con "Content-Type: image/png" entraba.
+ */
+export const validarContenidoArchivo: RequestHandler = (req, _res, next) => {
+    const file = (req as any).file;
+    if (!file) return next();
+    const tipo = detectarTipoArchivo(file.buffer, file.mimetype);
+    if (!tipo) {
+        return next(new BaseException(
+            400,
+            'El contenido del archivo no corresponde a un tipo permitido (imágenes, PDF, Word, Excel, texto o CSV).',
+            'ARCHIVO_INVALIDO',
+        ));
+    }
+    file.mimetype = tipo.mime;
+    file.extension = tipo.ext;
+    next();
+};
+
+// Subida de un archivo (campo "file"): multer + validación de contenido, en ese orden.
+export const uploadSingle: RequestHandler[] = [conErroresLimpios, validarContenidoArchivo];
 
 // Logo de marca para los PDF. pdfkit sólo sabe embeber PNG y JPEG, así que el
 // filtro es más estricto que el genérico (nada de webp/gif/heic) y el tope es

@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { IStorageAdapter, SavedFile, UploadInput } from './IStorageAdapter';
+import { extensionParaMime } from '../security/contenidoArchivo';
 
 // Stores files under <root>/<prefix>/<yyyy-mm>/<random>.<ext>
 // `url` is built relative to a public mount point ('/uploads' by default), so
@@ -13,7 +14,11 @@ export class LocalStorageAdapter implements IStorageAdapter {
     ) { }
 
     async save(file: UploadInput, prefix: string): Promise<SavedFile> {
-        const ext = path.extname(file.originalname).toLowerCase().slice(0, 16);
+        // La extensión NUNCA sale del originalname (lo controla el cliente: un .html/.svg/.js
+        // plantado se serviría desde el dominio de la app). Sale del contenido ya validado
+        // (file.extension) o, si no, del mimetype ya validado.
+        const extSegura = /^[a-z0-9]{1,5}$/.test(file.extension ?? '') ? file.extension : extensionParaMime(file.mimetype);
+        const ext = `.${extSegura}`;
         const safePrefix = prefix.replace(/[^a-zA-Z0-9_-]/g, '-');
         const yearMonth = new Date().toISOString().slice(0, 7);
         const randomName = crypto.randomBytes(16).toString('hex') + ext;

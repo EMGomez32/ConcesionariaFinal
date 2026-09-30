@@ -3,6 +3,7 @@ import { SolicitudFinanciacion } from '../../../domain/entities/SolicitudFinanci
 import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { firmarRuta } from '../../security/urlFirmada';
 
 // Lo que el cliente puede escribir al crear. `estado` queda afuera a propósito:
 // el default del schema es 'borrador' y la máquina de estados asume ese punto de
@@ -150,7 +151,8 @@ export class PrismaSolicitudFinanciacionRepository implements ISolicitudFinancia
             s.sucursal,
             s.venta,
             s.presupuesto,
-            s.archivos,
+            // Adjuntos privados (DNI, recibos): la url que sale es firmada y vence; ver urlFirmada.ts.
+            s.archivos?.map((a: any) => ({ ...a, url: firmarRuta(a.url) })),
             s.vehiculo
         );
     }
