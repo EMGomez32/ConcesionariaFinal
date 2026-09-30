@@ -1908,6 +1908,31 @@ model AuditLog {
   @@map("audit_log")
 }
 
+// Rastro de seguridad SIN tenant: lo que audit_log no puede guardar porque su
+// concesionaria_id es NOT NULL con FK. Acciones de super_admin (sin concesionaria),
+// intentos de login contra emails que no existen y alertas de fuerza bruta. Es un
+// registro de PLATAFORMA: sin FK ni RLS, sólo lo lee super_admin. Se guarda un hash
+// del email (no el email) para poder contar intentos contra un mismo objetivo sin
+// acumular direcciones ajenas. Append-only para el rol de la app (ver setup-app-role).
+model SecurityEvent {
+  id              Int      @id @default(autoincrement())
+  accion          String
+  entidad         String?
+  entidadId       Int?     @map("entidad_id")
+  usuarioId       Int?     @map("usuario_id")
+  concesionariaId Int?     @map("concesionaria_id")
+  emailHash       String?  @map("email_hash")
+  detalle         String?
+  ip              String?
+  userAgent       String?  @map("user_agent")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([accion, createdAt])
+  @@index([emailHash])
+  @@map("security_events")
+}
+
 model Plan {
   id            Int                         @id @default(autoincrement())
   nombre        String                      @unique
@@ -2284,6 +2309,9 @@ enum AccionAudit {
   refinanciar
   login
   logout
+  login_fail
+  password_reset_request
+  password_reset_done
 }
 
 enum PlanInterval {

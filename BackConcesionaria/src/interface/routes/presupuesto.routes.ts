@@ -5,6 +5,8 @@ import { authorize } from '../middlewares/authorize.middleware';
 
 import { validateBody } from '../middlewares/validate.middleware';
 import { createPresupuestoSchema, updatePresupuestoSchema } from '../validation/presupuesto.schema';
+import { convertirPresupuestoSchema } from '../validation/venta.schema';
+import { costosoLimiter } from '../middlewares/rateLimiters';
 const router = Router();
 
 /**
@@ -87,7 +89,7 @@ router.get('/:id/total', PresupuestoController.total);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id/pdf', ComprobanteController.presupuestoPdf);
+router.get('/:id/pdf', costosoLimiter, ComprobanteController.presupuestoPdf);
 
 /**
  * @openapi
@@ -169,7 +171,7 @@ router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updatePresupue
  *       404: { $ref: '#/components/responses/NotFound' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.post('/:id/convertir-en-venta', authorize('admin', 'vendedor'), PresupuestoController.convertToVenta);
+router.post('/:id/convertir-en-venta', authorize('admin', 'vendedor'), validateBody(convertirPresupuestoSchema), PresupuestoController.convertToVenta);
 
 /**
  * @openapi

@@ -1,7 +1,15 @@
 import { Router } from 'express';
 import { AuthController } from '../controllers/AuthController';
-import { loginLimiter } from '../middlewares/rateLimiters';
+import {
+    loginLimiter,
+    loginAccountLimiter,
+    forgotPasswordEmailLimiter,
+    forgotPasswordIpLimiter,
+    refreshLimiter,
+    resetPasswordLimiter,
+} from '../middlewares/rateLimiters';
 import { validateBody } from '../middlewares/validate.middleware';
+import { minResponseTime } from '../middlewares/minResponseTime.middleware';
 import { loginSchema, refreshSchema, resetPasswordSchema, logoutSchema } from '../validation/auth.schema';
 
 const router = Router();
@@ -32,7 +40,7 @@ const router = Router();
  *         description: Usuario inactivo
  *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
  */
-router.post('/login', loginLimiter, validateBody(loginSchema), AuthController.login);
+router.post('/login', loginLimiter, loginAccountLimiter, validateBody(loginSchema), AuthController.login);
 
 /**
  * @openapi
@@ -63,7 +71,7 @@ router.post('/login', loginLimiter, validateBody(loginSchema), AuthController.lo
  *                 refresh: { type: string }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.post('/refresh', validateBody(refreshSchema), AuthController.refresh);
+router.post('/refresh', refreshLimiter, validateBody(refreshSchema), AuthController.refresh);
 
 /**
  * @openapi
@@ -100,7 +108,8 @@ router.post('/logout', validateBody(logoutSchema), AuthController.logout);
  *     responses:
  *       200: { description: Respuesta genérica }
  */
-router.post('/forgot-password', loginLimiter, AuthController.forgotPassword);
+// minResponseTime: mismo tiempo de respuesta exista o no el email (no enumerar cuentas).
+router.post('/forgot-password', forgotPasswordIpLimiter, forgotPasswordEmailLimiter, minResponseTime(400), AuthController.forgotPassword);
 
 /**
  * @openapi
@@ -116,6 +125,6 @@ router.post('/forgot-password', loginLimiter, AuthController.forgotPassword);
  *       200: { description: Contraseña actualizada }
  *       400: { description: Token inválido o expirado }
  */
-router.post('/reset-password', validateBody(resetPasswordSchema), AuthController.resetPassword);
+router.post('/reset-password', resetPasswordLimiter, validateBody(resetPasswordSchema), AuthController.resetPassword);
 
 export default router;

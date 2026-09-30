@@ -213,6 +213,18 @@ jobs:
         # El script hace su propio `cd` a la raíz y levanta/baja su contenedor.
         run: bash ../scripts/verify-rls-role.sh
 
+  backup-script:
+    name: Scripts (lógica de backup.sh)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # Prueba la lógica de scripts/backup.sh con pg_dump/age/rclone simulados:
+    # cifrado, que nunca se suba nada en claro al offsite, alertas, retención y
+    # permisos. No reemplaza al simulacro de restore real (scripts/restore-drill.sh).
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - run: sh scripts/tests/backup.test.sh
+
   frontend:
     name: Frontend (typecheck + build)
     runs-on: ubuntu-latest

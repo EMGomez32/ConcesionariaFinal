@@ -4,6 +4,7 @@ import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { firmarRuta } from '../../security/urlFirmada';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 // Lo que el cliente puede escribir al crear. `estado` queda afuera a propósito:
 // el default del schema es 'borrador' y la máquina de estados asume ese punto de
@@ -60,9 +61,8 @@ const INCLUDES = {
 
 export class PrismaSolicitudFinanciacionRepository implements ISolicitudFinanciacionRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<SolicitudFinanciacion>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
 
         const where = coerceFilter(filter);
 
@@ -70,7 +70,7 @@ export class PrismaSolicitudFinanciacionRepository implements ISolicitudFinancia
             where,
             take: limitNum,
             skip: (pageNum - 1) * limitNum,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('SolicitudFinanciacion', sortBy, sortOrder, 'createdAt'),
             include: INCLUDES,
         });
 

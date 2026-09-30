@@ -5,6 +5,7 @@ import { authorize } from '../middlewares/authorize.middleware';
 
 import { validateBody } from '../middlewares/validate.middleware';
 import { createCasoSchema, updateCasoSchema } from '../validation/postventa-caso.schema';
+import { costosoLimiter } from '../middlewares/rateLimiters';
 const router = Router();
 
 /**
@@ -48,7 +49,7 @@ router.get('/', PostventaCasoController.getAll);
  *       200: { description: CSV de casos, content: { text/csv: {} } }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/export/csv', authorize('admin', 'postventa', 'vendedor'), PostventaCasoController.exportCsv);
+router.get('/export/csv', costosoLimiter, authorize('admin', 'postventa', 'vendedor'), PostventaCasoController.exportCsv);
 
 /**
  * @openapi
@@ -110,7 +111,7 @@ router.get('/:id/total', authorize('admin', 'postventa'), PostventaCasoControlle
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id/orden', ComprobanteController.postventaOrdenPdf);
+router.get('/:id/orden', costosoLimiter, ComprobanteController.postventaOrdenPdf);
 
 /**
  * @openapi

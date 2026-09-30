@@ -6,6 +6,7 @@ import { resolveConcesionariaId } from '../../infrastructure/security/resolveCon
 import { BaseException, NotFoundException, ValidationException } from '../../domain/exceptions/BaseException';
 import { cifrarConfig, estaCifrado } from '../../infrastructure/security/secretBox';
 import { estadoCanalesMeta } from '../../domain/services/canalesMeta';
+import { DestinoNoPermitidoError, resolverDestinoPublico } from '../../infrastructure/security/destinoSeguro';
 import {
     CAMPOS_SECRETOS,
     OPCIONALES_BORRABLES_META,
@@ -104,6 +105,22 @@ function lanzarValidacion(issues: { path: PropertyKey[]; message: string }[]): n
     throw new ValidationException(details, message);
 }
 
+/**
+ * SSRF: el host IMAP lo elige el admin y el backend se conecta a él solo. Además del chequeo
+ * de forma de Zod, acá se RESUELVE el DNS y se exige que todas las direcciones sean públicas
+ * (nada de db, backend, LAN, Tailscale ni metadatos de nube). Se vuelve a validar al conectar.
+ */
+async function assertHostImapPublico(host: unknown): Promise<void> {
+    try {
+        await resolverDestinoPublico(String(host ?? ''));
+    } catch (e) {
+        if (e instanceof DestinoNoPermitidoError) {
+            throw new BaseException(400, e.message, 'HOST_NO_PERMITIDO');
+        }
+        throw e;
+    }
+}
+
 export class IntegracionController {
     static async getAll(req: Request, res: Response, next: NextFunction) {
         try {
@@ -130,6 +147,7 @@ export class IntegracionController {
             // y la bandeja mezclando hilos fabricados con mensajes de gente de
             // verdad. Mismo corte simétrico que ya tiene Mercado Libre.
             if (tipo === 'meta') await assertSinDemoMetaActiva(concesionariaId);
+            if (tipo === 'email') await assertHostImapPublico((config as any)?.host);
             const creada = await prisma.integracionCanal.create({
                 data: { concesionariaId, tipo, nombre, activo: activo ?? true, config: cifrarConfig(config) },
             });
@@ -205,6 +223,8 @@ export class IntegracionController {
                 const schemaCompleto = existente.tipo === 'meta' ? metaConfigSchema : emailConfigSchema;
                 const completa = schemaCompleto.safeParse(mergeada);
                 if (!completa.success) lanzarValidacion(completa.error.issues);
+                // Si cambió el host (o se edita la config de una casilla), se re-resuelve el DNS.
+                if (existente.tipo === 'email') await assertHostImapPublico((completa.data as any).host);
                 // Cifrar al persistir. Esto también es la migración lazy: una
                 // config legada en claro queda cifrada en su primer update.
                 configFinal = cifrarConfig(completa.data as Record<string, unknown>);
