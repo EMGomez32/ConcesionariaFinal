@@ -49,7 +49,8 @@ describe('Uploads: contenido, extensión y zona privada', () => {
 
     test('una imagen real se sube y se guarda con extensión .png', async () => {
         const r = await subir(PNG, 'foto.png', 'image/png');
-        expect(r.status).toBe(201);
+        // El cuerpo viaja en el mensaje de fallo (sirve para diagnosticar en el CI).
+        expect({ status: r.status, data: r.data }).toMatchObject({ status: 201 });
         expect(r.data.storageKey).toMatch(/\.png$/);
         expect(r.data.mimeType).toBe('image/png');
     });

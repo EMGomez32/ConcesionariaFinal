@@ -14,6 +14,7 @@ import { LocalStorageAdapter } from '../../src/infrastructure/storage/LocalStora
 import { crearRouterUploads, esRutaPrivada, rutaNormalizada } from '../../src/interface/middlewares/uploads.middleware';
 import { uploadSingle } from '../../src/interface/middlewares/upload.middleware';
 import { BaseException } from '../../src/domain/exceptions/BaseException';
+import { context } from '../../src/infrastructure/security/context';
 
 const relleno = (n: number) => Buffer.alloc(n, 0x41);
 const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), relleno(32)]);
@@ -158,6 +159,17 @@ describe('uploadSingle (multer + contenido)', () => {
             expect(r.status).toBe(400);
             expect(r.body.error).toBe('ARCHIVO_INVALIDO');
         }
+    });
+
+    test('el contexto de la request (usuario/tenant) sigue disponible DESPUÉS de la subida', async () => {
+        // Sin esto, bajo app_rw la RLS no ve ninguna fila y un upload válido da 404.
+        const ctxApp = express();
+        ctxApp.use((_req, _res, next) => context.run({ user: { userId: 7, concesionariaId: 3 }, correlationId: 'abc' } as any, () => next()));
+        ctxApp.post('/ctx', uploadSingle, (_req: express.Request, res: express.Response) => {
+            res.json({ tenant: context.getTenantId() ?? null, corr: context.getCorrelationId() ?? null });
+        });
+        const r = await request(ctxApp).post('/ctx').attach('file', png, { filename: 'f.png', contentType: 'image/png' });
+        expect(r.body).toEqual({ tenant: 3, corr: 'abc' });
     });
 
     test('sin archivo pasa al handler (cada controller decide si es obligatorio)', async () => {

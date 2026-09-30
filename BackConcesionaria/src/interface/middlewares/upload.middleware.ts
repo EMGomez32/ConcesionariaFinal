@@ -2,6 +2,18 @@ import multer from 'multer';
 import { RequestHandler } from 'express';
 import { BaseException } from '../../domain/exceptions/BaseException';
 import { detectarTipoArchivo } from '../../infrastructure/security/contenidoArchivo';
+import { context } from '../../infrastructure/security/context';
+
+/**
+ * Multer lee el cuerpo por eventos del stream de la request, que NO conservan el AsyncLocalStorage
+ * (tenant, usuario, correlationId) con el que entró el request. Se lo captura antes y se lo
+ * RE-ENTRA al continuar: sin eso, lo que corre después de la subida ve un contexto vacío y, bajo el
+ * rol app_rw, la RLS no encuentra ninguna fila (un 404 falso en vez de subir el archivo).
+ */
+const conContexto = (mw: RequestHandler): RequestHandler => (req, res, next) => {
+    const ctx = context.get();
+    mw(req, res, (err?: unknown) => (ctx ? context.run(ctx, () => next(err as any)) : next(err as any)));
+};
 
 const ALLOWED_MIME = new Set([
     'image/jpeg',
@@ -66,7 +78,7 @@ export const validarContenidoArchivo: RequestHandler = (req, _res, next) => {
 };
 
 // Subida de un archivo (campo "file"): multer + validación de contenido, en ese orden.
-export const uploadSingle: RequestHandler[] = [conErroresLimpios, validarContenidoArchivo];
+export const uploadSingle: RequestHandler[] = [conContexto(conErroresLimpios), validarContenidoArchivo];
 
 // Logo de marca para los PDF. pdfkit sólo sabe embeber PNG y JPEG, así que el
 // filtro es más estricto que el genérico (nada de webp/gif/heic) y el tope es
@@ -74,14 +86,14 @@ export const uploadSingle: RequestHandler[] = [conErroresLimpios, validarConteni
 const LOGO_MIME = new Set(['image/png', 'image/jpeg']);
 const LOGO_MAX_BYTES = 3 * 1024 * 1024; // 3 MB
 
-export const uploadLogo = multer({
+export const uploadLogo = conContexto(multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: LOGO_MAX_BYTES },
     fileFilter: (_req, file, cb) => {
         if (LOGO_MIME.has(file.mimetype)) cb(null, true);
         else cb(new Error('El logo debe ser PNG o JPG'));
     },
-}).single('file');
+}).single('file'));
 
 // Detecta el tipo REAL de imagen por magic-bytes (no por el mimetype declarado
 // por el cliente, que es falsificable). Sirve para no confiar en el header y
