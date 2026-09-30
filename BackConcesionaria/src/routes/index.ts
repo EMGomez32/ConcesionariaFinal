@@ -141,8 +141,8 @@ router.use('/mercadolibre', mercadolibreRoutes);
 // pasa por el bypass de authorize). Antes cualquier usuario autenticado
 // (vendedor incluido) podía leerlo y exportarlo.
 router.use('/auditoria', authorize('admin'), auditoriaRoutes);
-// Rastro de plataforma (sin tenant): SÓLO super_admin (authorize('super_admin') no deja pasar a admin).
-router.use('/security-events', authorize('super_admin'), securityEventRoutes);
+// Rastro de plataforma (sin tenant): SÓLO super_admin (el authorize va en la ruta, ver security-event.routes.ts).
+router.use('/security-events', securityEventRoutes);
 
 // Reportes
 router.use('/reportes', reporteRoutes);

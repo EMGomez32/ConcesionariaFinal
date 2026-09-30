@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { rawPrisma } from '../../infrastructure/database/prisma';
+import { authorize } from '../middlewares/authorize.middleware';
 
 const router = Router();
 
@@ -22,7 +23,9 @@ const router = Router();
  *       200: { description: Listado paginado, más reciente primero }
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
-router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+// authorize('super_admin') POR RUTA (no en el montaje): un guard de montaje exime al archivo entero del
+// centinela de permisos y hay que declararlo aparte. authorize('super_admin') sólo deja pasar a super_admin.
+router.get('/', authorize('super_admin'), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const limit = Math.min(Math.max(Math.trunc(Number(req.query.limit)) || 100, 1), 500);
         const page = Math.min(Math.max(Math.trunc(Number(req.query.page)) || 1, 1), 100_000);
