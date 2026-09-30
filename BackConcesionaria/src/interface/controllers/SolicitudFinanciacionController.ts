@@ -11,6 +11,7 @@ import { resolveConcesionariaId } from '../../infrastructure/security/resolveCon
 import { storage } from '../../infrastructure/storage/LocalStorageAdapter';
 import { BaseException } from '../../domain/exceptions/BaseException';
 import prisma from '../../infrastructure/database/prisma';
+import { firmarRuta } from '../../infrastructure/security/urlFirmada';
 
 const repository = new PrismaSolicitudFinanciacionRepository();
 const getSolicitudesUC = new GetSolicitudes(repository);
@@ -96,7 +97,9 @@ export class SolicitudFinanciacionController {
                 where: { solicitudId },
                 orderBy: { createdAt: 'desc' },
             });
-            res.json(archivos);
+            // Los adjuntos (DNI, recibos) son PRIVADOS: la url que sale de acá es una URL firmada
+            // y con vencimiento; la que está guardada en la base no abre nada por sí sola.
+            res.json(archivos.map((a) => ({ ...a, url: firmarRuta(a.url) })));
         } catch (error) { next(error); }
     }
 
@@ -135,7 +138,7 @@ export class SolicitudFinanciacionController {
                 detalle: `Archivo "${file.originalname}" subido a solicitud ${solicitudId}`,
             });
 
-            res.status(201).json(result);
+            res.status(201).json({ ...result, url: firmarRuta(result.url) });
         } catch (error) { next(error); }
     }
 
