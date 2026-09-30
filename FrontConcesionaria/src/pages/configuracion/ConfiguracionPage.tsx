@@ -1778,6 +1778,8 @@ const ConfiguracionPage = () => {
     const [perfilForm, setPerfilForm] = useState({
         nombre: user?.nombre || '',
         email: user?.email || '',
+        // Sólo se pide (y se manda) cuando el email cambia.
+        currentPassword: '',
     });
     const [savingPerfil, setSavingPerfil] = useState(false);
 
@@ -1819,8 +1821,11 @@ const ConfiguracionPage = () => {
     }, [concesionariaId, addToast]);
 
     useEffect(() => {
-        setPerfilForm({ nombre: user?.nombre || '', email: user?.email || '' });
+        setPerfilForm({ nombre: user?.nombre || '', email: user?.email || '', currentPassword: '' });
     }, [user?.nombre, user?.email]);
+
+    const emailCambio =
+        perfilForm.email.trim().toLowerCase() !== (user?.email || '').trim().toLowerCase();
 
     const handleSaveConcesionaria = async () => {
         if (!concesionariaForm.nombre.trim()) {
@@ -1895,11 +1900,20 @@ const ConfiguracionPage = () => {
             addToast('Nombre y email son requeridos', 'error');
             return;
         }
+        // Cambiar el email es cambiar a dónde llega "olvidé mi contraseña": se pide
+        // la contraseña actual (el backend también lo exige).
+        if (emailCambio && !perfilForm.currentPassword) {
+            addToast('Para cambiar el email ingresá tu contraseña actual', 'error');
+            return;
+        }
         setSavingPerfil(true);
         try {
             await usuariosApi.updateMe({
                 nombre: perfilForm.nombre.trim(),
                 email: perfilForm.email.trim(),
+                ...(emailCambio ? { currentPassword: perfilForm.currentPassword } : {}),
+                // Refresh de esta sesión: el backend la conserva al cerrar las demás.
+                refreshToken: useAuthStore.getState().refreshToken ?? undefined,
             });
             setUser({ nombre: perfilForm.nombre.trim(), email: perfilForm.email.trim() });
             addToast('Perfil actualizado', 'success');
@@ -1925,7 +1939,12 @@ const ConfiguracionPage = () => {
         }
         setSavingPass(true);
         try {
-            await usuariosApi.changeMyPassword(passForm.current, passForm.password);
+            // Se cierran las demás sesiones; la de este navegador se conserva.
+            await usuariosApi.changeMyPassword(
+                passForm.current,
+                passForm.password,
+                useAuthStore.getState().refreshToken ?? undefined,
+            );
             addToast('Contraseña actualizada con éxito', 'success');
             setPassForm({ current: '', password: '', confirm: '' });
         } catch (err) {
@@ -2096,6 +2115,12 @@ const ConfiguracionPage = () => {
                             onChange={e => setPerfilForm(f => ({ ...f, nombre: e.target.value }))} />
                         <Input dense label="Email *" type="email" value={perfilForm.email}
                             onChange={e => setPerfilForm(f => ({ ...f, email: e.target.value }))} />
+                        {emailCambio && (
+                            <Input dense label="Contraseña actual * (para confirmar el cambio de email)" type="password"
+                                containerClassName="col-span-full" autoComplete="current-password"
+                                value={perfilForm.currentPassword}
+                                onChange={e => setPerfilForm(f => ({ ...f, currentPassword: e.target.value }))} />
+                        )}
                     </div>
                     <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
                         <Button variant="primary" onClick={handleSavePerfil} disabled={savingPerfil}>
