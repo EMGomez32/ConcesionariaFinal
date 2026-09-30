@@ -3,6 +3,7 @@ import { ConversacionController } from '../controllers/ConversacionController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
 import { crearMensajeSchema, registrarConsultaSchema, updateConversacionSchema } from '../validation/conversacion.schema';
+import { envioLimiter } from '../middlewares/rateLimiters';
 
 const router = Router();
 
@@ -166,7 +167,7 @@ router.get('/:id', authorize('admin', 'vendedor'), ConversacionController.getByI
  *           el destino o la integración), WHATSAPP_CUENTA_INACTIVA,
  *           WHATSAPP_CUENTA_PAUSADA.
  */
-router.post('/:id/mensajes', authorize('admin', 'vendedor'), validateBody(crearMensajeSchema), ConversacionController.crearMensaje);
+router.post('/:id/mensajes', envioLimiter, authorize('admin', 'vendedor'), validateBody(crearMensajeSchema), ConversacionController.crearMensaje);
 
 /**
  * @openapi

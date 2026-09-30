@@ -4,6 +4,7 @@ import { ComprobanteController } from '../controllers/ComprobanteController';
 import { FacturaController } from '../controllers/FacturaController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
+import { costosoLimiter } from '../middlewares/rateLimiters';
 import {
     createVentaSchema,
     updateVentaSchema,
@@ -45,7 +46,7 @@ const router = Router();
  *       200: { description: PDF del comprobante, content: { application/pdf: {} } }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id/comprobante', ComprobanteController.ventaPdf);
+router.get('/:id/comprobante', costosoLimiter, ComprobanteController.ventaPdf);
 
 // ── Facturación electrónica AFIP ─────────────────────────────────────────────
 /**
@@ -108,7 +109,7 @@ router.get('/:id/factura', FacturaController.getByVenta);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id/factura/pdf', FacturaController.pdf);
+router.get('/:id/factura/pdf', costosoLimiter, FacturaController.pdf);
 
 /**
  * @openapi

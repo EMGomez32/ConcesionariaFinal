@@ -3,6 +3,7 @@ import { MercadoLibreController } from '../controllers/MercadoLibreController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
 import { publicarSchema, responderSchema, asignarSchema, leadSchema, demoSchema } from '../validation/mercadolibre.schema';
+import { envioLimiter } from '../middlewares/rateLimiters';
 
 const router = Router();
 
@@ -313,7 +314,7 @@ router.get('/vehiculos/:vehiculoId/opciones', authorize('admin'), MercadoLibreCo
  *       404: { $ref: '#/components/responses/NotFound' }
  *       409: { description: No hay cuenta vinculada, o Mercado Libre rechazó el ítem }
  */
-router.post('/vehiculos/:vehiculoId/publicar', authorize('admin'), validateBody(publicarSchema), MercadoLibreController.publicar);
+router.post('/vehiculos/:vehiculoId/publicar', envioLimiter, authorize('admin'), validateBody(publicarSchema), MercadoLibreController.publicar);
 
 /**
  * @openapi
@@ -364,7 +365,7 @@ router.get('/vehiculos/:vehiculoId/publicacion', MercadoLibreController.getPubli
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/publicaciones/:id/pausar', authorize('admin'), MercadoLibreController.pausar);
+router.post('/publicaciones/:id/pausar', envioLimiter, authorize('admin'), MercadoLibreController.pausar);
 
 /**
  * @openapi
@@ -380,7 +381,7 @@ router.post('/publicaciones/:id/pausar', authorize('admin'), MercadoLibreControl
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/publicaciones/:id/reactivar', authorize('admin'), MercadoLibreController.reactivar);
+router.post('/publicaciones/:id/reactivar', envioLimiter, authorize('admin'), MercadoLibreController.reactivar);
 
 /**
  * @openapi
@@ -400,7 +401,7 @@ router.post('/publicaciones/:id/reactivar', authorize('admin'), MercadoLibreCont
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/publicaciones/:id/cerrar', authorize('admin'), MercadoLibreController.cerrar);
+router.post('/publicaciones/:id/cerrar', envioLimiter, authorize('admin'), MercadoLibreController.cerrar);
 
 /**
  * @openapi
@@ -421,7 +422,7 @@ router.post('/publicaciones/:id/cerrar', authorize('admin'), MercadoLibreControl
  *       404: { $ref: '#/components/responses/NotFound' }
  *       409: { description: La publicación nunca llegó a Mercado Libre (no tiene itemId) }
  */
-router.post('/publicaciones/:id/sincronizar', authorize('admin'), MercadoLibreController.sincronizarPublicacion);
+router.post('/publicaciones/:id/sincronizar', envioLimiter, authorize('admin'), MercadoLibreController.sincronizarPublicacion);
 
 /**
  * @openapi
@@ -485,7 +486,7 @@ router.get('/preguntas', authorize('admin', 'vendedor'), MercadoLibreController.
  *       404: { $ref: '#/components/responses/NotFound' }
  *       409: { description: La pregunta ya fue respondida o el comprador la eliminó - Mercado Libre admite una sola respuesta por pregunta }
  */
-router.post('/preguntas/:id/responder', authorize('admin', 'vendedor'), validateBody(responderSchema), MercadoLibreController.responder);
+router.post('/preguntas/:id/responder', envioLimiter, authorize('admin', 'vendedor'), validateBody(responderSchema), MercadoLibreController.responder);
 
 /**
  * @openapi
@@ -581,6 +582,6 @@ router.post('/preguntas/:id/lead', authorize('admin', 'vendedor'), validateBody(
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       409: { description: No hay una cuenta de Mercado Libre vinculada }
  */
-router.post('/sincronizar', authorize('admin'), MercadoLibreController.sincronizarAhora);
+router.post('/sincronizar', envioLimiter, authorize('admin'), MercadoLibreController.sincronizarAhora);
 
 export default router;

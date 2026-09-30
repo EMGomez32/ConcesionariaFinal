@@ -72,8 +72,13 @@ export class UsuarioController {
     static async getAll(req: Request, res: Response, next: NextFunction) {
         try {
             const { limit, page, sortBy, sortOrder, ...filters } = req.query;
-            const result: any = await getUsuariosUC.execute(cleanFilters(filters), { limit, page, sortBy, sortOrder } as any);
             const isAdmin = actorEsAdmin();
+            // El email de un colega NO es visible para no-admin (sanitizeUsuario lo
+            // recorta de la salida). Si además se pudiera FILTRAR por email, un
+            // `lectura` reconstruiría el padrón carácter a carácter (?email=a, ab, ...)
+            // mirando quién aparece. El filtro sólo vale para admin.
+            if (!isAdmin) delete filters.email;
+            const result: any = await getUsuariosUC.execute(cleanFilters(filters), { limit, page, sortBy, sortOrder } as any);
             res.json({ ...result, results: (result.results ?? []).map((u: any) => sanitizeUsuario(u, isAdmin)) });
         } catch (error) {
             next(error);

@@ -6,6 +6,7 @@ import { authorize } from '../middlewares/authorize.middleware';
 
 import { validateBody } from '../middlewares/validate.middleware';
 import { createVehiculoSchema, updateVehiculoSchema } from '../validation/vehiculo.schema';
+import { costosoLimiter } from '../middlewares/rateLimiters';
 const router = Router();
 
 /**
@@ -50,7 +51,7 @@ router.get('/', authenticate, VehiculoController.getAll);
  *       200: { description: PDF del catálogo, content: { application/pdf: {} } }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/catalogo/pdf', authenticate, ComprobanteController.catalogoPdf);
+router.get('/catalogo/pdf', costosoLimiter, authenticate, ComprobanteController.catalogoPdf);
 
 /**
  * @openapi
@@ -68,7 +69,7 @@ router.get('/catalogo/pdf', authenticate, ComprobanteController.catalogoPdf);
  *       200: { description: CSV del stock, content: { text/csv: {} } }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/export/csv', authenticate, authorize('admin', 'vendedor'), VehiculoController.exportCsv);
+router.get('/export/csv', costosoLimiter, authenticate, authorize('admin', 'vendedor'), VehiculoController.exportCsv);
 
 /**
  * @openapi
@@ -99,7 +100,7 @@ router.get('/:id', authenticate, VehiculoController.getById);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id/ficha', authenticate, ComprobanteController.vehiculoFichaPdf);
+router.get('/:id/ficha', costosoLimiter, authenticate, ComprobanteController.vehiculoFichaPdf);
 
 /**
  * @openapi

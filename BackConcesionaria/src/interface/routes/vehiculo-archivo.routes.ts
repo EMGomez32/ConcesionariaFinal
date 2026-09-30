@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { VehiculoArchivoController } from '../controllers/VehiculoArchivoController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { uploadSingle } from '../middlewares/upload.middleware';
+import { uploadLimiter } from '../middlewares/rateLimiters';
 import { validateBody } from '../middlewares/validate.middleware';
 import { createVehiculoArchivoSchema } from '../validation/vehiculo-archivo.schema';
 
@@ -87,7 +88,7 @@ router.post('/', authorize('admin', 'vendedor', 'postventa'), validateBody(creat
 // por el taller es parte de su trabajo, y hoy llega a esta ruta. `authorize` va
 // ANTES de uploadSingle a propósito: así el 403 corta antes de que multer se
 // ponga a recibir el binario de alguien que no tiene permiso para subirlo.
-router.post('/upload', authorize('admin', 'vendedor', 'postventa'), uploadSingle, VehiculoArchivoController.upload);
+router.post('/upload', uploadLimiter, authorize('admin', 'vendedor', 'postventa'), uploadSingle, VehiculoArchivoController.upload);
 
 /**
  * @openapi
