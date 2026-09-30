@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { BillingController } from '../controllers/BillingController';
 import { authorize } from '../middlewares/authorize.middleware';
+import { validateBody } from '../middlewares/validate.middleware';
+import { registrarPagoInvoiceSchema } from '../validation/billing.schema';
 
 // NOTA: comentario de línea y no bloque JSDoc a propósito — swagger-jsdoc
 // parsea TODO bloque /** */ de este directorio como YAML, y una lista con dos
@@ -278,6 +280,6 @@ router.get('/invoices/:id', authorize('admin'), BillingController.getInvoiceById
  *       404: { $ref: '#/components/responses/NotFound' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.post('/invoices/:id/payments', authorize('admin'), BillingController.registrarPagoInvoice);
+router.post('/invoices/:id/payments', authorize('admin'), validateBody(registrarPagoInvoiceSchema), BillingController.registrarPagoInvoice);
 
 export default router;

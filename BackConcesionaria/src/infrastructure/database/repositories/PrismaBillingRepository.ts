@@ -3,6 +3,7 @@ import { Plan, ConcesionariaSubscription, Invoice, Payment } from '../../../doma
 import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions } from '../../../types/common';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 export class PrismaBillingRepository implements IBillingRepository {
     // Planes
@@ -71,13 +72,14 @@ export class PrismaBillingRepository implements IBillingRepository {
 
     // Invoices
     async findAllInvoices(filter: any = {}, options: QueryOptions = {}): Promise<Invoice[]> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit, skip } = parsePagination(options);
         const where = coerceFilter(filter);
         const results = await prisma.invoice.findMany({
             where,
-            take: Number(limit),
-            skip: (Number(page) - 1) * Number(limit),
-            orderBy: { [sortBy as string]: sortOrder },
+            take: limit,
+            skip,
+            orderBy: parseOrderBy('Invoice', sortBy, sortOrder),
             include: { payments: true }
         });
         return results.map(this.mapInvoiceToEntity);

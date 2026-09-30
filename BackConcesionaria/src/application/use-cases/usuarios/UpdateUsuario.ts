@@ -2,12 +2,20 @@ import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioReposit
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 import { assertRolesAsignables } from '../../../infrastructure/security/usuarioPolicy';
+import { RevokeUserSessions } from '../auth/RevokeUserSessions';
 import bcrypt from 'bcryptjs';
 
 export class UpdateUsuario {
-    constructor(private readonly usuarioRepository: IUsuarioRepository) { }
+    constructor(
+        private readonly usuarioRepository: IUsuarioRepository,
+        private readonly revokeSessions: RevokeUserSessions,
+    ) { }
 
-    async execute(id: number, data: any) {
+    /**
+     * `keepRefreshToken`: refresh de la sesión ACTUAL cuando el usuario se edita a
+     * sí mismo (PATCH /usuarios/me); se conserva al cerrar las demás sesiones.
+     */
+    async execute(id: number, data: any, keepRefreshToken?: string | null) {
         const exists: any = await this.usuarioRepository.findById(id);
         if (!exists) {
             throw new NotFoundException('Usuario');
@@ -56,6 +64,14 @@ export class UpdateUsuario {
             (updateData as any).passwordHash = await bcrypt.hash(password, 10);
         }
 
-        return this.usuarioRepository.update(id, updateData);
+        // Cambian las credenciales o el estado (contraseña, email, desactivación):
+        // las sesiones abiertas ya no son de fiar y se cierran (ver RevokeUserSessions).
+        const cambiaEmail = !!updateData.email && updateData.email !== exists.email;
+        const seDesactiva = updateData.activo === false && exists.activo !== false;
+        const revocar = !!password || cambiaEmail || seDesactiva;
+
+        const result = await this.usuarioRepository.update(id, updateData);
+        if (revocar) await this.revokeSessions.execute(id, keepRefreshToken);
+        return result;
     }
 }

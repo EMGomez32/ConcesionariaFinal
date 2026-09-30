@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { AuditLogController } from '../controllers/AuditLogController';
+import { costosoLimiter } from '../middlewares/rateLimiters';
 
 const router = Router();
 
@@ -57,7 +58,7 @@ router.get('/', AuditLogController.getAll);
  *             schema: { type: string, format: binary }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/export', AuditLogController.exportCsv);
+router.get('/export', costosoLimiter, AuditLogController.exportCsv);
 
 /**
  * @openapi

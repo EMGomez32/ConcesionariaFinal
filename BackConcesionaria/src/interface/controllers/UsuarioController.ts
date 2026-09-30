@@ -7,11 +7,16 @@ import { UpdateUsuario } from '../../application/use-cases/usuarios/UpdateUsuari
 import { DeleteUsuario } from '../../application/use-cases/usuarios/DeleteUsuario';
 import { ResetPassword } from '../../application/use-cases/usuarios/ResetPassword';
 import { ChangeMyPassword } from '../../application/use-cases/usuarios/ChangeMyPassword';
+import { UpdateMyProfile } from '../../application/use-cases/usuarios/UpdateMyProfile';
+import { RevokeUserSessions } from '../../application/use-cases/auth/RevokeUserSessions';
+import { JwtTokenService } from '../../infrastructure/security/JwtTokenService';
+import { PrismaRefreshTokenRepository } from '../../infrastructure/database/repositories/PrismaRefreshTokenRepository';
 import { cleanFilters } from '../../utils/cleanFilters';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
 import { BaseException } from '../../domain/exceptions/BaseException';
 import { actorEsAdmin } from '../../infrastructure/security/roles';
+import { detalleUpdate, nombresDeRoles } from './usuarioAuditoria';
 
 /**
  * Lo que un no-admin puede ver de un colega: el nombre para el combo de "vendedor
@@ -56,17 +61,25 @@ const repository = new PrismaUsuarioRepository();
 const getUsuariosUC = new GetUsuarios(repository);
 const getUsuarioByIdUC = new GetUsuarioById(repository);
 const createUsuarioUC = new CreateUsuario(repository);
-const updateUsuarioUC = new UpdateUsuario(repository);
-const deleteUsuarioUC = new DeleteUsuario(repository);
-const resetPasswordUC = new ResetPassword(repository);
-const changeMyPasswordUC = new ChangeMyPassword(repository);
+// Cerrar sesiones (refresh tokens) cuando cambian credenciales o estado del usuario.
+const revokeSessions = new RevokeUserSessions(new JwtTokenService(), new PrismaRefreshTokenRepository());
+const updateUsuarioUC = new UpdateUsuario(repository, revokeSessions);
+const updateMyProfileUC = new UpdateMyProfile(repository, updateUsuarioUC);
+const deleteUsuarioUC = new DeleteUsuario(repository, revokeSessions);
+const resetPasswordUC = new ResetPassword(repository, revokeSessions);
+const changeMyPasswordUC = new ChangeMyPassword(repository, revokeSessions);
 
 export class UsuarioController {
     static async getAll(req: Request, res: Response, next: NextFunction) {
         try {
             const { limit, page, sortBy, sortOrder, ...filters } = req.query;
-            const result: any = await getUsuariosUC.execute(cleanFilters(filters), { limit, page, sortBy, sortOrder } as any);
             const isAdmin = actorEsAdmin();
+            // El email de un colega NO es visible para no-admin (sanitizeUsuario lo
+            // recorta de la salida). Si además se pudiera FILTRAR por email, un
+            // `lectura` reconstruiría el padrón carácter a carácter (?email=a, ab, ...)
+            // mirando quién aparece. El filtro sólo vale para admin.
+            if (!isAdmin) delete filters.email;
+            const result: any = await getUsuariosUC.execute(cleanFilters(filters), { limit, page, sortBy, sortOrder } as any);
             res.json({ ...result, results: (result.results ?? []).map((u: any) => sanitizeUsuario(u, isAdmin)) });
         } catch (error) {
             next(error);
@@ -100,7 +113,7 @@ export class UsuarioController {
                 entidad: 'Usuario',
                 accion: 'create',
                 entidadId: (result as any)?.id,
-                detalle: `Usuario ${(result as any)?.nombre ?? (result as any)?.email ?? (result as any)?.id} creado`,
+                detalle: `Usuario ${(result as any)?.nombre ?? (result as any)?.email ?? (result as any)?.id} creado. Roles: [${nombresDeRoles(result).join(', ') || 'sin roles'}]`,
             });
             res.status(201).json(sanitizeUsuario(result, actorEsAdmin()));
         } catch (error) {
@@ -132,12 +145,14 @@ export class UsuarioController {
                 delete data.roles;
                 delete data.activo;
             }
+            // Estado previo para dejar en la auditoría QUÉ cambió (roles, estado, email).
+            const antes: any = await getUsuarioByIdUC.execute(id);
             const result = await updateUsuarioUC.execute(id, data);
             await audit({
                 entidad: 'Usuario',
                 accion: 'update',
                 entidadId: id,
-                detalle: `Usuario ${(result as any)?.nombre ?? (result as any)?.email ?? id} actualizado`,
+                detalle: detalleUpdate(String((result as any)?.nombre ?? (result as any)?.email ?? id), antes, result),
             });
             res.json(sanitizeUsuario(result, actorEsAdmin()));
         } catch (error) {
@@ -193,8 +208,11 @@ export class UsuarioController {
             if (!uid) throw new BaseException(401, 'Sesión no válida', 'UNAUTHORIZED');
             // Sólo nombre y email: roles, activo, sucursal y concesionaria no se
             // tocan desde el perfil propio (eso es administración).
-            const { nombre, email } = req.body ?? {};
-            const result = await updateUsuarioUC.execute(uid, { nombre, email });
+            // Cambiar el email exige la contraseña actual (UpdateMyProfile).
+            // `refreshToken` (opcional) es el de la sesión actual: se conserva al
+            // cerrar las demás.
+            const { nombre, email, currentPassword, refreshToken } = req.body ?? {};
+            const result = await updateMyProfileUC.execute(uid, { nombre, email, currentPassword }, refreshToken);
             await audit({
                 entidad: 'Usuario',
                 accion: 'update',
@@ -215,8 +233,8 @@ export class UsuarioController {
         try {
             const uid = context.getUser()?.userId;
             if (!uid) throw new BaseException(401, 'Sesión no válida', 'UNAUTHORIZED');
-            const { currentPassword, newPassword } = req.body ?? {};
-            await changeMyPasswordUC.execute(uid, currentPassword, newPassword);
+            const { currentPassword, newPassword, refreshToken } = req.body ?? {};
+            await changeMyPasswordUC.execute(uid, currentPassword, newPassword, refreshToken);
             await audit({
                 entidad: 'Usuario',
                 accion: 'update',

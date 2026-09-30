@@ -26,6 +26,21 @@ export class PrismaRefreshTokenRepository implements IRefreshTokenRepository {
         });
     }
 
+    async claimForRotation(id: number): Promise<boolean> {
+        const r = await prisma.refreshToken.updateMany({
+            where: { id, isRevoked: false },
+            data: { isRevoked: true },
+        });
+        return r.count === 1;
+    }
+
+    async deleteAllForUser(usuarioId: number, exceptToken?: string): Promise<number> {
+        const r = await prisma.refreshToken.deleteMany({
+            where: { usuarioId, ...(exceptToken ? { token: { not: exceptToken } } : {}) },
+        });
+        return r.count;
+    }
+
     async revokeAllForUser(usuarioId: number): Promise<void> {
         await prisma.refreshToken.updateMany({
             where: { usuarioId },
