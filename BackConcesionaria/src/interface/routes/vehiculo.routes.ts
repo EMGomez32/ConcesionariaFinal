@@ -5,7 +5,7 @@ import { authenticate } from '../middlewares/authenticate.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
 
 import { validateBody } from '../middlewares/validate.middleware';
-import { createVehiculoSchema, updateVehiculoSchema } from '../validation/vehiculo.schema';
+import { createVehiculoSchema, updateVehiculoSchema, transferirVehiculoSchema } from '../validation/vehiculo.schema';
 const router = Router();
 
 /**
@@ -197,7 +197,7 @@ router.patch('/:id', authenticate, authorize('admin', 'vendedor'), validateBody(
  *       404: { $ref: '#/components/responses/NotFound' }
  *       422: { $ref: '#/components/responses/InvalidStateTransition' }
  */
-router.post('/:id/transferir', authenticate, authorize('admin', 'vendedor'), VehiculoController.transferir);
+router.post('/:id/transferir', authenticate, authorize('admin', 'vendedor'), validateBody(transferirVehiculoSchema), VehiculoController.transferir);
 
 /**
  * @openapi
