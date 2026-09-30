@@ -8,6 +8,12 @@ on:
   push:
   pull_request:
 
+# Mínimo privilegio: ningún job necesita más que LEER el repo (checkout + build + tests). Sin esto
+# el GITHUB_TOKEN queda con los permisos por defecto del repo/organización, que pueden incluir
+# escritura (contenido, PRs, paquetes): un paso comprometido de una acción de terceros podría usarla.
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend (typecheck + build)

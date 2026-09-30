@@ -9,7 +9,8 @@ RUN apk add --no-cache openssl
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm install
+# `npm ci`: build reproducible que respeta el lockfile (falla si no coincide con package.json).
+RUN npm ci
 
 # Copiar el resto del código
 COPY . .

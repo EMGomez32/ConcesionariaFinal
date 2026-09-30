@@ -13,8 +13,12 @@ const KNOWN_DEV_SECRETS = new Set([
 ]);
 
 const envSchema = z.object({
-    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-    PORT: z.preprocess((val) => Number(val), z.number().default(3000)),
+    // Default SEGURO: si alguien arranca sin NODE_ENV (otro entorno, un script, npm start a mano) se
+    // asume producción — sin Swagger, sin stack traces en las respuestas y con las validaciones de
+    // secretos. El desarrollo lo pide explícito (NODE_ENV=development, ver .env.example).
+    NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
+    // Sin PORT el preprocess anterior daba NaN y el arranque fallaba: el default(3000) nunca aplicaba.
+    PORT: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(3000)),
     // DATABASE_URL = conexión ADMIN (superusuario). La usan SOLO las tareas de
     // setup del arranque: `prisma db push` (DDL), init-rls (FORCE RLS + policies)
     // y setup-app-role (crea el rol de app + grants). NO la usa el runtime.
@@ -27,6 +31,9 @@ const envSchema = z.object({
     // Password del rol app_rw. setup-app-role sólo crea/actualiza el rol si está
     // presente; el usuario la fija en el .env junto con APP_DATABASE_URL.
     APP_DB_PASSWORD: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+    // Válvula de escape para NO exigir el rol app_rw en producción (ver el chequeo de abajo). Sólo
+    // para una migración de emergencia: con '1' la app puede correr como superusuario y la RLS queda inactiva.
+    ALLOW_SUPERUSER_DB: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['0', '1']).optional()),
     JWT_SECRET: z.string().min(10),
     // Clave de cifrado en reposo de los secretos de integraciones (AES-256-GCM).
     // 64 hex = 32 bytes: `openssl rand -hex 32`. Opcional: sin ella los secretos
@@ -114,6 +121,16 @@ const envSchema = z.object({
         });
     }
     if (data.NODE_ENV !== 'production') return;
+    // En producción el runtime TIENE que correr como app_rw. Sin APP_DATABASE_URL caía en silencio a
+    // DATABASE_URL (superusuario) y la RLS de Postgres quedaba decorativa: el aislamiento entre
+    // concesionarias dependía sólo de la capa de aplicación. Ahora el arranque falla, con el motivo.
+    if (!data.APP_DATABASE_URL && data.ALLOW_SUPERUSER_DB !== '1') {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['APP_DATABASE_URL'],
+            message: 'En producción APP_DATABASE_URL (rol app_rw) es obligatoria: sin ella la app correría como superusuario y la RLS no filtraría. Configurala junto con APP_DB_PASSWORD (ver .env.example) o, sólo en una emergencia, ALLOW_SUPERUSER_DB=1.',
+        });
+    }
     for (const [key, value] of [['JWT_SECRET', data.JWT_SECRET], ['JWT_REFRESH_SECRET', data.JWT_REFRESH_SECRET]] as const) {
         if (KNOWN_DEV_SECRETS.has(value)) {
             ctx.addIssue({

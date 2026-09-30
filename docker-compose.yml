@@ -35,6 +35,11 @@ services:
       dockerfile: Dockerfile
     restart: always
     logging: *default-logging
+    # Sin privilegios extra: ni escalada por setuid ni capabilities de Linux (la app no usa ninguna).
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     # Sin ports: el frontend (nginx) le llega por la red interna de docker
     # en backend:3000. No hace falta exponerlo al host, y evita choques con
     # otros servicios que usen el 3000.
@@ -48,6 +53,8 @@ services:
       #   APP_DATABASE_URL=postgresql://app_rw:<password>@db:5432/${POSTGRES_DB:-concesionaria}?sslmode=disable
       - APP_DATABASE_URL=${APP_DATABASE_URL:-}
       - APP_DB_PASSWORD=${APP_DB_PASSWORD:-}
+      # Sólo emergencia: permite arrancar en producción SIN el rol app_rw (RLS inactiva). Ver env.ts.
+      - ALLOW_SUPERUSER_DB=${ALLOW_SUPERUSER_DB:-}
       - PORT=3000
       - NODE_ENV=production
       # Secretos SIN default: el arranque falla si no están definidos en el .env.
@@ -113,7 +120,20 @@ services:
     # Idempotente: sin pendientes es no-op. El cutover desde 'db push' requirió baselinear
     # prod UNA vez con `migrate resolve --applied 0_init` (crea _prisma_migrations sin DDL).
     # El seed ya NO corre en cada arranque (ver README: se corre una sola vez).
-    command: sh -c "npx prisma migrate deploy && npm run init-rls && npm run setup-app-role && npm start"
+    #
+    # Las tres primeras tareas necesitan la conexión ADMIN (DATABASE_URL, superusuario). El SERVIDOR
+    # no: se lo arranca con `exec env DATABASE_URL=<la de app_rw>`, así el proceso que atiende
+    # requests NO tiene las credenciales de superusuario en su entorno (ni en /proc/<pid>/environ:
+    # exec reemplaza al shell, que era quien las guardaba). Un RCE en la app ya no las hereda.
+    # Si APP_DATABASE_URL está vacía (sólo posible con ALLOW_SUPERUSER_DB=1) se mantiene la admin.
+    command:
+      - sh
+      - -c
+      - >-
+        npx prisma migrate deploy &&
+        npm run init-rls &&
+        npm run setup-app-role &&
+        exec env DATABASE_URL="$${APP_DATABASE_URL:-$$DATABASE_URL}" npm start
     volumes:
       - uploads:/app/uploads
       # Sesiones de WhatsApp: sin este volumen, las credenciales de Baileys se
@@ -161,11 +181,22 @@ services:
       db:
         condition: service_healthy
 
+  # Prisma Studio: acceso directo a la base como SUPERUSUARIO y sin autenticación. Antes corría
+  # siempre (restart: always); ahora sólo bajo el perfil `debug`, o sea que NO arranca con un
+  # `docker compose up` común. Para usarlo un rato:
+  #     docker compose --profile debug up -d prisma-studio
+  #     (SSH tunnel a la Pi al puerto 5555)
+  #     docker compose --profile debug stop prisma-studio    # al terminar
   prisma-studio:
+    profiles: ["debug"]
     build:
       context: ./BackConcesionaria
       dockerfile: Dockerfile
-    restart: always
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     # Solo localhost: para acceder, SSH tunnel a la Pi. Nunca exponer al tunnel
     # de Cloudflare (es acceso directo a la base sin autenticación).
     ports:
@@ -183,12 +214,17 @@ services:
       dockerfile: Dockerfile
     restart: always
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     # Sólo loopback: el acceso externo entra por el Cloudflare Tunnel, que en la Pi
     # apunta a http://localhost:80 (cloudflared corre en el host). Bindear a
     # 0.0.0.0 exponía el front directo en la LAN / la red Tailscale de la Pi,
     # salteando Cloudflare. Con 127.0.0.1 el tunnel sigue llegando y nadie más.
     ports:
-      - "127.0.0.1:80:80"
+      # 8080 adentro: la imagen nginx-unprivileged corre sin root y no puede bindear puertos <1024.
+      - "127.0.0.1:80:8080"
     depends_on:
       - backend
 
