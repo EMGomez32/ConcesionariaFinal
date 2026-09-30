@@ -4,6 +4,7 @@ import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
 import { createTasacionSchema, updateTasacionSchema } from '../validation/tasacion.schema';
+import { costosoLimiter } from '../middlewares/rateLimiters';
 
 const router = Router();
 
@@ -50,7 +51,7 @@ router.get('/:id', authorize('admin', 'vendedor', 'tasador'), TasacionController
  *       200: { description: PDF de la tasación, content: { application/pdf: {} } }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id/pdf', authorize('admin', 'vendedor', 'tasador'), ComprobanteController.tasacionPdf);
+router.get('/:id/pdf', costosoLimiter, authorize('admin', 'vendedor', 'tasador'), ComprobanteController.tasacionPdf);
 
 /**
  * @openapi

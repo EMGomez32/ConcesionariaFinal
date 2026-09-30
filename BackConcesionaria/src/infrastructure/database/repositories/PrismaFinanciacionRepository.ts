@@ -11,6 +11,7 @@ import { coerceFilter } from '../queryFilter';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { assertMismoTenant } from '../../security/tenantGuard';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 /**
  * Vencimiento de la cuota nro `i` (1-based) contando desde la fecha de inicio.
@@ -80,9 +81,8 @@ export function planDeCuotas(
 
 export class PrismaFinanciacionRepository implements IFinanciacionRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Financiacion>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
 
         const where = coerceFilter(filter);
 
@@ -91,7 +91,7 @@ export class PrismaFinanciacionRepository implements IFinanciacionRepository {
             where,
             take: limitNum,
             skip: (pageNum - 1) * limitNum,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('Financiacion', sortBy, sortOrder, 'createdAt'),
             include: {
                 venta: { include: { vehiculo: { select: VEHICULO_PUBLICO } } },
                 cliente: true,

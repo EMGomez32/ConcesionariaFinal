@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { ReporteController } from '../controllers/ReporteController';
 import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authorize } from '../middlewares/authorize.middleware';
+import { costosoLimiter } from '../middlewares/rateLimiters';
 
 const router = Router();
 
@@ -339,6 +340,6 @@ router.get('/vencimientos-documentacion', authorize('admin', 'vendedor', 'postve
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/comisiones/pdf', authorize('admin'), ComprobanteController.comisionesLiquidacionPdf);
+router.get('/comisiones/pdf', costosoLimiter, authorize('admin'), ComprobanteController.comisionesLiquidacionPdf);
 
 export default router;
