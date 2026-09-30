@@ -1,4 +1,5 @@
 // Unit tests PUROS (DNS mockeado): anti-SSRF del host IMAP y de las APIs de terceros.
+jest.mock('../../src/config/env', () => ({ env: { NODE_ENV: 'test', JWT_SECRET: 'secreto-de-prueba-1234567890' } }));
 const lookup = jest.fn();
 jest.mock('dns', () => {
     const promises = { lookup: (...args: unknown[]) => lookup(...args) };
