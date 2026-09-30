@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
+import { RevokeUserSessions } from '../auth/RevokeUserSessions';
 
 /**
  * Cambio de contraseña por el propio usuario (autogestión desde Configuración).
@@ -9,11 +10,18 @@ import { BaseException, NotFoundException } from '../../../domain/exceptions/Bas
  * OTRO usuario sin conocer la anterior), acá el usuario cambia LA SUYA, así que
  * se exige y verifica la contraseña actual. Sin esa verificación, una sesión
  * abierta olvidada bastaría para que un tercero cambie la clave y tome la cuenta.
+ *
+ * Al cambiarla se cierran las DEMÁS sesiones (refresh tokens) del usuario: si la
+ * cambió porque sospecha que se la robaron, el atacante no puede seguir renovando.
+ * La sesión actual se conserva si el cliente manda su refresh token.
  */
 export class ChangeMyPassword {
-    constructor(private readonly repository: IUsuarioRepository) { }
+    constructor(
+        private readonly repository: IUsuarioRepository,
+        private readonly revokeSessions: RevokeUserSessions,
+    ) { }
 
-    async execute(usuarioId: number, currentPassword: string, newPassword: string) {
+    async execute(usuarioId: number, currentPassword: string, newPassword: string, keepRefreshToken?: string | null) {
         if (!newPassword || newPassword.length < 6) {
             throw new BaseException(400, 'La nueva contraseña debe tener al menos 6 caracteres', 'VALIDATION_ERROR');
         }
@@ -34,6 +42,8 @@ export class ChangeMyPassword {
         }
 
         const passwordHash = await bcrypt.hash(newPassword, 10);
-        return this.repository.update(usuarioId, { passwordHash });
+        const result = await this.repository.update(usuarioId, { passwordHash });
+        await this.revokeSessions.execute(usuarioId, keepRefreshToken);
+        return result;
     }
 }

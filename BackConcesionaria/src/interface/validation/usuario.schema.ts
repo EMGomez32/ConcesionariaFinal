@@ -89,10 +89,16 @@ export const resetUsuarioPasswordSchema = z.object({
 export const updateMeSchema = z.object({
     nombre: z.string().min(1, 'El nombre no puede estar vacío').optional(),
     email: z.string().trim().toLowerCase().min(1, 'El email no puede estar vacío').email('Email inválido').optional(),
+    // Obligatoria SÓLO si el email cambia (la verifica UpdateMyProfile).
+    currentPassword: z.string().optional(),
+    // Refresh de la sesión actual: se conserva al cerrar las demás sesiones.
+    refreshToken: z.string().optional(),
 });
 
 // POST /usuarios/me/password — cambio de la propia clave (verifica la actual).
 export const changeMyPasswordSchema = z.object({
     currentPassword: z.string({ error: 'La contraseña actual es obligatoria' }).min(1, 'La contraseña actual es obligatoria'),
     newPassword: z.string({ error: 'La nueva contraseña es obligatoria' }).min(6, 'La nueva contraseña debe tener al menos 6 caracteres'),
+    // Refresh de la sesión actual: se conserva al cerrar las demás sesiones.
+    refreshToken: z.string().optional(),
 });
