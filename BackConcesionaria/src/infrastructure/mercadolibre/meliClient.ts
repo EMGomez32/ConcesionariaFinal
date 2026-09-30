@@ -3,6 +3,7 @@ import { cifrarSecreto, descifrarSecreto, hayClaveDeSecretos } from '../security
 import { logger } from '../logging/logger';
 import { BaseException } from '../../domain/exceptions/BaseException';
 import { simularLlamada } from './meliSimulador';
+import { assertMismoOrigen } from '../security/destinoSeguro';
 
 /**
  * Cliente de la API de Mercado Libre con OAuth y refresh transparente.
@@ -276,6 +277,8 @@ export async function llamarApi<T>(
 
     const ejecutar = async (token: string): Promise<Response> => {
         const url = new URL(ruta.startsWith('http') ? ruta : `${API}${ruta}`);
+        // El Bearer va a donde diga la URL: una ruta absoluta sólo se acepta si es de la API de ML.
+        assertMismoOrigen(url, API);
         for (const [k, v] of Object.entries(init.query ?? {})) {
             if (v !== undefined) url.searchParams.set(k, String(v));
         }
