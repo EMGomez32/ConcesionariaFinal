@@ -40,3 +40,6 @@ graphify-out/
 # ── Archivos del sistema operativo ──────────────────────────
 .DS_Store
 Thumbs.db
+
+# ── Evidencia local del último simulacro de restore ─────────
+scripts/restore-drill.log
