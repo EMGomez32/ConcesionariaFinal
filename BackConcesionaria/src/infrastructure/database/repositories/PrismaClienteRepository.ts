@@ -4,11 +4,11 @@ import prisma from '../prisma';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { conFiltroCartera } from '../../../application/services/carteraCliente';
 import { normalizarTelefono } from '../../../domain/services/telefono';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 export class PrismaClienteRepository implements IClienteRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Cliente>> {
-        const limit = Number(options.limit) || 20;
-        const page = Number(options.page) || 1;
+        const { limit, page } = parsePagination(options);
         const sortBy = options.sortBy || 'createdAt';
         const sortOrder = options.sortOrder || 'desc';
 
@@ -74,7 +74,7 @@ export class PrismaClienteRepository implements IClienteRepository {
             where: whereScoped,
             take: limit,
             skip: (page - 1) * limit,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('Cliente', sortBy, sortOrder),
             include: {
                 concesionaria: {
                     select: {

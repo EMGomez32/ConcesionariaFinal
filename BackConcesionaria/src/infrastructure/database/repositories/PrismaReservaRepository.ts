@@ -4,12 +4,12 @@ import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { USUARIO_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 export class PrismaReservaRepository implements IReservaRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Reserva>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
 
         const where = coerceFilter(filter);
 
@@ -18,7 +18,7 @@ export class PrismaReservaRepository implements IReservaRepository {
             where,
             take: limitNum,
             skip: (pageNum - 1) * limitNum,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('Reserva', sortBy, sortOrder, 'createdAt'),
             include: {
                 cliente: true,
                 vehiculo: { select: VEHICULO_PUBLICO },

@@ -12,6 +12,7 @@ import { rawPrisma } from '../../infrastructure/database/prisma';
 import { withAuthBypass } from '../../infrastructure/database/unitOfWork';
 import { sendPasswordResetEmail } from '../../infrastructure/email/mailer';
 import { env } from '../../config/env';
+import { logger } from '../../infrastructure/logging/logger';
 
 const tokenService = new JwtTokenService();
 const refreshRepo = new PrismaRefreshTokenRepository();
@@ -84,7 +85,12 @@ export class AuthController {
             });
 
             const link = `${env.APP_URL.replace(/\/$/, '')}/reset-password?token=${token}`;
-            await sendPasswordResetEmail(usuario.email, link);
+            // Sin await: esperar al SMTP hacía que un email registrado tardara cientos de ms
+            // más que uno inexistente (oráculo de existencia por tiempo de respuesta), y un
+            // fallo del proveedor devolvía 500 sólo para cuentas reales. Se envía aparte y un
+            // error se loguea.
+            sendPasswordResetEmail(usuario.email, link).catch((err) =>
+                logger.error(`[auth] no se pudo enviar el email de recuperación: ${err instanceof Error ? err.message : err}`));
 
             return res.json(respuestaGenerica);
         } catch (error) {
