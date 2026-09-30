@@ -16,6 +16,7 @@ import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
 import { BaseException } from '../../domain/exceptions/BaseException';
 import { actorEsAdmin } from '../../infrastructure/security/roles';
+import { detalleUpdate, nombresDeRoles } from './usuarioAuditoria';
 
 /**
  * Lo que un no-admin puede ver de un colega: el nombre para el combo de "vendedor
@@ -112,7 +113,7 @@ export class UsuarioController {
                 entidad: 'Usuario',
                 accion: 'create',
                 entidadId: (result as any)?.id,
-                detalle: `Usuario ${(result as any)?.nombre ?? (result as any)?.email ?? (result as any)?.id} creado`,
+                detalle: `Usuario ${(result as any)?.nombre ?? (result as any)?.email ?? (result as any)?.id} creado. Roles: [${nombresDeRoles(result).join(', ') || 'sin roles'}]`,
             });
             res.status(201).json(sanitizeUsuario(result, actorEsAdmin()));
         } catch (error) {
@@ -144,12 +145,14 @@ export class UsuarioController {
                 delete data.roles;
                 delete data.activo;
             }
+            // Estado previo para dejar en la auditoría QUÉ cambió (roles, estado, email).
+            const antes: any = await getUsuarioByIdUC.execute(id);
             const result = await updateUsuarioUC.execute(id, data);
             await audit({
                 entidad: 'Usuario',
                 accion: 'update',
                 entidadId: id,
-                detalle: `Usuario ${(result as any)?.nombre ?? (result as any)?.email ?? id} actualizado`,
+                detalle: detalleUpdate(String((result as any)?.nombre ?? (result as any)?.email ?? id), antes, result),
             });
             res.json(sanitizeUsuario(result, actorEsAdmin()));
         } catch (error) {

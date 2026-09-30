@@ -1,12 +1,15 @@
 import { context } from './context';
 import { withAuthBypass } from '../database/unitOfWork';
 import { logger } from '../logging/logger';
+import { recordSecurityEvent } from './securityEvents';
 
 // 'refinanciar' mueve deuda de un contrato a otro: merece su propio rastro y no
 // confundirse con un 'create' cualquiera.
 // 'delete_soft' es la baja lógica (la de la mayoría de recursos). 'delete' es la
 // baja FÍSICA, reservada para datos de referencia sin soft-delete (p. ej. cotizaciones).
-type AccionAudit = 'create' | 'update' | 'cancel' | 'delete_soft' | 'delete' | 'login' | 'logout' | 'refinanciar';
+type AccionAudit =
+    | 'create' | 'update' | 'cancel' | 'delete_soft' | 'delete' | 'login' | 'logout' | 'refinanciar'
+    | 'login_fail' | 'password_reset_request' | 'password_reset_done';
 
 interface AuditParams {
     entidad: string;
@@ -15,6 +18,9 @@ interface AuditParams {
     detalle?: string;
     concesionariaId?: number | null;
     usuarioId?: number | null;
+    /** Para flujos fuera de la sesión (login fallido, recuperación): el contexto no los tiene. */
+    ip?: string | null;
+    userAgent?: string | null;
 }
 
 // Fire-and-forget audit log writer. Pulls user/ip/userAgent from the
@@ -27,7 +33,19 @@ export async function audit(params: AuditParams): Promise<void> {
         const concesionariaId = params.concesionariaId ?? user?.concesionariaId ?? null;
 
         if (!concesionariaId) {
-            logger.warn('[audit] skipped — no concesionariaId in context', { params });
+            // Sin tenant (típicamente super_admin) audit_log no puede guardarlo: concesionaria_id
+            // es NOT NULL con FK. Antes se DESCARTABA con un warn, así que lo que hace un
+            // super_admin —crear usuarios, otorgar super_admin— no dejaba rastro. Ahora va a
+            // security_events (sin tenant), que sólo lee super_admin.
+            await recordSecurityEvent({
+                accion: params.accion,
+                entidad: params.entidad,
+                entidadId: params.entidadId,
+                usuarioId: params.usuarioId ?? user?.userId ?? null,
+                detalle: params.detalle,
+                ip: params.ip ?? context.getIp() ?? null,
+                userAgent: params.userAgent ?? context.getUserAgent() ?? null,
+            });
             return;
         }
 
@@ -43,8 +61,8 @@ export async function audit(params: AuditParams): Promise<void> {
                 entidadId: params.entidadId ?? null,
                 accion: params.accion,
                 detalle: params.detalle ?? null,
-                ip: context.getIp() ?? null,
-                userAgent: context.getUserAgent() ?? null,
+                ip: params.ip ?? context.getIp() ?? null,
+                userAgent: params.userAgent ?? context.getUserAgent() ?? null,
             } as any,
         }));
     } catch (err) {
