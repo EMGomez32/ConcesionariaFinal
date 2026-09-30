@@ -5,6 +5,11 @@ import { UnauthorizedException, ForbiddenException } from '../../../domain/excep
 import { withAuthBypass } from '../../../infrastructure/database/unitOfWork';
 import config from '../../../config';
 
+// Hash descartable para gastar el MISMO tiempo de bcrypt cuando el email no existe:
+// sin esto, 'no existe' respondía en milisegundos y 'existe con clave mala' en ~100 ms,
+// y esa diferencia enumera las cuentas registradas.
+const DUMMY_HASH = bcrypt.hashSync('autenza-dummy-password-no-usar', 10);
+
 export class Login {
     constructor(
         private readonly tokenService: ITokenService,
@@ -27,6 +32,7 @@ export class Login {
         }));
 
         if (!usuario || !usuario.passwordHash) {
+            await bcrypt.compare(pass, DUMMY_HASH);
             throw new UnauthorizedException('Credenciales inválidas');
         }
 

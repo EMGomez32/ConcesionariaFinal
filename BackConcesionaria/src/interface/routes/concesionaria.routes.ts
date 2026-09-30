@@ -4,6 +4,7 @@ import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
 import { uploadLogo } from '../middlewares/upload.middleware';
 import { createConcesionariaSchema, updateConcesionariaSchema } from '../validation/concesionaria.schema';
+import { uploadLimiter } from '../middlewares/rateLimiters';
 
 const router = Router();
 
@@ -68,7 +69,7 @@ router.patch('/me', authorize('admin'), validateBody(updateConcesionariaSchema),
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
-router.post('/me/logo', authorize('admin'), uploadLogo, ConcesionariaController.uploadLogo);
+router.post('/me/logo', uploadLimiter, authorize('admin'), uploadLogo, ConcesionariaController.uploadLogo);
 router.delete('/me/logo', authorize('admin'), ConcesionariaController.deleteLogo);
 
 // A partir de acá, todo administra los TENANTS y es sólo para super_admin: sin

@@ -6,19 +6,19 @@ import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../security/tenantGuard';
 import { USUARIO_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 export class PrismaVentaRepository implements IVentaRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Venta>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
         const where = coerceFilter(filter);
 
         const results = await prisma.venta.findMany({
             where,
             take: limitNum,
             skip: (pageNum - 1) * limitNum,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('Venta', sortBy, sortOrder, 'createdAt'),
             include: {
                 cliente: true,
                 vehiculo: { select: VEHICULO_PUBLICO },

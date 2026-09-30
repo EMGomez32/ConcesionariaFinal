@@ -12,6 +12,7 @@ import { rawPrisma } from '../../infrastructure/database/prisma';
 import { withAuthBypass } from '../../infrastructure/database/unitOfWork';
 import { sendPasswordResetEmail } from '../../infrastructure/email/mailer';
 import { env } from '../../config/env';
+import { logger } from '../../infrastructure/logging/logger';
 
 const tokenService = new JwtTokenService();
 const refreshRepo = new PrismaRefreshTokenRepository();
@@ -75,6 +76,13 @@ export class AuthController {
             if (!usuario) return res.json(respuestaGenerica);
 
             const token = crypto.randomBytes(32).toString('hex');
+            // Un solo enlace vigente por usuario: pedir uno nuevo invalida los
+            // anteriores todavía sin usar (si no, cada pedido dejaba otro enlace
+            // válido dando vueltas en mails viejos durante 1 h).
+            await rawPrisma.passwordResetToken.updateMany({
+                where: { usuarioId: usuario.id, usedAt: null },
+                data: { usedAt: new Date() },
+            });
             await rawPrisma.passwordResetToken.create({
                 data: {
                     usuarioId: usuario.id,
@@ -84,7 +92,12 @@ export class AuthController {
             });
 
             const link = `${env.APP_URL.replace(/\/$/, '')}/reset-password?token=${token}`;
-            await sendPasswordResetEmail(usuario.email, link);
+            // Sin await: esperar al SMTP hacía que un email registrado tardara cientos de ms
+            // más que uno inexistente (oráculo de existencia por tiempo de respuesta), y un
+            // fallo del proveedor devolvía 500 sólo para cuentas reales. Se envía aparte y un
+            // error se loguea.
+            sendPasswordResetEmail(usuario.email, link).catch((err) =>
+                logger.error(`[auth] no se pudo enviar el email de recuperación: ${err instanceof Error ? err.message : err}`));
 
             return res.json(respuestaGenerica);
         } catch (error) {
@@ -110,12 +123,25 @@ export class AuthController {
             // withAuthBypass: transacción única (atómica) con la RLS salteada — el
             // update de `usuarios` es cross-tenant (reset sin sesión) y bajo app_rw la
             // RLS lo filtraría a 0 filas (la contraseña no cambiaría).
-            await withAuthBypass(async (tx) => {
+            const usado = await withAuthBypass(async (tx) => {
+                // Un solo uso, ATÓMICO: el findFirst de arriba no alcanza (dos requests
+                // con el mismo token pasaban los dos). Sólo gana quien logra pasar
+                // usedAt de NULL a fecha; el perdedor no cambia nada.
+                const claim = await tx.passwordResetToken.updateMany({
+                    where: { id: registro.id, usedAt: null },
+                    data: { usedAt: new Date() },
+                });
+                if (claim.count !== 1) return false;
                 await tx.usuario.update({ where: { id: registro.usuarioId }, data: { passwordHash } });
-                await tx.passwordResetToken.update({ where: { id: registro.id }, data: { usedAt: new Date() } });
-                // Invalida sesiones activas: hay que volver a loguearse.
-                await tx.refreshToken.updateMany({ where: { usuarioId: registro.usuarioId }, data: { isRevoked: true } });
+                // Cierra las sesiones activas: hay que volver a loguearse. Se BORRAN
+                // (no se marcan revocadas): un refresh viejo que reingrese es un 401 a
+                // secas y no dispara la detección de reuso sobre las sesiones NUEVAS.
+                await tx.refreshToken.deleteMany({ where: { usuarioId: registro.usuarioId } });
+                return true;
             });
+            if (!usado) {
+                return res.status(400).json({ error: 'INVALID_TOKEN', message: 'El enlace es inválido o expiró. Solicitá uno nuevo.' });
+            }
 
             return res.json({ message: 'Contraseña actualizada. Ya podés iniciar sesión.' });
         } catch (error) {
