@@ -76,3 +76,22 @@ export const changeEstadoEntregaSchema = z.object({
 export const addPagoSchema = pagoItem;
 export const addExtraSchema = externoItem;
 export const addCanjeSchema = canjeItem;
+
+// POST /presupuestos/:id/convertir-en-venta. Antes iba SIN validar: el body crudo
+// (precioVenta, pagos, externos, canjes...) entraba a CreateVenta con montos
+// negativos o NaN y claves extra en los create anidados. El cliente y el vehículo
+// salen del presupuesto, no del body; acá sólo lo que el use-case realmente lee.
+// Todo es opcional: el front manda formaPago/fechaVenta/moneda/observaciones y el
+// resto se toma del presupuesto.
+export const convertirPresupuestoSchema = z.object({
+    sucursalId: optionalFk,
+    vendedorId: optionalFk,
+    precioVenta: montoField('El precio de venta').optional(),
+    moneda: monedaEnum.optional(),
+    formaPago: formaPagoEnum.optional(),
+    fechaVenta: z.string().min(1, 'La fecha de venta no puede estar vacía').optional(),
+    observaciones: z.string().optional(),
+    pagos: z.array(pagoItem).optional(),
+    externos: z.array(externoItem).optional(),
+    canjes: z.array(canjeItem).optional(),
+});

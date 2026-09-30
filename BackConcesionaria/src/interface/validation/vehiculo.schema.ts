@@ -158,3 +158,12 @@ export const updateVehiculoSchema = z.object({
     observaciones: optionalStr,
     clienteOrigenId: optionalFk,
 });
+
+// POST /vehiculos/:id/transferir. Antes sin validar: `Number(undefined)` llegaba como NaN.
+export const transferirVehiculoSchema = z.object({
+    sucursalDestinoId: z.coerce
+        .number({ error: 'La sucursal destino es obligatoria' })
+        .int('Sucursal destino inválida')
+        .positive('La sucursal destino es obligatoria'),
+    motivo: z.string().trim().max(500, 'El motivo es demasiado largo').optional(),
+});
