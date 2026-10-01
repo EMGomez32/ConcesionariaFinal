@@ -43,7 +43,7 @@ type Metodo = 'post' | 'patch' | 'delete';
 const ID_FANTASMA = 999999999;
 
 /** Mínimo que acepta `createUsuarioSchema` (min 6). */
-const PASSWORD = 'secret123';
+const PASSWORD = 'secret12345';
 
 /** Los 4 roles que el seed NO trae y este test tiene que fabricar por API. */
 const ROLES_A_FABRICAR = ['lectura', 'vendedor', 'cobrador', 'postventa'] as const;

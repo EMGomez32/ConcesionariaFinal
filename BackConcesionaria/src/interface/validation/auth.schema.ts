@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { passwordNueva } from './password';
 
 // Schemas de validación de los endpoints de auth. Conservadores a propósito:
 // en login sólo se valida presencia y forma (nunca reglas de complejidad, que
@@ -31,5 +32,35 @@ export const logoutSchema = z.object({
 // (antes estaba hardcodeada en el controller).
 export const resetPasswordSchema = z.object({
     token: z.string({ error: 'El token es obligatorio' }).min(1, 'El token es obligatorio'),
-    password: z.string({ error: 'La contraseña es obligatoria' }).min(10, 'La contraseña debe tener al menos 10 caracteres'),
+    password: passwordNueva(),
+});
+
+// ── 2FA (TOTP) ──────────────────────────────────────────────────────────────
+
+const codigoTotp = z.string({ error: 'El código es obligatorio' }).trim().min(1, 'El código es obligatorio').max(12);
+const codigoRecuperacion = z.string().trim().min(1).max(20);
+
+// Segundo paso del login: el token de "contraseña correcta" + UN código (TOTP o de recuperación).
+export const login2faSchema = z.object({
+    mfaToken: z.string({ error: 'Falta el token de verificación' }).min(1, 'Falta el token de verificación'),
+    code: codigoTotp.optional(),
+    recoveryCode: codigoRecuperacion.optional(),
+}).refine((d) => !!d.code !== !!d.recoveryCode, { message: 'Ingresá el código de tu app o un código de recuperación (no ambos)' });
+
+export const mfaSetupSchema = z.object({
+    password: z.string({ error: 'La contraseña actual es obligatoria' }).min(1, 'La contraseña actual es obligatoria'),
+});
+
+export const mfaEnableSchema = z.object({ code: codigoTotp });
+
+// Desactivar: contraseña + (código de la app O código de recuperación).
+export const mfaDisableSchema = z.object({
+    password: z.string({ error: 'La contraseña actual es obligatoria' }).min(1, 'La contraseña actual es obligatoria'),
+    code: codigoTotp.optional(),
+    recoveryCode: codigoRecuperacion.optional(),
+}).refine((d) => !!d.code !== !!d.recoveryCode, { message: 'Ingresá el código de tu app o un código de recuperación (no ambos)' });
+
+export const mfaRegenerarSchema = z.object({
+    password: z.string({ error: 'La contraseña actual es obligatoria' }).min(1, 'La contraseña actual es obligatoria'),
+    code: codigoTotp,
 });

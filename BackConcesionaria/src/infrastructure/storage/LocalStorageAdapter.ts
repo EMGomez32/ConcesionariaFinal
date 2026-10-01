@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { IStorageAdapter, SavedFile, UploadInput } from './IStorageAdapter';
+import { extensionParaMime } from '../security/contenidoArchivo';
 
 // Stores files under <root>/<prefix>/<yyyy-mm>/<random>.<ext>
 // `url` is built relative to a public mount point ('/uploads' by default), so
@@ -13,7 +14,11 @@ export class LocalStorageAdapter implements IStorageAdapter {
     ) { }
 
     async save(file: UploadInput, prefix: string): Promise<SavedFile> {
-        const ext = path.extname(file.originalname).toLowerCase().slice(0, 16);
+        // La extensión NUNCA sale del originalname (lo controla el cliente: un .html/.svg/.js
+        // plantado se serviría desde el dominio de la app). Sale del contenido ya validado
+        // (file.extension) o, si no, del mimetype ya validado.
+        const extSegura = /^[a-z0-9]{1,5}$/.test(file.extension ?? '') ? file.extension : extensionParaMime(file.mimetype);
+        const ext = `.${extSegura}`;
         const safePrefix = prefix.replace(/[^a-zA-Z0-9_-]/g, '-');
         const yearMonth = new Date().toISOString().slice(0, 7);
         const randomName = crypto.randomBytes(16).toString('hex') + ext;
@@ -30,8 +35,23 @@ export class LocalStorageAdapter implements IStorageAdapter {
         };
     }
 
+    /**
+     * Resuelve un storageKey a una ruta absoluta y exige que caiga DENTRO de root.
+     * El storageKey se persiste en BD y no es de fiar: un '..' (o una ruta
+     * absoluta) no puede escapar del directorio de uploads, ni para leer ni para
+     * borrar.
+     */
+    private resolveInRoot(storageKey: string): string {
+        const fullPath = path.resolve(this.root, storageKey);
+        const rootResolved = path.resolve(this.root);
+        if (!fullPath.startsWith(rootResolved + path.sep)) {
+            throw new Error('storageKey fuera del directorio de storage');
+        }
+        return fullPath;
+    }
+
     async delete(storageKey: string): Promise<void> {
-        const fullPath = path.join(this.root, storageKey);
+        const fullPath = this.resolveInRoot(storageKey);
         try {
             await fs.unlink(fullPath);
         } catch (err: any) {
@@ -41,15 +61,7 @@ export class LocalStorageAdapter implements IStorageAdapter {
     }
 
     async read(storageKey: string): Promise<Buffer> {
-        // El storageKey se compone acá abajo (nunca viene del cliente), pero por
-        // las dudas se resuelve y se valida que caiga dentro de root: así un key
-        // con '..' no puede leer archivos fuera del directorio de uploads.
-        const fullPath = path.resolve(this.root, storageKey);
-        const rootResolved = path.resolve(this.root);
-        if (fullPath !== rootResolved && !fullPath.startsWith(rootResolved + path.sep)) {
-            throw new Error('storageKey fuera del directorio de storage');
-        }
-        return fs.readFile(fullPath);
+        return fs.readFile(this.resolveInRoot(storageKey));
     }
 }
 

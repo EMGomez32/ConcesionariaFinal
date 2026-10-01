@@ -43,30 +43,37 @@ describe('Auth', () => {
     test('reset password actualiza la contraseña y permite login con la nueva', async () => {
         const sa = await loginAsSuperAdmin();
         const adminSession = await loginAsAdmin();
-        const adminId = adminSession.user.id;
 
-        // Cambio temporalmente la password del admin
+        // Se resetea un usuario PROPIO del test: la política de contraseñas nuevas (10+ caracteres)
+        // ya no permite volver a poner las claves cortas del seed (admin123), así que no se toca al admin.
+        const email = `reset-${Date.now()}@demo.com`;
+        const alta = await api.post(
+            '/api/usuarios',
+            { nombre: 'Reset Test', email, password: 'clave-original-123', roleIds: [] },
+            authHeaders(adminSession.token)
+        );
+        expect(alta.status).toBe(201);
+        const userId = alta.data.id;
+
         const newPass = 'temp-' + Date.now();
         const resetRes = await api.post(
-            `/api/usuarios/${adminId}/reset-password`,
+            `/api/usuarios/${userId}/reset-password`,
             { password: newPass },
             authHeaders(sa.token)
         );
         expect(resetRes.status).toBe(204);
 
         // Login con la nueva password debe funcionar
-        const newLogin = await api.post('/api/auth/login', {
-            email: 'admin@demo.com',
-            password: newPass,
-        });
+        const newLogin = await api.post('/api/auth/login', { email, password: newPass });
         expect(newLogin.status).toBe(200);
 
-        // Restauro la password original para no romper otros tests
-        await api.post(
-            `/api/usuarios/${adminId}/reset-password`,
-            { password: 'admin123' },
-            authHeaders(sa.token)
-        );
+        // Y la política rechaza una contraseña corta o de las comunes.
+        const corta = await api.post(`/api/usuarios/${userId}/reset-password`, { password: 'admin123' }, authHeaders(sa.token));
+        expect(corta.status).toBe(400);
+        const comun = await api.post(`/api/usuarios/${userId}/reset-password`, { password: 'password123' }, authHeaders(sa.token));
+        expect(comun.status).toBe(400);
+
+        await api.delete(`/api/usuarios/${userId}`, authHeaders(sa.token));
     });
 
     test('reset password sin auth devuelve 401', async () => {

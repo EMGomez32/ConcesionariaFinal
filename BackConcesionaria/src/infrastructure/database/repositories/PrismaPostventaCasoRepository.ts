@@ -4,6 +4,7 @@ import prisma from '../prisma';
 import { VEHICULO_PUBLICO } from '../proyecciones';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { parsePagination } from '../queryOptions';
 
 // Sólo se puede ordenar por columnas reales: `sortBy` viene de la query y
 // pasarlo crudo a Prisma permite un 500 con cualquier valor inventado.
@@ -35,9 +36,8 @@ function pickEditable(data: any = {}, editable: readonly string[]): Record<strin
 
 export class PrismaPostventaCasoRepository implements IPostventaCasoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<PostventaCaso>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
 
         const where = coerceFilter(filter);
         const orderKey = SORTABLE.includes(String(sortBy)) ? String(sortBy) : 'createdAt';

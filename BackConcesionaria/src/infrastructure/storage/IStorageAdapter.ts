@@ -10,6 +10,8 @@ export interface UploadInput {
     originalname: string;
     mimetype: string;
     size: number;
+    /** Extensión derivada del CONTENIDO validado (ver validarContenidoArchivo); nunca del originalname. */
+    extension?: string;
 }
 
 export interface IStorageAdapter {

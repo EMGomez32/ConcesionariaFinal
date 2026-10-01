@@ -6,6 +6,7 @@ import { queryClient } from '../../api/queryClient';
 import { getApiErrorMessage } from '../../utils/error';
 import { Key, Mail, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import Isotipo from '../../components/brand/Isotipo';
+import { mfaApi, esSegundoPaso, type LoginResponse, type SesionResponse } from '../../api/mfa.api';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -13,9 +14,30 @@ const LoginPage = () => {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Segundo paso (2FA): token de "contraseña correcta" que devolvió el backend (vale 5 min).
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [codigo, setCodigo] = useState('');
+  const [usarRecuperacion, setUsarRecuperacion] = useState(false);
 
   const setAuth = useAuthStore((state) => state.setAuth);
   const navigate = useNavigate();
+
+  const entrar = (sesion: SesionResponse) => {
+    const { user, tokens } = sesion;
+    // Frontera de sesión: si quedó caché de una sesión anterior (p.ej. alguien
+    // abrió /login estando autenticado y entra con otra cuenta, camino que no
+    // pasa por performLogout), acá se descarta. En /login no hay queries de
+    // datos montadas, así que el clear() no dispara ningún refetch.
+    queryClient.clear();
+    setAuth(user, tokens.access, tokens.refresh);
+    // Un rol que exige 2FA y todavía no lo activó va primero a activarlo.
+    if (user.mfaPendiente) {
+      navigate('/activar-2fa');
+      return;
+    }
+    // El super_admin vive en su panel de plataforma, no en el shell del tenant.
+    navigate(user.roles.includes('super_admin') ? '/plataforma' : '/');
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,37 +45,46 @@ const LoginPage = () => {
     setError('');
 
     try {
-      interface LoginResponse {
-        user: {
-          id: number;
-          nombre: string;
-          email: string;
-          roles: string[];
-          concesionariaId: number | null;
-          sucursalId: number | null;
-        };
-        tokens: { access: string; refresh: string };
-      }
       const result = await client.post<LoginResponse>('/auth/login', {
         email,
         password,
       });
 
-      const { user, tokens } = result;
-      // Frontera de sesión: si quedó caché de una sesión anterior (p.ej. alguien
-      // abrió /login estando autenticado y entra con otra cuenta, camino que no
-      // pasa por performLogout), acá se descarta. En /login no hay queries de
-      // datos montadas, así que el clear() no dispara ningún refetch.
-      queryClient.clear();
-      setAuth(user, tokens.access, tokens.refresh);
-      // El super_admin vive en su panel de plataforma, no en el shell del tenant.
-      navigate(user.roles.includes('super_admin') ? '/plataforma' : '/');
+      // Cuenta con 2FA: todavía no hay sesión, falta el segundo factor.
+      if (esSegundoPaso(result)) {
+        setMfaToken(result.mfaToken);
+        setPassword('');
+        return;
+      }
+      entrar(result);
     } catch (err) {
       console.error('Login error:', err);
       setError(getApiErrorMessage(err, 'Error al iniciar sesión'));
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSegundoPaso = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaToken) return;
+    setLoading(true);
+    setError('');
+    try {
+      const sesion = await mfaApi.login2fa(mfaToken, usarRecuperacion ? { recoveryCode: codigo } : { code: codigo });
+      entrar(sesion);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Código inválido o vencido'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const volverAlLogin = () => {
+    setMfaToken(null);
+    setCodigo('');
+    setUsarRecuperacion(false);
+    setError('');
   };
 
   return (
@@ -72,6 +103,69 @@ const LoginPage = () => {
           <p className="login-tag">Dealer Operating System</p>
         </header>
 
+        {mfaToken ? (
+          <form onSubmit={handleSegundoPaso} className="login-form" aria-labelledby="login-title">
+            <div className="login-welcome">
+              <h2 id="login-title">Verificación en dos pasos</h2>
+              <p>
+                {usarRecuperacion
+                  ? 'Ingresá uno de tus códigos de recuperación (cada uno sirve una sola vez).'
+                  : 'Ingresá el código de 6 dígitos de tu app de autenticación.'}
+              </p>
+            </div>
+
+            {error && (
+              <div className="login-error animate-fade-in" role="alert">
+                <AlertCircle size={16} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="input-group">
+              <label htmlFor="login-codigo" className="input-label">
+                {usarRecuperacion ? 'Código de recuperación' : 'Código de verificación'}
+              </label>
+              <div className="input-container has-icon">
+                <span className="input-icon" aria-hidden="true"><Key size={16} /></span>
+                <input
+                  id="login-codigo"
+                  type="text"
+                  className="input-control"
+                  inputMode={usarRecuperacion ? 'text' : 'numeric'}
+                  autoComplete="one-time-code"
+                  placeholder={usarRecuperacion ? 'ABCDE-FGHJK' : '123456'}
+                  value={codigo}
+                  onChange={(e) => setCodigo(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="btn btn-primary btn-lg login-submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="loader" aria-hidden="true"></span>
+                  Verificando…
+                </>
+              ) : 'Verificar'}
+            </button>
+
+            <div style={{ textAlign: 'center', marginTop: '0.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ color: 'rgba(255,255,255,0.65)' }}
+                onClick={() => { setUsarRecuperacion((u) => !u); setCodigo(''); setError(''); }}
+              >
+                {usarRecuperacion ? 'Usar el código de mi app' : 'Usar un código de recuperación'}
+              </button>
+              <button type="button" className="btn btn-ghost" style={{ color: 'rgba(255,255,255,0.45)' }} onClick={volverAlLogin}>
+                Volver
+              </button>
+            </div>
+          </form>
+        ) : (
         <form onSubmit={handleLogin} className="login-form" aria-labelledby="login-title">
           <div className="login-welcome">
             <h2 id="login-title">Bienvenido de vuelta</h2>
@@ -147,6 +241,7 @@ const LoginPage = () => {
             <span>&copy; {new Date().getFullYear()} AUTENZA · Concesionaria</span>
           </footer>
         </form>
+        )}
       </main>
 
       <style>{`

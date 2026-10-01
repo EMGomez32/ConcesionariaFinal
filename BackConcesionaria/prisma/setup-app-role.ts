@@ -79,6 +79,18 @@ async function main() {
         await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${APP_ROLE}`);
         await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ${APP_ROLE}`);
 
+        // Rastro APPEND-ONLY: la app sólo inserta y lee audit_log / security_events.
+        // Sin esto, quien lograra ejecutar SQL con la conexión de la app (una
+        // inyección, un RCE) podía borrar o reescribir su propio rastro. El GRANT de
+        // arriba es sobre ALL TABLES; esto lo recorta DESPUÉS, en cada arranque.
+        // (Las tablas las crea la migración, que corre antes que este script.)
+        for (const tabla of ['audit_log', 'security_events']) {
+            const existe = await client.query(`SELECT to_regclass($1) AS oid`, [`public.${tabla}`]);
+            if (existe.rows[0]?.oid) {
+                await client.query(`REVOKE UPDATE, DELETE, TRUNCATE ON public.${tabla} FROM ${APP_ROLE}`);
+            }
+        }
+
         // Sanity: el rol NO debe ser superusuario ni BYPASSRLS (si no, la RLS no
         // filtraría) ni tener CREATEDB/CREATEROLE (privilegios de más).
         const check = await client.query(

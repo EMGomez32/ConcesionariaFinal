@@ -1,5 +1,6 @@
 import { CanalConversacion } from '@prisma/client';
 import { BaseException } from '../../domain/exceptions/BaseException';
+import { assertMismoOrigen } from '../security/destinoSeguro';
 import {
     ConfigMeta,
     campoTokenParaCanal,
@@ -170,6 +171,8 @@ export async function llamarGraph<T>(
     }
 
     const url = new URL(ruta.startsWith('http') ? ruta : `${GRAPH_API_BASE}/${ruta.replace(/^\//, '')}`);
+    // El Bearer va a donde diga la URL: una ruta absoluta sólo se acepta si es del Graph API.
+    assertMismoOrigen(url, GRAPH_API_BASE);
     for (const [k, v] of Object.entries(init.query ?? {})) {
         if (v !== undefined) url.searchParams.set(k, v);
     }

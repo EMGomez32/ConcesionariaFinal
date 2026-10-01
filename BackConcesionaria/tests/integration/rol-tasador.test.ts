@@ -22,7 +22,7 @@ describe('Rol tasador — sólo valúa usados', () => {
         const rolId = lista.find((r) => r.nombre === rol)?.id;
         expect(rolId).toBeTruthy();
         const email = `${unique(rol)}@demo.com`;
-        const pass = 'secret123';
+        const pass = 'secret12345';
         const res = await api.post('/api/usuarios', { nombre: unique(rol), email, password: pass, roleIds: [rolId] }, authHeaders(adminTok));
         expect(res.status).toBe(201);
         creados.push(res.data.id);
