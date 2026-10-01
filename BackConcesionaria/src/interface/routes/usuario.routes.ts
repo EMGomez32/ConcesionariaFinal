@@ -3,6 +3,7 @@ import { UsuarioController } from '../controllers/UsuarioController';
 import { authenticate } from '../middlewares/authenticate.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
+import { MfaController } from '../controllers/MfaController';
 import { createUsuarioSchema, updateUsuarioSchema, resetUsuarioPasswordSchema, updateMeSchema, changeMyPasswordSchema } from '../validation/usuario.schema';
 
 const router = Router();
@@ -186,6 +187,16 @@ router.patch('/:id', authenticate, authorize('admin', 'super_admin'), validateBo
  *       404: { $ref: '#/components/responses/NotFound' }
  */
 router.post('/:id/reset-password', authenticate, authorize('admin', 'super_admin'), validateBody(resetUsuarioPasswordSchema), UsuarioController.resetPassword);
+
+/**
+ * @openapi
+ * /usuarios/{id}/2fa/reset:
+ *   post:
+ *     tags: [Usuarios]
+ *     summary: Resetear el 2FA de un usuario (perdió el dispositivo)
+ *     description: Admin de la concesionaria (sobre sus usuarios) o super_admin. Apaga el 2FA, borra los códigos de recuperación y cierra las sesiones del usuario. Un admin no puede resetear a un super_admin.
+ */
+router.post('/:id/2fa/reset', authenticate, authorize('admin', 'super_admin'), MfaController.resetDeOtro);
 
 /**
  * @openapi

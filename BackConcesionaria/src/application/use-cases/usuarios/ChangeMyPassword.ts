@@ -22,8 +22,8 @@ export class ChangeMyPassword {
     ) { }
 
     async execute(usuarioId: number, currentPassword: string, newPassword: string, keepRefreshToken?: string | null) {
-        if (!newPassword || newPassword.length < 6) {
-            throw new BaseException(400, 'La nueva contraseña debe tener al menos 6 caracteres', 'VALIDATION_ERROR');
+        if (!newPassword || newPassword.length < 10) {
+            throw new BaseException(400, 'La nueva contraseña debe tener al menos 10 caracteres', 'VALIDATION_ERROR');
         }
 
         const usuario: any = await this.repository.findById(usuarioId);

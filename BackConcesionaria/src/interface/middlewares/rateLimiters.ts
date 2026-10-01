@@ -3,6 +3,7 @@ import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { env } from '../../config/env';
 import { getClientIp } from '../../utils/clientIp';
 import { context } from '../../infrastructure/security/context';
+import { usuarioDeMfaTokenSinVerificar } from '../../infrastructure/security/mfaToken';
 
 const isTest = env.NODE_ENV === 'test';
 
@@ -179,3 +180,38 @@ export const uploadLimiter = perUser(100);
 export const envioLimiter = perUser(60);
 /** PDFs y exportaciones CSV (consultas pesadas + render): 40 cada 15 min por usuario. */
 export const costosoLimiter = perUser(40);
+
+// ── 2FA ─────────────────────────────────────────────────────────────────────
+// Un código TOTP son 10⁶ posibilidades: sin freno se adivina. Se cuentan los FALLOS por CUENTA (el
+// id sale del token de "contraseña correcta", sin importar la IP): 5 cada 15 min. Un acierto no cuenta.
+export const mfaLoginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    skip: () => isTest,
+    keyGenerator: (req) => {
+        const uid = usuarioDeMfaTokenSinVerificar(req.body?.mfaToken);
+        return uid ? `mfa:u${uid}` : `mfa:ip:${ipKey(req)}`;
+    },
+    message: {
+        error: 'TOO_MANY_ATTEMPTS',
+        message: 'Demasiados códigos incorrectos. Esperá 15 minutos e intentá de nuevo.',
+    },
+});
+
+// Más de lo mismo por IP (barrido de cuentas con tokens robados).
+export const mfaLoginIpLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 30,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    skip: () => isTest,
+    keyGenerator: ipKey,
+    message: MSG_DEMASIADOS,
+});
+
+/** Setup / activar / desactivar / regenerar códigos: 10 cada 15 min por usuario (piden contraseña y código). */
+export const mfaAccionLimiter = perUser(10);

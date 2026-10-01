@@ -46,8 +46,9 @@ const CAMPOS_VISIBLES_PARA_NO_ADMIN = ['id', 'nombre', 'activo', 'roles', 'sucur
 //    que está gateado a admin) y el email (el padrón que arma el phishing).
 function sanitizeUsuario(u: any, isAdmin: boolean) {
     if (!u || typeof u !== 'object') return u;
-    const { passwordHash, ...rest } = u as any;
-    void passwordHash;
+    // passwordHash y los secretos del 2FA NUNCA salen en una respuesta.
+    const { passwordHash, totpSecret, totpLastStep, ...rest } = u as any;
+    void passwordHash; void totpSecret; void totpLastStep;
     if (isAdmin) return rest;
 
     const recortado: Record<string, unknown> = {};

@@ -11,6 +11,10 @@ interface User {
   roles: string[];
   concesionariaId: number | null;
   sucursalId: number | null;
+  /** El usuario tiene el 2FA activado. */
+  mfaActivo?: boolean;
+  /** Su rol exige 2FA y todavía no lo activó: sólo puede usar la pantalla de activación. */
+  mfaPendiente?: boolean;
 }
 
 interface AuthState {

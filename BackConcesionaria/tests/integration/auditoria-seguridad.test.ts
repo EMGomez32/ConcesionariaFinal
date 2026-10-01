@@ -104,7 +104,7 @@ describe('Auditoría de seguridad', () => {
 
             const u = await api.post(
                 '/api/usuarios',
-                { nombre: unique('Rol'), email: `${unique('rol')}@demo.com`, password: 'secret123', roleIds: [] },
+                { nombre: unique('Rol'), email: `${unique('rol')}@demo.com`, password: 'secret12345', roleIds: [] },
                 authHeaders(adminToken),
             );
             expect(u.status).toBe(201);

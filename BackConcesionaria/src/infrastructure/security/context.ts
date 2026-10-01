@@ -5,6 +5,8 @@ export interface UserContext {
     concesionariaId: number | null;
     sucursalId: number | null;
     roles: string[];
+    /** Ver TokenPayload.mfaPending. */
+    mfaPending?: boolean;
 }
 
 export interface AppContext {

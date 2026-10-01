@@ -55,6 +55,9 @@ services:
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET requerido en .env}
       - JWT_EXPIRES_IN=15m
       - JWT_REFRESH_EXPIRES_IN=7d
+      # Roles que DEBEN tener 2FA (separados por coma). Vacío = el default (super_admin en producción);
+      # `none` = nadie (escape de emergencia). Ver BackConcesionaria/src/infrastructure/security/mfaPolicy.ts.
+      - MFA_REQUIRED_ROLES=${MFA_REQUIRED_ROLES:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       # 1 = hay un proxy (nginx) delante; deja que la app lea el X-Forwarded-For real.
       - TRUST_PROXY=1

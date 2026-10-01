@@ -21,6 +21,7 @@ const RedirectTasador = lazy(() => import('./components/auth/RedirectTasador'));
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
+const Activar2faPage = lazy(() => import('./pages/auth/Activar2faPage'));
 
 // Resto de pages: lazy — un chunk por feature
 const CapacitacionPage = lazy(() => import('./pages/capacitacion/CapacitacionPage'));
@@ -78,6 +79,9 @@ function App() {
           <Route path="/capacitacion" element={<CapacitacionPage />} />
 
           <Route element={<ProtectedRoute />}>
+            {/* Activación obligatoria del 2FA (roles que lo exigen). ProtectedRoute confina acá a esa sesión. */}
+            <Route path="/activar-2fa" element={<Activar2faPage />} />
+
             {/* Panel de PLATAFORMA (super_admin): front separado con su propio
                 layout y navegación. Sólo administración global de tenants; no
                 muestra las pantallas operativas de la concesionaria. */}

@@ -3,6 +3,7 @@ import { IRefreshTokenRepository } from '../../../domain/repositories/IRefreshTo
 import { UnauthorizedException } from '../../../domain/exceptions/BaseException';
 import { withAuthBypass } from '../../../infrastructure/database/unitOfWork';
 import config from '../../../config';
+import { mfaPendiente } from '../../../infrastructure/security/mfaPolicy';
 
 export class RefreshAuth {
     constructor(
@@ -60,6 +61,8 @@ export class RefreshAuth {
                 concesionariaId: usuario.concesionariaId,
                 sucursalId: usuario.sucursalId,
                 roles,
+                // El rol exige 2FA y el usuario aún no lo activó: sigue restringido a configurarlo.
+                ...(mfaPendiente(roles, usuario.totpEnabled) ? { mfaPending: true } : {}),
             };
             const access = this.tokenService.generateAccessToken(newPayload);
             const refresh = this.tokenService.generateRefreshToken(newPayload);

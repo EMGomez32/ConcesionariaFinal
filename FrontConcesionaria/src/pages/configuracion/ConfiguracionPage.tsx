@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt, Plug, Plus, Edit, Copy, Link2, ChevronRight, ChevronDown, MessageCircle, QrCode, Unplug, LogOut, Smartphone, ShoppingBag, AlertTriangle, ExternalLink, FlaskConical, Check, Minus } from 'lucide-react';
+import { ShieldCheck, Building2, User as UserIcon, Lock, Save, RefreshCw, Palette, Trash2, Image as ImageIcon, Sparkles, PlayCircle, Receipt, Plug, Plus, Edit, Copy, Link2, ChevronRight, ChevronDown, MessageCircle, QrCode, Unplug, LogOut, Smartphone, ShoppingBag, AlertTriangle, ExternalLink, FlaskConical, Check, Minus } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
@@ -26,10 +26,11 @@ import type { Concesionaria, UpdateConcesionariaDto } from '../../types/concesio
 import { CONDICION_IVA_EMISOR_LABEL } from '../../types/concesionaria.types';
 import { getApiErrorMessage } from '../../utils/error';
 import { formatFecha } from '../../utils/fecha';
+import DosFactores from '../../components/seguridad/DosFactores';
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
-type Tab = 'concesionaria' | 'perfil' | 'password' | 'preferencias';
+type Tab = 'concesionaria' | 'perfil' | 'password' | 'seguridad' | 'preferencias';
 
 // Selector de color de marca: swatch nativo + hex editable + botón para volver
 // al color por defecto (valor vacío = el PDF usa el color AUTENZA).
@@ -1929,8 +1930,8 @@ const ConfiguracionPage = () => {
             addToast('Ingresá tu contraseña actual', 'error');
             return;
         }
-        if (passForm.password.length < 6) {
-            addToast('La nueva contraseña debe tener al menos 6 caracteres', 'error');
+        if (passForm.password.length < 10) {
+            addToast('La nueva contraseña debe tener al menos 10 caracteres', 'error');
             return;
         }
         if (passForm.password !== passForm.confirm) {
@@ -1972,6 +1973,9 @@ const ConfiguracionPage = () => {
                 </button>
                 <button className={`segmented-btn ${tab === 'password' ? 'is-active' : ''}`} onClick={() => setTab('password')}>
                     <Lock size={16} /> Cambiar contraseña
+                </button>
+                <button className={`segmented-btn ${tab === 'seguridad' ? 'is-active' : ''}`} onClick={() => setTab('seguridad')}>
+                    <ShieldCheck size={16} /> Seguridad
                 </button>
                 <button className={`segmented-btn ${tab === 'preferencias' ? 'is-active' : ''}`} onClick={() => setTab('preferencias')}>
                     <Sparkles size={16} /> Preferencias
@@ -2142,7 +2146,7 @@ const ConfiguracionPage = () => {
                             placeholder="Tu contraseña actual" />
                         <Input dense label="Nueva contraseña *" type="password" value={passForm.password} autoComplete="new-password"
                             onChange={e => setPassForm(f => ({ ...f, password: e.target.value }))}
-                            placeholder="Mínimo 6 caracteres" />
+                            placeholder="Mínimo 10 caracteres" />
                         <Input dense label="Confirmar nueva contraseña *" type="password" value={passForm.confirm} autoComplete="new-password"
                             onChange={e => setPassForm(f => ({ ...f, confirm: e.target.value }))} />
                     </div>
@@ -2151,6 +2155,15 @@ const ConfiguracionPage = () => {
                             <Lock size={16} /> {savingPass ? 'Guardando...' : 'Cambiar contraseña'}
                         </Button>
                     </div>
+                </div>
+            )}
+
+            {tab === 'seguridad' && (
+                <div className="card">
+                    <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <ShieldCheck size={18} /> Verificación en dos pasos
+                    </h2>
+                    <DosFactores />
                 </div>
             )}
 
