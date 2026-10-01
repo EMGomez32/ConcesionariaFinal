@@ -40,11 +40,19 @@ describe('rolesQueExigenMfa', () => {
         expect(rolesQueExigenMfa()).toEqual(['super_admin', 'admin']);
     });
 
-    test('variable VACÍA = escape de emergencia: no se exige a nadie ni en producción', () => {
+    test('MFA_REQUIRED_ROLES=none es el escape de emergencia: no se exige a nadie ni en producción', () => {
         envMock.NODE_ENV = 'production';
-        process.env.MFA_REQUIRED_ROLES = '';
+        process.env.MFA_REQUIRED_ROLES = 'none';
         expect(rolesQueExigenMfa()).toEqual([]);
         expect(exigeMfa(['super_admin'])).toBe(false);
+        process.env.MFA_REQUIRED_ROLES = ' NONE ';
+        expect(rolesQueExigenMfa()).toEqual([]);
+    });
+
+    test('variable VACÍA (así la pasa docker compose si no está definida) = el default, NO apaga la política', () => {
+        envMock.NODE_ENV = 'production';
+        process.env.MFA_REQUIRED_ROLES = '';
+        expect(rolesQueExigenMfa()).toEqual(['super_admin']);
     });
 
     test('exigeMfa / mfaPendiente', () => {

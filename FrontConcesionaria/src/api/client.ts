@@ -114,6 +114,17 @@ axiosInstance.interceptors.response.use(
             }
         }
 
+        // El rol de este usuario pasó a exigir 2FA (o su sesión es anterior a la política) y todavía no
+        // lo activó: el backend sólo le deja usar /api/auth/*. Se lo manda a activarlo.
+        if (
+            error.response?.status === 403 &&
+            error.response?.data?.error === 'MFA_ENROLLMENT_REQUIRED' &&
+            !window.location.pathname.startsWith('/activar-2fa')
+        ) {
+            useAuthStore.getState().setUser({ mfaPendiente: true });
+            window.location.assign('/activar-2fa');
+        }
+
         return Promise.reject(error.response?.data || error.message);
     }
 );

@@ -9,9 +9,11 @@ import {
     Lock,
     Building2,
     Mail,
+    ShieldOff,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usuariosApi } from '../../api/usuarios.api';
+import { mfaApi } from '../../api/mfa.api';
 import { concesionariasApi } from '../../api/concesionarias.api';
 import type { Usuario, CreateUsuarioDto, UpdateUsuarioDto } from '../../types/usuario.types';
 import type { Concesionaria } from '../../types/concesionaria.types';
@@ -54,6 +56,9 @@ const UsuariosPage: React.FC = () => {
     const [newPassword, setNewPassword] = useState('');
     const [resettingPassword, setResettingPassword] = useState(false);
     const [deletingUsuario, setDeletingUsuario] = useState<Usuario | null>(null);
+    // Reset del 2FA de un usuario que perdió el dispositivo (admin).
+    const [reseteando2fa, setReseteando2fa] = useState<Usuario | null>(null);
+    const [enviando2fa, setEnviando2fa] = useState(false);
 
     const { data: response, isLoading: loading, isError: error } = useQuery({
         queryKey: ['usuarios', searchTerm],
@@ -298,6 +303,14 @@ const UsuariosPage: React.FC = () => {
                                                 <Key size={16} />
                                             </button>
                                             <button
+                                                onClick={() => setReseteando2fa(usuario)}
+                                                className="icon-btn"
+                                                title="Resetear verificación en dos pasos (2FA)"
+                                                aria-label="Resetear 2FA"
+                                            >
+                                                <ShieldOff size={16} />
+                                            </button>
+                                            <button
                                                 onClick={() => handleOpenModal(usuario)}
                                                 className="icon-btn"
                                                 title="Editar"
@@ -357,10 +370,36 @@ const UsuariosPage: React.FC = () => {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Mínimo 10 caracteres"
                     icon={<Lock size={16} />}
                 />
             </Modal>
+
+            <ConfirmDialog
+                isOpen={!!reseteando2fa}
+                title="Resetear verificación en dos pasos"
+                message={reseteando2fa
+                    ? `¿Resetear el 2FA de "${reseteando2fa.nombre}"? Se le apaga el segundo factor, se borran sus códigos de recuperación y se cierran todas sus sesiones. Usalo cuando perdió el teléfono.`
+                    : ''}
+                confirmLabel="Resetear 2FA"
+                cancelLabel="Cancelar"
+                type="danger"
+                onConfirm={async () => {
+                    if (!reseteando2fa) return;
+                    setEnviando2fa(true);
+                    try {
+                        await mfaApi.resetDeUsuario(reseteando2fa.id);
+                        addToast('2FA reseteado. El usuario deberá volver a iniciar sesión.', 'success');
+                        setReseteando2fa(null);
+                    } catch (err) {
+                        addToast(getApiErrorMessage(err, 'No se pudo resetear el 2FA'), 'error');
+                    } finally {
+                        setEnviando2fa(false);
+                    }
+                }}
+                onCancel={() => setReseteando2fa(null)}
+                loading={enviando2fa}
+            />
 
             <ConfirmDialog
                 isOpen={!!deletingUsuario}
