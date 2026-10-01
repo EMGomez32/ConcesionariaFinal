@@ -41,10 +41,8 @@ import reporteRoutes from '../interface/routes/reporte.routes';
 import cotizacionRoutes from '../interface/routes/cotizacion.routes';
 import metaVentaRoutes from '../interface/routes/meta-venta.routes';
 import objetivoVendedorRoutes from '../interface/routes/objetivo-vendedor.routes';
-import debugRoutes from '../interface/routes/debug.routes';
 import { authenticate } from '../interface/middlewares/authenticate.middleware';
 import { authorize } from '../interface/middlewares/authorize.middleware';
-import { env } from '../config/env';
 import ApiResponse from '../utils/ApiResponse';
 
 const router = express.Router();
@@ -55,11 +53,6 @@ const router = express.Router();
 router.get('/health', (req, res) => {
     res.send(ApiResponse.success({ status: 'UP', timestamp: new Date() }));
 });
-
-// Debug endpoints: SOLO en desarrollo. Exponen datos internos; no van a prod.
-if (env.NODE_ENV === 'development') {
-    router.use('/debug', debugRoutes);
-}
 
 // Auth (login/refresh/logout son públicos por definición)
 // authEvents: rastro de login fallido / recuperación de contraseña (sin tocar los controllers).

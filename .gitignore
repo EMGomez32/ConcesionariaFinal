@@ -3,6 +3,8 @@
 .env
 *.env
 !.env.example
+# Copias que deja scripts/rotate-secrets.sh (contienen los secretos VIEJOS).
+.env.bak.*
 
 # ── Dependencias y builds ───────────────────────────────────
 node_modules/

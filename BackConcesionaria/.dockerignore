@@ -1,7 +1,25 @@
 node_modules
 dist
-.env
 npm-debug.log
 Dockerfile
 .git
 .gitignore
+
+# Secretos: ni el .env ni sus variantes (.env.local, .env.bak.*, etc.) entran a la imagen.
+.env
+.env.*
+!.env.example
+
+# Datos que NO deben quedar horneados en la imagen si el contexto de build viene de una carpeta con uso
+# real (p. ej. copiada por SFTP): archivos subidos (PII: DNI, recibos), sesiones de WhatsApp, logs.
+uploads
+wa-auth
+logs
+*.log
+
+# Nada de esto se usa en runtime
+tests
+__legacy_tests__
+coverage
+*.postman_collection.json
+*.tsbuildinfo
