@@ -38,7 +38,7 @@ describe('RBAC /usuarios — reasignación de tenant (update)', () => {
         // mover de tenant.
         const userRes = await api.post(
             '/api/usuarios',
-            { nombre: unique('U'), email: unique('u') + '@demo.com', password: 'secret123', roleIds: [] },
+            { nombre: unique('U'), email: unique('u') + '@demo.com', password: 'secret12345', roleIds: [] },
             authHeaders(adminToken)
         );
         expect(userRes.status).toBe(201);

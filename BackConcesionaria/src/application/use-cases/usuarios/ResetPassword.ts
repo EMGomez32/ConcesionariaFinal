@@ -11,8 +11,8 @@ export class ResetPassword {
     ) { }
 
     async execute(usuarioId: number, newPassword: string) {
-        if (!newPassword || newPassword.length < 6) {
-            throw new BaseException(400, 'La contraseña debe tener al menos 6 caracteres', 'VALIDATION_ERROR');
+        if (!newPassword || newPassword.length < 10) {
+            throw new BaseException(400, 'La contraseña debe tener al menos 10 caracteres', 'VALIDATION_ERROR');
         }
 
         const exists = await this.repository.findById(usuarioId);

@@ -21,7 +21,7 @@ describe('Sesiones y credenciales', () => {
         for (const id of creados) await tryDelete(`/api/usuarios/${id}`, saToken);
     });
 
-    const PASS = 'secret123';
+    const PASS = 'secret12345';
 
     async function nuevoUsuario() {
         const email = `${unique('ses')}@demo.com`;

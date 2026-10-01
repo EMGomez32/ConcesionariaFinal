@@ -3,6 +3,8 @@ export interface TokenPayload {
     concesionariaId: number | null;
     sucursalId: number | null;
     roles: string[];
+    /** El rol exige 2FA y el usuario no lo activó: la sesión sólo puede configurarlo. */
+    mfaPending?: boolean;
 }
 
 export class AuthTokens {

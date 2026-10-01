@@ -26,6 +26,8 @@ export type EventoAuth = 'login_fail' | 'login_bloqueado' | 'reset_pedido' | 're
 
 /** Qué evento corresponde a (ruta relativa a /auth, status HTTP). Pura: se testea sola. */
 export function clasificar(path: string, status: number): EventoAuth {
+    // Segundo factor incorrecto: cuenta como login fallido (y lo ve el admin del tenant).
+    if (path === '/login/2fa' && (status === 401 || status === 400)) return 'login_fail';
     if (path === '/login') {
         if (status === 401 || status === 403) return 'login_fail';
         if (status === 429) return 'login_bloqueado';

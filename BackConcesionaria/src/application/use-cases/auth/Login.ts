@@ -3,7 +3,8 @@ import { ITokenService } from '../../../domain/services/ITokenService';
 import { IRefreshTokenRepository } from '../../../domain/repositories/IRefreshTokenRepository';
 import { UnauthorizedException, ForbiddenException } from '../../../domain/exceptions/BaseException';
 import { withAuthBypass } from '../../../infrastructure/database/unitOfWork';
-import config from '../../../config';
+import { emitirMfaToken } from '../../../infrastructure/security/mfaToken';
+import { emitirSesion } from './emitirSesion';
 
 // Hash descartable para gastar el MISMO tiempo de bcrypt cuando el email no existe:
 // sin esto, 'no existe' respondía en milisegundos y 'existe con clave mala' en ~100 ms,
@@ -41,39 +42,12 @@ export class Login {
 
         if (!usuario.activo) throw new ForbiddenException('Usuario inactivo');
 
-        const roles = usuario.roles
-            .filter(r => !r.deletedAt && !r.rol.deletedAt)
-            .map(r => r.rol.nombre);
+        // 2FA: la contraseña sola NO alcanza. Se devuelve un token de 5 min que sólo sirve para
+        // /auth/login/2fa; no hay sesión (ni refresh token) hasta presentar el segundo factor.
+        if (usuario.totpEnabled) {
+            return { requires2fa: true as const, mfaToken: emitirMfaToken(usuario.id) };
+        }
 
-        const payload = {
-            userId: usuario.id,
-            concesionariaId: usuario.concesionariaId,
-            sucursalId: usuario.sucursalId,
-            roles
-        };
-
-        const access = this.tokenService.generateAccessToken(payload);
-        const refresh = this.tokenService.generateRefreshToken(payload);
-
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + parseInt(config.jwt.refreshExpirationDays));
-
-        await this.refreshTokenRepository.create({
-            token: this.tokenService.hashToken(refresh),
-            usuarioId: usuario.id,
-            expiresAt
-        });
-
-        return {
-            user: {
-                id: usuario.id,
-                nombre: usuario.nombre,
-                email: usuario.email,
-                roles,
-                concesionariaId: usuario.concesionariaId,
-                sucursalId: usuario.sucursalId
-            },
-            tokens: { access, refresh }
-        };
+        return emitirSesion(usuario, this.tokenService, this.refreshTokenRepository);
     }
 }

@@ -6,6 +6,7 @@ import { PrismaRefreshTokenRepository } from '../../infrastructure/database/repo
 import { Login } from '../../application/use-cases/auth/Login';
 import { RefreshAuth } from '../../application/use-cases/auth/RefreshAuth';
 import { LogoutAuth } from '../../application/use-cases/auth/Logout';
+import { LoginSegundoFactor } from '../../application/use-cases/auth/LoginSegundoFactor';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
 import { rawPrisma } from '../../infrastructure/database/prisma';
@@ -19,6 +20,7 @@ const refreshRepo = new PrismaRefreshTokenRepository();
 const loginUC = new Login(tokenService, refreshRepo);
 const refreshUC = new RefreshAuth(tokenService, refreshRepo);
 const logoutUC = new LogoutAuth(tokenService, refreshRepo);
+const loginSegundoFactorUC = new LoginSegundoFactor(tokenService, refreshRepo);
 
 const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 const RESET_TTL_MS = 60 * 60 * 1000; // 1 hora
@@ -28,6 +30,11 @@ export class AuthController {
         try {
             const { email, password } = req.body;
             const result = await loginUC.execute(email, password);
+
+            // Cuenta con 2FA: todavía NO hay sesión. Se devuelve el token de 5 min para /auth/login/2fa.
+            if ('requires2fa' in result) {
+                return res.json(result);
+            }
 
             // Login is unauthenticated, so the context middleware did not pre-fill
             // user info. Pass usuarioId/concesionariaId explicitly.
@@ -43,6 +50,29 @@ export class AuthController {
             }
 
             res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // POST /auth/login/2fa { mfaToken, code | recoveryCode } → sesión
+    static async login2fa(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { mfaToken, code, recoveryCode } = req.body;
+            const result = await loginSegundoFactorUC.execute(mfaToken, { codigo: code, recuperacion: recoveryCode });
+            const { usoRecuperacion, ...sesion } = result;
+
+            if (sesion.user.concesionariaId) {
+                await audit({
+                    entidad: 'Usuario',
+                    accion: 'login',
+                    entidadId: sesion.user.id,
+                    detalle: `Login ${sesion.user.email} (2FA)${usoRecuperacion ? ' con código de recuperación' : ''}`,
+                    usuarioId: sesion.user.id,
+                    concesionariaId: sesion.user.concesionariaId,
+                });
+            }
+            res.json({ ...sesion, ...(usoRecuperacion ? { usoRecuperacion: true } : {}) });
         } catch (error) {
             next(error);
         }

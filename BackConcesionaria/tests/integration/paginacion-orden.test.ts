@@ -66,7 +66,7 @@ describe('Paginación y orden', () => {
     });
 
     describe('GET /usuarios: el filtro por email es sólo para admin', () => {
-        const PASS = 'secret123';
+        const PASS = 'secret12345';
         const ids: number[] = [];
         let fragmento: string;
         let noAdminToken: string;

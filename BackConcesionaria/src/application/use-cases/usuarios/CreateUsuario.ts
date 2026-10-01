@@ -12,8 +12,8 @@ export class CreateUsuario {
         if (!password) {
             throw new BaseException(400, 'La contraseña es obligatoria', 'VALIDATION_ERROR');
         }
-        if (password.length < 6) {
-            throw new BaseException(400, 'La contraseña debe tener al menos 6 caracteres', 'VALIDATION_ERROR');
+        if (password.length < 10) {
+            throw new BaseException(400, 'La contraseña debe tener al menos 10 caracteres', 'VALIDATION_ERROR');
         }
         if (!userData.email) {
             throw new BaseException(400, 'El email es obligatorio', 'VALIDATION_ERROR');

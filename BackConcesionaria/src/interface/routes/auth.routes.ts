@@ -7,10 +7,18 @@ import {
     forgotPasswordIpLimiter,
     refreshLimiter,
     resetPasswordLimiter,
+    mfaLoginLimiter,
+    mfaLoginIpLimiter,
+    mfaAccionLimiter,
 } from '../middlewares/rateLimiters';
+import { authenticate } from '../middlewares/authenticate.middleware';
+import { MfaController } from '../controllers/MfaController';
 import { validateBody } from '../middlewares/validate.middleware';
 import { minResponseTime } from '../middlewares/minResponseTime.middleware';
-import { loginSchema, refreshSchema, resetPasswordSchema, logoutSchema } from '../validation/auth.schema';
+import {
+    loginSchema, refreshSchema, resetPasswordSchema, logoutSchema,
+    login2faSchema, mfaSetupSchema, mfaEnableSchema, mfaDisableSchema, mfaRegenerarSchema,
+} from '../validation/auth.schema';
 
 const router = Router();
 
@@ -126,5 +134,25 @@ router.post('/forgot-password', forgotPasswordIpLimiter, forgotPasswordEmailLimi
  *       400: { description: Token inválido o expirado }
  */
 router.post('/reset-password', resetPasswordLimiter, validateBody(resetPasswordSchema), AuthController.resetPassword);
+
+// ── 2FA (TOTP) ────────────────────────────────────────────────────────────────
+
+/**
+ * @openapi
+ * /auth/login/2fa:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Segundo paso del login con 2FA
+ *     description: Con el mfaToken que devolvió /auth/login (5 min) y un código de la app o de recuperación. Devuelve la sesión.
+ *     security: []
+ */
+router.post('/login/2fa', mfaLoginIpLimiter, mfaLoginLimiter, validateBody(login2faSchema), AuthController.login2fa);
+
+// Las rutas de abajo son de la cuenta YA autenticada (el router /auth se monta antes del authenticate global).
+router.get('/2fa/status', authenticate, MfaController.status);
+router.post('/2fa/setup', authenticate, mfaAccionLimiter, validateBody(mfaSetupSchema), MfaController.setup);
+router.post('/2fa/enable', authenticate, mfaAccionLimiter, validateBody(mfaEnableSchema), MfaController.enable);
+router.post('/2fa/disable', authenticate, mfaAccionLimiter, validateBody(mfaDisableSchema), MfaController.disable);
+router.post('/2fa/recovery-codes', authenticate, mfaAccionLimiter, validateBody(mfaRegenerarSchema), MfaController.regenerarCodigos);
 
 export default router;
