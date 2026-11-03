@@ -28,7 +28,11 @@ import Select from '../../components/ui/Select';
 import Modal from '../../components/ui/Modal';
 import { FileUploader } from '../../components/ui/FileUploader';
 import { useUIStore } from '../../store/uiStore';
+import { useAuthStore } from '../../store/authStore';
+import { useConfirm } from '../../hooks/useConfirm';
 import { waShareLink } from '../../utils/whatsapp';
+import PageTitle from '../../components/ui/PageTitle';
+import { ESTADO_VEHICULO, estadoVehiculoLabel } from './vehiculoTextos';
 import {
     ArrowLeft, Car, Calendar, DollarSign, MapPin,
     FileImage, Wrench, ArrowLeftRight, FileText,
@@ -42,13 +46,7 @@ import type { PaginatedResponse, ApiError } from '../../types/api.types';
 
 type Tab = 'info' | 'archivos' | 'gastos' | 'movimientos' | 'presupuestos' | 'reservas' | 'ventas' | 'interesados' | 'precios';
 
-const STATUS_MAP: Record<EstadoVehiculo, { label: string; variant: 'warning' | 'success' | 'info' | 'default' | 'danger' }> = {
-    preparacion: { label: 'En Preparación', variant: 'warning' },
-    publicado: { label: 'Publicado', variant: 'success' },
-    reservado: { label: 'Reservado', variant: 'info' },
-    vendido: { label: 'Vendido', variant: 'default' },
-    devuelto: { label: 'Devuelto', variant: 'danger' },
-};
+const STATUS_MAP = ESTADO_VEHICULO;
 
 // Fecha @db.Date → DD/MM/YYYY sin pasar por new Date() (evita el corrimiento de día
 // en UTC-3 que arrastran las otras filas de fecha de esta ficha).
@@ -121,6 +119,7 @@ const VehiculoDetallePage = () => {
     // el taller es su trabajo) pero NO marca la portada, que es decisión comercial.
     // Ver hooks/usePermisos.ts.
     const permisos = usePermisos();
+    const confirm = useConfirm();
     const puedePublicarMl = permisos.esAdmin;
 
     const [activeTab, setActiveTab] = useState<Tab>('info');
@@ -364,16 +363,21 @@ const VehiculoDetallePage = () => {
         if (activeTab === 'precios') loadPrecios();
     }, [activeTab, loadPrecios]);
 
-    const handleDeleteInteres = async (i: VehiculoInteres) => {
-        if (!window.confirm('¿Quitar a este cliente de los interesados?')) return;
-        try {
-            await vehiculoInteresApi.delete(i.id);
-            addToast('Interés eliminado', 'success');
-            setInteresados(prev => prev.filter(x => x.id !== i.id));
-        } catch {
-            addToast('Error al eliminar el interés', 'error');
-        }
-    };
+    const handleDeleteInteres = (i: VehiculoInteres) => confirm({
+        title: 'Quitar interesado',
+        message: `¿Quitar a ${i.cliente?.nombre ?? 'este cliente'} de los interesados en esta unidad?`,
+        type: 'danger',
+        confirmLabel: 'Quitar',
+        onConfirm: async () => {
+            try {
+                await vehiculoInteresApi.delete(i.id);
+                addToast('Interesado quitado', 'success');
+                setInteresados(prev => prev.filter(x => x.id !== i.id));
+            } catch (err) {
+                addToast(getApiErrorMessage(err, 'No se pudo quitar el interesado'), 'error');
+            }
+        },
+    });
 
     const handleAddGasto = async () => {
         if (!gastoForm.categoriaId || !gastoForm.monto || !gastoForm.fechaGasto) {
@@ -430,19 +434,24 @@ const VehiculoDetallePage = () => {
         }
     };
 
-    const handleDeleteGasto = async (gastoId: number) => {
-        if (!window.confirm('¿Eliminar este gasto? Esta acción no se puede deshacer.')) return;
-        setDeletingGastoId(gastoId);
-        try {
-            await gastosApi.delete(gastoId);
-            addToast('Gasto eliminado', 'success');
-            loadGastos();
-        } catch {
-            addToast('Error al eliminar gasto', 'error');
-        } finally {
-            setDeletingGastoId(null);
-        }
-    };
+    const handleDeleteGasto = (gastoId: number) => confirm({
+        title: 'Eliminar el gasto',
+        message: '¿Eliminar este gasto? No se puede deshacer.',
+        type: 'danger',
+        confirmLabel: 'Eliminar',
+        onConfirm: async () => {
+            setDeletingGastoId(gastoId);
+            try {
+                await gastosApi.delete(gastoId);
+                addToast('Gasto eliminado', 'success');
+                loadGastos();
+            } catch (err) {
+                addToast(getApiErrorMessage(err, 'No se pudo eliminar el gasto'), 'error');
+            } finally {
+                setDeletingGastoId(null);
+            }
+        },
+    });
 
     const handleArchivoUploaded = () => {
         addToast('Archivo subido correctamente', 'success');
@@ -454,15 +463,22 @@ const VehiculoDetallePage = () => {
 
     const handleDeleteArchivo = async (archivo: VehiculoArchivo) => {
         const label = archivo.originalName ?? archivo.descripcion ?? `Archivo ${archivo.id}`;
-        if (!window.confirm(`¿Eliminar el archivo "${label}"?`)) return;
-        try {
-            await vehiculoArchivosApi.delete(archivo.id);
-            addToast('Archivo eliminado', 'success');
-            setArchivos(prev => prev.filter(a => a.id !== archivo.id));
-        } catch (err: unknown) {
-            const apiError = err as ApiError;
-            addToast(apiError?.message || 'Error al eliminar archivo', 'error');
-        }
+        await confirm({
+            title: 'Eliminar el archivo',
+            message: `¿Eliminar el archivo "${label}"? No se puede deshacer.`,
+            type: 'danger',
+            confirmLabel: 'Eliminar',
+            onConfirm: async () => {
+                try {
+                    await vehiculoArchivosApi.delete(archivo.id);
+                    addToast('Archivo eliminado', 'success');
+                    setArchivos(prev => prev.filter(a => a.id !== archivo.id));
+                } catch (err: unknown) {
+                    const apiError = err as ApiError;
+                    addToast(apiError?.message || 'No se pudo eliminar el archivo', 'error');
+                }
+            },
+        });
     };
 
     const gastoColumns: Column<GastoVehiculo>[] = [
@@ -493,8 +509,8 @@ const VehiculoDetallePage = () => {
             align: 'right',
             accessor: (g) => (
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button className="icon-btn small" onClick={(e) => { e.stopPropagation(); openEditGasto(g); }} title="Editar"><Edit size={14} /></button>
-                    <button className="icon-btn small danger" onClick={(e) => { e.stopPropagation(); handleDeleteGasto(g.id); }} disabled={deletingGastoId === g.id} title="Eliminar"><Trash2 size={14} /></button>
+                    <button type="button" className="icon-btn small" onClick={(e) => { e.stopPropagation(); openEditGasto(g); }} title="Editar" aria-label="Editar el gasto"><Edit size={14} aria-hidden="true" /></button>
+                    <button type="button" className="icon-btn small danger" onClick={(e) => { e.stopPropagation(); handleDeleteGasto(g.id); }} disabled={deletingGastoId === g.id} title="Eliminar" aria-label="Eliminar el gasto"><Trash2 size={14} aria-hidden="true" /></button>
                 </div>
             )
         }
@@ -634,14 +650,16 @@ const VehiculoDetallePage = () => {
             accessor: (i) => (
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                     <button
+                        type="button"
                         className="icon-btn small"
                         onClick={(e) => { e.stopPropagation(); navigate(`/presupuestos?nuevoClienteId=${i.clienteId}&nuevoVehiculoId=${id}`); }}
-                        title="Generar presupuesto para este cliente"
+                        title="Crear presupuesto para este cliente"
+                        aria-label={`Crear presupuesto para ${i.cliente?.nombre ?? 'este cliente'}`}
                     >
-                        <FileText size={14} />
+                        <FileText size={14} aria-hidden="true" />
                     </button>
-                    <button className="icon-btn small danger" onClick={(e) => { e.stopPropagation(); handleDeleteInteres(i); }} title="Quitar interesado">
-                        <Trash2 size={14} />
+                    <button type="button" className="icon-btn small danger" onClick={(e) => { e.stopPropagation(); handleDeleteInteres(i); }} title="Quitar interesado" aria-label={`Quitar a ${i.cliente?.nombre ?? 'este cliente'} de los interesados`}>
+                        <Trash2 size={14} aria-hidden="true" />
                     </button>
                 </div>
             ),
@@ -741,10 +759,11 @@ const VehiculoDetallePage = () => {
 
     return (
         <div className="detalle-container">
+            <PageTitle title={`${vehiculo.marca} ${vehiculo.modelo}`} />
             {/* Header */}
             <div className="detalle-header">
-                <button className="back-btn" onClick={() => navigate('/vehiculos')}>
-                    <ArrowLeft size={20} />
+                <button type="button" className="back-btn" onClick={() => navigate('/vehiculos')} aria-label="Volver a Vehículos" title="Volver">
+                    <ArrowLeft size={20} aria-hidden="true" />
                 </button>
                 <div className="vehiculo-hero">
                     <div className="vehiculo-avatar-lg">
@@ -753,7 +772,7 @@ const VehiculoDetallePage = () => {
                     <div>
                         <h1>{vehiculo.marca} {vehiculo.modelo} {vehiculo.version && `· ${vehiculo.version}`}</h1>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.4rem' }}>
-                            <span className="dominio-tag">{vehiculo.dominio || 'S/D'}</span>
+                            <span className="dominio-tag">{vehiculo.dominio || 'Sin dominio'}</span>
                             <Badge variant={STATUS_MAP[vehiculo.estado].variant}>{STATUS_MAP[vehiculo.estado].label}</Badge>
                             {(() => {
                                 const d = docStatus(vehiculo.vencimientoVtv, vehiculo.vencimientoSeguro);
@@ -828,14 +847,17 @@ const VehiculoDetallePage = () => {
             {puedePublicarMl && <TarjetaMercadoLibre vehiculoId={vehiculo.id} estadoVehiculo={vehiculo.estado} />}
 
             {/* Tabs */}
-            <div className="tabs-bar glass">
+            <div className="tabs-bar glass" role="tablist" aria-label="Secciones de la ficha">
                 {tabs.map(t => (
                     <button
                         key={t.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === t.key}
                         className={`tab-btn ${activeTab === t.key ? 'active' : ''}`}
                         onClick={() => setActiveTab(t.key)}
                     >
-                        <t.icon size={15} />
+                        <t.icon size={15} aria-hidden="true" />
                         <span>{t.label}</span>
                         {t.count !== undefined && <span className="tab-badge">{t.count}</span>}
                     </button>
@@ -995,17 +1017,17 @@ const VehiculoDetallePage = () => {
                                                                                 <Star size={15} fill="currentColor" />
                                                                             </span>
                                                                         ) : (
-                                                                            <button className="icon-btn" title="Marcar como foto principal" onClick={() => handleSetPrincipal(a)}>
-                                                                                <Star size={15} />
+                                                                            <button type="button" className="icon-btn" title="Marcar como foto principal" aria-label="Marcar como foto principal" onClick={() => handleSetPrincipal(a)}>
+                                                                                <Star size={15} aria-hidden="true" />
                                                                             </button>
                                                                         )
                                                                     )}
-                                                                    <a href={a.url} target="_blank" rel="noreferrer" className="icon-btn" title="Ver archivo">
-                                                                        <ExternalLink size={15} />
+                                                                    <a href={a.url} target="_blank" rel="noreferrer" className="icon-btn" title="Ver archivo" aria-label="Ver el archivo (se abre en otra pestaña)">
+                                                                        <ExternalLink size={15} aria-hidden="true" />
                                                                     </a>
                                                                     {permisos.archivosBorrar && (
-                                                                        <button className="icon-btn danger" title="Eliminar" onClick={() => handleDeleteArchivo(a)}>
-                                                                            <Trash2 size={15} />
+                                                                        <button type="button" className="icon-btn danger" title="Eliminar" aria-label="Eliminar el archivo" onClick={() => handleDeleteArchivo(a)}>
+                                                                            <Trash2 size={15} aria-hidden="true" />
                                                                         </button>
                                                                     )}
                                                                 </div>
@@ -1159,6 +1181,7 @@ const VehiculoDetallePage = () => {
                 .detalle-container { display: flex; flex-direction: column; gap: 1.75rem; animation: fadeIn 0.4s ease-out; }
                 .detalle-header { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
                 .back-btn { padding: 0.625rem; border-radius: var(--radius-md); background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary); transition: all 0.15s; cursor: pointer; }
+                .back-btn:focus-visible { box-shadow: 0 0 0 3px var(--ring); }
                 .back-btn:hover { background: var(--bg-secondary); color: var(--text-primary); transform: translateX(-2px); }
 
                 .vehiculo-hero { display: flex; align-items: center; gap: 1.25rem; }
@@ -1174,9 +1197,10 @@ const VehiculoDetallePage = () => {
                 .stat-label { font-size: var(--text-xs); color: var(--text-secondary); margin-top: 0.2rem; }
 
                 .tabs-bar { display: flex; gap: 0.4rem; padding: 0.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); width: fit-content; flex-wrap: wrap; }
-                .tab-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: var(--radius-md); font-weight: 600; font-size: var(--text-sm); color: var(--text-secondary); transition: all 0.15s; cursor: pointer; }
+                .tab-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: var(--radius-md); font-weight: 600; font-size: var(--text-sm); color: var(--text-secondary); background: transparent; border: 1px solid transparent; transition: all 0.15s; cursor: pointer; }
                 .tab-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }
-                .tab-btn.active { background: var(--accent); color: var(--text-white); }
+                .tab-btn:focus-visible { box-shadow: 0 0 0 3px var(--ring); }
+                .tab-btn.active { background: var(--accent); color: var(--text-on-accent); }
                 .tab-badge { background: color-mix(in srgb, currentColor 25%, transparent); padding: 0.1rem 0.45rem; border-radius: var(--radius-pill); font-size: var(--text-2xs); font-weight: 700; }
                 .tab-btn:not(.active) .tab-badge { background: var(--bg-secondary); color: var(--text-muted); }
 
@@ -1311,6 +1335,10 @@ type AccionMl = 'pausar' | 'reactivar' | 'cerrar' | 'sincronizar';
 
 const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: number; estadoVehiculo: EstadoVehiculo }) => {
     const { addToast } = useUIStore();
+    const confirm = useConfirm();
+    // El detalle técnico de por qué falta la integración (variables del servidor)
+    // sólo le sirve a quien administra la plataforma.
+    const esSuperAdmin = !!useAuthStore((s) => s.user?.roles?.includes('super_admin'));
 
     const [cargando, setCargando] = useState(true);
     const [errorCarga, setErrorCarga] = useState<string | null>(null);
@@ -1411,9 +1439,24 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
         // sistema. Sobre un aviso simulado no puede afirmar que la baja impacta
         // en Mercado Libre — no hay ningún aviso allá que cerrar.
         const confirmarCierre = avisoSimulado
-            ? 'Cerrar la publicación simulada. No hay ningún aviso en Mercado Libre: el cierre pasa sólo adentro del sistema y, para volver a ofrecer la unidad, hay que publicarla de nuevo. ¿Cerrarla?'
-            : 'Cerrar la publicación es definitivo en Mercado Libre: para volver a ofrecer la unidad hay que publicarla de nuevo. ¿Cerrarla?';
-        if (cual === 'cerrar' && !window.confirm(confirmarCierre)) return;
+            ? 'No hay ningún aviso en Mercado Libre: el cierre pasa sólo adentro del sistema y, para volver a ofrecer la unidad, hay que publicarla de nuevo.'
+            : 'Cerrar es definitivo en Mercado Libre: para volver a ofrecer la unidad hay que publicarla de nuevo.';
+        if (cual === 'cerrar') {
+            await confirm({
+                title: avisoSimulado ? 'Cerrar la publicación simulada' : 'Cerrar la publicación',
+                message: confirmarCierre,
+                type: 'danger',
+                confirmLabel: 'Cerrar publicación',
+                cancelLabel: 'Volver',
+                onConfirm: () => correr(cual),
+            });
+            return;
+        }
+        await correr(cual);
+    };
+
+    const correr = async (cual: AccionMl) => {
+        if (!publicacion) return;
         setAccion(cual);
         try {
             const fn = {
@@ -1501,14 +1544,23 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
             ) : !conectada ? (
                 <p className="ml-hint">
                     {cuenta?.configurada === false
-                        ? 'La integración con Mercado Libre no está configurada en el servidor: faltan las credenciales de la aplicación (ML_CLIENT_ID / ML_CLIENT_SECRET) o la clave de cifrado de secretos (INTEGRACIONES_SECRET_KEY).'
+                        ? (
+                            <>
+                                La integración con Mercado Libre no está configurada. Pedile al administrador que la active en Ajustes.
+                                {esSuperAdmin && (
+                                    <span className="ml-detalle-tecnico">
+                                        {' '}Detalle técnico: faltan ML_CLIENT_ID / ML_CLIENT_SECRET o INTEGRACIONES_SECRET_KEY en el servidor.
+                                    </span>
+                                )}
+                            </>
+                        )
                         : 'Todavía no hay una cuenta de Mercado Libre vinculada. Vinculala desde Ajustes para poder publicar esta unidad.'}
                 </p>
             ) : !publicacion ? (
                 <div className="ml-fila">
                     <p className="ml-hint">
                         {noPublicable
-                            ? `Esta unidad está en estado "${estadoVehiculo}": no se publica en Mercado Libre stock que no está disponible.`
+                            ? `Esta unidad está "${estadoVehiculoLabel(estadoVehiculo).toLowerCase()}": en Mercado Libre sólo se publica stock disponible.`
                             : 'Esta unidad todavía no está publicada.'}
                     </p>
                     {puedePublicar && <div className="ml-acciones">{botonPublicar}</div>}
@@ -1593,7 +1645,7 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
                     )}
                     {noPublicable && estado !== 'cerrada' && (
                         <p className="ml-hint">
-                            El vehículo está en estado "{estadoVehiculo}": la publicación se cierra o se pausa sola.
+                            El vehículo está "{estadoVehiculoLabel(estadoVehiculo).toLowerCase()}": la publicación se cierra o se pausa sola.
                         </p>
                     )}
 

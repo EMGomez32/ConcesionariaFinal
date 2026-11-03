@@ -18,6 +18,7 @@ import AnimatedNumber from '../../components/ui/AnimatedNumber';
 import DonutChart from '../../components/ui/DonutChart';
 import { useTour } from '../../onboarding/useTour';
 import { useTourStore } from '../../store/tourStore';
+import { cuandoAuditoria, fraseAuditoria } from '../auditoria/auditoriaTextos';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -79,7 +80,7 @@ const DashboardPage = () => {
 
   const { data: statsData, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useDashboardStats();
   const { data: stockData, isLoading: stockLoading, isError: stockError, refetch: refetchStock } = useStockDistribution();
-  const { data: auditsData, isLoading: auditsLoading, refetch: refetchAudits } = useAuditLogs({}, { limit: 5 }, { enabled: isAdmin });
+  const { data: auditsData, isLoading: auditsLoading, isError: auditsError, refetch: refetchAudits } = useAuditLogs({}, { limit: 5 }, { enabled: isAdmin });
   // Finanzas del mes: dato de dueño, solo admin (igual criterio que Actividad Reciente).
   const { data: finanzas, isLoading: finanzasLoading, isError: finanzasError, refetch: refetchFinanzas } = useDashboardFinanzas(isAdmin);
   // Acciones del día: cada rol ve LAS SEÑALES DE SU TRABAJO, no un gate binario
@@ -110,6 +111,7 @@ const DashboardPage = () => {
   // actualizó. Antes "Sincronizar" refrescaba sólo stats/stock y el resto (tendencia,
   // objetivo, actividad) quedaba viejo sin ninguna señal.
   const [isSyncing, setIsSyncing] = useState(false);
+  const [mesElegido, setMesElegido] = useState<number | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<Date>(() => new Date());
   const [ahora, setAhora] = useState<Date>(() => new Date());
   useEffect(() => {
@@ -167,21 +169,24 @@ const DashboardPage = () => {
   const pctMeta = (actual: number, objetivo: number) => (objetivo > 0 ? Math.min(100, Math.round((actual / objetivo) * 100)) : 0);
 
   const stats = [
-    { label: 'Vehículos en Stock', value: statsData?.vehiculos ?? 0, icon: Car, color: 'var(--primary-navy)' },
-    { label: 'Ventas Totales', value: statsData?.ventas ?? 0, icon: Zap, color: 'var(--accent)' },
-    { label: 'Reservas Activas', value: statsData?.reservas ?? 0, icon: Clock, color: 'var(--warning)' },
-    { label: 'Clientes Registrados', value: statsData?.clientes ?? 0, icon: Users, color: 'var(--info)' },
+    // "En stock" = en preparación + publicados + reservados: la MISMA definición que
+    // "Distribución de stock" y que el filtro por defecto de Vehículos (antes la
+    // tarjeta contaba sólo publicados y el gráfico sumaba los vendidos: 11 vs 19).
+    { label: 'Vehículos en stock', value: statsData?.vehiculos ?? 0, icon: Car, color: 'var(--text-secondary)', sub: 'en preparación, publicados y reservados' },
+    { label: 'Ventas totales', value: statsData?.ventas ?? 0, icon: Zap, color: 'var(--accent)', sub: 'desde que usás AUTENZA' },
+    { label: 'Reservas activas', value: statsData?.reservas ?? 0, icon: Clock, color: 'var(--warning)', sub: 'con seña vigente' },
+    { label: 'Clientes registrados', value: statsData?.clientes ?? 0, icon: Users, color: 'var(--info)', sub: undefined },
   ];
 
   const audits = (auditsData as { results?: AuditLog[] })?.results ?? [];
-  const stockTotal = (stockData ?? []).reduce((sum, s) => sum + s.value, 0);
+  const stockSlices = stockData?.slices ?? [];
+  const stockTotal = stockSlices.reduce((sum, s) => sum + s.value, 0);
 
   const financeCards = finanzas ? [
-    { label: 'Ventas del mes', value: kpiValue(finanzas.ventasMes), sub: `${finanzas.ventasMes.cantidad} ${finanzas.ventasMes.cantidad === 1 ? 'operación' : 'operaciones'}`, icon: TrendingUp, color: 'var(--accent)' },
+    { label: 'Ventas del mes', value: kpiValue(finanzas.ventasMes), sub: `${finanzas.ventasMes.cantidad} ${finanzas.ventasMes.cantidad === 1 ? 'venta' : 'ventas'}`, icon: TrendingUp, color: 'var(--accent)' },
     { label: 'Ingresos del mes', value: kpiValue(finanzas.ingresosMes), sub: 'cobros de ventas y cuotas', icon: ArrowUpRight, color: 'var(--success)' },
     { label: 'Egresos del mes', value: kpiValue(finanzas.egresosMes), sub: 'gastos de unidades y fijos', icon: ArrowDownRight, color: 'var(--danger)' },
     { label: 'Resultado neto', value: kpiValue(finanzas.netoMes), sub: 'ingresos − egresos', icon: Wallet, color: (finanzas.netoMes.consolidado != null ? finanzas.netoMes.consolidado < 0 : finanzas.netoMes.porMoneda.some((m) => m.valor < 0)) ? 'var(--danger)' : 'var(--success)' },
-    { label: 'En mora', value: kpiValue(finanzas.mora), sub: `${finanzas.mora.cuotas} ${finanzas.mora.cuotas === 1 ? 'cuota vencida' : 'cuotas vencidas'}`, icon: AlertTriangle, color: 'var(--danger)' },
   ] : [];
 
   // Tarjetas de "Acciones del día": sólo las señales que este rol pidió (las no
@@ -207,6 +212,8 @@ const DashboardPage = () => {
 
   // ── Tendencia de ventas ──
   const tItems: VentaMensualItem[] = tendencia?.items ?? [];
+  // Mes elegido en el gráfico (tocar, foco o mouse). Por defecto, el último.
+  const mesTendencia = mesElegido != null && mesElegido < tItems.length ? mesElegido : tItems.length - 1;
   const tMax = Math.max(1, ...tItems.map((i) => i.cantidad));
   const tTotalUnidades = tItems.reduce((s, i) => s + i.cantidad, 0);
   const tHayCotizacion = tItems.some((i) => i.facturadoConsolidado != null);
@@ -247,7 +254,7 @@ const DashboardPage = () => {
     <div className="page-container">
       <header className="page-header">
         <div className="header-title">
-          <h1>Resumen Operativo</h1>
+          <h1>Inicio</h1>
           <p>Un vistazo al estado de tu concesionaria.</p>
         </div>
         <div className="header-actions">
@@ -266,114 +273,11 @@ const DashboardPage = () => {
         </div>
       </header>
 
-      {statsError && !statsData ? (
-        <div className="card glass" data-tour="dashboard-kpis" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-          No se pudieron cargar los indicadores.{' '}
-          <button className="btn btn-secondary btn-sm" type="button" onClick={() => refetchStats()}>Reintentar</button>
-        </div>
-      ) : (
-      <div className="stats-grid stagger" data-tour="dashboard-kpis" aria-busy={statsLoading}>
-        {stats.map((stat) => (
-          <div key={stat.label} className="card stat-card">
-            <div className="flex justify-between items-start mb-4">
-              {/* color-mix (no `${color}10`): el truco del alfa-hex sólo era CSS
-                  válido con un hex literal; con tokens var() la declaración caía
-                  y el chip quedaba transparente. */}
-              <div className="stat-icon-wrapper" style={{ backgroundColor: `color-mix(in srgb, ${stat.color} 10%, transparent)`, color: stat.color }}>
-                <stat.icon size={20} />
-              </div>
-            </div>
-            <div className="stat-content">
-              <span className="text-muted font-bold text-xs uppercase tracking-wider mb-1">{stat.label}</span>
-              <span className="stat-value">
-                {statsLoading
-                  ? <span className="skeleton skeleton-text-lg" style={{ width: '4ch', display: 'inline-block' }} role="status" aria-label={`Cargando ${stat.label}`} />
-                  : <AnimatedNumber value={stat.value} />}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-      )}
-
-      {esVendedor && (
-        <section style={{ marginTop: '1.75rem' }}>
-          <div className="flex items-center gap-2" style={{ marginBottom: '1rem' }}>
-            <Target size={18} className="text-accent" />
-            <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Mi objetivo de {mesActualLabel}</h2>
-          </div>
-          <div className="card" style={{ padding: '1.5rem' }}>
-            {miObjetivoLoading ? (
-              <span className="skeleton" style={{ display: 'block', height: '56px', width: '100%', borderRadius: '0.75rem' }} />
-            ) : !miObjetivo ? (
-              <div style={{ color: 'var(--text-secondary)' }}>Tu administrador todavía no te fijó un objetivo para este mes.</div>
-            ) : miObjetivo.unidadesObjetivo == null && miObjetivo.montoObjetivo == null ? (
-              <div style={{ color: 'var(--text-secondary)' }}>Tu administrador todavía no te fijó un objetivo para este mes.</div>
-            ) : (
-              <div className="flex flex-col">
-                {miObjetivo.unidadesObjetivo != null && (
-                  <ProgressRow
-                    etiqueta="Unidades vendidas"
-                    actual={String(miObjetivo.unidadesReal)}
-                    objetivo={String(miObjetivo.unidadesObjetivo)}
-                    pct={Math.min(100, miObjetivo.unidadesPct ?? 0)}
-                  />
-                )}
-                {miObjetivo.montoObjetivo != null && (
-                  <ProgressRow
-                    etiqueta={`Facturado (${miObjetivo.moneda})`}
-                    actual={money(miObjetivo.montoReal, miObjetivo.moneda)}
-                    objetivo={money(miObjetivo.montoObjetivo, miObjetivo.moneda)}
-                    pct={Math.min(100, miObjetivo.montoPct ?? 0)}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {isAdmin && (
-        <section style={{ marginTop: '1.75rem' }}>
-          <div className="flex items-center justify-between flex-wrap gap-2" style={{ marginBottom: '1rem' }}>
-            <div className="flex items-center gap-2">
-              <Target size={18} className="text-accent" />
-              <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Objetivo de {mesActualLabel}</h2>
-            </div>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={openMetaModal}>
-              {meta ? 'Editar objetivo' : 'Fijar objetivo'}
-            </button>
-          </div>
-          <div className="card" style={{ padding: '1.5rem' }}>
-            {/* La visibilidad de esta sección NO depende de finanzas: aunque falle,
-                el admin tiene que poder fijar/editar el objetivo. */}
-            {metaLoading ? (
-              <span className="skeleton" style={{ display: 'block', height: '56px', width: '100%', borderRadius: '0.75rem' }} />
-            ) : !meta ? (
-              <div style={{ color: 'var(--text-secondary)' }}>Todavía no fijaste un objetivo para este mes. Fijá uno para seguir el progreso de tus ventas.</div>
-            ) : finanzasLoading ? (
-              <span className="skeleton" style={{ display: 'block', height: '56px', width: '100%', borderRadius: '0.75rem' }} />
-            ) : !finanzas ? (
-              <div style={{ color: 'var(--text-secondary)' }}>No se pudieron cargar las ventas del mes para calcular el progreso.</div>
-            ) : (
-              <div className="flex flex-col">
-                {meta.unidadesObjetivo != null && (
-                  <ProgressRow etiqueta="Unidades vendidas" actual={String(unidadesVendidas)} objetivo={String(meta.unidadesObjetivo)} pct={pctMeta(unidadesVendidas, meta.unidadesObjetivo)} />
-                )}
-                {meta.montoObjetivo != null && (
-                  <ProgressRow etiqueta={`Facturado (${meta.moneda})`} actual={money(facturadoMonedaMeta, meta.moneda)} objetivo={money(meta.montoObjetivo, meta.moneda)} pct={pctMeta(facturadoMonedaMeta, meta.montoObjetivo)} />
-                )}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
       {alertKeys.length > 0 && (alertasLoading || alertas || alertasError) && (
-        <section style={{ marginTop: '1.75rem' }}>
+        <section aria-labelledby="acciones-del-dia">
           <div className="flex items-center gap-2" style={{ marginBottom: '1rem' }}>
             <Zap size={18} className="text-accent" />
-            <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Acciones del día</h2>
+            <h2 id="acciones-del-dia" style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Acciones del día</h2>
           </div>
           {alertasError ? (
             <div className="card glass" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
@@ -468,6 +372,110 @@ const DashboardPage = () => {
         </section>
       )}
 
+      {statsError && !statsData ? (
+        <div className="card glass" data-tour="dashboard-kpis" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+          No se pudieron cargar los indicadores.{' '}
+          <button className="btn btn-secondary btn-sm" type="button" onClick={() => refetchStats()}>Reintentar</button>
+        </div>
+      ) : (
+      <div className="stats-grid stagger" data-tour="dashboard-kpis" aria-busy={statsLoading}>
+        {stats.map((stat) => (
+          <div key={stat.label} className="card stat-card">
+            <div className="flex justify-between items-start mb-4">
+              {/* color-mix (no `${color}10`): el truco del alfa-hex sólo era CSS
+                  válido con un hex literal; con tokens var() la declaración caía
+                  y el chip quedaba transparente. */}
+              <div className="stat-icon-wrapper" style={{ backgroundColor: `color-mix(in srgb, ${stat.color} 10%, transparent)`, color: stat.color }}>
+                <stat.icon size={20} />
+              </div>
+            </div>
+            <div className="stat-content">
+              <span className="text-muted font-bold text-xs uppercase tracking-wider mb-1">{stat.label}</span>
+              <span className="stat-value">
+                {statsLoading
+                  ? <span className="skeleton skeleton-text-lg" style={{ width: '4ch', display: 'inline-block' }} role="status" aria-label={`Cargando ${stat.label}`} />
+                  : <AnimatedNumber value={stat.value} />}
+              </span>
+              {stat.sub && <span className="text-muted text-xs" style={{ marginTop: '0.35rem' }}>{stat.sub}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+      )}
+
+      {esVendedor && (
+        <section style={{ marginTop: '1.75rem' }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: '1rem' }}>
+            <Target size={18} className="text-accent" />
+            <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Mi objetivo de {mesActualLabel}</h2>
+          </div>
+          <div className="card" style={{ padding: '1.5rem' }}>
+            {miObjetivoLoading ? (
+              <span className="skeleton" style={{ display: 'block', height: '56px', width: '100%', borderRadius: '0.75rem' }} />
+            ) : !miObjetivo ? (
+              <div style={{ color: 'var(--text-secondary)' }}>Tu administrador todavía no te fijó un objetivo para este mes.</div>
+            ) : miObjetivo.unidadesObjetivo == null && miObjetivo.montoObjetivo == null ? (
+              <div style={{ color: 'var(--text-secondary)' }}>Tu administrador todavía no te fijó un objetivo para este mes.</div>
+            ) : (
+              <div className="flex flex-col">
+                {miObjetivo.unidadesObjetivo != null && (
+                  <ProgressRow
+                    etiqueta="Unidades vendidas"
+                    actual={String(miObjetivo.unidadesReal)}
+                    objetivo={String(miObjetivo.unidadesObjetivo)}
+                    pct={Math.min(100, miObjetivo.unidadesPct ?? 0)}
+                  />
+                )}
+                {miObjetivo.montoObjetivo != null && (
+                  <ProgressRow
+                    etiqueta={`Facturado (${miObjetivo.moneda})`}
+                    actual={money(miObjetivo.montoReal, miObjetivo.moneda)}
+                    objetivo={money(miObjetivo.montoObjetivo, miObjetivo.moneda)}
+                    pct={Math.min(100, miObjetivo.montoPct ?? 0)}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {isAdmin && (
+        <section style={{ marginTop: '1.75rem' }}>
+          <div className="flex items-center justify-between flex-wrap gap-2" style={{ marginBottom: '1rem' }}>
+            <div className="flex items-center gap-2">
+              <Target size={18} className="text-accent" />
+              <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Objetivo de {mesActualLabel}</h2>
+            </div>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={openMetaModal}>
+              {meta ? 'Editar objetivo' : 'Fijar objetivo'}
+            </button>
+          </div>
+          <div className="card" style={{ padding: '1.5rem' }}>
+            {/* La visibilidad de esta sección NO depende de finanzas: aunque falle,
+                el admin tiene que poder fijar/editar el objetivo. */}
+            {metaLoading ? (
+              <span className="skeleton" style={{ display: 'block', height: '56px', width: '100%', borderRadius: '0.75rem' }} />
+            ) : !meta ? (
+              <div style={{ color: 'var(--text-secondary)' }}>Todavía no fijaste un objetivo para este mes. Fijá uno para seguir el progreso de tus ventas.</div>
+            ) : finanzasLoading ? (
+              <span className="skeleton" style={{ display: 'block', height: '56px', width: '100%', borderRadius: '0.75rem' }} />
+            ) : !finanzas ? (
+              <div style={{ color: 'var(--text-secondary)' }}>No se pudieron cargar las ventas del mes para calcular el progreso.</div>
+            ) : (
+              <div className="flex flex-col">
+                {meta.unidadesObjetivo != null && (
+                  <ProgressRow etiqueta="Unidades vendidas" actual={String(unidadesVendidas)} objetivo={String(meta.unidadesObjetivo)} pct={pctMeta(unidadesVendidas, meta.unidadesObjetivo)} />
+                )}
+                {meta.montoObjetivo != null && (
+                  <ProgressRow etiqueta={`Facturado (${meta.moneda})`} actual={money(facturadoMonedaMeta, meta.moneda)} objetivo={money(meta.montoObjetivo, meta.moneda)} pct={pctMeta(facturadoMonedaMeta, meta.montoObjetivo)} />
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {isAdmin && (
         <section style={{ marginTop: '1.75rem' }}>
           <div className="flex items-center justify-between flex-wrap gap-2" style={{ marginBottom: '1rem' }}>
@@ -487,7 +495,7 @@ const DashboardPage = () => {
           ) : (
             <div className="stats-grid stagger">
               {finanzasLoading
-                ? Array.from({ length: 5 }).map((_, i) => (
+                ? Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="card stat-card">
                     <div className="stat-content">
                       <span className="skeleton skeleton-text" style={{ width: '60%' }} />
@@ -541,16 +549,21 @@ const DashboardPage = () => {
               </div>
             ) : (
               <>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.75rem' }}>
-                  {tItems.map((m) => {
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.75rem' }} role="group" aria-label="Ventas por mes. Elegí un mes para ver el facturado.">
+                  {tItems.map((m, idx) => {
                     const barPct = Math.round((m.cantidad / tMax) * 100);
+                    const elegido = idx === mesTendencia;
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={`${m.anio}-${m.mes}`}
-                        role="img"
+                        aria-pressed={elegido}
                         aria-label={`${m.label}: ${m.cantidad} ${m.cantidad === 1 ? 'unidad' : 'unidades'} · ${facturadoMes(m)}`}
-                        title={`${m.label}: ${m.cantidad} ${m.cantidad === 1 ? 'unidad' : 'unidades'} · ${facturadoMes(m)}`}
-                        style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}
+                        onClick={() => setMesElegido(idx)}
+                        onFocus={() => setMesElegido(idx)}
+                        onMouseEnter={() => setMesElegido(idx)}
+                        className="tendencia-mes"
+                        style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0, background: 'transparent', border: 'none', padding: '0.25rem 0', borderRadius: 'var(--radius-sm)', opacity: elegido ? 1 : 0.7 }}
                       >
                         <span style={{ fontSize: 'var(--text-xs)', fontWeight: 800, color: m.cantidad > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>{m.cantidad}</span>
                         {/* Sin transition de height (layout thrash); radios y cuerpos en
@@ -558,13 +571,19 @@ const DashboardPage = () => {
                         <div style={{ width: '100%', height: '140px', display: 'flex', alignItems: 'flex-end', marginTop: '0.25rem' }}>
                           <div style={{ width: '100%', maxWidth: '46px', margin: '0 auto', height: `${barPct}%`, minHeight: m.cantidad > 0 ? '6px' : '0', background: 'var(--accent)', borderRadius: 'var(--radius-xs) var(--radius-xs) 0 0' }} />
                         </div>
-                        <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)', marginTop: '0.4rem', whiteSpace: 'nowrap' }}>{m.label}</span>
-                      </div>
+                        <span style={{ fontSize: '0.625rem', color: elegido ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: elegido ? 700 : 400, marginTop: '0.4rem', whiteSpace: 'nowrap' }}>{m.label}</span>
+                      </button>
                     );
                   })}
                 </div>
-                <p className="text-xs text-muted" style={{ marginTop: '1rem', textAlign: 'center' }}>
-                  Barras: unidades vendidas por mes. Pasá el mouse para ver el facturado.
+                {tItems[mesTendencia] && (
+                  <p className="text-sm" style={{ marginTop: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }} aria-live="polite">
+                    <strong style={{ color: 'var(--text-primary)' }}>{tItems[mesTendencia].label}:</strong>{' '}
+                    {tItems[mesTendencia].cantidad} {tItems[mesTendencia].cantidad === 1 ? 'unidad vendida' : 'unidades vendidas'} · facturado {facturadoMes(tItems[mesTendencia])}
+                  </p>
+                )}
+                <p className="text-xs text-muted" style={{ marginTop: '0.35rem', textAlign: 'center' }}>
+                  Barras: unidades vendidas por mes. Tocá un mes para ver lo facturado.
                 </p>
               </>
             )}
@@ -630,11 +649,18 @@ const DashboardPage = () => {
               <button className="btn btn-secondary btn-sm" type="button" onClick={() => refetchStock()}>Reintentar</button>
             </div>
           ) : (
-            <DonutChart
-              data={stockData ?? []}
-              centerValue={stockTotal}
-              centerLabel="Unidades"
-            />
+            <>
+              <DonutChart
+                data={stockSlices}
+                centerValue={stockTotal}
+                centerLabel="En stock"
+              />
+              <p className="text-xs text-muted" style={{ marginTop: '0.75rem' }}>
+                En stock = en preparación, publicados y reservados.
+                {stockData && stockData.vendidos > 0 && ` Las ${stockData.vendidos} vendidas no cuentan.`}{' '}
+                <Link to="/vehiculos" className="text-accent">Ver el stock</Link>
+              </p>
+            </>
           )}
         </div>
 
@@ -643,9 +669,9 @@ const DashboardPage = () => {
           <div className="card-header">
             <div className="flex items-center gap-2">
               <Clock size={18} className="text-accent" />
-              <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Actividad Reciente</h2>
+              <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '-0.01em' }}>Actividad reciente</h2>
             </div>
-            <ShieldCheck size={18} className="text-muted" />
+            <Link to="/auditoria" className="text-xs text-accent" style={{ fontWeight: 600 }}>Ver todo</Link>
           </div>
 
           <div className="activity-timeline">
@@ -661,8 +687,13 @@ const DashboardPage = () => {
                   </div>
                 ))}
               </div>
+            ) : auditsError ? (
+              <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-secondary)' }}>
+                No se pudo cargar la actividad.{' '}
+                <button className="btn btn-secondary btn-sm" type="button" onClick={() => refetchAudits()}>Reintentar</button>
+              </div>
             ) : audits.length === 0 ? (
-              <p className="text-center p-4 text-muted">Aún no hay actividad registrada.</p>
+              <p className="text-center p-4 text-muted">Todavía no hay actividad registrada.</p>
             ) : (
               audits.map((audit) => (
                 <div key={audit.id} className="timeline-item">
@@ -671,13 +702,13 @@ const DashboardPage = () => {
                   </div>
                   <div className="timeline-info">
                     <div className="timeline-header">
-                      <span className="timeline-title">{audit.accion?.toUpperCase()} — {audit.entidad}</span>
-                      <span className="timeline-time">
-                        {new Date(audit.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                      <span className="timeline-title">{fraseAuditoria(audit)}</span>
+                      <time className="timeline-time" dateTime={audit.createdAt} title={new Date(audit.createdAt).toLocaleString('es-AR')}>
+                        {cuandoAuditoria(audit.createdAt, ahora)}
+                      </time>
                     </div>
-                    <p className="timeline-desc">{audit.detalle || `Operación sobre ${audit.entidad}`}</p>
-                    <span className="timeline-user">por {audit.usuario?.nombre || 'Sistema'}</span>
+                    {audit.detalle && <p className="timeline-desc">{audit.detalle}</p>}
+                    <span className="timeline-user">{audit.usuario?.nombre ? `por ${audit.usuario.nombre}` : 'automático'}</span>
                   </div>
                 </div>
               ))

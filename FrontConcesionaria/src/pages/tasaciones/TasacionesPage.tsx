@@ -13,6 +13,8 @@ import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
 import Modal from '../../components/ui/Modal';
 import PageTitle from '../../components/ui/PageTitle';
+import Pagination from '../../components/ui/Pagination';
+import { EstadoListado } from '../../components/listado';
 import { useUIStore } from '../../store/uiStore';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -56,7 +58,7 @@ const TasacionesPage = () => {
     const [tasarMoneda, setTasarMoneda] = useState<'ARS' | 'USD'>('ARS');
     const [tasarObs, setTasarObs] = useState('');
 
-    const { data, isLoading } = useQuery<PaginatedResponse<Tasacion>>({
+    const { data, isLoading, isError, refetch } = useQuery<PaginatedResponse<Tasacion>>({
         queryKey: ['tasaciones', page, debouncedSearch],
         queryFn: () => tasacionesApi.getAll(debouncedSearch.trim() ? { search: debouncedSearch } : {}, { page, limit: 12 }) as unknown as Promise<PaginatedResponse<Tasacion>>,
     });
@@ -193,6 +195,12 @@ const TasacionesPage = () => {
         return waLink(t.cliente?.telefono, msg) ?? waShareLink(msg);
     };
 
+    const nuevaTasacion = (
+        <Button variant="primary" onClick={() => { setForm(emptyForm()); setModalOpen(true); }}>
+            <Plus size={18} aria-hidden="true" /> Nueva tasación
+        </Button>
+    );
+
     const set = <K extends keyof CreateTasacionDto>(k: K, v: CreateTasacionDto[K]) => setForm((p) => ({ ...p, [k]: v }));
 
     return (
@@ -202,21 +210,20 @@ const TasacionesPage = () => {
                 <div className="header-title">
                     <div className="flex items-center gap-3 mb-1">
                         <div className="icon-badge primary shadow-glow"><Gauge size={22} /></div>
-                        <h1>Tasaciones de usados</h1>
+                        <h1>Tasaciones</h1>
                     </div>
                     <p>Valuá el vehículo que trae un cliente y entregale la tasación en PDF.</p>
                 </div>
-                <Button variant="primary" onClick={() => { setForm(emptyForm()); setModalOpen(true); }}>
-                    <Plus size={18} /> Nueva tasación
-                </Button>
+                {nuevaTasacion}
             </header>
 
             <div className="card glass filters-bar mb-6">
                 <div className="search-box">
-                    <Search size={18} className="text-muted" />
+                    <Search size={18} className="text-muted" aria-hidden="true" />
                     <input
-                        type="text"
-                        placeholder="Buscar por marca, modelo, dominio o cliente..."
+                        type="search"
+                        aria-label="Buscar tasaciones"
+                        placeholder="Buscar por marca, modelo, dominio o cliente"
                         value={searchTerm}
                         onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
                         className="w-full text-sm font-medium"
@@ -224,14 +231,25 @@ const TasacionesPage = () => {
                 </div>
             </div>
 
-            {isLoading ? (
+            {isError ? (
+                <div className="card glass">
+                    <EstadoListado tipo="error" mensaje="No se pudieron cargar las tasaciones" onReintentar={() => refetch()} />
+                </div>
+            ) : isLoading ? (
                 <div className="tas-grid">
                     {Array.from({ length: 4 }).map((_, i) => <div key={i} className="card tas-card"><span className="skeleton skeleton-text" style={{ width: '60%' }} /></div>)}
                 </div>
             ) : tasaciones.length === 0 ? (
-                <div className="card glass tas-empty">
-                    <Gauge size={30} style={{ opacity: 0.4, marginBottom: '0.5rem' }} />
-                    <div>No hay tasaciones registradas.</div>
+                <div className="card glass">
+                    {debouncedSearch.trim()
+                        ? <EstadoListado tipo="sin-resultados" onLimpiarFiltros={() => { setSearchTerm(''); setPage(1); }} />
+                        : <EstadoListado
+                            tipo="vacio"
+                            titulo="Todavía no hay tasaciones"
+                            descripcion="Cuando un cliente trae su usado, tasalo acá y mandale el PDF."
+                            icono={<Gauge size={32} aria-hidden="true" />}
+                            accion={nuevaTasacion}
+                        />}
                 </div>
             ) : (
                 <>
@@ -241,7 +259,7 @@ const TasacionesPage = () => {
                             return (
                                 <div key={t.id} className="card tas-card">
                                     <div className="tas-card-head">
-                                        <span className="tas-veh"><Car size={15} /> {t.marca} {t.modelo}{t.anio ? ` · ${t.anio}` : ''}</span>
+                                        <span className="tas-veh"><Car size={15} aria-hidden="true" /> {t.marca} {t.modelo}{t.anio ? ` · ${t.anio}` : ''}</span>
                                         <Badge variant={c.variant}>{c.label}</Badge>
                                     </div>
                                     <div className="tas-valor">{t.valorEstimado != null ? money(t.valorEstimado, t.moneda) : 'A convenir'}</div>
@@ -250,7 +268,7 @@ const TasacionesPage = () => {
                                         {t.km != null && <span>{Number(t.km).toLocaleString('es-AR')} km</span>}
                                         <span>{formatFecha(t.fecha)}</span>
                                     </div>
-                                    {t.cliente && <div className="tas-cliente"><User size={13} /> {t.cliente.nombre}</div>}
+                                    {t.cliente && <div className="tas-cliente"><User size={13} aria-hidden="true" /> {t.cliente.nombre}</div>}
                                     {t.observaciones && <p className="tas-obs">{t.observaciones}</p>}
                                     <div className="tas-actions">
                                         {t.valorEstimado == null && (
@@ -269,22 +287,17 @@ const TasacionesPage = () => {
                                             type="button"
                                             onClick={() => confirm({ title: 'Eliminar tasación', message: `¿Eliminar la tasación de ${t.marca} ${t.modelo}?`, type: 'danger', onConfirm: async () => { await deleteMut.mutateAsync(t.id); } })}
                                             title="Eliminar"
+                                            aria-label={`Eliminar la tasación de ${t.marca} ${t.modelo}`}
                                             style={{ marginLeft: 'auto' }}
                                         >
-                                            <Trash2 size={14} />
+                                            <Trash2 size={14} aria-hidden="true" />
                                         </button>
                                     </div>
                                 </div>
                             );
                         })}
                     </div>
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-center gap-3" style={{ marginTop: '1.25rem' }}>
-                            <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Anterior</Button>
-                            <span className="text-muted text-sm">Página {page} de {totalPages}</span>
-                            <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Siguiente</Button>
-                        </div>
-                    )}
+                    <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
                 </>
             )}
 
@@ -308,12 +321,12 @@ const TasacionesPage = () => {
                         <Input dense label="Marca *" value={form.marca} onChange={(e) => set('marca', e.target.value)} placeholder="Toyota" />
                         <Input dense label="Modelo *" value={form.modelo} onChange={(e) => set('modelo', e.target.value)} placeholder="Corolla" />
                         <Input dense label="Año" type="number" value={form.anio ?? ''} onChange={(e) => set('anio', e.target.value ? Number(e.target.value) : undefined)} placeholder="2018" />
-                        <Input dense label="Kilómetros" type="number" value={form.km ?? ''} onChange={(e) => set('km', e.target.value ? Number(e.target.value) : undefined)} placeholder="85000" />
-                        <Input dense label="Dominio *" value={form.dominio ?? ''} onChange={(e) => set('dominio', e.target.value)} placeholder="AB123CD" />
+                        <Input dense label="Kilómetros" type="number" inputMode="numeric" value={form.km ?? ''} onChange={(e) => set('km', e.target.value ? Number(e.target.value) : undefined)} placeholder="85000" />
+                        <Input dense label="Dominio *" value={form.dominio ?? ''} onChange={(e) => set('dominio', e.target.value.toUpperCase())} placeholder="AB123CD" maxLength={9} autoCapitalize="characters" />
                         <Select dense label="Condición" value={form.condicion} onChange={(e) => set('condicion', e.target.value as CondicionTasacion)}>
                             {CONDICIONES.map((k) => <option key={k} value={k}>{CONDICION_MAP[k].label}</option>)}
                         </Select>
-                        <Input dense label="Valor estimado" type="number" step="0.01" value={form.valorEstimado ?? ''} onChange={(e) => set('valorEstimado', e.target.value ? Number(e.target.value) : undefined)} placeholder="12000000" />
+                        <Input dense label="Valor estimado" type="number" inputMode="decimal" step="0.01" value={form.valorEstimado ?? ''} onChange={(e) => set('valorEstimado', e.target.value ? Number(e.target.value) : undefined)} placeholder="12000000" />
                         <Select dense label="Moneda" value={form.moneda} onChange={(e) => set('moneda', e.target.value as 'ARS' | 'USD')}>
                             <option value="ARS">Pesos (ARS)</option>
                             <option value="USD">Dólares (USD)</option>
@@ -339,8 +352,8 @@ const TasacionesPage = () => {
             >
                 <div className="tas-form">
                     <div className="tas-form-grid">
-                        <Input dense label="Dominio *" value={tasarDominio} onChange={(e) => setTasarDominio(e.target.value)} placeholder="AB123CD" />
-                        <Input dense label="Valor estimado *" type="number" value={tasarValor} onChange={(e) => setTasarValor(e.target.value)} placeholder="12000000" />
+                        <Input dense label="Dominio *" value={tasarDominio} onChange={(e) => setTasarDominio(e.target.value.toUpperCase())} placeholder="AB123CD" maxLength={9} autoCapitalize="characters" />
+                        <Input dense label="Valor estimado *" type="number" inputMode="decimal" value={tasarValor} onChange={(e) => setTasarValor(e.target.value)} placeholder="12000000" />
                         <Select dense label="Moneda" value={tasarMoneda} onChange={(e) => setTasarMoneda(e.target.value as 'ARS' | 'USD')}>
                             <option value="ARS">Pesos (ARS)</option>
                             <option value="USD">Dólares (USD)</option>
@@ -362,7 +375,6 @@ const TasacionesPage = () => {
                 .tas-cliente { display: inline-flex; align-items: center; gap: 0.3rem; font-size: var(--text-sm); color: var(--text-secondary); }
                 .tas-obs { font-size: var(--text-sm); color: var(--text-secondary); margin: 0; white-space: pre-wrap; word-break: break-word; }
                 .tas-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
-                .tas-empty { text-align: center; padding: 2.5rem 1.5rem; color: var(--text-secondary); }
                 .tas-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
                 .tas-field { display: flex; flex-direction: column; gap: 0.3rem; }
                 .tas-field > span { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); font-weight: 700; }

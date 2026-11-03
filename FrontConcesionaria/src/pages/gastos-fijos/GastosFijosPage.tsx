@@ -8,13 +8,16 @@ import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import PageTitle from '../../components/ui/PageTitle';
+import Badge from '../../components/ui/Badge';
+import { Listado, ListadoTabla, CampoFiltro, EstadoListado, type ColumnaListado } from '../../components/listado';
 import { useUIStore } from '../../store/uiStore';
 import { getList } from '../../utils/lista';
-import Badge from '../../components/ui/Badge';
+import { formatMoneda, formatTotales, totalesPorMoneda } from '../../utils/moneda';
+import { getErrorMessage } from '../../utils/getErrorMessage';
 import {
-    FileText, Plus, Trash2, Edit, RefreshCw,
-    Tag, DollarSign, AlertCircle,
-    Calendar, Building2, ExternalLink, ChevronLeft, ChevronRight
+    Plus, Trash2, Edit, RefreshCw,
+    Tag, AlertCircle, Calendar, ExternalLink, Receipt
 } from 'lucide-react';
 
 type PageTab = 'gastos' | 'categorias';
@@ -26,11 +29,6 @@ const MESES = [
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
-
-// Prefijo de moneda: US$ para dólares, $ para pesos. Sin esto, un gasto en USD
-// se imprimía con '$' y se leía como pesos.
-const money = (n: number, moneda = 'ARS') =>
-    `${moneda === 'USD' ? 'US$' : '$'}${Number(n || 0).toLocaleString('es-AR')}`;
 
 const EMPTY_FORM = {
     categoriaId: '',
@@ -55,6 +53,7 @@ const GastosFijosPage = () => {
     /* ── Select data ─────────────────────────────────── */
     const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([]);
     const [categorias, setCategorias] = useState<GastoFijoCategoria[]>([]);
+    const [categoriasError, setCategoriasError] = useState(false);
 
     /* ── Filters ─────────────────────────────────────── */
     const [filterAnio, setFilterAnio] = useState(String(CURRENT_YEAR));
@@ -65,6 +64,7 @@ const GastosFijosPage = () => {
     /* ── List ────────────────────────────────────────── */
     const [gastos, setGastos] = useState<GastoFijo[]>([]);
     const [loading, setLoading] = useState(false);
+    const [loadError, setLoadError] = useState(false);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
 
@@ -96,20 +96,21 @@ const GastosFijosPage = () => {
     const loadCategorias = useCallback(async () => {
         try {
             setCategorias(getList<GastoFijoCategoria>(await gastosFijosCategoriaApi.getAll()));
+            setCategoriasError(false);
         } catch {
-            addToast('Error al cargar categorías', 'error');
+            setCategoriasError(true);
         }
-    }, [addToast]);
+    }, []);
 
     /* ── Bootstrap ───────────────────────────────────── */
     useEffect(() => {
         const loadInitialData = async () => {
             try {
                 setSucursales(getList<{ id: number; nombre: string }>(await sucursalesApi.getAll()));
-                loadCategorias();
             } catch {
-                addToast('Error al cargar sucursales', 'error');
+                addToast('No se pudieron cargar las sucursales para el filtro', 'error');
             }
+            loadCategorias();
         };
         loadInitialData();
     }, [loadCategorias, addToast]);
@@ -127,29 +128,35 @@ const GastosFijosPage = () => {
             setGastos(getList<GastoFijo>(res));
             setTotalPages(res?.totalPages ?? 1);
             setPage(pg);
+            setLoadError(false);
         } catch {
-            addToast('Error al cargar gastos fijos', 'error');
+            // Un error del servidor no es "no hay gastos": la tabla lo muestra con Reintentar.
+            setLoadError(true);
         } finally {
             setLoading(false);
         }
-    }, [filterAnio, filterMes, filterCategoria, filterSucursal, addToast]);
+    }, [filterAnio, filterMes, filterCategoria, filterSucursal]);
 
     useEffect(() => { loadGastos(1); }, [loadGastos]);
 
     // Se agrupa por moneda: sumar ARS con USD da un número que no existe. Y es
     // sólo de la página actual (el backend pagina de a 20), así que se rotula
     // como tal en vez de hacerlo pasar por el total del período.
-    const totalesPorMoneda = gastos.reduce<Record<string, number>>((acc, g) => {
-        const moneda = g.moneda ?? 'ARS';
-        acc[moneda] = (acc[moneda] ?? 0) + (Number(g.monto) || 0);
-        return acc;
-    }, {});
-    const monedasOrdenadas = Object.keys(totalesPorMoneda).sort();
+    const totalesPagina = totalesPorMoneda(gastos, (g) => g.monto, (g) => g.moneda);
+
+    const filtrosActivos = [filterAnio !== String(CURRENT_YEAR), !!filterMes, !!filterCategoria, !!filterSucursal].filter(Boolean).length;
+    const limpiarFiltros = () => {
+        setFilterAnio(String(CURRENT_YEAR));
+        setFilterMes('');
+        setFilterCategoria('');
+        setFilterSucursal('');
+    };
+    const periodo = `${filterMes ? MESES[Number(filterMes) - 1] : 'Todo'} ${filterAnio}`;
 
     /* ── Create ──────────────────────────────────────── */
     const handleCreate = async () => {
         if (!createForm.categoriaId || !createForm.anio || !createForm.mes || !createForm.monto || !createForm.descripcion.trim()) {
-            setCreateError('Los campos marcados con * son mandatorios.');
+            setCreateError('Completá los campos marcados con *.');
             return;
         }
         setSaving(true);
@@ -167,12 +174,12 @@ const GastosFijosPage = () => {
             if (createForm.proveedorId) payload.proveedorId = Number(createForm.proveedorId);
             if (createForm.comprobanteUrl) payload.comprobanteUrl = createForm.comprobanteUrl.trim();
             await gastosFijosApi.create(payload);
-            addToast('Egreso operativo registrado con éxito', 'success');
+            addToast('Gasto fijo registrado', 'success');
             setShowCreate(false);
             setCreateForm({ ...EMPTY_FORM });
             loadGastos(1);
         } catch (err: unknown) {
-            setCreateError((err as { message?: string })?.message ?? 'Error estructural al guardar');
+            setCreateError(getErrorMessage(err, 'No se pudo registrar el gasto'));
         } finally {
             setSaving(false);
         }
@@ -198,7 +205,7 @@ const GastosFijosPage = () => {
     const handleEdit = async () => {
         if (!editTarget) return;
         if (!editForm.categoriaId || !editForm.anio || !editForm.mes || !editForm.monto || !editForm.descripcion.trim()) {
-            setEditError('Todos los campos son requeridos para la actualización.');
+            setEditError('Completá los campos marcados con *.');
             return;
         }
         setSavingEdit(true);
@@ -216,11 +223,11 @@ const GastosFijosPage = () => {
                 comprobanteUrl: editForm.comprobanteUrl || null,
             };
             await gastosFijosApi.update(editTarget.id, payload);
-            addToast('Registro actualizado correctamente', 'success');
+            addToast('Gasto fijo actualizado', 'success');
             setEditTarget(null);
             loadGastos(page);
         } catch (err: unknown) {
-            setEditError((err as { message?: string })?.message ?? 'Error en la actualización de datos');
+            setEditError(getErrorMessage(err, 'No se pudo guardar el gasto'));
         } finally {
             setSavingEdit(false);
         }
@@ -232,11 +239,11 @@ const GastosFijosPage = () => {
         setDeleting(true);
         try {
             await gastosFijosApi.delete(deleteTarget.id);
-            addToast('Registro eliminado definitivamente', 'success');
+            addToast('Gasto fijo eliminado', 'success');
             setDeleteTarget(null);
             loadGastos(page);
-        } catch {
-            addToast('Error al ejecutar la baja del registro', 'error');
+        } catch (err) {
+            addToast(getErrorMessage(err, 'No se pudo eliminar el gasto'), 'error');
         } finally {
             setDeleting(false);
         }
@@ -244,16 +251,16 @@ const GastosFijosPage = () => {
 
     /* ── Cat create ──────────────────────────────────── */
     const handleCatCreate = async () => {
-        if (!catForm.nombre.trim()) { addToast('Defina un nombre para el rubro', 'error'); return; }
+        if (!catForm.nombre.trim()) { addToast('Poné un nombre para el rubro', 'error'); return; }
         setSavingCat(true);
         try {
             await gastosFijosCategoriaApi.create({ nombre: catForm.nombre.trim(), activo: catForm.activo });
-            addToast('Nuevo rubro operativo creado', 'success');
+            addToast('Rubro creado', 'success');
             setShowCatCreate(false);
             setCatForm({ ...EMPTY_CAT_FORM });
             loadCategorias();
         } catch (err: unknown) {
-            addToast((err as { message?: string })?.message ?? 'Fallo en la creación del rubro', 'error');
+            addToast(getErrorMessage(err, 'No se pudo crear el rubro'), 'error');
         } finally {
             setSavingCat(false);
         }
@@ -270,11 +277,11 @@ const GastosFijosPage = () => {
         setSavingCat(true);
         try {
             await gastosFijosCategoriaApi.update(editCat.id, { nombre: editCatForm.nombre || undefined, activo: editCatForm.activo });
-            addToast('Rubro actualizado con éxito', 'success');
+            addToast('Rubro actualizado', 'success');
             setEditCat(null);
             loadCategorias();
         } catch (err: unknown) {
-            addToast((err as { message?: string })?.message ?? 'Error al modificar rubro', 'error');
+            addToast(getErrorMessage(err, 'No se pudo guardar el rubro'), 'error');
         } finally {
             setSavingCat(false);
         }
@@ -286,247 +293,195 @@ const GastosFijosPage = () => {
         setDeletingCat(true);
         try {
             await gastosFijosCategoriaApi.delete(deleteCatTarget.id);
-            addToast('Categoría de egreso eliminada', 'success');
+            addToast('Rubro eliminado', 'success');
             setDeleteCatTarget(null);
             loadCategorias();
         } catch {
-            addToast('Error al eliminar categoría. Podría tener registros vinculados.', 'error');
+            addToast('No se pudo eliminar el rubro. Puede que tenga gastos cargados.', 'error');
         } finally {
             setDeletingCat(false);
         }
     };
 
+    const abrirAlta = () => { setShowCreate(true); setCreateError(''); };
+
+    const columnas: ColumnaListado<GastoFijo>[] = [
+        {
+            clave: 'descripcion',
+            titulo: 'Gasto',
+            flexible: true,
+            tarjeta: 'titulo',
+            celda: (g) => (
+                <>
+                    <span className="listado-principal" title={g.descripcion}>{g.descripcion}</span>
+                    <span className="listado-secundario">{g.categoria?.nombre ?? 'Sin rubro'}</span>
+                </>
+            ),
+        },
+        {
+            clave: 'periodo',
+            titulo: 'Período',
+            celda: (g) => <span className="listado-nowrap">{MESES[g.mes - 1] ?? g.mes} {g.anio}</span>,
+        },
+        {
+            clave: 'monto',
+            titulo: 'Importe',
+            alinear: 'right',
+            celda: (g) => <span className="listado-nowrap" style={{ fontWeight: 700 }}>{formatMoneda(g.monto, g.moneda)}</span>,
+        },
+        {
+            clave: 'sucursal',
+            titulo: 'Sucursal',
+            celda: (g) => <span className="listado-nowrap">{g.sucursal?.nombre ?? 'Toda la concesionaria'}</span>,
+        },
+        {
+            clave: 'comprobante',
+            titulo: 'Comprobante',
+            celda: (g) => (
+                g.comprobanteUrl ? (
+                    <a href={g.comprobanteUrl} target="_blank" rel="noreferrer" className="text-accent listado-nowrap" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
+                        <ExternalLink size={12} aria-hidden="true" /> Ver
+                    </a>
+                ) : <span className="text-muted">Sin comprobante</span>
+            ),
+        },
+        {
+            clave: 'acciones',
+            titulo: 'Acciones',
+            alinear: 'right',
+            ancho: '1%',
+            tarjeta: 'acciones',
+            celda: (g) => (
+                <div className="listado-acciones-fila">
+                    <button type="button" className="icon-btn" onClick={() => openEdit(g)} title="Editar" aria-label={`Editar el gasto "${g.descripcion}"`}><Edit size={14} aria-hidden="true" /></button>
+                    <button type="button" className="icon-btn danger" onClick={() => setDeleteTarget(g)} title="Eliminar" aria-label={`Eliminar el gasto "${g.descripcion}"`}><Trash2 size={14} aria-hidden="true" /></button>
+                </div>
+            ),
+        },
+    ];
+
+    const pestanas = (
+        <div className="segmented" role="tablist" aria-label="Vista">
+            <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'gastos'}
+                onClick={() => setActiveTab('gastos')}
+                className={`segmented-btn ${activeTab === 'gastos' ? 'is-active' : ''}`}
+            >
+                <Calendar size={16} aria-hidden="true" />
+                Gastos por mes
+            </button>
+            <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'categorias'}
+                onClick={() => setActiveTab('categorias')}
+                className={`segmented-btn ${activeTab === 'categorias' ? 'is-active' : ''}`}
+            >
+                <Tag size={16} aria-hidden="true" />
+                Rubros
+            </button>
+        </div>
+    );
+
     return (
         <div className="page-container animate-fade-in">
-            {/* Header */}
-            <header className="page-header">
-                <div className="header-title">
-                    <div className="flex items-center gap-3 mb-1">
-                        <div className="icon-badge accent shadow-glow">
-                            <DollarSign size={20} />
-                        </div>
-                        <h1>Egresos Corporativos</h1>
-                    </div>
-                    <p>Administración de costos fijos, alquileres, suministros y servicios recurrentes.</p>
-                </div>
-                <div className="flex gap-3">
-                    <Button variant="secondary" onClick={() => loadGastos(page)}>
-                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+            <PageTitle title="Gastos fijos" />
+            <Listado
+                titulo="Gastos fijos"
+                subtitulo="Alquiler, servicios, impuestos y otros gastos que se repiten todos los meses"
+                icono={<Receipt size={22} />}
+                clave="gastos-fijos"
+                pestanas={pestanas}
+                acciones={activeTab === 'gastos' ? (
+                    <Button variant="secondary" className="btn-icono" onClick={() => loadGastos(page)} disabled={loading} aria-label="Actualizar la lista" title="Actualizar">
+                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
                     </Button>
-                    <Button variant="primary" onClick={() => { setShowCreate(true); setCreateError(''); }}>
-                        <Plus size={18} /> Nuevo Registro
+                ) : undefined}
+                accionPrincipal={activeTab === 'gastos' ? (
+                    <Button variant="primary" onClick={abrirAlta}>
+                        <Plus size={18} aria-hidden="true" /> Nuevo gasto fijo
                     </Button>
-                </div>
-            </header>
-
-            {/* Tabs & Period Summary */}
-            <div className="flex flex-col gap-6">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="segmented" role="tablist">
-                        <button
-                            role="tab"
-                            aria-selected={activeTab === 'gastos'}
-                            onClick={() => setActiveTab('gastos')}
-                            className={`segmented-btn ${activeTab === 'gastos' ? 'is-active' : ''}`}
-                        >
-                            <Calendar size={16} />
-                            Vista por Período
-                        </button>
-                        <button
-                            role="tab"
-                            aria-selected={activeTab === 'categorias'}
-                            onClick={() => setActiveTab('categorias')}
-                            className={`segmented-btn ${activeTab === 'categorias' ? 'is-active' : ''}`}
-                        >
-                            <Tag size={16} />
-                            Rubros de Gasto
-                        </button>
-                    </div>
-
-                    {activeTab === 'gastos' && (
-                        <div className="card glass flex items-center gap-4">
-                            <div className="flex flex-col">
-                                <span className="text-3xs font-black uppercase text-accent tracking-tight">Subtotal en pantalla</span>
-                                {monedasOrdenadas.length === 0 ? (
-                                    <span className="text-2xl font-black tabular-nums">$0</span>
-                                ) : (
-                                    <div className="flex items-baseline gap-3">
-                                        {monedasOrdenadas.map(m => (
-                                            <span key={m} className="text-2xl font-black tabular-nums">
-                                                {money(totalesPorMoneda[m], m)}
-                                                <span className="text-3xs font-black text-muted"> {m}</span>
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            <div></div>
-                            <div className="flex flex-col">
-                                <span className="text-3xs font-black uppercase text-muted tracking-tight">Período Seleccionado</span>
-                                <span className="text-xl font-black text-muted">
-                                    {filterMes ? MESES[Number(filterMes) - 1].toUpperCase() : 'TODOS'} {filterAnio}
-                                </span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {activeTab === 'gastos' ? (
+                ) : (!showCatCreate ? (
+                    <Button variant="primary" onClick={() => setShowCatCreate(true)}>
+                        <Plus size={18} aria-hidden="true" /> Nuevo rubro
+                    </Button>
+                ) : undefined)}
+                filtrosActivos={filtrosActivos}
+                onLimpiarFiltros={limpiarFiltros}
+                resumen={activeTab === 'gastos' && !loading && !loadError ? (
+                    <span title="Suma de los gastos que se ven en esta página, separada por moneda">
+                        {periodo} · en esta página: {formatTotales(totalesPagina)}
+                    </span>
+                ) : undefined}
+                filtros={activeTab === 'gastos' ? (
                     <>
-                        {/* Filters Bar */}
-                        <div className="card glass filters-bar flex flex-wrap items-center gap-6">
-                            <div>
-                                <label className="form-label-xs">Año Fiscal</label>
-                                <select className="form-input-select w-full" value={filterAnio} onChange={e => setFilterAnio(e.target.value)}>
-                                    {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="form-label-xs">Mes Contable</label>
-                                <select className="form-input-select w-full" value={filterMes} onChange={e => setFilterMes(e.target.value)}>
-                                    <option value="">TODOS LOS MESES</option>
-                                    {MESES.map((m, i) => <option key={i + 1} value={i + 1}>{m.toUpperCase()}</option>)}
-                                </select>
-                            </div>
-                            <div className="flex-1">
-                                <label className="form-label-xs">Tipo de Rubro</label>
-                                <select className="form-input-select w-full" value={filterCategoria} onChange={e => setFilterCategoria(e.target.value)}>
-                                    <option value="">TODAS LAS CATEGORÍAS</option>
-                                    {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre.toUpperCase()}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="form-label-xs">Sucursal Asignada</label>
-                                <select className="form-input-select w-full" value={filterSucursal} onChange={e => setFilterSucursal(e.target.value)}>
-                                    <option value="">CORPORATIVO GLOBAL</option>
-                                    {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
-                                </select>
-                            </div>
-                            <div className="flex items-end">
-                                <Button variant="secondary" onClick={() => { setFilterMes(''); setFilterCategoria(''); setFilterSucursal(''); }}>
-                                    <RefreshCw size={18} />
-                                </Button>
-                            </div>
-                        </div>
-
-                        {/* List Table */}
-                        <div className="table-container card">
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Categoría</th>
-                                        <th>Mes / Período</th>
-                                        <th>Descripción del Concepto</th>
-                                        <th>Monto Ejecutado</th>
-                                        <th>Ubicación / Plaza</th>
-                                        <th style={{ textAlign: 'center' }}>Documentación</th>
-                                        <th style={{ textAlign: 'right' }}>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {loading ? (
-                                        <tr><td colSpan={7} style={{ padding: '8rem', textAlign: 'center' }}><RefreshCw className="animate-spin text-accent" size={40} /></td></tr>
-                                    ) : gastos.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={7}>
-                                                <div className="flex flex-col items-center text-muted">
-                                                    <FileText size={64} className="mb-4" />
-                                                    <p className="text-xl font-bold italic">Sin registros para el período</p>
-                                                    <p className="text-sm">Inicie una carga financiera para visualizar datos.</p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        gastos.map(g => (
-                                            <tr key={g.id}>
-                                                <td><Badge variant="info">{g.categoria?.nombre?.toUpperCase() ?? 'GENERAL'}</Badge></td>
-                                                <td>
-                                                    <div className="flex flex-col">
-                                                        <span className="font-bold text-sm">{MESES[g.mes - 1].toUpperCase()}</span>
-                                                        <span className="text-3xs font-black text-muted tracking-widest">{g.anio}</span>
-                                                    </div>
-                                                </td>
-                                                <td style={{ maxWidth: '280px' }}>
-                                                    <span className="text-xs font-semibold text-muted line-clamp-2" title={g.descripcion}>{g.descripcion}</span>
-                                                </td>
-                                                <td>
-                                                    <div className="flex items-baseline">
-                                                        <span className="text-lg font-black tabular-nums">{money(Number(g.monto), g.moneda)}</span>
-                                                        <span className="text-3xs font-black text-muted">{g.moneda ?? 'ARS'}</span>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div className="flex items-center gap-2">
-                                                        <Building2 size={12} className="text-muted" />
-                                                        <span className="text-xs font-bold text-muted">{g.sucursal?.nombre ?? 'CORPORATIVO'}</span>
-                                                    </div>
-                                                </td>
-                                                <td style={{ textAlign: 'center' }}>
-                                                    {g.comprobanteUrl ? (
-                                                        <a href={g.comprobanteUrl} target="_blank" rel="noreferrer" className="items-center text-info text-3xs font-black uppercase tracking-tight">
-                                                            <ExternalLink size={12} /> Ver PDF
-                                                        </a>
-                                                    ) : <span className="text-secondary text-3xs font-black">—</span>}
-                                                </td>
-                                                <td>
-                                                    <div className="flex justify-end gap-2">
-                                                        <button className="icon-btn" onClick={() => openEdit(g)} title="Editar"><Edit size={16} /></button>
-                                                        <button className="icon-btn danger" onClick={() => setDeleteTarget(g)} title="Eliminar"><Trash2 size={16} /></button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Pagination */}
-                        {totalPages > 1 && (
-                            <div className="flex justify-center gap-4">
-                                <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => loadGastos(page - 1)}>
-                                    <ChevronLeft size={16} /> Anterior
-                                </Button>
-                                <div className="flex items-center text-xs font-black">
-                                    {page} / {totalPages}
-                                </div>
-                                <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => loadGastos(page + 1)}>
-                                    Siguiente <ChevronRight size={16} />
-                                </Button>
-                            </div>
-                        )}
+                        <CampoFiltro etiqueta="Año">
+                            <select className="form-input" value={filterAnio} onChange={e => setFilterAnio(e.target.value)}>
+                                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                        </CampoFiltro>
+                        <CampoFiltro etiqueta="Mes">
+                            <select className="form-input" value={filterMes} onChange={e => setFilterMes(e.target.value)}>
+                                <option value="">Todos los meses</option>
+                                {MESES.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+                            </select>
+                        </CampoFiltro>
+                        <CampoFiltro etiqueta="Rubro">
+                            <select className="form-input" value={filterCategoria} onChange={e => setFilterCategoria(e.target.value)}>
+                                <option value="">Todos los rubros</option>
+                                {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                            </select>
+                        </CampoFiltro>
+                        <CampoFiltro etiqueta="Sucursal">
+                            <select className="form-input" value={filterSucursal} onChange={e => setFilterSucursal(e.target.value)}>
+                                <option value="">Todas las sucursales</option>
+                                {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                            </select>
+                        </CampoFiltro>
                     </>
-                ) : (
-                    /* Categorias View */
-                    <div className="w-full flex flex-col gap-6">
-                        <div className="card glass flex justify-between items-center shadow-glow-sm">
-                            <div className="flex items-center gap-6">
-                                <div className="flex items-center justify-center">
-                                    <Tag size={32} />
-                                </div>
-                                <div>
-                                    <h2 className="text-2xl font-black">Gestión de Rubros</h2>
-                                    <p className="text-sm text-muted">Parámetros de clasificación para gastos mensuales recurrentes.</p>
-                                </div>
-                            </div>
-                            {!showCatCreate && (
-                                <Button variant="primary" onClick={() => setShowCatCreate(true)}>
-                                    <Plus size={18} /> Nuevo Rubro
+                ) : undefined}
+            >
+                {activeTab === 'gastos' ? (
+                    <ListadoTabla
+                        etiqueta="Gastos fijos"
+                        columnas={columnas}
+                        filas={gastos}
+                        cargando={loading && gastos.length === 0}
+                        error={loadError}
+                        mensajeError="No se pudieron cargar los gastos fijos"
+                        onReintentar={() => loadGastos(page)}
+                        hayFiltros={!!filterMes || !!filterCategoria || !!filterSucursal}
+                        onLimpiarFiltros={limpiarFiltros}
+                        vacio={{
+                            titulo: `No hay gastos fijos cargados en ${filterAnio}`,
+                            descripcion: 'Cargá el alquiler, los servicios y los impuestos de cada mes para ver cuánto cuesta mantener la concesionaria.',
+                            icono: <Receipt size={32} aria-hidden="true" />,
+                            accion: (
+                                <Button variant="primary" size="sm" onClick={abrirAlta}>
+                                    <Plus size={16} aria-hidden="true" /> Nuevo gasto fijo
                                 </Button>
-                            )}
-                        </div>
-
+                            ),
+                        }}
+                        pagina={page}
+                        totalPaginas={totalPages}
+                        onPaginaChange={(p) => loadGastos(p)}
+                    />
+                ) : (
+                    /* Rubros */
+                    <div className="w-full flex flex-col gap-6">
                         {showCatCreate && (
                             <div className="card glass animate-fade-in">
-                                <h3 className="text-lg font-black mb-6 flex items-center gap-2">
-                                    <Plus size={20} className="text-accent" /> Definir Nueva Categoría
-                                </h3>
+                                <h2 className="text-lg font-black mb-6 flex items-center gap-2" style={{ fontSize: 'var(--text-lg)' }}>
+                                    <Plus size={20} className="text-accent" aria-hidden="true" /> Nuevo rubro
+                                </h2>
                                 <div className="flex flex-col sm:flex-row gap-6 items-end">
                                     <Input
                                         dense
-                                        label="Nombre del Concepto *"
+                                        label="Nombre *"
                                         containerClassName="flex-1 w-full"
-                                        placeholder="Ej: Servicios Públicos, Impuestos..."
+                                        placeholder="Ej: servicios, impuestos"
                                         value={catForm.nombre}
                                         onChange={e => setCatForm(f => ({ ...f, nombre: e.target.value }))}
                                         autoFocus
@@ -539,64 +494,76 @@ const GastosFijosPage = () => {
                             </div>
                         )}
 
-                        <div className="table-container card">
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Identificador del Rubro</th>
-                                        <th>Estado Operativo</th>
-                                        <th style={{ textAlign: 'right' }}>Acciones Especiales</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {categorias.map(c => (
-                                        <tr key={c.id}>
-                                            <td className="font-black text-sm">
-                                                {editCat?.id === c.id ? (
-                                                    <input className="form-input" value={editCatForm.nombre} onChange={e => setEditCatForm(f => ({ ...f, nombre: e.target.value }))} />
-                                                ) : c.nombre.toUpperCase()}
-                                            </td>
-                                            <td>
-                                                <div className="flex items-center gap-2">
-                                                    <div></div>
-                                                    <span className={`text-3xs font-black uppercase ${c.activo !== false ? 'text-success' : 'text-muted'}`}>
-                                                        {c.activo !== false ? 'Visible en Carga' : 'Archivado'}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                {editCat?.id === c.id ? (
-                                                    <div className="flex justify-end gap-2">
-                                                        <Button variant="primary" size="sm" onClick={handleCatEdit} loading={savingCat}>Guardar</Button>
-                                                        <Button variant="secondary" size="sm" onClick={() => setEditCat(null)}>X</Button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex justify-end gap-2">
-                                                        <button className="icon-btn" onClick={() => openEditCat(c)}><Edit size={16} /></button>
-                                                        <button className="icon-btn danger" onClick={() => setDeleteCatTarget(c)}><Trash2 size={16} /></button>
-                                                    </div>
-                                                )}
-                                            </td>
+                        {categoriasError ? (
+                            <div className="card">
+                                <EstadoListado tipo="error" mensaje="No se pudieron cargar los rubros" onReintentar={loadCategorias} />
+                            </div>
+                        ) : categorias.length === 0 ? (
+                            <div className="card">
+                                <EstadoListado
+                                    tipo="vacio"
+                                    titulo="Todavía no hay rubros"
+                                    descripcion="Los rubros agrupan los gastos fijos (servicios, impuestos, sueldos…). Creá el primero para empezar a cargar."
+                                    icono={<Tag size={32} aria-hidden="true" />}
+                                />
+                            </div>
+                        ) : (
+                            <div className="table-container card">
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Rubro</th>
+                                            <th>Estado</th>
+                                            <th style={{ textAlign: 'right' }}>Acciones</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody>
+                                        {categorias.map(c => (
+                                            <tr key={c.id}>
+                                                <td className="font-bold text-sm">
+                                                    {editCat?.id === c.id ? (
+                                                        <input className="form-input" aria-label="Nombre del rubro" value={editCatForm.nombre} onChange={e => setEditCatForm(f => ({ ...f, nombre: e.target.value }))} />
+                                                    ) : c.nombre}
+                                                </td>
+                                                <td>
+                                                    <Badge variant={c.activo !== false ? 'success' : 'default'} title={c.activo !== false ? 'Aparece al cargar un gasto' : 'No aparece al cargar un gasto'}>
+                                                        {c.activo !== false ? 'Activo' : 'Archivado'}
+                                                    </Badge>
+                                                </td>
+                                                <td>
+                                                    {editCat?.id === c.id ? (
+                                                        <div className="flex justify-end gap-2">
+                                                            <Button variant="secondary" size="sm" onClick={() => setEditCat(null)}>Cancelar</Button>
+                                                            <Button variant="primary" size="sm" onClick={handleCatEdit} loading={savingCat}>Guardar</Button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex justify-end gap-2">
+                                                            <button type="button" className="icon-btn" onClick={() => openEditCat(c)} title="Editar" aria-label={`Editar el rubro ${c.nombre}`}><Edit size={16} aria-hidden="true" /></button>
+                                                            <button type="button" className="icon-btn danger" onClick={() => setDeleteCatTarget(c)} title="Eliminar" aria-label={`Eliminar el rubro ${c.nombre}`}><Trash2 size={16} aria-hidden="true" /></button>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
                 )}
-            </div>
+            </Listado>
 
             <Modal
                 isOpen={showCreate || editTarget !== null}
                 onClose={() => { setShowCreate(false); setEditTarget(null); }}
-                title={editTarget ? 'Actualización de Carga' : 'Certificación de Egreso'}
-                subtitle="Asegúrese de adjuntar digitalmente el comprobante de respaldo."
+                title={editTarget ? 'Editar gasto fijo' : 'Nuevo gasto fijo'}
+                subtitle="Si tenés el comprobante, pegá el link para tenerlo a mano."
                 maxWidth="720px"
                 footer={
                     <>
-                        <Button variant="secondary" onClick={() => { setShowCreate(false); setEditTarget(null); }}>Abortar</Button>
+                        <Button variant="secondary" onClick={() => { setShowCreate(false); setEditTarget(null); }}>Cancelar</Button>
                         <Button variant="primary" onClick={editTarget ? handleEdit : handleCreate} loading={saving || savingEdit}>
-                            {editTarget ? 'Confirmar Cambios' : 'Registrar'}
+                            {editTarget ? 'Guardar' : 'Registrar'}
                         </Button>
                     </>
                 }
@@ -605,20 +572,20 @@ const GastosFijosPage = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Select
                             dense
-                            label="Rubro del Gasto *"
-                            placeholder="Selección de cuenta..."
-                            options={categorias.map(c => ({ value: c.id, label: c.nombre.toUpperCase() }))}
+                            label="Rubro *"
+                            placeholder="Elegí el rubro"
+                            options={categorias.map(c => ({ value: c.id, label: c.nombre }))}
                             value={editTarget ? editForm.categoriaId : createForm.categoriaId}
                             onChange={e => editTarget ? setEditForm(f => ({ ...f, categoriaId: e.target.value })) : setCreateForm(f => ({ ...f, categoriaId: e.target.value }))}
                         />
                         <div className="input-group input-group--dense">
-                            <label className="input-label">Período Fiscal *</label>
+                            <span className="input-label">Período *</span>
                             <div className="flex gap-4">
-                                <Select dense containerClassName="flex-1" value={editTarget ? editForm.mes : createForm.mes}
+                                <Select dense containerClassName="flex-1" aria-label="Mes" value={editTarget ? editForm.mes : createForm.mes}
                                     onChange={e => editTarget ? setEditForm(f => ({ ...f, mes: e.target.value })) : setCreateForm(f => ({ ...f, mes: e.target.value }))}>
-                                    {MESES.map((m, i) => <option key={i + 1} value={i + 1}>{m.toUpperCase()}</option>)}
+                                    {MESES.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
                                 </Select>
-                                <Select dense containerClassName="flex-1" value={editTarget ? editForm.anio : createForm.anio}
+                                <Select dense containerClassName="flex-1" aria-label="Año" value={editTarget ? editForm.anio : createForm.anio}
                                     onChange={e => editTarget ? setEditForm(f => ({ ...f, anio: e.target.value })) : setCreateForm(f => ({ ...f, anio: e.target.value }))}>
                                     {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                                 </Select>
@@ -628,20 +595,21 @@ const GastosFijosPage = () => {
 
                     <Textarea
                         dense
-                        label="Descripción Detallada *"
+                        label="Descripción *"
                         rows={3}
                         value={editTarget ? editForm.descripcion : createForm.descripcion}
                         onChange={e => editTarget ? setEditForm(f => ({ ...f, descripcion: e.target.value })) : setCreateForm(f => ({ ...f, descripcion: e.target.value }))}
-                        placeholder="Justificación y desglose del egreso..."
+                        placeholder="Ej: alquiler del local de Av. Rivadavia"
                         style={{ resize: 'none' }}
                     />
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="input-group input-group--dense">
-                            <label className="input-label">Importe *</label>
+                            <span className="input-label">Importe *</span>
                             <div className="flex gap-3">
                                 <Select
                                     dense
+                                    aria-label="Moneda"
                                     style={{ maxWidth: '6.5rem' }}
                                     value={editTarget ? editForm.moneda : createForm.moneda}
                                     onChange={e => editTarget ? setEditForm(f => ({ ...f, moneda: e.target.value })) : setCreateForm(f => ({ ...f, moneda: e.target.value }))}
@@ -649,18 +617,15 @@ const GastosFijosPage = () => {
                                     <option value="ARS">ARS</option>
                                     <option value="USD">USD</option>
                                 </Select>
-                                <div className="flex-1">
-                                    <div className="text-accent font-black">{(editTarget ? editForm.moneda : createForm.moneda) === 'USD' ? 'US$' : '$'}</div>
-                                    <Input dense type="number" className="font-black text-xl" value={editTarget ? editForm.monto : createForm.monto}
-                                        onChange={e => editTarget ? setEditForm(f => ({ ...f, monto: e.target.value })) : setCreateForm(f => ({ ...f, monto: e.target.value }))} />
-                                </div>
+                                <Input dense containerClassName="flex-1" type="number" inputMode="decimal" aria-label="Importe" value={editTarget ? editForm.monto : createForm.monto}
+                                    onChange={e => editTarget ? setEditForm(f => ({ ...f, monto: e.target.value })) : setCreateForm(f => ({ ...f, monto: e.target.value }))} />
                             </div>
                         </div>
                         <Select
                             dense
-                            label="Plaza / Sucursal"
-                            placeholder="CENTRALIZADO (CORPORATIVO)"
-                            options={sucursales.map(s => ({ value: s.id, label: s.nombre.toUpperCase() }))}
+                            label="Sucursal"
+                            placeholder="Toda la concesionaria"
+                            options={sucursales.map(s => ({ value: s.id, label: s.nombre }))}
                             value={editTarget ? editForm.sucursalId : createForm.sucursalId}
                             onChange={e => editTarget ? setEditForm(f => ({ ...f, sucursalId: e.target.value })) : setCreateForm(f => ({ ...f, sucursalId: e.target.value }))}
                         />
@@ -668,17 +633,18 @@ const GastosFijosPage = () => {
 
                     <Input
                         dense
-                        label="Link de Comprobante Digital (PDF/IMG)"
+                        label="Link del comprobante (PDF o imagen)"
                         icon={<ExternalLink size={14} />}
                         className="text-xs"
+                        type="url"
                         value={editTarget ? editForm.comprobanteUrl : createForm.comprobanteUrl}
                         onChange={e => editTarget ? setEditForm(f => ({ ...f, comprobanteUrl: e.target.value })) : setCreateForm(f => ({ ...f, comprobanteUrl: e.target.value }))}
-                        placeholder="https://bucket-almacenamiento.com/factura-123.pdf"
+                        placeholder="https://…"
                     />
 
                     {(createError || editError) && (
-                        <div className="uploader-alert uploader-alert-error">
-                            <AlertCircle size={14} />
+                        <div className="uploader-alert uploader-alert-error" role="alert">
+                            <AlertCircle size={14} aria-hidden="true" />
                             <span>{createError || editError}</span>
                         </div>
                     )}
@@ -687,18 +653,17 @@ const GastosFijosPage = () => {
 
             <ConfirmDialog
                 isOpen={deleteTarget !== null || deleteCatTarget !== null}
-                title="¿Ejecutar baja?"
-                message={`Esta operación eliminará irremediablemente ${deleteTarget
-                    ? 'el registro por $' + Number(deleteTarget.monto).toLocaleString('es-AR')
-                    : 'la categoría "' + deleteCatTarget?.nombre + '"'}.`}
+                title={deleteTarget ? 'Eliminar el gasto fijo' : 'Eliminar el rubro'}
+                message={deleteTarget
+                    ? `¿Eliminar el gasto "${deleteTarget.descripcion}" de ${formatMoneda(deleteTarget.monto, deleteTarget.moneda)}? No se puede deshacer.`
+                    : `¿Eliminar el rubro "${deleteCatTarget?.nombre ?? ''}"? No se puede deshacer.`}
                 confirmLabel="Eliminar"
-                cancelLabel="Cerrar"
+                cancelLabel="Cancelar"
                 type="danger"
                 onConfirm={deleteTarget ? handleDelete : handleCatDelete}
                 onCancel={() => { setDeleteTarget(null); setDeleteCatTarget(null); }}
                 loading={deleting || deletingCat}
             />
-
         </div>
     );
 };

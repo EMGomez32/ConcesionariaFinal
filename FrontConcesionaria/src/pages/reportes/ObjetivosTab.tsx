@@ -170,7 +170,7 @@ const ObjetivosTab = () => {
     });
 
     // ── Resumen ──────────────────────────────────────────────────────────────
-    const items = objetivosQ.data?.items ?? [];
+    const items = useMemo(() => objetivosQ.data?.items ?? [], [objetivosQ.data]);
     // Promedio de cumplimiento: se mira el objetivo de unidades si existe, si no el
     // de facturado. Sólo cuenta a quienes tienen algún objetivo (todos, por diseño).
     const promedio = useMemo(() => {
@@ -203,10 +203,10 @@ const ObjetivosTab = () => {
             align: 'center',
             accessor: (r) => (
                 <div className="flex items-center justify-center gap-1">
-                    <button className="icon-btn" title="Editar objetivo" onClick={() => openEdit(r)} type="button">
+                    <button className="icon-btn" title="Editar objetivo" aria-label="Editar el objetivo" onClick={() => openEdit(r)} type="button">
                         <Pencil size={16} />
                     </button>
-                    <button className="icon-btn" title="Eliminar objetivo" onClick={() => setAEliminar(r)} type="button">
+                    <button className="icon-btn" title="Eliminar objetivo" aria-label="Eliminar el objetivo" onClick={() => setAEliminar(r)} type="button">
                         <Trash2 size={16} />
                     </button>
                 </div>
