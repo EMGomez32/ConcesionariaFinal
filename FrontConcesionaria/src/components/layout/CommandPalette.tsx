@@ -317,6 +317,9 @@ const CommandPalette = ({ sections = NAV_SECTIONS, enableGlobalSearch = true }: 
 
                 .cmdk-search-icon { color: var(--text-muted); flex-shrink: 0; }
 
+                /* El panel entero es el contexto de foco: el input no suma anillo. */
+                .cmdk-input:focus-visible { box-shadow: none; }
+
                 .cmdk-input {
                     flex: 1;
                     background: transparent;
@@ -381,7 +384,7 @@ const CommandPalette = ({ sections = NAV_SECTIONS, enableGlobalSearch = true }: 
 
                 .cmdk-item.is-active {
                     background: var(--accent-light);
-                    color: var(--accent);
+                    color: var(--accent-text);
                 }
 
                 .cmdk-item-icon {
