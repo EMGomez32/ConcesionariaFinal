@@ -11,8 +11,15 @@ export class PrismaPresupuestoRepository implements IPresupuestoRepository {
         const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
         const { limit: limitNum, page: pageNum } = parsePagination(options);
 
-        const where = coerceFilter(filter);
-
+        const { vehiculoId, ...resto } = filter ?? {};
+        const where = coerceFilter(resto);
+        // El presupuesto no tiene vehiculoId: las unidades van en sus ítems. Filtrar por
+        // vehículo (pestaña Presupuestos de la ficha) = presupuestos con algún ítem
+        // vigente de esa unidad. Un id inválido no matchea nada en vez de listar todo.
+        if (vehiculoId !== undefined && vehiculoId !== null && vehiculoId !== '') {
+            const id = Number(vehiculoId);
+            where.items = { some: { vehiculoId: Number.isInteger(id) ? id : -1, deletedAt: null } };
+        }
 
         const results = await prisma.presupuesto.findMany({
             where,
