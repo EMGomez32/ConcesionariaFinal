@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { obligatorio, invalido } from './mensajes';
 
 // Schemas de validación del recurso presupuesto. Reemplazan a
 // modules/presupuestos/presupuesto.validation.ts (express-validator). Payload
@@ -19,13 +20,13 @@ import { z } from 'zod';
 // del body, no viene del cliente (igual que venta.schema.ts).
 
 const idField = (label: string) =>
-    z.coerce.number({ error: `${label} es obligatorio` }).int(`${label} inválido`).positive(`${label} es obligatorio`);
+    z.coerce.number({ error: obligatorio(label) }).int(invalido(label)).positive(obligatorio(label));
 
 // Monto requerido: equivale al `isDecimal()` del validador viejo (acepta número o
 // string numérico, rechaza no-numérico). No se fuerza positivo para no ser más estricto
 // que isDecimal. El front siempre manda estos con Number(...).
 const decimalField = (label: string) =>
-    z.coerce.number({ error: `${label} es obligatorio` });
+    z.coerce.number({ error: obligatorio(label) });
 
 // Número opcional tolerante ('' / null / NaN -> undefined) para no persistir un 0 espurio.
 const optionalInt = z.preprocess(

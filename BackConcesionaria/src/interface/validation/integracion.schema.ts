@@ -48,7 +48,7 @@ const idMetaOpcional = (etiqueta: string) =>
 // domain/services/canalesMeta.ts (fuente de verdad del contrato del config).
 const metaConfigBase = z.object({
     origen: z.enum(['instagram', 'facebook'], {
-        error: 'Origen inválido. Válidos: instagram, facebook',
+        error: 'Elegí un origen válido: Instagram o Facebook',
     }),
     verifyToken: z.string().min(1, 'El verify token es obligatorio'),
     appSecret: z.string().min(1, 'El app secret es obligatorio'),
@@ -88,7 +88,7 @@ const puertoImap = z.coerce.number().int().positive().refine(
 // Email (IMAP): credenciales de la casilla donde caen los avisos de consultas.
 export const emailConfigSchema = z.object({
     origen: z.enum(ORIGENES_LEAD, {
-        error: 'Origen inválido. Válidos: deruedas, instagram, facebook, whatsapp, web, mostrador, referido, otro',
+        error: 'Elegí un origen válido: DeRuedas, Instagram, Facebook, WhatsApp, web, mostrador, referido u otro',
     }).default('deruedas'),
     host: hostImap('El host IMAP es obligatorio'),
     port: puertoImap.default(993),
@@ -186,7 +186,7 @@ export const updateMetaConfigSchema = metaConfigBase.partial().extend({
 // opcional y SIN defaults: sólo lo que vino pisa lo guardado.
 export const updateEmailConfigSchema = z.object({
     origen: z.enum(ORIGENES_LEAD, {
-        error: 'Origen inválido. Válidos: deruedas, instagram, facebook, whatsapp, web, mostrador, referido, otro',
+        error: 'Elegí un origen válido: DeRuedas, Instagram, Facebook, WhatsApp, web, mostrador, referido u otro',
     }).optional(),
     host: hostImap('El host IMAP no puede estar vacío').optional(),
     port: puertoImap.optional(),

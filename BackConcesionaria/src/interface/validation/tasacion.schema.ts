@@ -6,9 +6,9 @@ import { z } from 'zod';
 
 // Espejo del enum CondicionTasacion (prisma/schema.prisma).
 const condicionEnum = z.enum(['excelente', 'muy_bueno', 'bueno', 'regular', 'malo'], {
-    error: 'Condición inválida. Válidas: excelente, muy_bueno, bueno, regular, malo',
+    error: 'Elegí una condición válida: excelente, muy bueno, bueno, regular o malo',
 });
-const monedaEnum = z.enum(['ARS', 'USD'], { error: 'Moneda inválida (ARS o USD)' });
+const monedaEnum = z.enum(['ARS', 'USD'], { error: 'Elegí una moneda válida: ARS o USD' });
 
 const optionalStr = z.string().optional();
 const optionalInt = z.preprocess(

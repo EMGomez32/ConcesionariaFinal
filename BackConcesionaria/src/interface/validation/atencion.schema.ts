@@ -28,37 +28,37 @@ import { z } from 'zod';
 
 // ── Espejos de los enums de prisma/schema.prisma ────────────────────────────
 const motivoEnum = z.enum(['consulta_general', 'unidad_puntual', 'vuelve_por_atencion_anterior'], {
-    error: 'Motivo inválido. Válidos: consulta_general, unidad_puntual, vuelve_por_atencion_anterior',
+    error: 'Elegí un motivo válido: consulta general, unidad puntual o vuelve por una atención anterior',
 });
 const resultadoEnum = z.enum(
     ['reserva', 'cotizacion', 'test_drive', 'permuta_a_tasar', 'en_analisis', 'sin_unidad', 'se_retiro'],
-    { error: 'Resultado inválido. Válidos: reserva, cotizacion, test_drive, permuta_a_tasar, en_analisis, sin_unidad, se_retiro' },
+    { error: 'Elegí un resultado válido: reserva, cotización, test drive, permuta a tasar, en análisis, sin unidad o se retiró' },
 );
 const modoBusquedaEnum = z.enum(['presupuesto', 'modelo', 'unidad'], {
-    error: 'Modo de búsqueda inválido. Válidos: presupuesto, modelo, unidad',
+    error: 'Elegí un modo de búsqueda válido: presupuesto, modelo o unidad',
 });
 const tipoFinanciamientoEnum = z.enum(['contado', 'credito', 'plan_de_ahorro'], {
-    error: 'Tipo de financiamiento inválido. Válidos: contado, credito, plan_de_ahorro',
+    error: 'Elegí un tipo de financiamiento válido: contado, crédito o plan de ahorro',
 });
 const tipoVehiculoEnum = z.enum(['buscada', 'sugerida'], {
-    error: 'Tipo inválido. Válidos: buscada (la pidió el cliente), sugerida (la propuso el sistema)',
+    error: 'Elegí un tipo válido: buscada (la pidió el cliente) o sugerida (la propuso el sistema)',
 });
 const accionEnum = z.enum(['vista', 'test_drive', 'cotizada', 'reservada'], {
-    error: 'Acción inválida. Válidas: vista, test_drive, cotizada, reservada',
+    error: 'Elegí una acción válida: vista, test drive, cotizada o reservada',
 });
 const nivelInteresEnum = z.enum(['bajo', 'medio', 'alto'], {
-    error: 'Nivel de interés inválido. Válidos: bajo, medio, alto',
+    error: 'Elegí un nivel de interés válido: bajo, medio o alto',
 });
 const medioContactoEnum = z.enum(['llamada', 'whatsapp', 'email', 'visita', 'otro'], {
-    error: 'Medio de contacto inválido. Válidos: llamada, whatsapp, email, visita, otro',
+    error: 'Elegí un medio de contacto válido: llamada, WhatsApp, email, visita u otro',
 });
 const condicionTasacionEnum = z.enum(['excelente', 'muy_bueno', 'bueno', 'regular', 'malo'], {
-    error: 'Condición inválida. Válidas: excelente, muy_bueno, bueno, regular, malo',
+    error: 'Elegí una condición válida: excelente, muy bueno, bueno, regular o malo',
 });
 const estadoTasacionEnum = z.enum(['sin_tasar', 'tasada', 'rechazada'], {
-    error: 'Estado de tasación inválido. Válidos: sin_tasar, tasada, rechazada',
+    error: 'Elegí un estado de tasación válido: sin tasar, tasada o rechazada',
 });
-const monedaEnum = z.enum(['ARS', 'USD'], { error: 'Moneda inválida (ARS o USD)' });
+const monedaEnum = z.enum(['ARS', 'USD'], { error: 'Elegí una moneda válida: ARS o USD' });
 
 // ── Helpers (mismo criterio que tasacion.schema.ts) ─────────────────────────
 
@@ -92,7 +92,7 @@ const contacto = {
     dni: textoOpcional,
     email: z.preprocess(
         (v) => (v === '' || v === null ? undefined : typeof v === 'string' ? v.trim().toLowerCase() : v),
-        z.string().email('Email inválido').optional(),
+        z.string().email('El email no es válido').optional(),
     ),
 };
 

@@ -8,7 +8,7 @@ import { z } from 'zod';
 // Espejo del enum TipoSeguimiento (prisma/schema.prisma). Mismo criterio que el
 // resto de la validación (z.enum de literales, no z.nativeEnum).
 const tipoEnum = z.enum(['llamada', 'whatsapp', 'email', 'visita', 'otro'], {
-    error: 'Tipo inválido. Válidos: llamada, whatsapp, email, visita, otro',
+    error: 'Elegí un tipo válido: llamada, WhatsApp, email, visita u otro',
 });
 
 // concesionariaId: la resuelve el controller desde el token (admin) o la elige el
@@ -24,7 +24,7 @@ const nullableFecha = () =>
     z.preprocess((v) => (v === '' ? undefined : v), z.string().nullable().optional());
 
 export const createSeguimientoSchema = z.object({
-    clienteId: z.coerce.number({ error: 'clienteId es obligatorio' }).int('clienteId inválido').positive('clienteId inválido'),
+    clienteId: z.coerce.number({ error: 'El cliente es obligatorio' }).int('El cliente no es válido').positive('El cliente no es válido'),
     tipo: tipoEnum,
     fecha: z.string({ error: 'La fecha es obligatoria' }).min(1, 'La fecha es obligatoria'),
     nota: z.string({ error: 'La nota es obligatoria' }).min(1, 'La nota es obligatoria'),

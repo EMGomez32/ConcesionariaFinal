@@ -8,8 +8,8 @@ const optionalFk = z.preprocess(
 );
 
 export const createVehiculoInteresSchema = z.object({
-    clienteId: z.coerce.number({ error: 'clienteId es obligatorio' }).int('clienteId inválido').positive('clienteId inválido'),
-    vehiculoId: z.coerce.number({ error: 'vehiculoId es obligatorio' }).int('vehiculoId inválido').positive('vehiculoId inválido'),
+    clienteId: z.coerce.number({ error: 'El cliente es obligatorio' }).int('El cliente no es válido').positive('El cliente no es válido'),
+    vehiculoId: z.coerce.number({ error: 'El vehículo es obligatorio' }).int('El vehículo no es válido').positive('El vehículo no es válido'),
     nota: z.string().optional(),
     concesionariaId: optionalFk,
 });

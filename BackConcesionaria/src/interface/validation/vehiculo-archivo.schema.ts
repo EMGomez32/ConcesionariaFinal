@@ -9,9 +9,9 @@ import { z } from 'zod';
 // Sólo enlaces http(s) absolutos: `javascript:`, `data:` o rutas relativas no son
 // un "link externo" válido y se renderizan como href en el front.
 const urlExterna = z
-    .string({ error: 'url es obligatoria' })
+    .string({ error: 'La URL es obligatoria' })
     .trim()
-    .max(2048, 'url demasiado larga')
+    .max(2048, 'La URL es demasiado larga')
     .refine((v) => {
         try {
             const u = new URL(v);
@@ -19,13 +19,13 @@ const urlExterna = z
         } catch {
             return false;
         }
-    }, 'url debe ser un enlace http(s) válido');
+    }, 'La URL tiene que ser un enlace http o https válido');
 
 export const createVehiculoArchivoSchema = z.object({
     vehiculoId: z.coerce
-        .number({ error: 'vehiculoId es obligatorio' })
-        .int('vehiculoId inválido')
-        .positive('vehiculoId inválido'),
+        .number({ error: 'El vehículo es obligatorio' })
+        .int('El vehículo no es válido')
+        .positive('El vehículo no es válido'),
     url: urlExterna,
     tipo: z.string().trim().max(50).nullish(),
     descripcion: z.string().trim().max(500).nullish(),
