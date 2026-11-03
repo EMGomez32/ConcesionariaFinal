@@ -1,3 +1,4 @@
+import type React from 'react';
 import { useUIStore } from '../../store/uiStore';
 import { CheckCircle, AlertCircle, Info, X, AlertTriangle } from 'lucide-react';
 
@@ -11,6 +12,7 @@ const Toast = () => {
           key={toast.id}
           className={`toast toast-${toast.type}`}
           role={toast.type === 'error' ? 'alert' : 'status'}
+          style={{ '--toast-duracion': `${toast.duracion}ms` } as React.CSSProperties}
         >
           <div className="toast-icon" aria-hidden="true">
             {toast.type === 'success' && <CheckCircle size={18} />}
@@ -125,7 +127,7 @@ const Toast = () => {
           height: 2px;
           background: currentColor;
           opacity: 0.65;
-          animation: toast-progress 3s linear forwards;
+          animation: toast-progress var(--toast-duracion, 3000ms) linear forwards;
         }
 
         @keyframes toast-progress {

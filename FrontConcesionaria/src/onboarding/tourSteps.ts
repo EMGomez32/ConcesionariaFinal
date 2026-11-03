@@ -25,7 +25,7 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
             popover: {
                 title: 'Todo empieza por acá',
                 description:
-                    'Tu menú, agrupado por tema: stock, operaciones, finanzas y postventa. ¿Necesitás más espacio? Colapsalo con el botón de abajo.',
+                    'Tu menú, agrupado por tema: stock, clientes, ventas, finanzas y postventa. ¿Necesitás más espacio? Colapsalo con el botón de abajo.',
                 side: 'right',
                 align: 'start',
             },
@@ -110,7 +110,7 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
             popover: {
                 title: '¿Lo querés ver de nuevo?',
                 description:
-                    'Este <strong>?</strong> relanza el tour cuando quieras. Y si ya te lo sabés, apagalo en <strong>Configuración → Preferencias</strong>. ¡A vender! 🚗',
+                    'Este <strong>?</strong> relanza el tour cuando quieras. Y si ya te lo sabés, apagalo en <strong>Ajustes → Preferencias</strong>. ¡A vender! 🚗',
                 side: 'bottom',
                 align: 'end',
             },

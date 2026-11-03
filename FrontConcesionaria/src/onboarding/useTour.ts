@@ -28,7 +28,7 @@ function stepVisible(step: DriveStep): boolean {
  * Ambos comparten el mismo motor: filtran los pasos cuyo ancla no está visible
  * (rol/mobile), no apilan tours (guard), y al cerrarse marcan lo visto (para no
  * repetir el auto-inicio). Se usan en el auto-inicio (Dashboard + ModuleTourController),
- * el botón "?" del TopBar (contextual) y Configuración → Preferencias.
+ * el botón "?" del TopBar (contextual) y Ajustes → Preferencias.
  */
 export function useTour() {
     const roles = useAuthStore((s) => s.user?.roles ?? []);

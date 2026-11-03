@@ -8,6 +8,7 @@ import ScrollProgress from './ScrollProgress';
 import SkipLink from './SkipLink';
 import Toast from '../ui/Toast';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import ErrorBoundary from '../ErrorBoundary';
 import { useConfirmStore } from '../../store/confirmStore';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 import type { NavSection } from '../../config/nav';
@@ -26,6 +27,26 @@ const AppLayout = ({ sections, brandTag, showNotifications = true }: AppLayoutPr
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const togglePalette = useCommandPaletteStore((s) => s.toggle);
     const { pathname } = useLocation();
+
+    // El menú móvil se cierra al navegar. Es estado derivado de la ruta: se ajusta
+    // durante el render (patrón de React para "resetear al cambiar una prop") en
+    // vez de con un efecto que haga setState.
+    const [rutaVista, setRutaVista] = useState(pathname);
+    if (rutaVista !== pathname) {
+        setRutaVista(pathname);
+        setIsSidebarOpen(false);
+    }
+
+    // ...y con Escape. Si un modal o un combobox ya usó la tecla (preventDefault),
+    // no se toca el menú.
+    useEffect(() => {
+        if (!isSidebarOpen) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !e.defaultPrevented) setIsSidebarOpen(false);
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [isSidebarOpen]);
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -63,12 +84,13 @@ const AppLayout = ({ sections, brandTag, showNotifications = true }: AppLayoutPr
                 <div
                     className="sidebar-backdrop"
                     onClick={() => setIsSidebarOpen(false)}
+                    aria-hidden="true"
                 />
             )}
             <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} sections={sections} brandTag={brandTag} />
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                 <ScrollProgress />
-                <TopBar onMenuClick={() => setIsSidebarOpen(true)} showNotifications={showNotifications} />
+                <TopBar onMenuClick={() => setIsSidebarOpen(true)} menuAbierto={isSidebarOpen} showNotifications={showNotifications} />
                 <main
                     id="main-content"
                     className="app-main"
@@ -76,7 +98,12 @@ const AppLayout = ({ sections, brandTag, showNotifications = true }: AppLayoutPr
                     style={{ flex: 1, overflowY: 'auto' }}
                 >
                     <div key={pathname} className="page-transition">
-                        <Outlet />
+                        {/* Un error en una pantalla no tumba el shell: el menú sigue
+                            andando y, como este div lleva key={pathname}, al navegar
+                            a otra ruta la barrera se resetea sola. */}
+                        <ErrorBoundary variante="seccion">
+                            <Outlet />
+                        </ErrorBoundary>
                     </div>
                 </main>
             </div>

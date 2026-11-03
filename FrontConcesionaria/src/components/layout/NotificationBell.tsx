@@ -128,7 +128,8 @@ const NotificationBell = () => {
                 .notif-badge {
                     position: absolute; top: 3px; right: 2px;
                     min-width: 16px; height: 16px; padding: 0 3px;
-                    background: var(--accent-2); color: var(--text-white);
+                    /* Tinta oscura sobre el violeta: el blanco daba 4.2:1 en claro y 2.7:1 en oscuro. */
+                    background: var(--accent-2); color: var(--text-on-accent);
                     font-size: var(--text-3xs); font-weight: 800; line-height: 16px;
                     text-align: center; border-radius: var(--radius-pill);
                     border: 2px solid var(--bg-card);
@@ -158,7 +159,7 @@ const NotificationBell = () => {
                 .notif-item-icon { width: 30px; height: 30px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
                 .notif-item-label { flex: 1; font-size: var(--text-sm); }
                 .notif-item-count { font-weight: 800; font-size: var(--text-base); }
-                .notif-foot { display: block; text-align: center; padding: 0.6rem; font-size: var(--text-sm); color: var(--accent); text-decoration: none; }
+                .notif-foot { display: block; text-align: center; padding: 0.6rem; font-size: var(--text-sm); color: var(--accent-text); text-decoration: none; }
                 .notif-foot:hover { background: var(--bg-secondary); }
             `}</style>
         </>

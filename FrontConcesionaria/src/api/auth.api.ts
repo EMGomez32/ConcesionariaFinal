@@ -1,26 +1,39 @@
 import client from './client';
 import { queryClient } from './queryClient';
-import { useAuthStore, getPersistedRefreshToken } from '../store/authStore';
+import { useAuthStore } from '../store/authStore';
+import { limpiarRegreso } from '../store/sesion';
+
+/**
+ * Marca de "salida voluntaria": ProtectedRoute la lee para NO recordar la ruta en
+ * la que estaba el usuario (si cierra la sesión y entra otra persona, que arranque
+ * en el inicio y no en la pantalla del anterior). Vive en memoria (el logout no
+ * recarga la página) y se apaga al volver a entrar.
+ */
+let salidaVoluntaria = false;
+export const haySalidaVoluntaria = (): boolean => salidaVoluntaria;
+export const limpiarSalidaVoluntaria = () => { salidaVoluntaria = false; };
 
 /**
  * Cierra la sesión del usuario. Limpia el estado local PRIMERO y recién después
- * revoca el refresh token en el backend (best-effort):
+ * revoca el refresh en el backend (best-effort):
  *
  *  - Limpiar primero hace que el usuario quede deslogueado al instante aunque el
  *    backend no responda o la request se cuelgue (no dependemos del round-trip para
  *    cerrar la sesión local).
- *  - Además, al vaciar el store antes del POST, ninguna request en vuelo puede releer
- *    este refresh token y mandarlo a /auth/refresh justo cuando el logout lo está
- *    invalidando (evita la carrera con la detección de reuso).
+ *  - Además, al vaciar el store antes del POST, ninguna request en vuelo dispara un
+ *    /auth/refresh (el interceptor sólo renueva si hay usuario) justo cuando el
+ *    logout está invalidando la cookie (evita la carrera con la detección de reuso).
+ *  - El refresh viaja en la cookie httpOnly: /auth/logout la revoca y la borra.
+ *    El cuerpo va vacío (el campo `refreshToken` del cuerpo es para la app móvil).
+ *  - Las otras pestañas se enteran por el evento `storage` (el usuario persistido
+ *    pasa a null) y cierran también.
  *
  * Sólo cierra ESTA sesión, no las de otros dispositivos.
  */
 export async function performLogout(): Promise<void> {
-    // Capturar el refresh MÁS fresco ANTES de limpiar: se prefiere el persistido en
-    // localStorage porque, en multi-pestaña, otra pestaña pudo haberlo rotado y el de
-    // memoria de ésta quedó viejo. Así se revoca en el backend el token que de verdad
-    // está activo (no uno ya rotado).
-    const refreshToken = getPersistedRefreshToken() ?? useAuthStore.getState().refreshToken;
+    const teniaSesion = !!useAuthStore.getState().user;
+    salidaVoluntaria = true;
+    limpiarRegreso();
     useAuthStore.getState().logout();
     // El caché de React Query guarda datos del usuario/tenant saliente y el
     // QueryClient singleton sobrevive a la navegación SPA logout→login: sin esto,
@@ -31,9 +44,9 @@ export async function performLogout(): Promise<void> {
     // silencia sin sesión). Sólo afecta ESTA pestaña, igual que el logout local.
     queryClient.clear();
 
-    if (refreshToken) {
+    if (teniaSesion) {
         try {
-            await client.post('/auth/logout', { refreshToken });
+            await client.post('/auth/logout', {});
         } catch {
             // best-effort: el logout local ya ocurrió.
         }
