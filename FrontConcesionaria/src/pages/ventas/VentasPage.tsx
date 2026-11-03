@@ -29,6 +29,7 @@ import VentaFacturaPanel from '../../components/ventas/VentaFacturaPanel';
 import { ENTREGA_ESTADO, FORMA_PAGO_LABEL, METODO_PAGO_LABEL, rotuloEstado } from '../../components/ventas/estados';
 import { calcularSaldoVenta, imprimirReciboVenta } from '../../components/ventas/reciboVenta';
 import { useFiltrosUrl } from '../../components/ventas/useFiltrosUrl';
+import '../../components/ventas/listados.css';
 import { usePermisos } from '../../hooks/usePermisos';
 import { ventasApi } from '../../api/ventas.api';
 import { reportesApi } from '../../api/reportes.api';
@@ -547,12 +548,12 @@ const VentasPage = () => {
             </div>
 
             {/* Filtros */}
-            <div className="filters-bar" data-tour="ventas-filtros">
+            <div className="filters-bar filtros-comerciales" data-tour="ventas-filtros">
                 <div className="search-box">
                     <Search size={18} className="text-muted" aria-hidden="true" />
                     <input
                         type="search"
-                        placeholder="Buscar por cliente, DNI, dominio, marca o modelo"
+                        placeholder="Buscar cliente, DNI, dominio, marca o modelo"
                         aria-label="Buscar ventas"
                         value={busqueda}
                         onChange={e => setBusqueda(e.target.value)}
@@ -566,12 +567,14 @@ const VentasPage = () => {
                     <option value="">Forma de pago: todas</option>
                     {Object.entries(FORMA_PAGO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
-                <Button variant="ghost" onClick={limpiar} disabled={!hayFiltros}>
-                    <X size={16} /> Limpiar filtros
-                </Button>
+                {hayFiltros && (
+                    <Button variant="ghost" size="sm" onClick={limpiar}>
+                        <X size={16} /> Limpiar filtros
+                    </Button>
+                )}
             </div>
 
-            <div data-tour="ventas-tabla">
+            <div data-tour="ventas-tabla" className="listado-compacto">
                 <DataTable
                     columns={columns}
                     data={ventas}

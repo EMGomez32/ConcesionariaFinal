@@ -16,6 +16,7 @@ import Textarea from '../../components/ui/Textarea';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import PageTitle from '../../components/ui/PageTitle';
 import { useFiltrosUrl } from '../../components/ventas/useFiltrosUrl';
+import '../../components/ventas/listados.css';
 import type { PaginatedResponse } from '../../types/api.types';
 import {
     Plus, Search, Eye, Trash2, RefreshCw, X,
@@ -576,8 +577,14 @@ const FinanciacionesPage = () => {
             accessor: (f) => <span className="font-mono text-xs font-bold">N° {nroPlan(f.id)}</span>,
         },
         {
+            // Cliente y cobrador juntos: a 1280 px la tabla entra sin scroll horizontal.
             header: 'Cliente',
-            accessor: (f) => <span className="font-bold text-sm">{f.cliente?.nombre ?? `Cliente #${f.clienteId}`}</span>,
+            accessor: (f) => (
+                <div className="flex flex-col" style={{ minWidth: 0, maxWidth: 145 }}>
+                    <span className="font-bold text-sm truncate" title={f.cliente?.nombre}>{f.cliente?.nombre ?? `Cliente #${f.clienteId}`}</span>
+                    <span className="text-xs text-muted truncate">Cobrador: {f.cobrador?.nombre || 'sin asignar'}</span>
+                </div>
+            ),
         },
         {
             header: 'Unidad',
@@ -587,10 +594,6 @@ const FinanciacionesPage = () => {
                     <span className="text-xs text-muted">{f.venta?.vehiculo?.dominio || 'Sin dominio'}</span>
                 </div>
             ),
-        },
-        {
-            header: 'Cobrador',
-            accessor: (f) => <span className="text-sm text-muted">{f.cobrador?.nombre || 'Sin asignar'}</span>,
         },
         {
             header: 'Monto financiado',
@@ -603,7 +606,7 @@ const FinanciacionesPage = () => {
                 const pagas = cuotasPagas(f);
                 const pct = f.cuotas ? Math.round((pagas / f.cuotas) * 100) : 0;
                 return (
-                    <div className="flex flex-col gap-1" style={{ minWidth: 110 }}>
+                    <div className="flex flex-col gap-1" style={{ minWidth: 90 }}>
                         <span className="text-xs tabular-nums">{pagas} de {f.cuotas} · {pct}%</span>
                         <div className="fin-progreso" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${pagas} de ${f.cuotas} cuotas pagas`}>
                             <div style={{ width: `${pct}%` }} />
@@ -713,7 +716,7 @@ const FinanciacionesPage = () => {
             </div>
 
             {/* Filtros */}
-            <div className="filters-bar">
+            <div className="filters-bar filtros-comerciales">
                 <div className="search-box">
                     <Search size={18} className="text-muted" aria-hidden="true" />
                     <input
@@ -730,13 +733,15 @@ const FinanciacionesPage = () => {
                         <option key={k} value={k}>{v.label}</option>
                     ))}
                 </select>
-                <Button variant="ghost" onClick={limpiar} disabled={!hayFiltros}>
-                    <X size={16} /> Limpiar filtros
-                </Button>
+                {hayFiltros && (
+                    <Button variant="ghost" size="sm" onClick={limpiar}>
+                        <X size={16} /> Limpiar filtros
+                    </Button>
+                )}
             </div>
 
             {/* Listado */}
-            <div data-tour="fin-tabla">
+            <div data-tour="fin-tabla" className="listado-compacto">
                 <DataTable
                     columns={columns}
                     data={financiaciones}

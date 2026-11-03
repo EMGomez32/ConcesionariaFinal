@@ -25,6 +25,7 @@ import { formatFecha, hoyLocal } from '../../utils/fecha';
 import { formatMoneda } from '../../utils/moneda';
 import { RESERVA_ESTADO, rotuloEstado } from '../../components/ventas/estados';
 import { useFiltrosUrl } from '../../components/ventas/useFiltrosUrl';
+import '../../components/ventas/listados.css';
 import type { PaginatedResponse } from '../../types/api.types';
 
 /** Usuario actual como vendedor por defecto, si tiene ese rol. */
@@ -181,12 +182,11 @@ const ReservasPage = () => {
             accessor: (r) => (
                 <div className="flex flex-col">
                     <span className="font-bold text-sm">{r.vehiculo ? `${r.vehiculo.marca} ${r.vehiculo.modelo}` : `Unidad #${r.vehiculoId}`}</span>
-                    <span className="text-xs text-muted">{r.vehiculo?.dominio || 'Sin dominio'}</span>
+                    <span className="text-xs text-muted">{r.vehiculo?.dominio || 'Sin dominio'}{r.sucursal?.nombre ? ` · ${r.sucursal.nombre}` : ''}</span>
                 </div>
             ),
         },
         { header: 'Cliente', accessor: (r) => <span className="text-sm">{r.cliente?.nombre ?? '-'}</span> },
-        { header: 'Sucursal', accessor: (r) => <span className="text-sm text-muted">{r.sucursal?.nombre ?? '-'}</span> },
         {
             header: 'Seña',
             align: 'right',
@@ -264,7 +264,7 @@ const ReservasPage = () => {
             )}
 
             {/* Filtros */}
-            <div className="filters-bar" data-tour="res-filtros">
+            <div className="filters-bar filtros-comerciales" data-tour="res-filtros">
                 <div className="search-box">
                     <Search size={18} className="text-muted" aria-hidden="true" />
                     <input
@@ -283,12 +283,14 @@ const ReservasPage = () => {
                     <option value="">Sucursal: todas</option>
                     {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
-                <Button variant="ghost" onClick={limpiar} disabled={!hayFiltros}>
-                    <X size={16} /> Limpiar filtros
-                </Button>
+                {hayFiltros && (
+                    <Button variant="ghost" size="sm" onClick={limpiar}>
+                        <X size={16} /> Limpiar filtros
+                    </Button>
+                )}
             </div>
 
-            <div data-tour="res-tabla">
+            <div data-tour="res-tabla" className="listado-compacto">
                 <DataTable
                     columns={columns}
                     data={reservas}

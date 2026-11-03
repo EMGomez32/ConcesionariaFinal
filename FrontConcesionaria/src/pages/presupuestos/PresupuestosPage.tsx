@@ -16,6 +16,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useConfirm } from '../../hooks/useConfirm';
 import { FORMA_PAGO_OPTIONS, PRESUPUESTO_ESTADO, rotuloEstado } from '../../components/ventas/estados';
 import { useFiltrosUrl } from '../../components/ventas/useFiltrosUrl';
+import '../../components/ventas/listados.css';
 
 /* ── tipos locales ── */
 interface PresupuestoItem {
@@ -93,6 +94,7 @@ import {
     Hash, RefreshCw, ArrowRight, FileDown, MessageCircle, Clock
 } from 'lucide-react';
 import { getErrorMessage } from '../../utils/getErrorMessage';
+import { getList } from '../../utils/lista';
 import { waLink } from '../../utils/whatsapp';
 
 /* ── helpers ── */
@@ -313,10 +315,11 @@ const PresupuestosPage = () => {
             sucursalesApi.getAll({}, { limit: 100 }),
             vehiculosApi.getAll({ estado: 'publicado' }, { limit: 1000 }),
         ]).then(([c, u, s, v]) => {
-            setClientes((c.results ?? []) as ClienteRef[]);
-            setVendedores(((u as { results?: VendedorRef[] }).results ?? []));
-            setSucursales(((s as { results?: SucursalRef[] }).results ?? []));
-            setVehiculos((v.results ?? []) as VehiculoRef[]);
+            // getList: no todos los módulos responden con la misma forma.
+            setClientes(getList<ClienteRef>(c));
+            setVendedores(getList<VendedorRef>(u));
+            setSucursales(getList<SucursalRef>(s));
+            setVehiculos(getList<VehiculoRef>(v));
             setCatalogosOk(true);
         }).catch((e: unknown) => {
             // Sin esto el alta quedaba con los selects vacíos y sin explicación.
@@ -574,26 +577,29 @@ const PresupuestosPage = () => {
             ),
         },
         {
-            header: 'Válido hasta',
-            accessor: (p) => {
-                const vencido = !!p.validoHasta && p.validoHasta.slice(0, 10) < hoyLocal();
-                return (
-                    <span className={`text-xs tabular-nums ${vencido ? 'text-danger font-bold' : 'text-muted'}`} title={vencido ? 'La validez ya pasó' : undefined}>
-                        {fmt(p.validoHasta)}
-                    </span>
-                );
-            },
-        },
-        {
             header: 'Total',
             align: 'right',
             accessor: (p) => <span className="font-bold tabular-nums" style={{ whiteSpace: 'nowrap' }}>{formatMoneda(calcTotal(p), p.moneda)}</span>,
         },
         {
+            // La validez va bajo el estado (se leen juntos: un enviado con la
+            // validez vencida está para marcarlo como vencido) y la tabla gana
+            // una columna: a 1280 px las acciones entran sin scroll horizontal.
             header: 'Estado',
             accessor: (p) => {
                 const e = rotuloEstado(PRESUPUESTO_ESTADO, p.estado);
-                return <Badge variant={e.variant}>{e.label}</Badge>;
+                const vivo = p.estado === 'borrador' || p.estado === 'enviado';
+                const vencido = vivo && !!p.validoHasta && p.validoHasta.slice(0, 10) < hoyLocal();
+                return (
+                    <div className="flex flex-col gap-1" style={{ alignItems: 'flex-start' }}>
+                        <Badge variant={e.variant}>{e.label}</Badge>
+                        {p.validoHasta && (
+                            <span className={`text-xs tabular-nums ${vencido ? 'text-danger font-bold' : 'text-muted'}`} title={vencido ? 'La validez ya pasó' : undefined}>
+                                Válido hasta {fmt(p.validoHasta)}
+                            </span>
+                        )}
+                    </div>
+                );
             },
         },
         {
@@ -679,7 +685,7 @@ const PresupuestosPage = () => {
             </div>
 
             {/* Filtros */}
-            <div className="filters-bar">
+            <div className="filters-bar filtros-comerciales">
                 <div className="search-box">
                     <Search size={18} className="text-muted" aria-hidden="true" />
                     <input
@@ -694,11 +700,14 @@ const PresupuestosPage = () => {
                     <option value="">Estado: todos</option>
                     {Object.entries(PRESUPUESTO_ESTADO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
-                <Button variant="ghost" onClick={limpiar} disabled={!hayFiltros}>
-                    <X size={16} /> Limpiar filtros
-                </Button>
+                {hayFiltros && (
+                    <Button variant="ghost" size="sm" onClick={limpiar}>
+                        <X size={16} /> Limpiar filtros
+                    </Button>
+                )}
             </div>
 
+            <div className="listado-compacto">
             <DataTable
                 columns={columns}
                 data={presupuestos}
@@ -716,6 +725,7 @@ const PresupuestosPage = () => {
                 emptyIcon={<FileText size={40} className="dt-empty-icon" />}
                 onClearFilters={hayFiltros ? limpiar : undefined}
             />
+            </div>
 
             {/* ALTA */}
             <Modal

@@ -21,6 +21,7 @@ import { formatFecha, hoyLocal } from '../../utils/fecha';
 import { formatMoneda } from '../../utils/moneda';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 import { FORMA_PAGO_OPTIONS, RESERVA_ESTADO } from '../../components/ventas/estados';
+import { etiquetaDocumento } from '../../components/clientes/documento';
 
 const ESTADO_BADGE = (e: EstadoReserva) => RESERVA_ESTADO[e]?.variant ?? 'default';
 const ESTADO_LABEL = (e: EstadoReserva) => RESERVA_ESTADO[e]?.label ?? e;
@@ -273,7 +274,7 @@ const ReservaDetallePage = () => {
                 {/* Vehículo */}
                 <div className="glass" style={{ padding: '1.5rem', borderRadius: '1rem' }}>
                     <h3 style={{ fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <Car size={14} /> Vehículo
+                        <Car size={14} aria-hidden="true" /> Unidad
                     </h3>
                     <InfoRow icon={Car} label="Unidad" value={reserva.vehiculo ? `${reserva.vehiculo.marca} ${reserva.vehiculo.modelo} ${reserva.vehiculo.version ?? ''}`.trim() : `Unidad #${reserva.vehiculoId}`} />
                     {Number(reserva.vehiculo?.precioLista) > 0 && (
@@ -293,7 +294,7 @@ const ReservaDetallePage = () => {
                         <Users size={14} /> Cliente
                     </h3>
                     <InfoRow icon={User} label="Nombre" value={reserva.cliente?.nombre} />
-                    <InfoRow icon={User} label="DNI" value={reserva.cliente?.dni} />
+                    <InfoRow icon={User} label={etiquetaDocumento(reserva.cliente?.dni)} value={reserva.cliente?.dni} />
                     <InfoRow icon={User} label="Teléfono" value={reserva.cliente?.telefono} />
                     <div style={{ marginTop: '0.75rem' }}>
                         <Button variant="ghost" size="sm" onClick={() => navigate(`/clientes/${reserva.clienteId}`)}>
