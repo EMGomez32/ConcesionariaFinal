@@ -7,12 +7,25 @@ import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../security/tenantGuard';
 import { USUARIO_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
 import { parsePagination, parseOrderBy } from '../queryOptions';
+import { whereDeBusqueda, clienteCoincide, vehiculoCoincide, rangoDeFechas } from '../busqueda';
 
 export class PrismaVentaRepository implements IVentaRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Venta>> {
         const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
         const { limit: limitNum, page: pageNum } = parsePagination(options);
-        const where = coerceFilter(filter);
+        // q y el rango no son columnas: fuera del filtro antes de coerceFilter (ver busqueda.ts).
+        const { q, fechaDesde, fechaHasta, ...resto } = filter ?? {};
+        const where = coerceFilter(resto);
+
+        const busqueda = whereDeBusqueda(q, (t) => [
+            { cliente: clienteCoincide(t) },
+            { vehiculo: vehiculoCoincide(t) },
+        ]);
+        if (busqueda) where.AND = busqueda;
+
+        // "Ventas del mes": fechaVenta es @db.Date, el rango es inclusivo en ambas puntas.
+        const rango = rangoDeFechas(fechaDesde, fechaHasta);
+        if (rango) where.fechaVenta = rango;
 
         const results = await prisma.venta.findMany({
             where,

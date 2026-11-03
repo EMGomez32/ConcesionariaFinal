@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { obligatorio, invalido } from './mensajes';
 
 // Schemas de validación de ventas. Payloads verificados contra los DTOs reales
 // del front (ventas.api.ts, VentaSubResources.tsx). Se usa `coerce` para aceptar
@@ -8,10 +9,10 @@ import { z } from 'zod';
 // lo no declarado.
 
 const idField = (label: string) =>
-    z.coerce.number({ error: `${label} es obligatorio` }).int(`${label} inválido`).positive(`${label} es obligatorio`);
+    z.coerce.number({ error: obligatorio(label) }).int(invalido(label)).positive(obligatorio(label));
 
 const montoField = (label: string) =>
-    z.coerce.number({ error: `${label} es obligatorio` }).positive(`${label} debe ser mayor a 0`);
+    z.coerce.number({ error: obligatorio(label) }).positive(`${label} debe ser mayor a 0`);
 
 // FK opcional: 0 / '' / null se interpretan como "sin FK" (undefined), porque el
 // form puede inicializar el campo en 0. Si viene un id real, se valida positivo.

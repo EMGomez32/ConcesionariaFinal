@@ -16,7 +16,7 @@ import { z } from 'zod';
 
 // Enum EstadoPostventa (prisma/schema.prisma).
 const estadoEnum = z.enum(['pendiente', 'en_curso', 'resuelto'], {
-    error: 'Estado inválido. Válidos: pendiente, en_curso, resuelto',
+    error: 'Elegí un estado válido: pendiente, en curso o resuelto',
 });
 
 // Entero obligatorio (FK requerida): isInt({ min: 1 }) del validation viejo.
@@ -67,18 +67,18 @@ const nullableMonto = () =>
     );
 
 export const createCasoSchema = z.object({
-    clienteId: requiredId('clienteId es obligatorio'),
-    vehiculoId: requiredId('vehiculoId es obligatorio'),
-    sucursalId: requiredId('sucursalId es obligatorio'),
+    clienteId: requiredId('El cliente es obligatorio'),
+    vehiculoId: requiredId('El vehículo es obligatorio'),
+    sucursalId: requiredId('La sucursal es obligatoria'),
     // ventaId es obligatorio (schema: `ventaId Int`): el reclamo siempre es sobre
     // una unidad vendida. Sin esto el form manda 0 y explota la FK con un 500.
     ventaId: requiredId('Indicá sobre qué venta es el reclamo'),
     fechaReclamo: z
-        .string({ error: 'fechaReclamo debe ser una fecha válida' })
-        .min(1, 'fechaReclamo debe ser una fecha válida'),
+        .string({ error: 'La fecha del reclamo es obligatoria' })
+        .min(1, 'La fecha del reclamo es obligatoria'),
     descripcion: z.string({ error: 'La descripción es obligatoria' }).min(1, 'La descripción es obligatoria'),
     // Opcional: el tipo (catálogo TipoPostventa) puede no saberse al abrir el caso.
-    tipoId: nullableInt('tipoId inválido'),
+    tipoId: nullableInt('El tipo no es válido'),
     // Turno de taller: opcional al abrir el caso (se suele coordinar después).
     fechaTurno: nullableFecha(),
     horaTurno: nullableHora(),
@@ -95,7 +95,7 @@ export const createCasoSchema = z.object({
 // resuelve y el repo no lo tiene en EDITABLE_UPDATE.
 export const updateCasoSchema = z.object({
     estado: estadoEnum.optional(),
-    tipoId: nullableInt('tipoId inválido'),
+    tipoId: nullableInt('El tipo no es válido'),
     descripcion: z.string().min(1, 'La descripción no puede quedar vacía').optional(),
     fechaReclamo: z.string().optional(),
     fechaCierre: nullableFecha(),

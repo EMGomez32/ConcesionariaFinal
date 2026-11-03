@@ -14,6 +14,7 @@ import { withAuthBypass } from '../../infrastructure/database/unitOfWork';
 import { sendPasswordResetEmail } from '../../infrastructure/email/mailer';
 import { env } from '../../config/env';
 import { logger } from '../../infrastructure/logging/logger';
+import { ponerCookieRefresh, limpiarCookieRefresh, refreshDeLaRequest } from './refreshCookie';
 
 const tokenService = new JwtTokenService();
 const refreshRepo = new PrismaRefreshTokenRepository();
@@ -49,6 +50,8 @@ export class AuthController {
                 });
             }
 
+            // Web: el refresh va además en la cookie httpOnly. El cuerpo no cambia (app móvil).
+            ponerCookieRefresh(res, result.tokens.refresh);
             res.json(result);
         } catch (error) {
             next(error);
@@ -72,6 +75,7 @@ export class AuthController {
                     concesionariaId: sesion.user.concesionariaId,
                 });
             }
+            ponerCookieRefresh(res, sesion.tokens.refresh);
             res.json({ ...sesion, ...(usoRecuperacion ? { usoRecuperacion: true } : {}) });
         } catch (error) {
             next(error);
@@ -80,8 +84,13 @@ export class AuthController {
 
     static async refresh(req: Request, res: Response, next: NextFunction) {
         try {
-            const { refreshToken } = req.body;
-            const result = await refreshUC.execute(refreshToken);
+            // body.refreshToken (app móvil) o, si no viene, la cookie (web). Sin
+            // ninguno, RefreshAuth responde el mismo 401 que a un token inválido.
+            const result = await refreshUC.execute(refreshDeLaRequest(req) ?? '');
+            // Rotación: la cookie pasa a tener el refresh nuevo. Si falla NO se borra:
+            // con dos pestañas, el 401 del que pierde la carrera borraría la cookie que
+            // el ganador acaba de rotar.
+            ponerCookieRefresh(res, result.refresh);
             res.json(result);
         } catch (error) {
             next(error);
@@ -183,8 +192,9 @@ export class AuthController {
         try {
             // Revoca el refresh token de la sesión (best-effort): a partir de acá ese
             // token deja de servir para renovar, aunque todavía no haya expirado.
-            const { refreshToken } = req.body ?? {};
-            await logoutUC.execute(refreshToken);
+            // body.refreshToken (app móvil) o la cookie (web); la cookie se borra siempre.
+            await logoutUC.execute(refreshDeLaRequest(req));
+            limpiarCookieRefresh(res);
 
             // Auditar sólo si el access token seguía válido (contextMiddleware pobló
             // el usuario): el audit_log es tenant-scoped y necesita la concesionaria.

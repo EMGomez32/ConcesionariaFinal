@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { obligatorio, invalido } from './mensajes';
 
 // Schema de validación del alta de ingresos de vehículo. Payload verificado contra
 // el DTO real del front (vehiculo-ingresos.api.ts -> Partial<IngresoVehiculo>) y
@@ -15,7 +16,7 @@ import { z } from 'zod';
 // no lo inyecta; hoy persiste null). `id`/`createdAt` se descartan por no declararse.
 
 const idField = (label: string) =>
-    z.coerce.number({ error: `${label} es obligatorio` }).int(`${label} inválido`).positive(`${label} es obligatorio`);
+    z.coerce.number({ error: obligatorio(label) }).int(invalido(label)).positive(obligatorio(label));
 
 // FK opcional: 0 / '' / null se interpretan como "sin FK" (undefined), porque el
 // form puede inicializar el campo en 0. Si viene un id real, se valida positivo.

@@ -19,7 +19,7 @@ import { z } from 'zod';
 // Enum EstadoSolicitudFinanciacion (prisma/schema.prisma).
 const estadoEnum = z.enum(
     ['borrador', 'enviada', 'pendiente', 'aprobada', 'rechazada', 'cancelada'],
-    { error: 'Estado inválido. Válidos: borrador, enviada, pendiente, aprobada, rechazada, cancelada' },
+    { error: 'Elegí un estado válido: borrador, enviada, pendiente, aprobada, rechazada o cancelada' },
 );
 
 // Entero obligatorio (FK requerida): isInt({ min: 1 }).
@@ -60,13 +60,13 @@ const optionalFk = z.preprocess(
 );
 
 export const createSolicitudSchema = z.object({
-    clienteId: requiredId('clienteId es obligatorio'),
-    financieraId: requiredId('financieraId es obligatorio'),
+    clienteId: requiredId('El cliente es obligatorio'),
+    financieraId: requiredId('La financiera es obligatoria'),
     sucursalId: nullableInt(),
     ventaId: nullableInt(),
     presupuestoId: nullableInt(),
     // Opcional: en una pre-aprobación crediticia todavía no hay auto elegido.
-    vehiculoId: nullableInt('vehiculoId inválido'),
+    vehiculoId: nullableInt('El vehículo no es válido'),
     montoSolicitado: nullableMonto('El monto solicitado no puede ser negativo'),
     plazoCuotas: nullableInt('El plazo debe ser de al menos 1 cuota'),
     tasaEstimada: nullableMonto('La tasa no puede ser negativa'),
@@ -83,7 +83,7 @@ export const updateSolicitudSchema = z.object({
     sucursalId: nullableInt(),
     ventaId: nullableInt(),
     presupuestoId: nullableInt(),
-    vehiculoId: nullableInt('vehiculoId inválido'),
+    vehiculoId: nullableInt('El vehículo no es válido'),
     montoSolicitado: nullableMonto(),
     plazoCuotas: nullableInt(),
     tasaEstimada: nullableMonto(),

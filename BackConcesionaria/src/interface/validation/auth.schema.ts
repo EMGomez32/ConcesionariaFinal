@@ -14,19 +14,24 @@ export const loginSchema = z.object({
     // `.toLowerCase()`: el email es identidad GLOBAL (schema: @unique). Normalizarlo
     // en el borde hace la unicidad case-insensitive de hecho y evita que 'Admin@x' y
     // 'admin@x' sean cuentas distintas o que el login no matchee por diferencia de case.
-    email: z.string({ error: 'El email es obligatorio' }).trim().toLowerCase().min(1, 'El email es obligatorio').email('Email inválido'),
+    email: z.string({ error: 'El email es obligatorio' }).trim().toLowerCase().min(1, 'El email es obligatorio').email('El email no es válido'),
     password: z.string({ error: 'La contraseña es obligatoria' }).min(1, 'La contraseña es obligatoria'),
 });
 
-export const refreshSchema = z.object({
-    refreshToken: z.string({ error: 'El refresh token es obligatorio' }).min(1, 'El refresh token es obligatorio'),
-});
+// Refresh y logout: el token viene en el body (app móvil) o en la cookie httpOnly
+// `autenza_rt` (web, ver refreshCookie.ts), así que en el body es opcional. La web
+// los llama SIN cuerpo: con Express 5 `req.body` llega undefined, que se toma como {}.
+const sinCuerpoEsVacio = (v: unknown) => v ?? {};
 
-// Logout: el refresh token es opcional a propósito. Cerrar sesión debe ser
-// siempre graceful (incluso sin token o con el body vacío); si viene, se revoca.
-export const logoutSchema = z.object({
+export const refreshSchema = z.preprocess(sinCuerpoEsVacio, z.object({
+    refreshToken: z.string({ error: 'El refresh token tiene que ser un texto' }).optional(),
+}));
+
+// Logout: cerrar sesión debe ser siempre graceful (incluso sin token o con el body
+// vacío); si viene un token (body o cookie), se revoca.
+export const logoutSchema = z.preprocess(sinCuerpoEsVacio, z.object({
     refreshToken: z.string().optional(),
-});
+}));
 
 // La política de longitud mínima (10) vive acá, como única fuente de verdad
 // (antes estaba hardcodeada en el controller).

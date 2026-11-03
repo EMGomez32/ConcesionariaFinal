@@ -11,6 +11,7 @@ import {
     confirmarSetupMfa, desactivarMfa, estadoMfa, iniciarSetupMfa, regenerarCodigosMfa, verificarSegundoFactor,
 } from '../../application/services/mfaService';
 import { emitirSesion } from '../../application/use-cases/auth/emitirSesion';
+import { ponerCookieRefresh } from './refreshCookie';
 import { RevokeUserSessions } from '../../application/use-cases/auth/RevokeUserSessions';
 
 const tokenService = new JwtTokenService();
@@ -84,6 +85,8 @@ export class MfaController {
                 concesionariaId: u.concesionariaId,
                 detalle: '2FA activado (sesiones anteriores cerradas)',
             });
+            // La sesión vieja se acaba de cerrar: la cookie de la web pasa a la nueva.
+            ponerCookieRefresh(res, nueva.tokens.refresh);
             res.json({ codigosRecuperacion, ...nueva });
         } catch (error) { next(error); }
     }
