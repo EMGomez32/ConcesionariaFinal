@@ -3,7 +3,15 @@ import React from 'react';
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline';
     size?: 'sm' | 'md' | 'lg';
+    /** Muestra un spinner y deshabilita el botón mientras dura la operación. */
     loading?: boolean;
+    /**
+     * Texto mientras `loading` (p.ej. "Guardando…"). Si no se pasa, el botón
+     * conserva su propio texto con el spinner al lado: antes decía "Cargando..."
+     * en todos los casos, y al guardar un formulario el botón "Guardar" pasaba a
+     * leerse como si se estuvieran trayendo datos.
+     */
+    loadingText?: React.ReactNode;
 }
 
 const Button = ({
@@ -11,6 +19,7 @@ const Button = ({
     variant = 'primary',
     size = 'md',
     loading,
+    loadingText,
     className = '',
     style,
     disabled,
@@ -30,13 +39,14 @@ const Button = ({
             // durante todo el round-trip. En "Publicar en Mercado Libre" eso era
             // un doble clic = dos avisos publicados y cobrados.
             disabled={loading || disabled}
+            aria-busy={loading || undefined}
             style={style}
             {...props}
         >
             {loading ? (
                 <span className="loader-container">
                     <span className="loader" aria-hidden="true"></span>
-                    <span>Cargando...</span>
+                    {loadingText ?? children}
                 </span>
             ) : children}
         </button>
