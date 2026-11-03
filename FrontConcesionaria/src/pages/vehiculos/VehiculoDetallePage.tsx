@@ -7,6 +7,9 @@ import { gastosApi, type GastoVehiculo } from '../../api/gastos.api';
 import { gastosCategoriaApi, type GastoCategoria } from '../../api/gastos-categorias.api';
 import { vehiculoInteresApi, type VehiculoInteres } from '../../api/vehiculoInteres.api';
 import { vehiculoPreciosApi, type VehiculoPrecioHistorial } from '../../api/vehiculoPrecios.api';
+import { presupuestosApi } from '../../api/presupuestos.api';
+import { reservasApi } from '../../api/reservas.api';
+import { ventasApi } from '../../api/ventas.api';
 import mercadolibreApi, { esCuentaDemo } from '../../api/mercadolibre.api';
 import type {
     EstadoCuentaMl,
@@ -70,11 +73,31 @@ interface VehiculoFull extends Vehiculo {
     archivos?: VehiculoArchivo[];
     gastos?: GastoVehiculo[];
     movimientos?: VehiculoMovimiento[];
-    presupuestos?: { id: number; nroPresupuesto?: string; cliente?: { nombre: string }; fechaEmision?: string; estado?: string; precioFinal?: number }[];
-    reservas?: { id: number; cliente?: { nombre: string }; montoSena?: number; fechaVencimiento?: string; estado?: string }[];
-    ventas?: { id: number; cliente?: { nombre: string }; fechaVenta?: string; precioFinal?: number; formaPago?: string; estadoEntrega?: string }[];
     proveedorCompra?: { id: number; nombre: string };
 }
+
+// Filas de las pestañas Presupuestos / Reservas / Ventas, con los nombres de campo
+// que devuelven sus listados (el detalle del vehículo no trae esas relaciones).
+interface PresupuestoFicha {
+    id: number; nroPresupuesto?: string; cliente?: { nombre: string }; fechaCreacion?: string;
+    estado?: string; moneda?: string; items?: { vehiculoId?: number; precioFinal?: number | string }[];
+}
+interface ReservaFicha {
+    id: number; cliente?: { nombre: string }; monto?: number | null; moneda?: string;
+    fechaVencimiento?: string | null; estado?: string;
+}
+interface VentaFicha {
+    id: number; cliente?: { nombre: string }; fechaVenta?: string; precioVenta?: number | string;
+    moneda?: string; formaPago?: string; estadoEntrega?: string;
+}
+
+// "convertida_en_venta" → "Convertida en venta": los estados no se muestran crudos.
+const legible = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ') : '-');
+
+const FORMA_PAGO_LABEL: Record<string, string> = {
+    contado: 'Contado', transferencia: 'Transferencia', financiado_propio: 'Financiación propia',
+    financiado_externo: 'Crédito externo', canje_mas_diferencia: 'Canje más diferencia', mixto: 'Mixto',
+};
 
 const TIPO_ARCHIVO_OPTS = ['foto', 'documento', 'comprobante', 'plano', 'otro'];
 
@@ -113,6 +136,10 @@ const VehiculoDetallePage = () => {
     // Movimientos state
     const [movList, setMovList] = useState<VehiculoMovimiento[]>([]);
     const [loadingMov, setLoadingMov] = useState(false);
+    const [presupuestos, setPresupuestos] = useState<PresupuestoFicha[]>([]);
+    const [reservas, setReservas] = useState<ReservaFicha[]>([]);
+    const [ventas, setVentas] = useState<VentaFicha[]>([]);
+    const [loadingOperaciones, setLoadingOperaciones] = useState(false);
 
     // Gastos state
     const [gastosList, setGastosList] = useState<GastoVehiculo[]>([]);
@@ -238,6 +265,36 @@ const VehiculoDetallePage = () => {
     useEffect(() => {
         if (activeTab === 'movimientos') loadMovimientos();
     }, [activeTab, loadMovimientos]);
+
+    /*
+     * Presupuestos, reservas y ventas de la unidad. El detalle del vehículo no trae
+     * esas relaciones (las pestañas leían campos que nunca llegaban y mostraban 0),
+     * así que se piden a sus listados filtrando por vehículo. Se cargan con la ficha
+     * porque las pestañas muestran el contador antes de abrirlas.
+     */
+    const loadOperaciones = useCallback(async () => {
+        if (!id) return;
+        const vehiculoId = Number(id);
+        setLoadingOperaciones(true);
+        try {
+            const [p, r, v] = await Promise.all([
+                presupuestosApi.getAll({ vehiculoId }, { limit: 50 }) as unknown as Promise<PaginatedResponse<PresupuestoFicha>>,
+                reservasApi.getAll({ vehiculoId, limit: 50 }) as unknown as Promise<PaginatedResponse<ReservaFicha>>,
+                ventasApi.getAll({ vehiculoId }, { limit: 50 }) as unknown as Promise<PaginatedResponse<VentaFicha>>,
+            ]);
+            setPresupuestos(p?.results || []);
+            setReservas(r?.results || []);
+            setVentas(v?.results || []);
+        } catch {
+            addToast('Error al cargar presupuestos, reservas y ventas de la unidad', 'error');
+        } finally {
+            setLoadingOperaciones(false);
+        }
+    }, [id, addToast]);
+
+    useEffect(() => {
+        loadOperaciones();
+    }, [loadOperaciones]);
 
     const loadGastos = useCallback(async () => {
         if (!id) return;
@@ -470,7 +527,7 @@ const VehiculoDetallePage = () => {
         }
     ];
 
-    const presupuestoColumns: Column<{ id: number; nroPresupuesto?: string; cliente?: { nombre: string }; fechaEmision?: string; estado?: string; precioFinal?: number }>[] = [
+    const presupuestoColumns: Column<PresupuestoFicha>[] = [
         {
             header: 'Nro',
             accessor: (p) => <span className="fw-bold">#{p.nroPresupuesto || p.id}</span>
@@ -481,57 +538,61 @@ const VehiculoDetallePage = () => {
         },
         {
             header: 'Fecha',
-            accessor: (p) => p.fechaEmision ? new Date(p.fechaEmision).toLocaleDateString('es-AR') : '-'
+            accessor: (p) => formatFecha(p.fechaCreacion)
         },
         {
             header: 'Estado',
-            accessor: (p) => <span className="tipo-chip">{p.estado || '-'}</span>
+            accessor: (p) => <span className="tipo-chip">{legible(p.estado)}</span>
         },
         {
-            header: 'Total',
-            accessor: (p) => <span className="fw-bold">{p.precioFinal ? `$${Number(p.precioFinal).toLocaleString('es-AR')}` : '-'}</span>
+            // El precio de ESTA unidad en el presupuesto (puede cotizar varias).
+            header: 'Precio cotizado',
+            accessor: (p) => {
+                const item = p.items?.find((it) => it.vehiculoId === Number(id));
+                return <span className="fw-bold">{item?.precioFinal != null ? money(Number(item.precioFinal), p.moneda) : '-'}</span>;
+            }
         }
     ];
 
-    const reservaColumns: Column<{ id: number; cliente?: { nombre: string }; montoSena?: number; fechaVencimiento?: string; estado?: string }>[] = [
+    const reservaColumns: Column<ReservaFicha>[] = [
         {
             header: 'Cliente',
             accessor: (r) => r.cliente?.nombre || '-'
         },
         {
             header: 'Seña',
-            accessor: (r) => <span className="fw-bold">{r.montoSena ? `$${Number(r.montoSena).toLocaleString('es-AR')}` : '-'}</span>
+            accessor: (r) => <span className="fw-bold">{r.monto != null ? money(Number(r.monto), r.moneda) : '-'}</span>
         },
         {
             header: 'Vencimiento',
-            accessor: (r) => r.fechaVencimiento ? new Date(r.fechaVencimiento).toLocaleDateString('es-AR') : '-'
+            accessor: (r) => formatFecha(r.fechaVencimiento)
         },
         {
             header: 'Estado',
-            accessor: (r) => <span className="tipo-chip">{r.estado}</span>
+            accessor: (r) => <span className="tipo-chip">{legible(r.estado)}</span>
         }
     ];
 
-    const ventaColumns: Column<{ id: number; cliente?: { nombre: string }; fechaVenta?: string; precioFinal?: number; formaPago?: string; estadoEntrega?: string }>[] = [
+    const ventaColumns: Column<VentaFicha>[] = [
         {
             header: 'Cliente',
             accessor: (v) => v.cliente?.nombre || '-'
         },
         {
             header: 'Fecha',
-            accessor: (v) => v.fechaVenta ? new Date(v.fechaVenta).toLocaleDateString('es-AR') : '-'
+            accessor: (v) => formatFecha(v.fechaVenta)
         },
         {
-            header: 'Precio final',
-            accessor: (v) => <span className="fw-bold">{v.precioFinal ? `$${Number(v.precioFinal).toLocaleString('es-AR')}` : '-'}</span>
+            header: 'Precio de venta',
+            accessor: (v) => <span className="fw-bold">{v.precioVenta != null ? money(Number(v.precioVenta), v.moneda) : '-'}</span>
         },
         {
             header: 'Forma de pago',
-            accessor: (v) => v.formaPago || '-'
+            accessor: (v) => (v.formaPago ? FORMA_PAGO_LABEL[v.formaPago] ?? legible(v.formaPago) : '-')
         },
         {
             header: 'Entrega',
-            accessor: (v) => <span className="tipo-chip">{v.estadoEntrega || '-'}</span>
+            accessor: (v) => <span className="tipo-chip">{legible(v.estadoEntrega)}</span>
         }
     ];
 
@@ -630,9 +691,6 @@ const VehiculoDetallePage = () => {
         },
     ];
 
-    const presupuestos = useMemo(() => vehiculo?.presupuestos ?? [], [vehiculo]);
-    const reservas = useMemo(() => vehiculo?.reservas ?? [], [vehiculo]);
-    const ventas = useMemo(() => vehiculo?.ventas ?? [], [vehiculo]);
     // Los gastos se acumulan por moneda: sumar ARS y USD en un solo número no
     // representa ningún importe real.
     const totalesGastos = useMemo(() => {
@@ -1046,6 +1104,7 @@ const VehiculoDetallePage = () => {
                     <DataTable
                         columns={presupuestoColumns}
                         data={presupuestos}
+                        isLoading={loadingOperaciones}
                         emptyMessage="No hay presupuestos para este vehículo."
                         emptyIcon={<FileText size={40} className="text-secondary" />}
                     />
@@ -1056,6 +1115,7 @@ const VehiculoDetallePage = () => {
                     <DataTable
                         columns={reservaColumns}
                         data={reservas}
+                        isLoading={loadingOperaciones}
                         emptyMessage="No hay reservas para este vehículo."
                         emptyIcon={<Bookmark size={40} className="text-secondary" />}
                     />
@@ -1066,6 +1126,7 @@ const VehiculoDetallePage = () => {
                     <DataTable
                         columns={ventaColumns}
                         data={ventas}
+                        isLoading={loadingOperaciones}
                         emptyMessage="Este vehículo no ha sido vendido aún."
                         emptyIcon={<ShoppingCart size={40} className="text-secondary" />}
                     />
