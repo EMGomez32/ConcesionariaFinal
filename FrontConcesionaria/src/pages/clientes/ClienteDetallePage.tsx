@@ -22,10 +22,17 @@ import { useUIStore } from '../../store/uiStore';
 import { useAuthStore } from '../../store/authStore';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 import { formatFecha } from '../../utils/fecha';
+import { formatMoneda, formatTotales, totalesPorMoneda } from '../../utils/moneda';
+import { useConfirm } from '../../hooks/useConfirm';
+import { etiquetaDocumento, AYUDA_DOCUMENTO } from '../../components/clientes/documento';
+import {
+    ENTREGA_ESTADO, FINANCIACION_ESTADO, POSTVENTA_ESTADO, PRESUPUESTO_ESTADO,
+    RESERVA_ESTADO, SOLICITUD_ESTADO, VEHICULO_ESTADO, rotuloEstado, type EstadoMeta,
+} from '../../components/ventas/estados';
 import {
     ArrowLeft, User, Phone, Mail, MapPin, FileText,
     ShoppingCart, FileBarChart, Calendar, DollarSign,
-    CreditCard, RefreshCw, BookmarkCheck, Wrench, Banknote, FileSignature, FileDown,
+    RefreshCw, BookmarkCheck, Wrench, Banknote, FileSignature, FileDown,
     Clock, Plus, Trash2, MessageCircle, Check, CheckCircle2, Star, Car, UserCheck, type LucideIcon
 } from 'lucide-react';
 
@@ -49,11 +56,26 @@ const TIPO_SEG: Record<TipoSeguimiento, { label: string; icon: LucideIcon; color
 
 type AnyRow = Record<string, unknown>;
 
-const fmtMoney = (v: unknown) =>
-    v != null && Number(v) ? `$${Number(v).toLocaleString('es-AR')}` : '-';
+/** Monto con la moneda de su fila ("US$22.300"), o "-" si no hay. */
+const fmtMoney = (v: unknown, moneda?: unknown) =>
+    v != null && Number(v) ? formatMoneda(Number(v), moneda ? String(moneda) : 'ARS') : '-';
 
-const money = (n: number, moneda = 'ARS') =>
-    `${moneda === 'USD' ? 'US$' : '$'}${Number(n || 0).toLocaleString('es-AR')}`;
+const money = (n: number, moneda = 'ARS') => formatMoneda(n, moneda);
+
+/** Badge con el estado legible (nunca el valor crudo de la base). */
+const EstadoBadge = ({ mapa, estado }: { mapa: Record<string, EstadoMeta>; estado: unknown }) => {
+    const e = rotuloEstado(mapa, estado);
+    return <Badge variant={e.variant}>{e.label}</Badge>;
+};
+
+/** Total de un presupuesto del listado: unidades + extras − canje. */
+const totalPresupuesto = (p: AnyRow) => {
+    const items = ((p.items as AnyRow[] | undefined) ?? []).reduce((s, i) => s + (Number(i.precioFinal) || 0), 0);
+    const extras = ((p.extras as AnyRow[] | undefined) ?? []).reduce((s, e) => s + (Number(e.monto) || 0), 0);
+    const canje = p.canje ? Number((p.canje as AnyRow).valorTomado) || 0 : 0;
+    const calculado = items + extras - canje;
+    return calculado || Number(p.total) || 0;
+};
 
 /** "$X · US$Y" para un campo de un array por moneda; omite las monedas en 0. */
 const porMonedaStr = (arr: { moneda: string;[k: string]: unknown }[] | undefined, campo: string) => {
@@ -77,6 +99,7 @@ const ClienteDetallePage = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { addToast } = useUIStore();
+    const confirm = useConfirm();
     const user = useAuthStore((s) => s.user);
     // Admin/vendedor pueden registrar y borrar contactos (mismo criterio que el backend).
     const puedeEditar = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin' || r === 'vendedor');
@@ -95,6 +118,9 @@ const ClienteDetallePage = () => {
     const [estadoCuenta, setEstadoCuenta] = useState<EstadoCuenta | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    // Secciones secundarias que no cargaron: se avisa en vez de mostrarlas vacías.
+    const [avisos, setAvisos] = useState<string[]>([]);
+    const [recarga, setRecarga] = useState(0);
     const [savingEstado, setSavingEstado] = useState(false);
 
     // ─ Alta de contacto (bitácora de seguimiento) ─
@@ -115,6 +141,13 @@ const ClienteDetallePage = () => {
             const cid = Number(id);
             setLoading(true);
             setError(null);
+            setAvisos([]);
+            // Estado de cuenta, bitácora e interés son rutas admin/vendedor: para
+            // los demás roles ni se piden. Si fallan para quien sí puede, antes
+            // se tragaba el error y la pestaña decía "Sin contactos"; ahora se avisa.
+            const fallidas: string[] = [];
+            const opcional = <T,>(p: Promise<T>, nombre: string, vacio: T): Promise<T> =>
+                puedeEditar ? p.catch(() => { fallidas.push(nombre); return vacio; }) : Promise.resolve(vacio);
             try {
                 const [clienteRes, ventasRes, presupuestosRes, reservasRes, financiacionesRes, solicitudesRes, postventaRes, estadoCuentaRes, seguimientosRes, interesRes] = await Promise.all([
                     clientesApi.getById(cid),
@@ -124,18 +157,11 @@ const ClienteDetallePage = () => {
                     financiacionesApi.getAll({ clienteId: cid }),
                     solicitudesFinanciacionApi.getAll({ clienteId: cid }),
                     postventaApi.getCasos({ clienteId: cid }),
-                    // El estado de cuenta es admin/vendedor: si el rol no tiene acceso
-                    // (o falla), se degrada a null y la sección simplemente no aparece.
-                    reportesApi.estadoCuenta(cid).catch(() => null),
-                    // La bitácora de seguimiento pasó a ser admin/vendedor en el
-                    // backend: no es dato de ficha, es la nota libre del vendedor sobre
-                    // la negociación. Se degrada a [] como sus dos vecinas de arriba, y
-                    // la pestaña no se arma para los roles que no la pueden pedir.
-                    seguimientosApi.getByCliente(cid).catch(() => [] as Seguimiento[]),
-                    // Interés en vehículos (puente CRM↔inventario). admin/vendedor: si
-                    // el rol no accede, se degrada a [] y el tab queda vacío.
-                    vehiculoInteresApi.getByCliente(cid).catch(() => [] as VehiculoInteres[]),
+                    opcional<EstadoCuenta | null>(reportesApi.estadoCuenta(cid), 'el estado de cuenta', null),
+                    opcional<Seguimiento[]>(seguimientosApi.getByCliente(cid), 'la bitácora de seguimiento', []),
+                    opcional<VehiculoInteres[]>(vehiculoInteresApi.getByCliente(cid), 'los vehículos de interés', []),
                 ]);
+                setAvisos(fallidas);
                 setCliente(clienteRes);
                 setVentas(extractList(ventasRes));
                 setPresupuestos(extractList(presupuestosRes));
@@ -146,14 +172,14 @@ const ClienteDetallePage = () => {
                 setEstadoCuenta(estadoCuentaRes);
                 setSeguimientos(extractList(seguimientosRes));
                 setInteres(extractList(interesRes));
-            } catch {
-                setError('No se pudo cargar el cliente.');
+            } catch (e: unknown) {
+                setError(getErrorMessage(e, 'No se pudo cargar el cliente.'));
             } finally {
                 setLoading(false);
             }
         };
         load();
-    }, [id]);
+    }, [id, puedeEditar, recarga]);
 
     // Carga diferida del stock: sólo la primera vez que se abre el tab "Interés"
     // (evita pedir el listado completo de vehículos en el load inicial de la ficha).
@@ -196,16 +222,21 @@ const ClienteDetallePage = () => {
         }
     };
 
-    const handleDeleteInteres = async (i: VehiculoInteres) => {
-        if (!window.confirm('¿Quitar este vehículo de los intereses del cliente?')) return;
-        try {
-            await vehiculoInteresApi.delete(i.id);
-            addToast('Interés eliminado', 'success');
-            setInteres((prev) => prev.filter((x) => x.id !== i.id));
-        } catch (e) {
-            addToast(getErrorMessage(e, 'No se pudo eliminar el interés'), 'error');
-        }
-    };
+    const handleDeleteInteres = (i: VehiculoInteres) => confirm({
+        title: 'Quitar interés',
+        message: `¿Quitar ${i.vehiculo ? `${i.vehiculo.marca} ${i.vehiculo.modelo}` : 'este vehículo'} de los intereses del cliente?`,
+        type: 'danger',
+        confirmLabel: 'Quitar',
+        onConfirm: async () => {
+            try {
+                await vehiculoInteresApi.delete(i.id);
+                addToast('Interés quitado', 'success');
+                setInteres((prev) => prev.filter((x) => x.id !== i.id));
+            } catch (e) {
+                addToast(getErrorMessage(e, 'No se pudo quitar el interés'), 'error');
+            }
+        },
+    });
 
     // Descarga el estado de cuenta del cliente (PDF), mismo patrón que el
     // comprobante de venta y el recibo de cuota.
@@ -224,7 +255,7 @@ const ClienteDetallePage = () => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch {
-            addToast('Error al generar el estado de cuenta', 'error');
+            addToast('No se pudo generar el estado de cuenta', 'error');
         } finally {
             setDescargandoEC(false);
         }
@@ -256,7 +287,7 @@ const ClienteDetallePage = () => {
             addToast(
                 creado
                     ? 'Contacto guardado. Recargá para ver la lista actualizada.'
-                    : getErrorMessage(e, 'Error al registrar el contacto'),
+                    : getErrorMessage(e, 'No se pudo registrar el contacto'),
                 creado ? 'info' : 'error',
             );
         } finally {
@@ -264,16 +295,21 @@ const ClienteDetallePage = () => {
         }
     };
 
-    const handleDeleteSeguimiento = async (s: Seguimiento) => {
-        if (!window.confirm('¿Eliminar este contacto de la bitácora?')) return;
-        try {
-            await seguimientosApi.delete(s.id);
-            addToast('Contacto eliminado', 'success');
-            setSeguimientos((prev) => prev.filter((x) => x.id !== s.id));
-        } catch (e) {
-            addToast(getErrorMessage(e, 'Error al eliminar el contacto'), 'error');
-        }
-    };
+    const handleDeleteSeguimiento = (s: Seguimiento) => confirm({
+        title: 'Eliminar contacto',
+        message: `¿Eliminar de la bitácora el contacto del ${fmtDate(s.fecha)}? No se puede deshacer.`,
+        type: 'danger',
+        confirmLabel: 'Eliminar',
+        onConfirm: async () => {
+            try {
+                await seguimientosApi.delete(s.id);
+                addToast('Contacto eliminado', 'success');
+                setSeguimientos((prev) => prev.filter((x) => x.id !== s.id));
+            } catch (e) {
+                addToast(getErrorMessage(e, 'No se pudo eliminar el contacto'), 'error');
+            }
+        },
+    });
 
     // Cambia la etapa del lead (embudo). Reusa el PATCH /clientes/:id genérico e
     // invalida el listado + el embudo para que los conteos y el badge se refresquen.
@@ -311,16 +347,19 @@ const ClienteDetallePage = () => {
 
     if (loading) return (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '0.75rem', color: 'var(--text-secondary)' }}>
-            <RefreshCw size={20} className="spin" /> Cargando...
+            <RefreshCw size={20} className="spin" aria-hidden="true" /> Cargando la ficha…
         </div>
     );
 
     if (error || !cliente) return (
         <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>
             <p style={{ marginBottom: '1.5rem' }}>{error || 'Cliente no encontrado.'}</p>
-            <Button variant="secondary" onClick={() => navigate('/clientes')}>
-                <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} /> Volver a Clientes
-            </Button>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                {error && <Button variant="secondary" onClick={() => setRecarga((n) => n + 1)}>Reintentar</Button>}
+                <Button variant="secondary" onClick={() => navigate('/clientes')}>
+                    <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} /> Volver a Clientes
+                </Button>
+            </div>
         </div>
     );
 
@@ -329,8 +368,8 @@ const ClienteDetallePage = () => {
         { key: 'ventas', label: 'Ventas', icon: ShoppingCart, count: ventas.length },
         { key: 'reservas', label: 'Reservas', icon: BookmarkCheck, count: reservas.length },
         { key: 'presupuestos', label: 'Presupuestos', icon: FileBarChart, count: presupuestos.length },
-        { key: 'financiaciones', label: 'Financiaciones', icon: Banknote, count: financiaciones.length },
-        { key: 'solicitudes', label: 'Solicitudes', icon: FileSignature, count: solicitudes.length },
+        { key: 'financiaciones', label: 'Financiación', icon: Banknote, count: financiaciones.length },
+        { key: 'solicitudes', label: 'Financiación externa', icon: FileSignature, count: solicitudes.length },
         { key: 'postventa', label: 'Postventa', icon: Wrench, count: postventaCasos.length },
         ...(puedeEditar ? [{ key: 'seguimiento' as const, label: 'Seguimiento', icon: Clock, count: seguimientos.length }] : []),
         { key: 'interes', label: 'Interés', icon: Star, count: interes.length },
@@ -339,7 +378,7 @@ const ClienteDetallePage = () => {
     return (
         <div className="detalle-container">
             <div className="detalle-header">
-                <button className="back-btn" onClick={() => navigate('/clientes')}>
+                <button type="button" className="back-btn" onClick={() => navigate('/clientes')} aria-label="Volver a Clientes" title="Volver a Clientes">
                     <ArrowLeft size={20} />
                 </button>
                 <div className="cliente-hero">
@@ -349,7 +388,7 @@ const ClienteDetallePage = () => {
                     <div>
                         <h1>{cliente.nombre}</h1>
                         <p className="cliente-hero-sub">
-                            {[cliente.dni && `CUIT/CUIL: ${cliente.dni}`, cliente.email, cliente.telefono].filter(Boolean).join(' · ')}
+                            {[cliente.dni && `${etiquetaDocumento(cliente.dni, cliente.tipoDoc)} ${cliente.dni}`, cliente.email, cliente.telefono].filter(Boolean).join(' · ')}
                         </p>
                         <div className="lead-stage-row">
                             <Badge variant={ESTADO_LEAD_MAP[cliente.estadoLead ?? 'nuevo'].variant}>
@@ -363,7 +402,7 @@ const ClienteDetallePage = () => {
                                 apagar la demostración, así que la ficha lo dice. */}
                             {cliente.origenSimulado && (
                                 <Badge variant="warning" title="La consulta que originó esta ficha la generó el modo demostración de Mercado Libre: no la hizo un interesado real">
-                                    SIMULACIÓN
+                                    Simulación
                                 </Badge>
                             )}
                             {puedeEditar && (
@@ -372,7 +411,7 @@ const ClienteDetallePage = () => {
                                     value={cliente.estadoLead ?? 'nuevo'}
                                     disabled={savingEstado}
                                     onChange={(e) => handleChangeEstadoLead(e.target.value as EstadoLead)}
-                                    aria-label="Cambiar etapa del lead"
+                                    aria-label="Cambiar la etapa del cliente"
                                 >
                                     {ESTADOS_LEAD.map((k) => <option key={k} value={k}>{ESTADO_LEAD_MAP[k].label}</option>)}
                                 </select>
@@ -394,6 +433,13 @@ const ClienteDetallePage = () => {
                 )}
             </div>
 
+            {avisos.length > 0 && (
+                <div className="uploader-alert uploader-alert-error" role="alert" style={{ justifyContent: 'space-between' }}>
+                    <span>No se pudo cargar {avisos.join(', ')}. Lo demás de la ficha está al día.</span>
+                    <Button variant="secondary" size="sm" onClick={() => setRecarga((n) => n + 1)}>Reintentar</Button>
+                </div>
+            )}
+
             <div className="stats-bar">
                 <div className="stat-card glass">
                     <ShoppingCart size={20} style={{ color: 'var(--accent-2)' }} />
@@ -412,12 +458,11 @@ const ClienteDetallePage = () => {
                 <div className="stat-card glass">
                     <DollarSign size={20} style={{ color: 'var(--accent)' }} />
                     <div>
-                        <div className="stat-value">
-                            {ventas.length > 0
-                                ? `$${ventas.reduce((sum: number, v) => sum + (Number((v as AnyRow).precioVenta ?? (v as AnyRow).precioFinal) || 0), 0).toLocaleString('es-AR')}`
-                                : '$0'}
+                        {/* Un total por moneda: sumar dólares con pesos no es ningún importe. */}
+                        <div className="stat-value tabular-nums">
+                            {formatTotales(totalesPorMoneda(ventas, (v) => Number(v.precioVenta ?? v.precioFinal), (v) => String(v.moneda ?? 'ARS')))}
                         </div>
-                        <div className="stat-label">Total facturado</div>
+                        <div className="stat-label">Total de sus compras</div>
                     </div>
                 </div>
                 {estadoCuenta && estadoCuenta.resumen.financiaciones > 0 && (
@@ -460,7 +505,7 @@ const ClienteDetallePage = () => {
                                 </div>
                                 <div className="info-row">
                                     <FileText size={16} />
-                                    <span className="info-label">CUIT/CUIL</span>
+                                    <span className="info-label"><abbr title={AYUDA_DOCUMENTO[etiquetaDocumento(cliente.dni, cliente.tipoDoc)]}>{etiquetaDocumento(cliente.dni, cliente.tipoDoc)}</abbr></span>
                                     <span className="info-value">{cliente.dni || '-'}</span>
                                 </div>
                             </div>
@@ -503,7 +548,7 @@ const ClienteDetallePage = () => {
                             </div>
                         ) : (
                             <table className="data-table">
-                                <thead><tr><th>Vehículo</th><th>Fecha</th><th>Precio</th><th>Estado entrega</th></tr></thead>
+                                <thead><tr><th>Unidad</th><th>Fecha</th><th>Precio</th><th>Entrega</th></tr></thead>
                                 <tbody>
                                     {ventas.map((v) => {
                                         const r = v as AnyRow;
@@ -515,8 +560,8 @@ const ClienteDetallePage = () => {
                                                     <div className="text-muted-sm">{String(veh?.anio ?? '')} {veh?.dominio ? `· ${String(veh.dominio)}` : ''}</div>
                                                 </td>
                                                 <td><div className="flex-cell"><Calendar size={14} />{fmtDate(r.fechaVenta)}</div></td>
-                                                <td><div className="flex-cell"><DollarSign size={14} />{fmtMoney(r.precioVenta ?? r.precioFinal)}</div></td>
-                                                <td><span className="badge badge-warning">{String(r.estadoEntrega ?? '-')}</span></td>
+                                                <td className="tabular-nums">{fmtMoney(r.precioVenta ?? r.precioFinal, r.moneda)}</td>
+                                                <td><EstadoBadge mapa={ENTREGA_ESTADO} estado={r.estadoEntrega} /></td>
                                             </tr>
                                         );
                                     })}
@@ -532,7 +577,7 @@ const ClienteDetallePage = () => {
                             <div className="empty-state"><BookmarkCheck size={48} style={{ opacity: 0.2 }} /><p>Sin reservas.</p></div>
                         ) : (
                             <table className="data-table">
-                                <thead><tr><th>Vehículo</th><th>Vencimiento</th><th>Seña</th><th>Estado</th></tr></thead>
+                                <thead><tr><th>Unidad</th><th>Vence</th><th>Seña</th><th>Estado</th></tr></thead>
                                 <tbody>
                                     {reservas.map((row) => {
                                         const r = row as AnyRow;
@@ -544,8 +589,9 @@ const ClienteDetallePage = () => {
                                                     <div className="text-muted-sm">{veh?.dominio ? String(veh.dominio) : ''}</div>
                                                 </td>
                                                 <td><div className="flex-cell"><Calendar size={14} />{fmtDate(r.fechaVencimiento)}</div></td>
-                                                <td><div className="flex-cell"><DollarSign size={14} />{fmtMoney(r.montoSena)}</div></td>
-                                                <td><span className="badge badge-warning">{String(r.estado ?? '-')}</span></td>
+                                                {/* La API devuelve la seña como `monto` (antes se leía `montoSena` y salía "-"). */}
+                                                <td className="tabular-nums">{fmtMoney(r.monto, r.moneda)}</td>
+                                                <td><EstadoBadge mapa={RESERVA_ESTADO} estado={r.estado} /></td>
                                             </tr>
                                         );
                                     })}
@@ -561,16 +607,16 @@ const ClienteDetallePage = () => {
                             <div className="empty-state"><FileBarChart size={48} style={{ opacity: 0.2 }} /><p>Sin presupuestos.</p></div>
                         ) : (
                             <table className="data-table">
-                                <thead><tr><th>Nro</th><th>Fecha</th><th>Monto</th><th>Estado</th></tr></thead>
+                                <thead><tr><th>Número</th><th>Fecha</th><th>Total</th><th>Estado</th></tr></thead>
                                 <tbody>
                                     {presupuestos.map((row) => {
                                         const p = row as AnyRow;
                                         return (
                                             <tr key={String(p.id)}>
-                                                <td><span className="fw-bold">#{String(p.nroPresupuesto ?? p.id)}</span></td>
-                                                <td><div className="flex-cell"><Calendar size={14} />{fmtDate(p.fechaCreacion ?? p.fechaEmision)}</div></td>
-                                                <td><div className="flex-cell"><CreditCard size={14} />{fmtMoney(p.montoTotal ?? p.precioTotal)}</div></td>
-                                                <td><span className={`badge badge-${p.estado === 'aceptado' ? 'emerald' : p.estado === 'rechazado' ? 'danger' : 'warning'}`}>{String(p.estado ?? '-')}</span></td>
+                                                <td><span className="fw-bold">{String(p.nroPresupuesto ?? p.id)}</span></td>
+                                                <td><div className="flex-cell"><Calendar size={14} aria-hidden="true" />{fmtDate(p.fechaCreacion ?? p.fechaEmision)}</div></td>
+                                                <td className="tabular-nums">{fmtMoney(totalPresupuesto(p), p.moneda)}</td>
+                                                <td><EstadoBadge mapa={PRESUPUESTO_ESTADO} estado={p.estado} /></td>
                                             </tr>
                                         );
                                     })}
@@ -604,38 +650,38 @@ const ClienteDetallePage = () => {
                             <div className="empty-state"><Banknote size={48} style={{ opacity: 0.2 }} /><p>Sin financiaciones.</p></div>
                         ) : estadoCuenta ? (
                             <table className="data-table">
-                                <thead><tr><th>Vehículo</th><th>Inicio</th><th>Monto</th><th>Progreso</th><th>Saldo</th><th>Vencidas</th><th>Próx. venc.</th><th>Estado</th></tr></thead>
+                                <thead><tr><th>Unidad</th><th>Inicio</th><th>Monto financiado</th><th>Cuotas pagas</th><th>Saldo</th><th>Vencidas</th><th>Próximo vencimiento</th><th>Estado</th></tr></thead>
                                 <tbody>
                                     {estadoCuenta.financiaciones.map((f) => (
                                         <tr key={f.id}>
                                             <td>
-                                                <div className="fw-bold">{f.vehiculo || `Financiación #${f.id}`}</div>
+                                                <div className="fw-bold">{f.vehiculo || `Plan N° ${f.id}`}</div>
                                                 {f.dominio && <div className="text-muted-sm">{f.dominio}</div>}
                                             </td>
                                             <td><div className="flex-cell"><Calendar size={14} />{fmtDate(f.fechaInicio)}</div></td>
-                                            <td><div className="flex-cell"><DollarSign size={14} />{money(f.montoFinanciado, f.moneda)}</div></td>
-                                            <td>{f.cuotasPagadas}/{f.cuotasTotal} <span className="text-muted-sm">pagas</span></td>
+                                            <td className="tabular-nums">{money(f.montoFinanciado, f.moneda)}</td>
+                                            <td className="tabular-nums">{f.cuotasPagadas} de {f.cuotasTotal}</td>
                                             <td><span className="fw-bold" style={{ color: f.saldoPendiente > 0 ? 'var(--danger)' : 'var(--accent)' }}>{money(f.saldoPendiente, f.moneda)}</span></td>
                                             <td>{f.cuotasVencidas > 0 ? <span className="badge badge-danger">{f.cuotasVencidas}</span> : <span className="text-muted-sm">—</span>}</td>
                                             <td className="text-muted-sm">{f.proximaCuota ? fmtDate(f.proximaCuota.vencimiento) : '—'}</td>
-                                            <td><span className={`badge badge-${f.estado === 'activa' ? 'emerald' : 'warning'}`}>{f.estado}</span></td>
+                                            <td><EstadoBadge mapa={FINANCIACION_ESTADO} estado={f.estado} /></td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         ) : (
                             <table className="data-table">
-                                <thead><tr><th>ID</th><th>Inicio</th><th>Monto</th><th>Cuotas</th><th>Estado</th></tr></thead>
+                                <thead><tr><th>Plan</th><th>Inicio</th><th>Monto financiado</th><th>Cuotas</th><th>Estado</th></tr></thead>
                                 <tbody>
                                     {financiaciones.map((row) => {
                                         const f = row as AnyRow;
                                         return (
                                             <tr key={String(f.id)}>
-                                                <td><span className="fw-bold">#{String(f.id)}</span></td>
-                                                <td><div className="flex-cell"><Calendar size={14} />{fmtDate(f.fechaInicio)}</div></td>
-                                                <td><div className="flex-cell"><DollarSign size={14} />{fmtMoney(f.montoFinanciado)}</div></td>
+                                                <td><span className="fw-bold">N° {String(f.id)}</span></td>
+                                                <td><div className="flex-cell"><Calendar size={14} aria-hidden="true" />{fmtDate(f.fechaInicio)}</div></td>
+                                                <td className="tabular-nums">{fmtMoney(f.montoFinanciado, f.moneda)}</td>
                                                 <td>{String(f.cuotas ?? '-')}</td>
-                                                <td><span className={`badge badge-${f.estado === 'activa' ? 'emerald' : 'warning'}`}>{String(f.estado ?? '-')}</span></td>
+                                                <td><EstadoBadge mapa={FINANCIACION_ESTADO} estado={f.estado} /></td>
                                             </tr>
                                         );
                                     })}
@@ -659,9 +705,9 @@ const ClienteDetallePage = () => {
                                         return (
                                             <tr key={String(s.id)}>
                                                 <td className="fw-bold">{String(fin?.nombre ?? '-')}</td>
-                                                <td><div className="flex-cell"><DollarSign size={14} />{fmtMoney(s.montoSolicitado)}</div></td>
+                                                <td className="tabular-nums">{fmtMoney(s.montoSolicitado, s.moneda)}</td>
                                                 <td>{s.plazoCuotas ? `${String(s.plazoCuotas)} cuotas` : '-'}</td>
-                                                <td><span className="badge badge-warning">{String(s.estado ?? '-')}</span></td>
+                                                <td><EstadoBadge mapa={SOLICITUD_ESTADO} estado={s.estado} /></td>
                                                 <td><div className="flex-cell"><Calendar size={14} />{fmtDate(s.createdAt)}</div></td>
                                             </tr>
                                         );
@@ -687,7 +733,7 @@ const ClienteDetallePage = () => {
                                                 <td className="fw-bold">{String(c.tipo ?? '-')}</td>
                                                 <td className="text-muted-sm" style={{ maxWidth: '300px' }}>{String(c.descripcion ?? '-')}</td>
                                                 <td><div className="flex-cell"><Calendar size={14} />{fmtDate(c.fechaReclamo)}</div></td>
-                                                <td><span className={`badge badge-${c.estado === 'resuelto' ? 'emerald' : 'warning'}`}>{String(c.estado ?? '-')}</span></td>
+                                                <td><EstadoBadge mapa={POSTVENTA_ESTADO} estado={c.estado} /></td>
                                                 <td><div className="flex-cell"><Calendar size={14} />{fmtDate(c.fechaCierre)}</div></td>
                                             </tr>
                                         );
@@ -763,7 +809,7 @@ const ClienteDetallePage = () => {
                                                 <span className="seg-user">por {s.usuario?.nombre ?? '—'}</span>
                                             </div>
                                             {puedeEditar && (
-                                                <button className="seg-del" title="Eliminar contacto" onClick={() => handleDeleteSeguimiento(s)}>
+                                                <button type="button" className="seg-del" title="Eliminar contacto" aria-label={`Eliminar el contacto del ${fmtDate(s.fecha)}`} onClick={() => handleDeleteSeguimiento(s)}>
                                                     <Trash2 size={15} />
                                                 </button>
                                             )}
@@ -838,7 +884,7 @@ const ClienteDetallePage = () => {
                                                     </button>
                                                     {v?.anio && <span className="flex-cell">{v.anio}</span>}
                                                     {v?.dominio && <span className="int-chip">{v.dominio}</span>}
-                                                    {v?.estado && <span className="int-chip">{v.estado}</span>}
+                                                    {v?.estado && <span className="int-chip">{rotuloEstado(VEHICULO_ESTADO, v.estado).label}</span>}
                                                     {v?.precioLista != null && Number(v.precioLista) > 0 && (
                                                         <span className="int-precio">{money(Number(v.precioLista), v.moneda)}</span>
                                                     )}
@@ -849,13 +895,15 @@ const ClienteDetallePage = () => {
                                             {puedeEditar && (
                                                 <div className="int-item-actions">
                                                     <button
+                                                        type="button"
                                                         className="int-gen-presu"
-                                                        title="Generar presupuesto con este vehículo"
+                                                        title="Crear un presupuesto con este vehículo"
+                                                        aria-label="Crear un presupuesto con este vehículo"
                                                         onClick={() => navigate(`/presupuestos?nuevoClienteId=${id}&nuevoVehiculoId=${i.vehiculoId}`)}
                                                     >
                                                         <FileText size={15} />
                                                     </button>
-                                                    <button className="seg-del" title="Quitar interés" onClick={() => handleDeleteInteres(i)}>
+                                                    <button type="button" className="seg-del" title="Quitar interés" aria-label="Quitar este vehículo de los intereses" onClick={() => handleDeleteInteres(i)}>
                                                         <Trash2 size={15} />
                                                     </button>
                                                 </div>
@@ -891,7 +939,7 @@ const ClienteDetallePage = () => {
                 .tabs-bar { display: flex; gap: 0.5rem; padding: 0.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); flex-wrap: wrap; }
                 .tab-btn { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 1.25rem; border-radius: var(--radius-md); font-weight: 600; font-size: var(--text-sm); color: var(--text-secondary); transition: all 0.15s; }
                 .tab-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }
-                .tab-btn.active { background: var(--accent); color: var(--text-white); }
+                .tab-btn.active { background: var(--accent); color: var(--text-on-accent); }
                 .tab-badge { background: color-mix(in srgb, currentColor 25%, transparent); padding: 0.125rem 0.5rem; border-radius: var(--radius-pill); font-size: var(--text-2xs); font-weight: 700; }
                 .tab-btn:not(.active) .tab-badge { background: var(--bg-secondary); color: var(--text-muted); }
                 .tab-content { padding: 2rem; border-radius: var(--radius-lg); border: 1px solid var(--border); }
@@ -938,7 +986,7 @@ const ClienteDetallePage = () => {
                 .int-veh-link { font-weight: 600; color: var(--text-primary); background: none; border: none; padding: 0; cursor: pointer; transition: color 0.15s; }
                 .int-veh-link:hover:not(:disabled) { color: var(--accent-2); text-decoration: underline; }
                 .int-veh-link:disabled { cursor: default; }
-                .int-chip { font-size: var(--text-xs); padding: 0.1rem 0.5rem; border-radius: var(--radius-pill); background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border); text-transform: capitalize; }
+                .int-chip { font-size: var(--text-xs); padding: 0.1rem 0.5rem; border-radius: var(--radius-pill); background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border); }
                 .int-precio { font-size: var(--text-sm); font-weight: 600; color: var(--success); }
                 .int-item-actions { display: flex; align-items: flex-start; gap: 0.35rem; flex-shrink: 0; }
                 .int-gen-presu { color: var(--text-muted); padding: 0.35rem; border-radius: var(--radius-sm); transition: all 0.15s; }

@@ -76,15 +76,15 @@ const SeguimientosPage = () => {
 
     return (
         <div className="seg-page">
-            <PageTitle title="Agenda de seguimientos" />
+            <PageTitle title="Seguimientos" />
 
             <div className="seg-head">
                 <div className="flex items-center gap-3">
                     <div className="seg-head-icon"><CalendarClock size={22} /></div>
                     <div>
-                        <h1 className="seg-title">Agenda de seguimientos</h1>
+                        <h1 className="seg-title">Seguimientos</h1>
                         <p className="seg-sub">
-                            Contactos del CRM por atender: vencidos recientes, de hoy y próximos.
+                            Contactos con clientes que hay que hacer: atrasados, de hoy y próximos.
                         </p>
                     </div>
                 </div>
@@ -119,7 +119,7 @@ const SeguimientosPage = () => {
                             {formatFecha(data.ventana.desde)} — {formatFecha(data.ventana.hasta)}
                         </span>
                     )}
-                    <button className="seg-refresh" type="button" onClick={() => refetch()} disabled={isFetching} title="Actualizar">
+                    <button className="seg-refresh" type="button" onClick={() => refetch()} disabled={isFetching} title="Actualizar" aria-label="Actualizar">
                         <RefreshCw size={15} className={isFetching ? 'seg-spin' : ''} />
                     </button>
                 </div>
@@ -213,7 +213,7 @@ const SeguimientosPage = () => {
                 .seg-sub { margin: 0.15rem 0 0; color: var(--text-secondary); font-size: var(--text-sm); }
                 .seg-dias { display: inline-flex; gap: 0.25rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 0.2rem; }
                 .seg-dia-btn { border: none; background: transparent; color: var(--text-secondary); font-size: var(--text-sm); font-weight: 700; padding: 0.35rem 0.7rem; border-radius: var(--radius-pill); cursor: pointer; transition: background var(--duration-fast), color var(--duration-fast); }
-                .seg-dia-btn.is-active { background: var(--accent); color: var(--text-white); }
+                .seg-dia-btn.is-active { background: var(--accent); color: var(--text-on-accent); }
                 .seg-chips { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; margin-bottom: 1rem; font-size: var(--text-sm); }
                 .seg-chip strong { font-size: var(--text-md); }
                 .seg-chip-range { color: var(--text-muted); font-size: var(--text-sm); }

@@ -1,0 +1,52 @@
+/*
+ * Listados comerciales densos (Ventas, Presupuestos, Financiación, Reservas).
+ *
+ * A 1280 px de ancho, con la barra lateral abierta, al contenido le quedan
+ * ~840 px. Con el padding por defecto de la tabla (1.5rem por lado y por
+ * celda) la columna de acciones quedaba fuera de la vista y había que
+ * scrollear en horizontal para ver los botones. Esta variante sólo achica el
+ * aire entre celdas y los botones de ícono; tipografía y colores siguen siendo
+ * los del sistema (.data-table, .icon-btn).
+ */
+.listado-compacto .data-table th,
+.listado-compacto .data-table td {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+}
+
+.listado-compacto .data-table td {
+    padding-top: 0.8rem;
+    padding-bottom: 0.8rem;
+}
+
+.listado-compacto .data-table .icon-btn {
+    padding: 0.45rem;
+}
+
+/* El giro de 90° del hover global marea en una fila con varios botones juntos. */
+.listado-compacto .data-table .icon-btn:hover {
+    transform: scale(1.06);
+}
+
+/*
+ * Barra de filtros de estos listados: la grilla global (1.5fr 1fr 1fr 1fr)
+ * cortaba el placeholder del buscador y "Forma de pago: todas". En escritorio
+ * se reparte en flex: el buscador toma el doble y los selects lo que necesitan.
+ */
+@media (min-width: 1024px) {
+    .filters-bar.filtros-comerciales {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .filters-bar.filtros-comerciales .search-box {
+        flex: 1 1 260px;
+    }
+    .filters-bar.filtros-comerciales select {
+        flex: 0 1 auto;
+        width: auto;
+    }
+    .filters-bar.filtros-comerciales > .btn {
+        flex: 0 0 auto;
+    }
+}

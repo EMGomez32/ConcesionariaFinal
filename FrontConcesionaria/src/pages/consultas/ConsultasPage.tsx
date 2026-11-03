@@ -105,7 +105,7 @@ const ConsultasPage = () => {
         },
         onMutate: ({ clienteId }) => setContactando((s) => new Set(s).add(clienteId)),
         onSuccess: () => {
-            addToast('Contacto registrado: el lead pasó a "contactado"', 'success');
+            addToast('Contacto registrado: el cliente pasó a la etapa "Contactado"', 'success');
             qc.invalidateQueries({ queryKey: ['reportes', 'consultas'] });
             qc.invalidateQueries({ queryKey: ['clientes'] });
             qc.invalidateQueries({ queryKey: ['dashboard'] });
@@ -207,7 +207,7 @@ const ConsultasPage = () => {
                             variant="secondary"
                             size="sm"
                             loading={contactando.has(c.clienteId)}
-                            title="Registra el primer contacto y pasa el lead a 'contactado'"
+                            title="Registrá el primer contacto: el cliente pasa a la etapa Contactado"
                             onClick={() => contactar.mutate({ clienteId: c.clienteId, porWhatsapp: !!link })}
                         >
                             <Check size={14} /> Contactado
@@ -270,7 +270,7 @@ const ConsultasPage = () => {
                         </div>
                         <h1>Consultas</h1>
                     </div>
-                    <p>Leads entrantes de todos los canales: sin atender, gestión por vendedor y conversión por canal.</p>
+                    <p>Consultas de todos los canales: las que falta atender, cómo las gestiona cada vendedor y cuántas se convierten.</p>
                 </div>
             </header>
 

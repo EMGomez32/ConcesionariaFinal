@@ -223,7 +223,7 @@ const AtencionesPage = () => {
                 <div className="header-title">
                     <div className="flex items-center gap-3 mb-1">
                         <div className="icon-badge primary shadow-glow"><UserRoundCheck size={22} /></div>
-                        <h1>Mostrador</h1>
+                        <h1>Atenciones</h1>
                     </div>
                     <p>Atención presencial: abrí la visita con el nombre y el teléfono, el resto se completa sobre la marcha.</p>
                     <p className="at-nota">
@@ -329,7 +329,7 @@ const AtencionesPage = () => {
                 {/* Resultado del dedupe */}
                 {identificado && (
                     <div className={`at-ficha ${cliente ? '' : 'is-nuevo'}`} ref={fichaRef}>
-                        <button type="button" className="at-ficha-cerrar icon-btn" onClick={limpiarApertura} title="Descartar y empezar de nuevo">
+                        <button type="button" className="at-ficha-cerrar icon-btn" onClick={limpiarApertura} title="Descartar y empezar de nuevo" aria-label="Descartar y empezar de nuevo">
                             <X size={16} />
                         </button>
 
@@ -563,7 +563,7 @@ const AtencionesPage = () => {
                     />
                 </div>
 
-                <button className="at-refresh" type="button" onClick={() => refetch()} disabled={isFetching} title="Actualizar">
+                <button className="at-refresh" type="button" onClick={() => refetch()} disabled={isFetching} title="Actualizar" aria-label="Actualizar">
                     <RefreshCw size={15} className={isFetching ? 'at-spin' : ''} />
                 </button>
             </div>

@@ -729,7 +729,7 @@ const AtencionPage = () => {
                     <CircleAlert size={18} />
                     <div>
                         <strong>Sin consentimiento de contacto.</strong>{' '}
-                        Mostrarle unidades no lo necesita. Para un test drive, una cotización, una reserva o la
+                        Mostrarle unidades no lo necesita. Para una prueba de manejo, un presupuesto, una reserva o la
                         permuta hay que pedirle el DNI, el email, el domicilio y su conformidad (Ley 25.326).
                         <div>
                             <button type="button" className="at-link" onClick={() => pedirDatos(null, { tipo: 'ninguna' })}>
@@ -1181,7 +1181,7 @@ const AtencionPage = () => {
                     <p className="at-proximo-porque">
                         <CircleAlert size={16} />
                         <span>
-                            {motivoDatos || 'Para registrar interés real —test drive, cotización, reserva o permuta— el sistema exige estos datos.'}
+                            {motivoDatos || 'Para registrar interés real —prueba de manejo, presupuesto, reserva o permuta— el sistema exige estos datos.'}
                         </span>
                     </p>
                     {faltantes.length > 0 && (

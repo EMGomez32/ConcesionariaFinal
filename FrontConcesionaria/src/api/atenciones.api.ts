@@ -130,13 +130,13 @@ export const RESULTADO_ATENCION_META: Record<
         variant: 'default',
     },
     cotizacion: {
-        label: 'Cotización entregada',
+        label: 'Presupuesto entregado',
         ayuda: 'Se fue con un presupuesto: hay que volver a llamarlo.',
         definitivo: false,
         variant: 'cyan',
     },
     test_drive: {
-        label: 'Test drive realizado',
+        label: 'Prueba de manejo realizada',
         ayuda: 'Probó una unidad. La operación sigue abierta.',
         definitivo: false,
         variant: 'violet',
@@ -185,8 +185,8 @@ export const esResultadoDefinitivo = (r?: ResultadoAtencion | null): boolean =>
  */
 export const ACCION_LABEL: Record<AccionAtencionVehiculo, string> = {
     vista: 'La vio',
-    test_drive: 'Test drive',
-    cotizada: 'Cotizada',
+    test_drive: 'Prueba de manejo',
+    cotizada: 'Presupuestada',
     reservada: 'Reservada',
 };
 

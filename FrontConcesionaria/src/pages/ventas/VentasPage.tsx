@@ -1,13 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { CreateVentaDto } from '../../api/ventas.api';
 import { useUIStore } from '../../store/uiStore';
+import { useAuthStore } from '../../store/authStore';
 import { useConfirm } from '../../hooks/useConfirm';
-import { useVentas, useVenta, useCreateVenta, useDeleteVenta, useChangeEstadoEntrega } from '../../hooks/useVentas';
+import { useVentas, useVenta, useVentasConteo, useCreateVenta, useDeleteVenta, useChangeEstadoEntrega } from '../../hooks/useVentas';
 import { useClientes } from '../../hooks/useClientes';
 import { useUsuarios } from '../../hooks/useUsuarios';
 import { useSucursales } from '../../hooks/useSucursales';
 import { useVehiculos } from '../../hooks/useVehiculos';
-import { useDebounce } from '../../hooks/useDebounce';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
@@ -15,22 +16,30 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
 import DataTable, { type Column } from '../../components/ui/DataTable';
+import PageTitle from '../../components/ui/PageTitle';
 import {
     Plus, Search, Eye, Trash2, X, RefreshCw, DollarSign,
     ArrowRightLeft, User, ShoppingBag, Car, MapPin,
-    CheckCircle2, TrendingUp, Printer, Package, FileText
+    CheckCircle2, TrendingUp, Printer, Package, FileText, FileDown
 } from 'lucide-react';
 import type { FormaPagoVenta, EstadoEntrega, Venta } from '../../types/venta.types';
 import type { ApiError } from '../../types/api.types';
 import VentaSubResources from '../../components/ventas/VentaSubResources';
 import VentaFacturaPanel from '../../components/ventas/VentaFacturaPanel';
+import { ENTREGA_ESTADO, FORMA_PAGO_LABEL, METODO_PAGO_LABEL, rotuloEstado } from '../../components/ventas/estados';
+import { calcularSaldoVenta, imprimirReciboVenta } from '../../components/ventas/reciboVenta';
+import { useFiltrosUrl } from '../../components/ventas/useFiltrosUrl';
+import '../../components/ventas/listados.css';
 import { usePermisos } from '../../hooks/usePermisos';
 import { ventasApi } from '../../api/ventas.api';
+import { reportesApi } from '../../api/reportes.api';
+import { concesionariasApi } from '../../api/concesionarias.api';
 import { formatMoneda } from '../../utils/moneda';
 import { formatFecha, hoyLocal } from '../../utils/fecha';
 
 // ─── Tipos auxiliares ──────────────────────────────────────────────────────
-interface PagoRow { monto: number; metodo: 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro'; referencia: string; observaciones: string }
+type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
+interface PagoRow { monto: number; metodo: MetodoPago; referencia: string; observaciones: string }
 interface ExtraRow { descripcion: string; monto: number; comprobanteUrl: string }
 interface CanjeRow { vehiculoCanjeId: number; valorTomado: number }
 
@@ -49,47 +58,30 @@ interface VentaForm {
     canjes: CanjeRow[];
 }
 
-// ─── Status maps ────────────────────────────────────────────────────────────
-const entregaStatusMap: Record<EstadoEntrega, { label: string; variant: 'warning' | 'danger' | 'info' | 'success' | 'default' }> = {
-    pendiente: { label: 'Pendiente', variant: 'warning' },
-    bloqueada: { label: 'Bloqueada', variant: 'danger' },
-    autorizada: { label: 'Autorizada', variant: 'info' },
-    entregada: { label: 'Entregada', variant: 'success' },
-    cancelada: { label: 'Cancelada', variant: 'default' },
-};
-
 /**
- * `esAnulacion` separa las dos cosas que este endpoint hace y que la UI mostraba
- * pegadas en la misma fila: avanzar la entrega (trabajo diario de vendedor y
- * postventa) y "Anular Operación", que manda la venta a `cancelada` — estado
- * TERMINAL, sin transición de vuelta ni para el admin, que además no revierte el
- * stock. El backend acota ese destino a admin dentro del controller, así que sin
- * este flag el de postventa apretaba el botón rojo pegado al suyo y comía un 403.
+ * Transiciones de la entrega. `esAnulacion` separa las dos cosas que este
+ * endpoint hace: avanzar la entrega (trabajo diario de vendedor y postventa) y
+ * "Anular venta", que manda la venta a `cancelada` — estado TERMINAL, sin vuelta
+ * atrás ni para el admin, y que NO devuelve la unidad al stock. El backend acota
+ * ese destino a admin dentro del controller. `final` marca los pasos sin vuelta
+ * atrás: piden confirmación antes de mandarse.
  */
-const entregaTransitions: Record<EstadoEntrega, { label: string; next: EstadoEntrega; esAnulacion?: boolean }[]> = {
-    pendiente: [{ label: 'Bloquear Entrega', next: 'bloqueada' }, { label: 'Autorizar Entrega', next: 'autorizada' }],
-    bloqueada: [{ label: 'Autorizar Entrega', next: 'autorizada' }, { label: 'Anular Operación', next: 'cancelada', esAnulacion: true }],
-    autorizada: [{ label: 'Efectivizar Entrega', next: 'entregada' }, { label: 'Anular Operación', next: 'cancelada', esAnulacion: true }],
+const entregaTransitions: Record<EstadoEntrega, { label: string; next: EstadoEntrega; esAnulacion?: boolean; final?: boolean }[]> = {
+    pendiente: [{ label: 'Bloquear entrega', next: 'bloqueada' }, { label: 'Autorizar entrega', next: 'autorizada' }],
+    bloqueada: [{ label: 'Autorizar entrega', next: 'autorizada' }, { label: 'Anular venta', next: 'cancelada', esAnulacion: true, final: true }],
+    autorizada: [{ label: 'Marcar como entregada', next: 'entregada', final: true }, { label: 'Anular venta', next: 'cancelada', esAnulacion: true, final: true }],
     entregada: [],
     cancelada: [],
 };
 
-const formaPagoLabels: Record<FormaPagoVenta, string> = {
-    contado: 'Contado / Efectivo',
-    transferencia: 'Transferencia Bancaria',
-    financiado_propio: 'Financiación Interna',
-    financiado_externo: 'Crédito Prendario / Uva',
-    canje_mas_diferencia: 'Canje + Saldo',
-    mixto: 'Ingresos Mixtos',
-};
-
-const metodoLabels: Record<string, string> = {
-    efectivo: 'Efectivo', transferencia: 'Transferencia',
-    tarjeta: 'Tarjeta', cheque: 'Cheque', otro: 'Otro / Billetera',
+/** Usuario actual como vendedor por defecto, si tiene ese rol. */
+const vendedorPorDefecto = (): number => {
+    const u = useAuthStore.getState().user;
+    return u?.roles?.includes('vendedor') ? u.id : 0;
 };
 
 const emptyForm = (): VentaForm => ({
-    sucursalId: 0, clienteId: 0, vendedorId: 0, vehiculoId: 0,
+    sucursalId: 0, clienteId: 0, vendedorId: vendedorPorDefecto(), vehiculoId: 0,
     fechaVenta: hoyLocal(), precioVenta: 0, moneda: 'ARS',
     formaPago: 'contado', observaciones: '',
     pagos: [], externos: [], canjes: [],
@@ -97,25 +89,30 @@ const emptyForm = (): VentaForm => ({
 const emptyPago = (): PagoRow => ({ monto: 0, metodo: 'efectivo', referencia: '', observaciones: '' });
 const emptyCanjeRow = (): CanjeRow => ({ vehiculoCanjeId: 0, valorTomado: 0 });
 
-const addPago = (setForm: React.Dispatch<React.SetStateAction<VentaForm>>) => {
-    setForm(f => ({ ...f, pagos: [...f.pagos, emptyPago()] }));
+const pad2 = (n: number) => String(n).padStart(2, '0');
+/** Primer y último día del mes en curso (hora local), para "Ventas del mes". */
+const rangoMesActual = () => {
+    const hoy = new Date();
+    const y = hoy.getFullYear();
+    const m = hoy.getMonth();
+    const ultimo = new Date(y, m + 1, 0).getDate();
+    return {
+        desde: `${y}-${pad2(m + 1)}-01`,
+        hasta: `${y}-${pad2(m + 1)}-${pad2(ultimo)}`,
+        nombre: hoy.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }),
+    };
 };
 
-const addCanje = (setForm: React.Dispatch<React.SetStateAction<VentaForm>>) => {
-    setForm(f => ({ ...f, canjes: [...f.canjes, emptyCanjeRow()] }));
-};
+const nroVenta = (id: number) => String(id).padStart(6, '0');
 
 // ─── Componente principal ────────────────────────────────────────────────────
 const VentasPage = () => {
     const { addToast } = useUIStore();
     const confirm = useConfirm();
 
-    // Filters & Pagination State
-    const [page, setPage] = useState(1);
-    const [search, setSearch] = useState('');
-    const debouncedSearch = useDebounce(search, 500);
-    const [filterFormaPago, setFilterFormaPago] = useState('');
-    const [filterEstadoEntrega, setFilterEstadoEntrega] = useState('');
+    // Filtros, búsqueda y página en la URL: sobreviven a entrar a una ficha y volver.
+    const { filtros, q, busqueda, setBusqueda, page, setPage, setFiltro, limpiar, hayFiltros } =
+        useFiltrosUrl(['formaPago', 'estadoEntrega'] as const);
 
     // Modals & Detail State
     const [createOpen, setCreateOpen] = useState(false);
@@ -123,23 +120,48 @@ const VentasPage = () => {
     const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
     // Facturas en curso (por venta): evita doble emisión al doble-clickear.
     const [facturaEnCurso, setFacturaEnCurso] = useState<Set<number>>(new Set());
+    const [imprimiendo, setImprimiendo] = useState(false);
 
-    // Queries
-    const { data: ventasData, isLoading: loadingVentas, refetch: refetchVentas } = useVentas(
+    // La búsqueda la resuelve el backend (contrato 1): ya no se filtra la página en memoria.
+    const { data: ventasData, isLoading: loadingVentas, isFetching, isError, refetch: refetchVentas } = useVentas(
         {
-            formaPago: filterFormaPago || undefined,
-            estadoEntrega: filterEstadoEntrega || undefined,
+            q: q || undefined,
+            formaPago: filtros.formaPago || undefined,
+            estadoEntrega: filtros.estadoEntrega || undefined,
         },
         { page, limit: 15 }
     );
 
-    const { data: detail, isLoading: loadingDetail } = useVenta(selectedDetailId);
+    const { data: detail, isLoading: loadingDetail, isError: detailError, refetch: refetchDetail } = useVenta(selectedDetailId);
 
-    // Cada control de esta pantalla espeja un authorize() del backend. Sin esto,
-    // `lectura` (el contador, el socio) veía el tacho rojo "Anular Venta" en cada
-    // fila y el vendedor confirmaba un diálogo que le prometía revertir el stock
-    // para recibir un cartel de error. Ver hooks/usePermisos.ts.
+    // Cada control de esta pantalla espeja un authorize() del backend. Ver hooks/usePermisos.ts.
     const permisos = usePermisos();
+    // /reportes/ventas es admin/vendedor (super_admin pasa siempre).
+    const puedeVerReporte = permisos.tiene('admin', 'super_admin', 'vendedor');
+
+    // ── Indicadores: contados por el backend, no sobre la página visible ──
+    const mes = useMemo(rangoMesActual, []);
+    const ventasMes = useVentasConteo({ fechaDesde: mes.desde, fechaHasta: mes.hasta });
+    const pendientes = useVentasConteo({ estadoEntrega: 'pendiente' });
+    const bloqueadas = useVentasConteo({ estadoEntrega: 'bloqueada' });
+    const autorizadas = useVentasConteo({ estadoEntrega: 'autorizada' });
+    const pendientesError = pendientes.isError || bloqueadas.isError || autorizadas.isError;
+    const pendientesCargando = pendientes.isLoading || bloqueadas.isLoading || autorizadas.isLoading;
+    const pendientesTotal = (pendientes.data ?? 0) + (bloqueadas.data ?? 0) + (autorizadas.data ?? 0);
+
+    // Importe vendido en el mes, por moneda: el mismo cálculo que "Ventas del
+    // mes" del Inicio (precio + extras de las ventas con fecha en el mes).
+    const reporteMes = useQuery({
+        queryKey: ['ventas', 'reporte-mes', mes.desde, mes.hasta],
+        queryFn: () => reportesApi.ventas({ desde: mes.desde, hasta: mes.hasta }),
+        enabled: puedeVerReporte,
+        staleTime: 60 * 1000,
+    });
+    const vendidoPorMoneda = useMemo(() => (reporteMes.data?.resumen?.porMoneda ?? [])
+        .map((m) => ({ moneda: String(m.moneda), total: Number(m.total ?? 0), cantidad: Number(m.cantidad ?? 0) }))
+        .filter((m) => m.cantidad > 0)
+        .sort((a, b) => (a.moneda === 'ARS' ? -1 : b.moneda === 'ARS' ? 1 : a.moneda.localeCompare(b.moneda))),
+    [reporteMes.data]);
 
     // Catalog Queries
     const { data: clientesData } = useClientes({}, { limit: 1000 });
@@ -153,17 +175,36 @@ const VentasPage = () => {
     const vehiculos = vehiculosPublicados?.results || [];
     const todosVehiculos = todosVehiculosData?.results || [];
 
+    const nombreSucursal = (id?: number) => sucursalesData?.find((s) => s.id === id)?.nombre;
+    const descripcionUnidad = (id: number) => {
+        const v = todosVehiculos.find((x) => x.id === id);
+        return v ? `${v.marca} ${v.modelo}${v.dominio ? ` (${v.dominio})` : ''}` : `Unidad #${id}`;
+    };
+
     // Mutations
     const createMutation = useCreateVenta();
     const changeEstadoEntregaMutation = useChangeEstadoEntrega();
     const deleteMutation = useDeleteVenta();
 
+    /** Al elegir la unidad se precargan su precio de lista, su moneda y su sucursal. */
+    const elegirUnidad = (vehiculoId: number) => {
+        const v = vehiculos.find((x) => x.id === vehiculoId);
+        setForm((f) => ({
+            ...f,
+            vehiculoId,
+            ...(v && Number(v.precioLista) > 0 ? { precioVenta: Number(v.precioLista) } : {}),
+            ...(v?.moneda === 'ARS' || v?.moneda === 'USD' ? { moneda: v.moneda } : {}),
+            ...(v?.sucursalId ? { sucursalId: v.sucursalId } : {}),
+        }));
+    };
+    const unidadElegida = vehiculos.find((x) => x.id === form.vehiculoId);
+
     const handleCreate = async () => {
         if (!form.vehiculoId || !form.clienteId || !form.vendedorId || !form.sucursalId) {
-            addToast('Complete la estructura mandatoria para registrar la venta', 'error'); return;
+            addToast('Completá la unidad, el cliente, el vendedor y la sucursal', 'error'); return;
         }
         if (form.precioVenta <= 0) {
-            addToast('El precio de transacción debe ser un valor positivo', 'error'); return;
+            addToast('El precio de venta tiene que ser mayor a 0', 'error'); return;
         }
 
         try {
@@ -178,39 +219,45 @@ const VentasPage = () => {
                 canjes: form.canjes.filter(c => c.vehiculoCanjeId && c.valorTomado > 0),
             };
             await createMutation.mutateAsync(dto);
-            addToast('Venta perfeccionada y asientos contables generados', 'success');
+            addToast('Venta registrada', 'success');
             setCreateOpen(false);
             setForm(emptyForm());
         } catch (err: unknown) {
             const apiError = err as ApiError;
-            addToast(apiError?.message ?? 'Fallo en la validación fiscal de la venta', 'error');
+            addToast(apiError?.message ?? 'No se pudo registrar la venta', 'error');
         }
     };
 
     /**
      * Transiciones de entrega que este rol puede disparar de verdad. Avanzar la
-     * entrega es de admin/vendedor/postventa; "Anular Operación" es sólo del admin
+     * entrega es de admin/vendedor/postventa; "Anular venta" es sólo del admin
      * (el backend lo chequea por DESTINO, no por ruta: es el mismo PATCH).
      */
     const transicionesVisibles = (detail ? entregaTransitions[detail.estadoEntrega] ?? [] : []).filter(
         (t) => (t.esAnulacion ? permisos.ventasCancelarOperacion : permisos.ventasAvanzarEntrega)
     );
 
-    const handleAddPago = () => addPago(setForm);
-    const handleAddCanje = () => addCanje(setForm);
+    const handleAddPago = () => setForm(f => ({ ...f, pagos: [...f.pagos, emptyPago()] }));
+    const handleAddCanje = () => setForm(f => ({ ...f, canjes: [...f.canjes, emptyCanjeRow()] }));
 
-    const handleDelete = async (id: number) => {
+    const updPago = (i: number, cambios: Partial<PagoRow>) =>
+        setForm(f => ({ ...f, pagos: f.pagos.map((p, j) => (j === i ? { ...p, ...cambios } : p)) }));
+    const updCanje = (i: number, cambios: Partial<CanjeRow>) =>
+        setForm(f => ({ ...f, canjes: f.canjes.map((c, j) => (j === i ? { ...c, ...cambios } : c)) }));
+
+    const handleDelete = async (v: Venta) => {
         await confirm({
-            title: 'Revocar Acto Comercial',
-            message: `¿Desea anular la venta #${id}? Esta acción revierte el stock, anula los cobros y purga los asientos contables relacionados.`,
+            title: 'Eliminar venta',
+            message: `La venta N° ${nroVenta(v.id)} (${v.vehiculo?.marca ?? ''} ${v.vehiculo?.modelo ?? ''}) se borra del listado y la unidad vuelve a quedar publicada para la venta. No se puede deshacer.`,
             type: 'danger',
+            confirmLabel: 'Eliminar venta',
             onConfirm: async () => {
                 try {
-                    await deleteMutation.mutateAsync(id);
-                    addToast('Operación revocada con éxito', 'success');
+                    await deleteMutation.mutateAsync(v.id);
+                    addToast('Venta eliminada. La unidad volvió a Publicado.', 'success');
                 } catch (err: unknown) {
                     const apiError = err as ApiError;
-                    addToast(apiError?.message ?? 'Error al desestimar la venta', 'error');
+                    addToast(apiError?.message ?? 'No se pudo eliminar la venta', 'error');
                 }
             }
         });
@@ -228,7 +275,7 @@ const VentasPage = () => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch {
-            addToast('Error al generar el comprobante', 'error');
+            addToast('No se pudo generar el comprobante', 'error');
         }
     };
 
@@ -253,7 +300,7 @@ const VentasPage = () => {
                     return;
                 }
             }
-            if (emitida) addToast('Factura AFIP emitida — CAE obtenido', 'success');
+            if (emitida) addToast('Factura emitida: AFIP otorgó el CAE', 'success');
 
             const blob = await ventasApi.facturaPdf(id) as unknown as Blob;
             const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
@@ -265,525 +312,541 @@ const VentasPage = () => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch {
-            addToast('Error al generar la factura', 'error');
+            addToast('No se pudo generar la factura', 'error');
         } finally {
             setFacturaEnCurso(prev => { const next = new Set(prev); next.delete(id); return next; });
         }
     };
 
-    const handleEstadoEntrega = async (id: number, estadoEntrega: EstadoEntrega) => {
+    const cambiarEntrega = async (id: number, estadoEntrega: EstadoEntrega) => {
         try {
             await changeEstadoEntregaMutation.mutateAsync({ id, estadoEntrega });
-            addToast(`Estado de logística actualizado a: ${entregaStatusMap[estadoEntrega].label.toUpperCase()} `, 'success');
+            addToast(`Entrega: ${ENTREGA_ESTADO[estadoEntrega].label}`, 'success');
         } catch (err: unknown) {
             const apiError = err as ApiError;
-            addToast(apiError?.message ?? 'Error al procesar la transición de logística', 'error');
+            addToast(apiError?.message ?? 'No se pudo cambiar el estado de la entrega', 'error');
+            throw err;
         }
     };
 
-    // Client-side search filtration
-    const ventasFiltradas = useMemo(() => {
-        const results = ventasData?.results || [];
-        if (!debouncedSearch) return results;
-        const term = debouncedSearch.toLowerCase();
-        return results.filter(v =>
-            v.cliente?.nombre?.toLowerCase().includes(term) ||
-            v.vehiculo?.marca?.toLowerCase().includes(term) ||
-            v.vehiculo?.modelo?.toLowerCase().includes(term) ||
-            v.vehiculo?.dominio?.toLowerCase().includes(term) ||
-            v.vendedor?.nombre?.toLowerCase().includes(term)
-        );
-    }, [ventasData, debouncedSearch]);
-
-    // El volumen se acumula por moneda: sumar pesos y dólares en un mismo total
-    // da un número que no existe, y el promedio de esa mezcla tampoco significa
-    // nada. ARS primero por ser la moneda por defecto.
-    const volumenPorMoneda = useMemo(() => {
-        const acc: Record<string, { total: number; cantidad: number }> = {};
-        for (const v of ventasFiltradas) {
-            const moneda = v.moneda || 'ARS';
-            if (!acc[moneda]) acc[moneda] = { total: 0, cantidad: 0 };
-            acc[moneda].total += Number(v.precioVenta) || 0;
-            acc[moneda].cantidad += 1;
+    /** Los pasos finales (entregar, anular) piden confirmación: no tienen vuelta atrás. */
+    const handleEstadoEntrega = async (v: Venta, t: { next: EstadoEntrega; final?: boolean }) => {
+        if (!t.final) {
+            // El error ya se mostró en un toast dentro de cambiarEntrega.
+            await cambiarEntrega(v.id, t.next).catch(() => undefined);
+            return;
         }
-        return Object.entries(acc)
-            .map(([moneda, { total, cantidad }]) => ({ moneda, total, cantidad }))
-            .sort((a, b) => (a.moneda === 'ARS' ? -1 : b.moneda === 'ARS' ? 1 : a.moneda.localeCompare(b.moneda)));
-    }, [ventasFiltradas]);
+        const unidad = `${v.vehiculo?.marca ?? ''} ${v.vehiculo?.modelo ?? ''}${v.vehiculo?.dominio ? ` (${v.vehiculo.dominio})` : ''}`.trim();
+        if (t.next === 'cancelada') {
+            await confirm({
+                title: 'Anular venta',
+                message: `La venta N° ${nroVenta(v.id)} queda anulada y no se puede volver atrás. La unidad ${unidad} no vuelve sola al stock: si corresponde, cambiá su estado desde Vehículos.`,
+                type: 'danger',
+                confirmLabel: 'Anular venta',
+                onConfirm: () => cambiarEntrega(v.id, 'cancelada'),
+            });
+        } else {
+            await confirm({
+                title: 'Marcar como entregada',
+                message: `Confirmá que la unidad ${unidad} ya se le entregó a ${v.cliente?.nombre ?? 'el cliente'}. Es el último paso de la entrega: después no se puede cambiar.`,
+                type: 'question',
+                confirmLabel: 'Marcar como entregada',
+                onConfirm: () => cambiarEntrega(v.id, 'entregada'),
+            });
+        }
+    };
+
+    // ── Recibo imprimible ──
+    const handleImprimirRecibo = async () => {
+        if (!detail) return;
+        setImprimiendo(true);
+        try {
+            // Datos de la concesionaria para el encabezado. El super_admin no tiene
+            // "la suya": se pide la de la venta. Si falla, el recibo sale igual.
+            let conc: { nombre?: string; cuit?: string; direccion?: string; telefono?: string } | null = null;
+            try {
+                conc = permisos.roles.includes('super_admin')
+                    ? await concesionariasApi.getById(detail.concesionariaId) as typeof conc
+                    : await concesionariasApi.getMine() as typeof conc;
+            } catch {
+                addToast('No se pudieron leer los datos de la concesionaria: el recibo sale sin ellos', 'info');
+            }
+            const cliente = (detail.cliente ?? {}) as { nombre?: string; dni?: string; email?: string; telefono?: string };
+            const ok = imprimirReciboVenta({
+                id: detail.id,
+                fechaVenta: detail.fechaVenta,
+                precioVenta: detail.precioVenta,
+                moneda: detail.moneda,
+                formaPago: detail.formaPago,
+                observaciones: detail.observaciones,
+                concesionaria: conc,
+                sucursal: nombreSucursal(detail.sucursalId),
+                cliente,
+                vehiculo: detail.vehiculo,
+                vendedor: detail.vendedor?.nombre,
+                pagos: (detail.pagos ?? []).map((p) => ({ ...p, fecha: (p as { fecha?: string }).fecha })),
+                extras: ((detail as { extras?: { descripcion?: string; monto: number }[] }).extras ?? []),
+                canjes: (detail.canjes ?? []).map((c) => ({ descripcion: descripcionUnidad(c.vehiculoCanjeId), valorTomado: c.valorTomado })),
+            });
+            if (!ok) addToast('El navegador bloqueó la ventana del recibo. Permití las ventanas emergentes y probá de nuevo.', 'error');
+        } finally {
+            setImprimiendo(false);
+        }
+    };
+
+    const ventas = ventasData?.results || [];
+    const cuentaForm = calcularSaldoVenta({
+        precioVenta: form.precioVenta,
+        pagos: form.pagos,
+        extras: form.externos,
+        canjes: form.canjes,
+    });
 
     const columns: Column<Venta>[] = [
         {
-            header: 'Identificador',
+            header: 'Venta',
             accessor: (v) => (
                 <div className="flex flex-col">
-                    <span className="text-2xs font-black text-info tracking-tight uppercase italic">Operación</span>
-                    <span className="font-mono text-xs font-bold">#{String(v.id).padStart(6, '0')}</span>
+                    <span className="font-mono text-xs font-bold">N° {nroVenta(v.id)}</span>
+                    <span className="text-xs text-muted tabular-nums">{formatFecha(v.fechaVenta)}</span>
                 </div>
             )
         },
         {
-            header: 'Unidad / Activo',
-            accessor: (v) => (
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center text-accent shadow-glow-sm">
-                        <Car size={18} />
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="font-bold text-xs uppercase">{v.vehiculo?.marca} {v.vehiculo?.modelo}</span>
-                        <span className="text-3xs font-black text-muted tracking-widest">{v.vehiculo?.dominio || 'S/DOMINIO'}</span>
-                    </div>
-                </div>
-            )
-        },
-        {
-            header: 'Titular Cliente',
-            accessor: (v) => (
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center text-muted">
-                        <User size={12} />
-                    </div>
-                    <span className="text-xs font-bold text-muted uppercase truncate">{v.cliente?.nombre || 'CLIENTE N/A'}</span>
-                </div>
-            )
-        },
-        {
-            header: 'Oficial Designado',
-            accessor: (v) => (
-                <span className="text-3xs font-black text-muted uppercase">{v.vendedor?.nombre || 'SIN OFICIAL'}</span>
-            )
-        },
-        {
-            header: 'Aforo de Venta',
+            header: 'Unidad',
             accessor: (v) => (
                 <div className="flex flex-col">
-                    <span className="font-black text-base tabular-nums">
-                        {formatMoneda(v.precioVenta, v.moneda)}
-                    </span>
-                    <span className="text-3xs font-bold text-accent uppercase tracking-tight">
-                        {formaPagoLabels[v.formaPago] || v.formaPago}
-                    </span>
+                    <span className="font-bold text-sm">{v.vehiculo?.marca} {v.vehiculo?.modelo}</span>
+                    <span className="text-xs text-muted">{v.vehiculo?.dominio || 'Sin dominio'}</span>
                 </div>
             )
         },
         {
-            header: 'Estado Entrega',
+            // Cliente y vendedor en una sola columna: a 1280 px la tabla entra sin
+            // scroll horizontal y las acciones quedan a la vista.
+            header: 'Cliente',
             accessor: (v) => (
-                <Badge variant={entregaStatusMap[v.estadoEntrega]?.variant ?? 'default'}>
-                    {entregaStatusMap[v.estadoEntrega]?.label.toUpperCase()}
-                </Badge>
+                <div className="flex flex-col" style={{ minWidth: 0 }}>
+                    <span className="text-sm font-bold truncate">{v.cliente?.nombre || 'Sin cliente'}</span>
+                    <span className="text-xs text-muted truncate">Vendedor: {v.vendedor?.nombre || 'sin asignar'}</span>
+                </div>
             )
         },
         {
-            header: 'Análisis',
+            header: 'Precio',
             align: 'right',
             accessor: (v) => (
-                <div className="flex justify-end gap-2">
-                    <button className="icon-btn" title="Auditar Operación" onClick={(e) => { e.stopPropagation(); setSelectedDetailId(v.id); }}><Eye size={16} /></button>
-                    <button className="icon-btn" title="Descargar comprobante PDF" onClick={(e) => { e.stopPropagation(); handleComprobante(v.id); }}><Printer size={16} /></button>
+                <div className="flex flex-col" style={{ alignItems: 'flex-end' }}>
+                    <span className="font-black tabular-nums" style={{ whiteSpace: 'nowrap' }}>
+                        {formatMoneda(v.precioVenta, v.moneda)}
+                    </span>
+                    <span className="text-xs text-muted">{FORMA_PAGO_LABEL[v.formaPago] || v.formaPago}</span>
+                </div>
+            )
+        },
+        {
+            header: 'Entrega',
+            accessor: (v) => {
+                const e = rotuloEstado(ENTREGA_ESTADO, v.estadoEntrega);
+                return <Badge variant={e.variant}>{e.label}</Badge>;
+            }
+        },
+        {
+            header: 'Acciones',
+            align: 'right',
+            accessor: (v) => (
+                <div className="flex justify-end gap-1">
+                    <button type="button" className="icon-btn" title="Ver detalle" aria-label={`Ver detalle de la venta ${nroVenta(v.id)}`} onClick={(e) => { e.stopPropagation(); setSelectedDetailId(v.id); }}><Eye size={16} /></button>
+                    <button type="button" className="icon-btn" title="Descargar comprobante (PDF)" aria-label={`Descargar comprobante de la venta ${nroVenta(v.id)}`} onClick={(e) => { e.stopPropagation(); handleComprobante(v.id); }}><FileDown size={16} /></button>
                     {permisos.ventasOperar && (
-                        <button className="icon-btn" title="Emitir / descargar factura AFIP" disabled={facturaEnCurso.has(v.id)} onClick={(e) => { e.stopPropagation(); handleFactura(v.id); }}><FileText size={16} /></button>
+                        <button type="button" className="icon-btn" title="Emitir o descargar la factura electrónica (AFIP)" aria-label={`Factura AFIP de la venta ${nroVenta(v.id)}`} disabled={facturaEnCurso.has(v.id)} onClick={(e) => { e.stopPropagation(); handleFactura(v.id); }}><FileText size={16} /></button>
                     )}
                     {permisos.ventasAnular && (
-                        <button className="icon-btn danger" onClick={e => { e.stopPropagation(); handleDelete(v.id); }} title="Anular Venta"><Trash2 size={16} /></button>
+                        <button type="button" className="icon-btn danger" title="Eliminar venta" aria-label={`Eliminar la venta ${nroVenta(v.id)}`} onClick={e => { e.stopPropagation(); handleDelete(v); }}><Trash2 size={16} /></button>
                     )}
                 </div>
             )
         }
     ];
 
+    const kpiNumero = (c: { data?: number; isLoading: boolean; isError: boolean }) =>
+        c.isError ? '—' : c.isLoading ? '…' : String(c.data ?? 0);
+
     return (
         <div className="page-container animate-fade-in">
+            <PageTitle title="Ventas" />
             {/* Header */}
             <header className="page-header">
                 <div className="header-title">
                     <div className="flex items-center gap-3 mb-1">
-                        <div className="icon-badge primary shadow-glow">
+                        <div className="icon-badge primary">
                             <ShoppingBag size={20} />
                         </div>
-                        <h1>Libro de Ventas y Entregas</h1>
+                        <h1>Ventas</h1>
                     </div>
-                    <p>Centralización de operaciones comerciales, auditoría de ingresos y trazabilidad de activos entregados.</p>
+                    <p>Ventas registradas, su entrega y sus cobros.</p>
                 </div>
-                <div className="flex gap-3">
-                    <Button variant="secondary" onClick={() => refetchVentas()}>
-                        <RefreshCw size={18} className={loadingVentas ? 'animate-spin' : ''} />
+                <div className="header-actions">
+                    <Button variant="secondary" onClick={() => refetchVentas()} aria-label="Actualizar listado" title="Actualizar listado">
+                        <RefreshCw size={18} className={isFetching ? 'animate-spin' : ''} />
                     </Button>
                     {permisos.ventasOperar && (
                         <Button data-tour="ventas-nueva" variant="primary" onClick={() => { setForm(emptyForm()); setCreateOpen(true); }}>
-                            <Plus size={18} /> Registrar Nueva Transacción
+                            <Plus size={18} /> Registrar venta
                         </Button>
                     )}
                 </div>
             </header>
 
-            {/* Metrics Row */}
+            {/* Indicadores */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6" data-tour="ventas-kpis">
                 <div className="card glass stat-tile">
                     <div className="stat-tile-body">
-                        <span className="text-xs text-muted uppercase font-black tracking-tight">Ventas del Mes</span>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black">{ventasFiltradas.length}</span>
-                            <span className="text-xs text-muted font-bold">PERIODICIDAD ACTIVA</span>
-                        </div>
+                        <span className="stat-tile-label">Ventas del mes</span>
+                        <div className="text-3xl font-black tabular-nums" title={ventasMes.isError ? 'No se pudo calcular' : undefined}>{kpiNumero(ventasMes)}</div>
+                        <span className="text-xs text-muted">{mes.nombre}</span>
                     </div>
                     <TrendingUp size={64} className="stat-tile-bg" />
                 </div>
                 <div className="card glass stat-tile">
                     <div className="stat-tile-body">
-                        <span className="text-xs text-muted uppercase font-black tracking-tight">Pendientes Entrega</span>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black">{ventasFiltradas.filter(v => v.estadoEntrega === 'pendiente' || v.estadoEntrega === 'autorizada').length}</span>
-                            <span className="text-xs text-muted font-bold">UNIDADES</span>
+                        <span className="stat-tile-label">Pendientes de entrega</span>
+                        <div className="text-3xl font-black tabular-nums" title={pendientesError ? 'No se pudo calcular' : undefined}>
+                            {pendientesError ? '—' : pendientesCargando ? '…' : pendientesTotal}
                         </div>
+                        <span className="text-xs text-muted">Sin entregar ni anular</span>
                     </div>
                     <Package size={64} className="stat-tile-bg" />
                 </div>
-                <div className="card glass stat-tile col-span-1 md:col-span-2">
-                    <div className="stat-tile-body flex justify-between items-center">
-                        <div>
-                            <span className="text-xs text-muted uppercase font-black tracking-tight">Volumen Facturado (Total Filtro)</span>
-                            {/* Un solo número mezclando ARS y USD no representa ningún
-                                importe real: se muestra un renglón por moneda. */}
-                            {volumenPorMoneda.length === 0 ? (
-                                <div className="text-3xl font-black">{formatMoneda(0, 'ARS')}</div>
-                            ) : volumenPorMoneda.map(({ moneda, total }) => (
-                                <div key={moneda} className="text-3xl font-black">
-                                    {formatMoneda(total, moneda)}
-                                </div>
-                            ))}
+                {puedeVerReporte && (
+                    <div className="card glass stat-tile col-span-1 md:col-span-2">
+                        <div className="ventas-kpi-montos">
+                            <div>
+                                <span className="stat-tile-label">Vendido en el mes</span>
+                                {reporteMes.isError ? (
+                                    <p className="text-sm text-muted">No se pudo calcular. <button type="button" className="link-btn" onClick={() => reporteMes.refetch()}>Reintentar</button></p>
+                                ) : reporteMes.isLoading ? (
+                                    <div className="ventas-kpi-monto text-muted">…</div>
+                                ) : vendidoPorMoneda.length === 0 ? (
+                                    <div className="ventas-kpi-monto">{formatMoneda(0, 'ARS')}</div>
+                                ) : vendidoPorMoneda.map(({ moneda, total }) => (
+                                    <div key={moneda} className="ventas-kpi-monto">{formatMoneda(total, moneda)}</div>
+                                ))}
+                            </div>
+                            <div>
+                                <span className="stat-tile-label">Promedio por venta</span>
+                                {vendidoPorMoneda.length === 0 ? (
+                                    <div className="ventas-kpi-monto text-muted">-</div>
+                                ) : vendidoPorMoneda.map(({ moneda, total, cantidad }) => (
+                                    <div key={moneda} className="ventas-kpi-monto">{formatMoneda(Math.round(total / cantidad), moneda)}</div>
+                                ))}
+                            </div>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                            <span className="text-xs text-muted uppercase font-black tracking-tight">Promedio venta</span>
-                            {volumenPorMoneda.length === 0 ? (
-                                <p className="text-xl font-bold text-muted">-</p>
-                            ) : volumenPorMoneda.map(({ moneda, total, cantidad }) => (
-                                <p key={moneda} className="text-xl font-bold">
-                                    {formatMoneda(Math.round(total / cantidad), moneda)}
-                                </p>
-                            ))}
-                        </div>
+                        <DollarSign size={80} className="stat-tile-bg" />
                     </div>
-                    <DollarSign size={80} className="stat-tile-bg" />
-                </div>
+                )}
             </div>
 
-            {/* Filters */}
-            <div className="card glass filters-bar flex flex-wrap items-center justify-between gap-6 mb-6" data-tour="ventas-filtros">
-                <div className="flex-1">
-                    <Search size={18} className="text-muted" />
+            {/* Filtros */}
+            <div className="filters-bar filtros-comerciales" data-tour="ventas-filtros">
+                <div className="search-box">
+                    <Search size={18} className="text-muted" aria-hidden="true" />
                     <input
-                        type="text"
-                        placeholder="BUSCAR POR CLIENTE, MARCA, MODELO, DOMINIO O RESPONSABLE COMERCIAL..."
-                        className="form-input w-full"
-                        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '1rem', color: 'var(--text-primary)' }}
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
+                        type="search"
+                        placeholder="Buscar cliente, DNI, dominio, marca o modelo"
+                        aria-label="Buscar ventas"
+                        value={busqueda}
+                        onChange={e => setBusqueda(e.target.value)}
                     />
                 </div>
-                <div className="flex gap-4 items-center">
-                    <div>
-                        <label className="text-3xs font-black text-muted uppercase mb-1">Logística</label>
-                        <select className="form-input w-full" value={filterEstadoEntrega} onChange={e => { setFilterEstadoEntrega(e.target.value); setPage(1); }}>
-                            <option value="">TODAS LAS ENTREGAS</option>
-                            {Object.entries(entregaStatusMap).map(([k, v]) => <option key={k} value={k}>{v.label.toUpperCase()}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-3xs font-black text-muted uppercase mb-1">Modalidad</label>
-                        <select className="form-input w-full" value={filterFormaPago} onChange={e => { setFilterFormaPago(e.target.value); setPage(1); }}>
-                            <option value="">TODOS LOS PAGOS</option>
-                            {Object.entries(formaPagoLabels).map(([k, v]) => <option key={k} value={k}>{v.toUpperCase()}</option>)}
-                        </select>
-                    </div>
-                    <Button variant="secondary" onClick={() => { setSearch(''); setFilterEstadoEntrega(''); setFilterFormaPago(''); setPage(1); }}>
-                        <RefreshCw size={18} />
+                <select aria-label="Filtrar por estado de la entrega" value={filtros.estadoEntrega} onChange={e => setFiltro('estadoEntrega', e.target.value)}>
+                    <option value="">Entrega: todas</option>
+                    {Object.entries(ENTREGA_ESTADO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+                <select aria-label="Filtrar por forma de pago" value={filtros.formaPago} onChange={e => setFiltro('formaPago', e.target.value)}>
+                    <option value="">Forma de pago: todas</option>
+                    {Object.entries(FORMA_PAGO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+                {hayFiltros && (
+                    <Button variant="ghost" size="sm" onClick={limpiar}>
+                        <X size={16} /> Limpiar filtros
                     </Button>
-                </div>
+                )}
             </div>
 
-            <div data-tour="ventas-tabla">
-            <DataTable
-                columns={columns}
-                data={ventasFiltradas}
-                isLoading={loadingVentas}
-                onRowClick={(v) => setSelectedDetailId(v.id)}
-                currentPage={page}
-                totalPages={ventasData?.totalPages || 1}
-                onPageChange={setPage}
-                emptyMessage="Sin operaciones en este registro"
-            />
+            <div data-tour="ventas-tabla" className="listado-compacto">
+                <DataTable
+                    columns={columns}
+                    data={ventas}
+                    isLoading={loadingVentas}
+                    isError={isError}
+                    errorMessage="No se pudieron cargar las ventas"
+                    onRetry={() => refetchVentas()}
+                    onRowClick={(v) => setSelectedDetailId(v.id)}
+                    currentPage={page}
+                    totalPages={ventasData?.totalPages || 1}
+                    onPageChange={setPage}
+                    emptyMessage={hayFiltros
+                        ? 'Ninguna venta coincide con la búsqueda o los filtros'
+                        : 'Todavía no hay ventas registradas. Cargá la primera con «Registrar venta».'}
+                    emptyIcon={<ShoppingBag size={40} className="dt-empty-icon" />}
+                    onClearFilters={hayFiltros ? limpiar : undefined}
+                />
             </div>
 
-            {/* CREATE MODAL */}
+            {/* ALTA */}
             <Modal
                 isOpen={createOpen}
                 onClose={() => setCreateOpen(false)}
-                title="Certificación de Venta Automotriz"
+                title="Registrar venta"
+                subtitle="Los campos con * son obligatorios."
                 maxWidth="940px"
+                footer={(
+                    <div className="flex justify-between items-center w-full flex-wrap gap-4">
+                        <div>
+                            <p className="stat-tile-label">Precio de venta</p>
+                            <p className="text-2xl font-black tabular-nums">{formatMoneda(form.precioVenta, form.moneda)}</p>
+                            {(cuentaForm.totalPagos > 0 || cuentaForm.totalCanjes > 0) && (
+                                <p className="text-xs text-muted tabular-nums">
+                                    Cobrado {formatMoneda(cuentaForm.totalPagos, form.moneda)}
+                                    {cuentaForm.totalCanjes > 0 && ` · Canjes ${formatMoneda(cuentaForm.totalCanjes, form.moneda)}`}
+                                    {` · Saldo ${formatMoneda(cuentaForm.saldo, form.moneda)}`}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex gap-3">
+                            <Button variant="secondary" onClick={() => setCreateOpen(false)}>Cancelar</Button>
+                            <Button variant="primary" onClick={handleCreate} loading={createMutation.isPending}>Registrar venta</Button>
+                        </div>
+                    </div>
+                )}
             >
-                <div>
-                    {/* Primary IDs */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <Select dense label="Unidad Transaccionada *" className="text-lg font-bold" placeholder="SELECCIONAR UNIDAD EN STOCK..." value={form.vehiculoId || ''} onChange={e => setForm(f => ({ ...f, vehiculoId: +e.target.value }))}>
+                <div className="flex flex-col gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Select dense label="Unidad *" placeholder="Elegí una unidad publicada" value={form.vehiculoId || ''} onChange={e => elegirUnidad(+e.target.value)}
+                            hint={unidadElegida && Number(unidadElegida.precioLista) > 0 ? `Precio de lista: ${formatMoneda(unidadElegida.precioLista, unidadElegida.moneda)}` : undefined}>
                             {vehiculos.map(v => (
-                                <option key={v.id} value={v.id}>{v.marca} {v.modelo} [{v.dominio || `#${v.id} `}]</option>
+                                <option key={v.id} value={v.id}>{v.marca} {v.modelo} — {v.dominio || `#${v.id}`}</option>
                             ))}
                         </Select>
-                        <Select dense label="Titular Adquirente *" placeholder="CLIENTE RECEPTOR..." value={form.clienteId || ''} onChange={e => setForm(f => ({ ...f, clienteId: +e.target.value }))}>
-                            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre.toUpperCase()}</option>)}
+                        <Select dense label="Cliente *" placeholder="Elegí el cliente" value={form.clienteId || ''} onChange={e => setForm(f => ({ ...f, clienteId: +e.target.value }))}>
+                            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                         </Select>
-                        <Select dense label="Oficial de Venta *" placeholder="GESTIONADO POR..." value={form.vendedorId || ''} onChange={e => setForm(f => ({ ...f, vendedorId: +e.target.value }))}>
-                            {vendedores.map(u => <option key={u.id} value={u.id}>{u.nombre.toUpperCase()}</option>)}
-                        </Select>
-                    </div>
-
-                    {/* Financial Details */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <Select dense label="Sucursal de Venta *" placeholder="SELECCIONAR SUCURSAL..." value={form.sucursalId || ''} onChange={e => setForm(f => ({ ...f, sucursalId: +e.target.value }))}>
-                            {sucursalesData?.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
-                        </Select>
-                        <Input dense label="Fecha Contable" type="date" value={form.fechaVenta} onChange={e => setForm(f => ({ ...f, fechaVenta: e.target.value }))} />
-                        <Input dense label="Precio de Cierre *" type="number" className="font-black" icon={<DollarSign size={16} className="text-accent" />} value={form.precioVenta || ''}
-                            onChange={e => setForm(f => ({ ...f, precioVenta: +e.target.value }))} placeholder="0.00" />
-                        <Select dense label="Divisa" value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
-                            <option value="ARS">PESOS (ARS)</option>
-                            <option value="USD">DÓLARES (USD)</option>
-                        </Select>
-                        <Select dense label="Modalidad Liquidación" value={form.formaPago} onChange={e => setForm(f => ({ ...f, formaPago: e.target.value as FormaPagoVenta }))}>
-                            {Object.entries(formaPagoLabels).map(([k, lbl]) => <option key={k} value={k}>{lbl.toUpperCase()}</option>)}
+                        <Select dense label="Vendedor *" placeholder="Elegí el vendedor" value={form.vendedorId || ''} onChange={e => setForm(f => ({ ...f, vendedorId: +e.target.value }))}>
+                            {vendedores.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
                         </Select>
                     </div>
 
-                    {/* Payment Breakdown */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <Select dense label="Sucursal *" placeholder="Elegí la sucursal" value={form.sucursalId || ''} onChange={e => setForm(f => ({ ...f, sucursalId: +e.target.value }))}>
+                            {sucursalesData?.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                        </Select>
+                        <Input dense label="Fecha de venta *" type="date" value={form.fechaVenta} onChange={e => setForm(f => ({ ...f, fechaVenta: e.target.value }))} />
+                        <Input dense label="Precio de venta *" type="number" min="0" className="font-bold tabular-nums" icon={<DollarSign size={16} />} value={form.precioVenta || ''}
+                            onChange={e => setForm(f => ({ ...f, precioVenta: +e.target.value }))} placeholder="0"
+                            hint={form.precioVenta > 0 ? formatMoneda(form.precioVenta, form.moneda) : undefined} />
+                        <Select dense label="Moneda *" value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
+                            <option value="ARS">Pesos ($)</option>
+                            <option value="USD">Dólares (US$)</option>
+                        </Select>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <Select dense label="Forma de pago *" value={form.formaPago} onChange={e => setForm(f => ({ ...f, formaPago: e.target.value as FormaPagoVenta }))}>
+                            {Object.entries(FORMA_PAGO_LABEL).map(([k, lbl]) => <option key={k} value={k}>{lbl}</option>)}
+                        </Select>
+                    </div>
+
+                    {/* Pagos */}
                     <div>
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-black uppercase text-accent tracking-widest flex items-center gap-2">
-                                <DollarSign size={14} /> Desglose de Cobros y Entregas
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-bold flex items-center gap-2">
+                                <DollarSign size={14} /> Pagos recibidos
                             </h3>
                             <Button variant="secondary" size="sm" onClick={handleAddPago}>
-                                <Plus size={14} /> Añadir Pago
+                                <Plus size={14} /> Agregar pago
                             </Button>
                         </div>
+                        {form.pagos.length === 0 && <p className="text-xs text-muted">Sin pagos cargados. Podés agregarlos después desde el detalle de la venta.</p>}
                         {form.pagos.map((p, i) => (
-                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4">
-                                <Input dense containerClassName="mb-0 md:col-span-3" label="Importe Recibido" type="number" className="font-bold" value={p.monto || ''}
-                                    onChange={e => {
-                                        const newPagos = [...form.pagos];
-                                        newPagos[i].monto = +e.target.value;
-                                        setForm(f => ({ ...f, pagos: newPagos }));
-                                    }} />
-                                <Select dense containerClassName="mb-0 md:col-span-3" label="Vía Canal" value={p.metodo} onChange={e => {
-                                    const newPagos = [...form.pagos];
-                                    newPagos[i].metodo = e.target.value as 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
-                                    setForm(f => ({ ...f, pagos: newPagos }));
-                                }}>
-                                    {Object.entries(metodoLabels).map(([k, lbl]) => <option key={k} value={k}>{lbl.toUpperCase()}</option>)}
+                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end mb-2">
+                                <Input dense containerClassName="mb-0 md:col-span-3" label="Monto" type="number" min="0" className="tabular-nums" value={p.monto || ''}
+                                    onChange={e => updPago(i, { monto: +e.target.value })} />
+                                <Select dense containerClassName="mb-0 md:col-span-3" label="Medio de pago" value={p.metodo} onChange={e => updPago(i, { metodo: e.target.value as MetodoPago })}>
+                                    {Object.entries(METODO_PAGO_LABEL).map(([k, lbl]) => <option key={k} value={k}>{lbl}</option>)}
                                 </Select>
-                                <Input dense containerClassName="mb-0 md:col-span-5" label="Certificación / Tracking" type="text" className="italic" value={p.referencia}
-                                    onChange={e => {
-                                        const newPagos = [...form.pagos];
-                                        newPagos[i].referencia = e.target.value;
-                                        setForm(f => ({ ...f, pagos: newPagos }));
-                                    }} placeholder="NRO DE RECIBO, CBU, CHEQUE..." />
-                                <div className="md:col-span-1">
-                                    <button className="w-full flex items-center justify-center text-danger" onClick={() => {
-                                        setForm(f => ({ ...f, pagos: f.pagos.filter((_, j) => j !== i) }));
-                                    }}>
-                                        <X size={18} />
+                                <Input dense containerClassName="mb-0 md:col-span-5" label="Referencia" type="text" value={p.referencia}
+                                    onChange={e => updPago(i, { referencia: e.target.value })} placeholder="N° de recibo, de transferencia o de cheque" />
+                                <div className="md:col-span-1 flex justify-end">
+                                    <button type="button" className="icon-btn danger" aria-label={`Quitar el pago ${i + 1}`} title="Quitar pago"
+                                        onClick={() => setForm(f => ({ ...f, pagos: f.pagos.filter((_, j) => j !== i) }))}>
+                                        <X size={16} />
                                     </button>
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    {/* Canjes Section */}
+                    {/* Canjes */}
                     <div>
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-black uppercase text-warning tracking-widest flex items-center gap-2">
-                                <ArrowRightLeft size={14} /> Permuta / Toma de Activos
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-bold flex items-center gap-2">
+                                <ArrowRightLeft size={14} /> Canje (unidad que entrega el cliente)
                             </h3>
                             <Button variant="secondary" size="sm" onClick={handleAddCanje}>
-                                <Plus size={14} /> Incorporar Unidad
+                                <Plus size={14} /> Agregar canje
                             </Button>
                         </div>
+                        {form.canjes.length === 0 && <p className="text-xs text-muted">Sin canje. La unidad que entrega el cliente tiene que estar cargada en Vehículos.</p>}
                         {form.canjes.map((c, i) => (
-                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4">
-                                <Select dense containerClassName="mb-0 md:col-span-8" label="Vehículo para incorporar al Stock" placeholder="RECONOCIMIENTO DE UNIDAD EXISTENTE..." value={c.vehiculoCanjeId || ''} onChange={e => {
-                                    const newCanjes = [...form.canjes];
-                                    newCanjes[i].vehiculoCanjeId = +e.target.value;
-                                    setForm(f => ({ ...f, canjes: newCanjes }));
-                                }}>
+                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end mb-2">
+                                <Select dense containerClassName="mb-0 md:col-span-8" label="Unidad del canje" placeholder="Elegí la unidad" value={c.vehiculoCanjeId || ''} onChange={e => updCanje(i, { vehiculoCanjeId: +e.target.value })}>
                                     {todosVehiculos.map(v => (
-                                        <option key={v.id} value={v.id}>{v.marca} {v.modelo} [{v.dominio || `#${v.id}`}]</option>
+                                        <option key={v.id} value={v.id}>{v.marca} {v.modelo} — {v.dominio || `#${v.id}`}</option>
                                     ))}
                                 </Select>
-                                <Input dense containerClassName="mb-0 md:col-span-3" label="Acreditación" type="number" className="font-black text-danger" value={c.valorTomado || ''}
-                                    onChange={e => {
-                                        const newCanjes = [...form.canjes];
-                                        newCanjes[i].valorTomado = +e.target.value;
-                                        setForm(f => ({ ...f, canjes: newCanjes }));
-                                    }} />
-                                <div className="md:col-span-1">
-                                    <button className="w-full flex items-center justify-center text-danger" onClick={() => {
-                                        setForm(f => ({ ...f, canjes: f.canjes.filter((_, j) => j !== i) }));
-                                    }}>
-                                        <X size={18} />
+                                <Input dense containerClassName="mb-0 md:col-span-3" label="Valor de toma" type="number" min="0" className="tabular-nums" value={c.valorTomado || ''}
+                                    onChange={e => updCanje(i, { valorTomado: +e.target.value })} />
+                                <div className="md:col-span-1 flex justify-end">
+                                    <button type="button" className="icon-btn danger" aria-label={`Quitar el canje ${i + 1}`} title="Quitar canje"
+                                        onClick={() => setForm(f => ({ ...f, canjes: f.canjes.filter((_, j) => j !== i) }))}>
+                                        <X size={16} />
                                     </button>
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    <Textarea dense label="Notas Adicionales (Protocolo de Venta)" rows={2} value={form.observaciones}
-                        onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} placeholder="DETALLES DE GESTORÍA, DOCUMENTACIÓN PENDIENTE..." />
-
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <p className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Impacto de Caja Final</p>
-                            <p className="text-3xl font-black">{formatMoneda(form.precioVenta, form.moneda)}</p>
-                        </div>
-                        <div className="flex gap-4">
-                            <Button variant="secondary" onClick={() => setCreateOpen(false)}>Abortar</Button>
-                            <Button variant="primary" className="shadow-glow" onClick={handleCreate} loading={createMutation.isPending}>Acreditar y Cerrar Venta</Button>
-                        </div>
-                    </div>
+                    <Textarea dense label="Observaciones" rows={2} value={form.observaciones}
+                        onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} placeholder="Gestoría, documentación pendiente, acuerdos con el cliente…" />
                 </div>
             </Modal>
 
-            {/* DETAIL MODAL (AUDITORÍA) */}
+            {/* DETALLE */}
             <Modal
                 isOpen={!!selectedDetailId}
                 onClose={() => { setSelectedDetailId(null); }}
-                title={detail ? `CONTRATO #${String(detail.id).padStart(5, '0')} ` : 'Cargando...'}
+                title={selectedDetailId ? `Venta N° ${nroVenta(selectedDetailId)}` : 'Venta'}
                 maxWidth="900px"
+                footer={detail ? (
+                    <div className="flex justify-end gap-3 w-full flex-wrap">
+                        <Button variant="secondary" onClick={handleImprimirRecibo} loading={imprimiendo}>
+                            <Printer size={16} /> Imprimir recibo
+                        </Button>
+                        <Button variant="secondary" onClick={() => setSelectedDetailId(null)}>Cerrar</Button>
+                    </div>
+                ) : undefined}
             >
-                {loadingDetail || !detail ? (
-                    <div className="text-center"><RefreshCw className="animate-spin text-accent mb-4" size={48} /><p className="text-xs font-black text-muted uppercase tracking-widest">Consolidando expediente de venta...</p></div>
+                {detailError ? (
+                    <div className="dt-empty">
+                        <p className="dt-empty-text">No se pudo cargar la venta.</p>
+                        <Button variant="secondary" size="sm" onClick={() => refetchDetail()}>Reintentar</Button>
+                    </div>
+                ) : loadingDetail || !detail ? (
+                    <div className="text-center"><RefreshCw className="animate-spin text-accent mb-4" size={40} aria-hidden="true" /><p className="text-sm text-muted">Cargando la venta…</p></div>
                 ) : (
-                    <div>
-                        <header className="flex justify-between items-start">
-                            <div className="flex items-center gap-6">
-                                <div className="flex items-center justify-center">
-                                    <ShoppingBag size={32} />
-                                </div>
-                                <div>
-                                    <div className="flex items-center gap-3 mb-1">
-                                        <Badge variant={entregaStatusMap[detail.estadoEntrega]?.variant ?? 'default'}>
-                                            LOGÍSTICA: {entregaStatusMap[detail.estadoEntrega]?.label.toUpperCase()}
-                                        </Badge>
-                                    </div>
-                                    <p className="text-accent font-bold flex items-center gap-2 text-sm">
-                                        <Car size={16} /> {detail.vehiculo?.marca?.toUpperCase()} {detail.vehiculo?.modelo?.toUpperCase()} [{detail.vehiculo?.dominio || 'S/DOMINIO'}]
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex gap-3">
-                                <button className="text-muted" title="Imprimir Recibo">
-                                    <Printer size={20} />
-                                </button>
-                            </div>
-                        </header>
+                    <div className="flex flex-col gap-6">
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <Badge variant={rotuloEstado(ENTREGA_ESTADO, detail.estadoEntrega).variant}>
+                                Entrega: {rotuloEstado(ENTREGA_ESTADO, detail.estadoEntrega).label}
+                            </Badge>
+                            <p className="font-bold flex items-center gap-2 text-sm">
+                                <Car size={16} aria-hidden="true" /> {detail.vehiculo?.marca} {detail.vehiculo?.modelo} · {detail.vehiculo?.dominio || 'sin dominio'}
+                            </p>
+                        </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                             <div>
-                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Fecha Operación</span>
-                                <p className="text-lg font-bold">{formatFecha(detail.fechaVenta)}</p>
+                                <span className="stat-tile-label">Fecha de venta</span>
+                                <p className="text-lg font-bold tabular-nums">{formatFecha(detail.fechaVenta)}</p>
                             </div>
                             <div>
-                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Sucursal Radicación</span>
-                                <p className="text-lg font-bold truncate">{detail.sucursal?.nombre || 'CENTRAL'}</p>
+                                <span className="stat-tile-label">Sucursal</span>
+                                <p className="text-lg font-bold truncate">{nombreSucursal(detail.sucursalId) || '-'}</p>
                             </div>
                             <div>
-                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Aforo Venta</span>
-                                <p className="text-xl font-black text-accent">{formatMoneda(detail.precioVenta, detail.moneda)}</p>
+                                <span className="stat-tile-label">Precio de venta</span>
+                                <p className="text-xl font-black tabular-nums">{formatMoneda(detail.precioVenta, detail.moneda)}</p>
                             </div>
                             <div>
-                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Modalidad</span>
-                                <p className="text-xs font-black uppercase italic">{formaPagoLabels[detail.formaPago] || detail.formaPago}</p>
+                                <span className="stat-tile-label">Forma de pago</span>
+                                <p className="text-sm font-bold">{FORMA_PAGO_LABEL[detail.formaPago] || detail.formaPago}</p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div>
-                                <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
-                                    <User size={14} className="text-accent" /> Partes Involucradas
+                                <h3 className="text-sm font-bold flex items-center gap-2 mb-2">
+                                    <User size={14} aria-hidden="true" /> Cliente y vendedor
                                 </h3>
-                                <div>
-                                    <div>
-                                        <span className="text-3xs font-black text-muted mb-1 uppercase">Comprador</span>
-                                        <p className="font-bold">{detail.cliente?.nombre?.toUpperCase() || 'N/A'}</p>
-                                        <p className="text-xs text-muted">{detail.cliente?.email || 'SIN EMAIL'}</p>
-                                    </div>
-                                    <div>
-                                        <span className="text-3xs font-black text-muted mb-1 uppercase">Responsable Comercial</span>
-                                        <p className="font-bold italic">{detail.vendedor?.nombre?.toUpperCase() || 'NO ASIGNADO'}</p>
-                                    </div>
-                                </div>
+                                <span className="stat-tile-label">Cliente</span>
+                                <p className="font-bold">{detail.cliente?.nombre || '-'}</p>
+                                <p className="text-xs text-muted mb-3">{detail.cliente?.email || 'Sin email'}</p>
+                                <span className="stat-tile-label">Vendedor</span>
+                                <p className="font-bold">{detail.vendedor?.nombre || 'Sin asignar'}</p>
                             </div>
 
                             <div>
-                                <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
-                                    <MapPin size={14} className="text-warning" /> Trazabilidad Logística
+                                <h3 className="text-sm font-bold flex items-center gap-2 mb-2">
+                                    <MapPin size={14} aria-hidden="true" /> Entrega
                                 </h3>
-                                <div>
-                                    {transicionesVisibles.length > 0 ? (
-                                        <div>
-                                            <p className="text-xs text-secondary italic mb-4">Acciones de auditoría requeridas para el flujo de entrega:</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {transicionesVisibles.map(t => (
-                                                    <Button
-                                                        key={t.next}
-                                                        variant={t.next === 'cancelada' ? 'danger' : t.next === 'entregada' ? 'primary' : 'secondary'}
-                                                        size="sm"
-                                                        className="flex-1"
-                                                        onClick={() => handleEstadoEntrega(detail.id, t.next)}
-                                                    >
-                                                        {t.label.toUpperCase()}
-                                                    </Button>
-                                                ))}
-                                            </div>
+                                {transicionesVisibles.length > 0 ? (
+                                    <div>
+                                        <p className="text-xs text-secondary mb-3">Próximo paso de la entrega:</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {transicionesVisibles.map(t => (
+                                                <Button
+                                                    key={t.next}
+                                                    variant={t.next === 'cancelada' ? 'danger' : t.next === 'entregada' ? 'primary' : 'secondary'}
+                                                    size="sm"
+                                                    loading={changeEstadoEntregaMutation.isPending && changeEstadoEntregaMutation.variables?.estadoEntrega === t.next}
+                                                    onClick={() => handleEstadoEntrega(detail, t)}
+                                                >
+                                                    {t.label}
+                                                </Button>
+                                            ))}
                                         </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center justify-center p-4 text-center">
-                                            <CheckCircle2 size={32} className="text-success mb-2" />
-                                            <p className="text-xs font-bold uppercase italic">Ciclo operativo concluido</p>
-                                        </div>
-                                    )}
-                                </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <CheckCircle2 size={20} className="text-success" aria-hidden="true" />
+                                        <span>{detail.estadoEntrega === 'entregada' ? 'Unidad entregada.' : detail.estadoEntrega === 'cancelada' ? 'Venta anulada.' : 'No hay pasos de entrega disponibles para tu usuario.'}</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
                         <div>
-                            <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
-                                <DollarSign size={14} className="text-accent" /> Detalle de Ingresos Conciliados
+                            <h3 className="text-sm font-bold flex items-center gap-2 mb-2">
+                                <DollarSign size={14} aria-hidden="true" /> Pagos y canjes
                             </h3>
                             <div className="table-container">
                                 <table className="data-table">
                                     <thead>
                                         <tr>
-                                            <th>Identificador</th>
-                                            <th>Canal / Vía</th>
-                                            <th>Referencia Auditoría</th>
-                                            <th style={{ textAlign: 'right' }}>Importe Efectivo</th>
+                                            <th>Concepto</th>
+                                            <th>Medio</th>
+                                            <th>Referencia</th>
+                                            <th style={{ textAlign: 'right' }}>Monto</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {detail.pagos && detail.pagos.length > 0 ? detail.pagos.map((p) => (
-                                            <tr key={p.id}>
-                                                <td className="font-mono text-3xs text-muted">PAG-{p.id}</td>
-                                                <td><Badge variant="default">{metodoLabels[p.metodo]?.toUpperCase() || p.metodo.toUpperCase()}</Badge></td>
-                                                <td className="text-xs italic text-muted">{p.referencia || '-'}</td>
-                                                <td style={{ textAlign: 'right' }} className="font-black">{formatMoneda(p.monto, detail.moneda)}</td>
-                                            </tr>
-                                        )) : (
-                                            <tr><td colSpan={4} className="text-center text-xs italic text-muted">No se registran pagos individuales (Ingreso Contado Total)</td></tr>
+                                        {(detail.pagos?.length ?? 0) === 0 && (detail.canjes?.length ?? 0) === 0 && (
+                                            <tr><td colSpan={4} className="text-center text-sm text-muted">Todavía no hay pagos ni canjes registrados.</td></tr>
                                         )}
+                                        {detail.pagos?.map((p) => (
+                                            <tr key={`p-${p.id}`}>
+                                                <td>Pago</td>
+                                                <td><Badge variant="default">{METODO_PAGO_LABEL[p.metodo] ?? p.metodo}</Badge></td>
+                                                <td className="text-xs text-muted">{p.referencia || '-'}</td>
+                                                <td style={{ textAlign: 'right' }} className="font-bold tabular-nums">{formatMoneda(p.monto, detail.moneda)}</td>
+                                            </tr>
+                                        ))}
                                         {detail.canjes?.map((c) => (
-                                            <tr key={c.id}>
-                                                <td className="font-mono text-3xs text-warning">CAN-{c.id}</td>
-                                                <td><Badge variant="warning">TOMA UNIDAD</Badge></td>
-                                                <td className="text-xs italic font-bold uppercase">ID-VEHÍCULO: {c.vehiculoCanjeId}</td>
-                                                <td style={{ textAlign: 'right' }} className="font-black text-warning">{formatMoneda(-Number(c.valorTomado), detail.moneda)}</td>
+                                            <tr key={`c-${c.id}`}>
+                                                <td>Canje</td>
+                                                <td><Badge variant="warning">Unidad</Badge></td>
+                                                <td className="text-xs">{descripcionUnidad(c.vehiculoCanjeId)}</td>
+                                                <td style={{ textAlign: 'right' }} className="font-bold tabular-nums">{formatMoneda(c.valorTomado, detail.moneda)}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -792,26 +855,32 @@ const VentasPage = () => {
                         </div>
 
                         {detail.observaciones && (
-                            <div className="italic text-xs text-secondary">
-                                <span className="font-black text-muted mb-2 uppercase tracking-widest">Anotaciones de Auditoría:</span>
-                                "{detail.observaciones}"
+                            <div className="text-sm text-secondary">
+                                <span className="stat-tile-label">Observaciones</span>
+                                <p style={{ whiteSpace: 'pre-line' }}>{detail.observaciones}</p>
                             </div>
                         )}
 
                         {/* Facturación electrónica AFIP */}
                         <VentaFacturaPanel ventaId={detail.id} />
 
-                        {/* Sub-recursos: Pagos, Extras, Canjes */}
+                        {/* Pagos, extras y canjes: alta y baja */}
                         <div>
-                            <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
-                                <DollarSign size={14} className="text-accent" /> Gestión de Sub-recursos
+                            <h3 className="text-sm font-bold flex items-center gap-2 mb-2">
+                                <DollarSign size={14} aria-hidden="true" /> Cargar o quitar pagos, extras y canjes
                             </h3>
-                            <VentaSubResources ventaId={detail.id} />
+                            <VentaSubResources ventaId={detail.id} moneda={detail.moneda} />
                         </div>
                     </div>
                 )}
             </Modal>
 
+            <style>{`
+                .ventas-kpi-montos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+                /* Tamaño fluido: a 1280 px el promedio entra entero (antes se cortaba en "$17.700.00…"). */
+                .ventas-kpi-monto { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.1rem, 1.6vw, 1.75rem); line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; }
+                .link-btn { background: none; border: none; padding: 0; color: var(--accent-hover, var(--accent)); text-decoration: underline; cursor: pointer; font: inherit; }
+            `}</style>
         </div>
     );
 };

@@ -16,6 +16,10 @@ import { clientesApi } from '../../api/clientes.api';
 import { vehiculosApi } from '../../api/vehiculos.api';
 import { useUIStore } from '../../store/uiStore';
 import { FileUploader } from '../../components/ui/FileUploader';
+import PageTitle from '../../components/ui/PageTitle';
+import { useConfirm } from '../../hooks/useConfirm';
+import { formatFecha } from '../../utils/fecha';
+import { formatMoneda } from '../../utils/moneda';
 
 // ─── Estado mappings ──────────────────────────────────────────────────────────
 const ESTADO_SOL_LABELS: Record<EstadoSolicitud, string> = {
@@ -70,15 +74,20 @@ const etiquetaVehiculo = (v?: VehiculoRef | null): string => {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const fmt = (v?: string | number | null) =>
-    v != null ? Number(v).toLocaleString('es-AR', { minimumFractionDigits: 0 }) : '-';
+/** Monto pedido/aprobado. La solicitud no guarda moneda: se asume pesos. */
+const fmt = (v?: string | number | null) => (v != null ? formatMoneda(v, 'ARS') : '-');
 
+/** Fecha y hora reales (alta, envío): se muestran en la hora local. */
 const fmtDate = (d?: string | null) =>
     d ? new Date(d).toLocaleDateString('es-AR') : '-';
+
+/** Fecha de respuesta: se carga como día de calendario, sin corrimiento de zona. */
+const fmtDia = (d?: string | null) => formatFecha(d);
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function FinanciacionExternaPage() {
     const addToast = useUIStore((s) => s.addToast);
+    const confirm = useConfirm();
 
     // ─ tabs ─
     const [tab, setTab] = useState<'solicitudes' | 'financieras'>('solicitudes');
@@ -88,6 +97,7 @@ export default function FinanciacionExternaPage() {
     // ─────────────────────────────────────────────────────────────────────────
     const [financieras, setFinancieras] = useState<Financiera[]>([]);
     const [loadingFin, setLoadingFin] = useState(false);
+    const [errorFin, setErrorFin] = useState(false);
     const [filterTipo, setFilterTipo] = useState('');
     const [filterActivo, setFilterActivo] = useState('');
 
@@ -105,7 +115,9 @@ export default function FinanciacionExternaPage() {
     // ─────────────────────────────────────────────────────────────────────────
     const [solicitudes, setSolicitudes] = useState<SolicitudFinanciacion[]>([]);
     const [loadingSol, setLoadingSol] = useState(false);
+    const [errorSol, setErrorSol] = useState(false);
     const [stats, setStats] = useState({ enTramite: 0, aprobadas: 0, rechazadas: 0 });
+    const [statsError, setStatsError] = useState(false);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [searchSol, setSearchSol] = useState('');
@@ -147,6 +159,7 @@ export default function FinanciacionExternaPage() {
     // ─────────────────────────────────────────────────────────────────────────
     const loadFinancieras = useCallback(async () => {
         setLoadingFin(true);
+        setErrorFin(false);
         try {
             const res = await financierasApi.getAll() as { results?: Financiera[] } | Financiera[];
             const raw = Array.isArray(res) ? res : res?.results ?? [];
@@ -154,17 +167,18 @@ export default function FinanciacionExternaPage() {
             setFinancieras(arr);
             setFinancierasCatalog(arr.filter(f => f.activo));
         } catch {
-            addToast('Error al cargar financieras', 'error');
+            setErrorFin(true);
         } finally {
             setLoadingFin(false);
         }
-    }, [addToast]);
+    }, []);
 
     // ─────────────────────────────────────────────────────────────────────────
     // LOAD SOLICITUDES
     // ─────────────────────────────────────────────────────────────────────────
     const loadSolicitudes = useCallback(async () => {
         setLoadingSol(true);
+        setErrorSol(false);
         try {
             const params: Record<string, unknown> = { page, limit: 20 };
             if (filterEstado) params.estado = filterEstado;
@@ -174,11 +188,11 @@ export default function FinanciacionExternaPage() {
             setSolicitudes(Array.isArray(raw) ? raw : []);
             setTotalPages(res?.totalPages ?? 1);
         } catch {
-            addToast('Error al cargar solicitudes', 'error');
+            setErrorSol(true);
         } finally {
             setLoadingSol(false);
         }
-    }, [page, filterEstado, filterFinanciera, addToast]);
+    }, [page, filterEstado, filterFinanciera]);
 
     // Conteos por estado. Se piden con limit=1 y se lee `totalResults`, que es el
     // total real del backend y no lo que entró en la página actual.
@@ -193,8 +207,11 @@ export default function FinanciacionExternaPage() {
                 contar('aprobada'), contar('rechazada'),
             ]);
             setStats({ enTramite: borrador + enviada + pendiente, aprobadas, rechazadas });
+            setStatsError(false);
         } catch {
-            // Los contadores son informativos: si fallan, no se rompe la página.
+            // Los contadores son informativos: si fallan, no se rompe la página,
+            // pero tampoco se muestra un 0 que no es cierto.
+            setStatsError(true);
         }
     }, []);
 
@@ -207,7 +224,7 @@ export default function FinanciacionExternaPage() {
             const res = await solicitudesFinanciacionApi.listArchivos(solicitudId);
             setArchivosSol(Array.isArray(res) ? res : []);
         } catch {
-            addToast('Error al cargar archivos', 'error');
+            addToast('No se pudieron cargar los archivos de la solicitud', 'error');
         } finally {
             setLoadingArchivosSol(false);
         }
@@ -218,16 +235,25 @@ export default function FinanciacionExternaPage() {
         else setArchivosSol([]);
     }, [detailSolicitud, loadArchivosSol]);
 
-    const handleDeleteArchivoSol = async (archivo: SolicitudArchivo) => {
+    const handleDeleteArchivoSol = (archivo: SolicitudArchivo) => {
         const label = archivo.originalName ?? archivo.descripcion ?? `Archivo ${archivo.id}`;
-        if (!detailSolicitud || !window.confirm(`¿Eliminar el archivo "${label}"?`)) return;
-        try {
-            await solicitudesFinanciacionApi.deleteArchivo(detailSolicitud.id, archivo.id);
-            addToast('Archivo eliminado', 'success');
-            setArchivosSol(prev => prev.filter(a => a.id !== archivo.id));
-        } catch {
-            addToast('Error al eliminar archivo', 'error');
-        }
+        if (!detailSolicitud) return;
+        const solicitudId = detailSolicitud.id;
+        return confirm({
+            title: 'Eliminar archivo',
+            message: `¿Eliminar el archivo "${label}"? No se puede deshacer.`,
+            type: 'danger',
+            confirmLabel: 'Eliminar',
+            onConfirm: async () => {
+                try {
+                    await solicitudesFinanciacionApi.deleteArchivo(solicitudId, archivo.id);
+                    addToast('Archivo eliminado', 'success');
+                    setArchivosSol(prev => prev.filter(a => a.id !== archivo.id));
+                } catch {
+                    addToast('No se pudo eliminar el archivo', 'error');
+                }
+            },
+        });
     };
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -284,7 +310,7 @@ export default function FinanciacionExternaPage() {
     };
 
     const handleSaveFinanciera = async () => {
-        if (!finForm.nombre.trim()) { addToast('Nombre es obligatorio', 'error'); return; }
+        if (!finForm.nombre.trim()) { addToast('El nombre es obligatorio', 'error'); return; }
         setSubmittingFin(true);
         try {
             if (editingFinanciera) {
@@ -297,7 +323,7 @@ export default function FinanciacionExternaPage() {
             setShowFinancieraModal(false);
             loadFinancieras();
         } catch {
-            addToast('Error al guardar financiera', 'error');
+            addToast('No se pudo guardar la financiera', 'error');
         } finally {
             setSubmittingFin(false);
         }
@@ -311,7 +337,7 @@ export default function FinanciacionExternaPage() {
             setDeletingFinanciera(null);
             loadFinancieras();
         } catch {
-            addToast('Error al eliminar financiera', 'error');
+            addToast('No se pudo eliminar la financiera', 'error');
         }
     };
 
@@ -320,7 +346,7 @@ export default function FinanciacionExternaPage() {
     // ─────────────────────────────────────────────────────────────────────────
     const handleCreateSolicitud = async () => {
         if (!solForm.clienteId || !solForm.financieraId) {
-            addToast('Cliente y Financiera son obligatorios', 'error'); return;
+            addToast('Elegí el cliente y la financiera', 'error'); return;
         }
         setSubmittingSol(true);
         try {
@@ -341,7 +367,7 @@ export default function FinanciacionExternaPage() {
             loadSolicitudes();
             loadStats();
         } catch {
-            addToast('Error al crear solicitud', 'error');
+            addToast('No se pudo crear la solicitud', 'error');
         } finally {
             setSubmittingSol(false);
         }
@@ -369,7 +395,7 @@ export default function FinanciacionExternaPage() {
             loadSolicitudes();
             loadStats();
         } catch {
-            addToast('Error al actualizar estado', 'error');
+            addToast('No se pudo cambiar el estado', 'error');
         } finally {
             setSubmittingSol(false);
         }
@@ -384,7 +410,7 @@ export default function FinanciacionExternaPage() {
             loadSolicitudes();
             loadStats();
         } catch {
-            addToast('Error al eliminar solicitud', 'error');
+            addToast('No se pudo eliminar la solicitud', 'error');
         }
     };
 
@@ -413,6 +439,7 @@ export default function FinanciacionExternaPage() {
     // ─────────────────────────────────────────────────────────────────────────
     return (
         <div className="page-container animate-fade-in">
+            <PageTitle title="Financiación externa" />
             {/* Header */}
             <header className="page-header">
                 <div className="header-title">
@@ -420,16 +447,16 @@ export default function FinanciacionExternaPage() {
                         <div className="icon-badge primary shadow-glow">
                             <Landmark size={20} />
                         </div>
-                        <h1>Financiación Externa</h1>
+                        <h1>Financiación externa</h1>
                     </div>
                     <p>Solicitudes de crédito a bancos y financieras, y seguimiento de su aprobación.</p>
                 </div>
                 <div className="flex gap-3">
-                    <Button variant="secondary" onClick={() => tab === 'solicitudes' ? loadSolicitudes() : loadFinancieras()}>
+                    <Button variant="secondary" aria-label="Actualizar" title="Actualizar" onClick={() => tab === 'solicitudes' ? loadSolicitudes() : loadFinancieras()}>
                         <RefreshCw size={18} className={(tab === 'solicitudes' ? loadingSol : loadingFin) ? 'animate-spin' : ''} />
                     </Button>
                     <Button variant="primary" onClick={tab === 'solicitudes' ? () => setShowSolModal(true) : openCreateFinanciera}>
-                        <Plus size={18} /> {tab === 'solicitudes' ? 'Nueva Solicitud' : 'Nueva Financiera'}
+                        <Plus size={18} /> {tab === 'solicitudes' ? 'Nueva solicitud' : 'Nueva financiera'}
                     </Button>
                 </div>
             </header>
@@ -441,32 +468,32 @@ export default function FinanciacionExternaPage() {
                 <div className="card glass stat-tile">
                     <span className="stat-tile-label" style={{ color: 'var(--info)' }}>En trámite</span>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-black">{stats.enTramite}</span>
-                        <span className="text-xs text-muted font-bold">SOLICITUDES</span>
+                        <span className="text-3xl font-black tabular-nums">{statsError ? '—' : stats.enTramite}</span>
+                        <span className="text-xs text-muted">borrador, enviadas o pendientes</span>
                     </div>
                     <Clock size={60} className="stat-tile-bg" />
                 </div>
                 <div className="card glass stat-tile">
                     <span className="stat-tile-label" style={{ color: 'var(--success)' }}>Aprobadas</span>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-black">{stats.aprobadas}</span>
-                        <span className="text-xs text-muted font-bold">SOLICITUDES</span>
+                        <span className="text-3xl font-black tabular-nums">{statsError ? '—' : stats.aprobadas}</span>
+                        <span className="text-xs text-muted">solicitudes</span>
                     </div>
                     <CheckCircle size={60} className="stat-tile-bg" />
                 </div>
                 <div className="card glass stat-tile">
                     <span className="stat-tile-label" style={{ color: 'var(--danger)' }}>Rechazadas</span>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-black">{stats.rechazadas}</span>
-                        <span className="text-xs text-muted font-bold">SOLICITUDES</span>
+                        <span className="text-3xl font-black tabular-nums">{statsError ? '—' : stats.rechazadas}</span>
+                        <span className="text-xs text-muted">solicitudes</span>
                     </div>
                     <XCircle size={60} className="stat-tile-bg" />
                 </div>
                 <div className="card glass stat-tile">
                     <span className="stat-tile-label" style={{ color: 'var(--accent-2)' }}>Entidades activas</span>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-black">{financieras.filter(f => f.activo).length}</span>
-                        <span className="text-xs text-muted font-bold">BANCOS / FIN.</span>
+                        <span className="text-3xl font-black tabular-nums">{errorFin ? '—' : financieras.filter(f => f.activo).length}</span>
+                        <span className="text-xs text-muted">bancos y financieras</span>
                     </div>
                     <Landmark size={60} className="stat-tile-bg" />
                 </div>
@@ -500,30 +527,31 @@ export default function FinanciacionExternaPage() {
                     {/* Filters */}
                     <div className="card glass filters-bar">
                         <div className="search-box">
-                            <Search size={18} className="text-muted" />
+                            <Search size={18} className="text-muted" aria-hidden="true" />
                             <input
-                                type="text"
-                                placeholder="Buscar cliente / financiera..."
+                                type="search"
+                                aria-label="Buscar en esta página"
+                                placeholder="Buscar en esta página: cliente, financiera o unidad"
                                 value={searchSol}
                                 onChange={e => setSearchSol(e.target.value)}
                                 className="w-full text-sm font-medium"
                             />
                         </div>
-                        <select value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }}>
-                            <option value="">Todos los estados</option>
+                        <select aria-label="Filtrar por estado" value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }}>
+                            <option value="">Estado: todos</option>
                             {(Object.keys(ESTADO_SOL_LABELS) as EstadoSolicitud[]).map(e => (
                                 <option key={e} value={e}>{ESTADO_SOL_LABELS[e]}</option>
                             ))}
                         </select>
-                        <select value={filterFinanciera} onChange={e => { setFilterFinanciera(e.target.value); setPage(1); }}>
-                            <option value="">Todas las financieras</option>
+                        <select aria-label="Filtrar por financiera" value={filterFinanciera} onChange={e => { setFilterFinanciera(e.target.value); setPage(1); }}>
+                            <option value="">Financiera: todas</option>
                             {financierasCatalog.map(f => (
                                 <option key={f.id} value={f.id}>{f.nombre}</option>
                             ))}
                         </select>
                         {(filterEstado || filterFinanciera || searchSol) && (
-                            <Button variant="secondary" onClick={() => { setFilterEstado(''); setFilterFinanciera(''); setSearchSol(''); setPage(1); }}>
-                                <X size={14} /> Limpiar
+                            <Button variant="ghost" onClick={() => { setFilterEstado(''); setFilterFinanciera(''); setSearchSol(''); setPage(1); }}>
+                                <X size={14} /> Limpiar filtros
                             </Button>
                         )}
                     </div>
@@ -534,22 +562,34 @@ export default function FinanciacionExternaPage() {
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
                                     <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                                        {['#', 'Cliente', 'Vehículo', 'Financiera', 'Monto Sol.', 'Plazo', 'Estado', 'Fecha', 'Acciones'].map(h => (
+                                        {['N°', 'Cliente', 'Unidad', 'Financiera', 'Monto pedido', 'Plazo', 'Estado', 'Fecha', 'Acciones'].map(h => (
                                             <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {loadingSol ? (
-                                        <tr><td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Cargando...</td></tr>
+                                        <tr><td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Cargando…</td></tr>
+                                    ) : errorSol ? (
+                                        <tr><td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: 'var(--danger)' }}>
+                                            <p style={{ marginBottom: '0.75rem' }}>No se pudieron cargar las solicitudes. Es un problema al consultar el servidor.</p>
+                                            <Button variant="secondary" size="sm" onClick={() => loadSolicitudes()}>Reintentar</Button>
+                                        </td></tr>
                                     ) : filteredSolicitudes.length === 0 ? (
-                                        <tr><td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No hay solicitudes</td></tr>
+                                        <tr><td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                            {(filterEstado || filterFinanciera || searchSol) ? (
+                                                <>
+                                                    <p style={{ marginBottom: '0.75rem' }}>Ninguna solicitud coincide con la búsqueda o los filtros.</p>
+                                                    <Button variant="secondary" size="sm" onClick={() => { setFilterEstado(''); setFilterFinanciera(''); setSearchSol(''); setPage(1); }}>Limpiar filtros</Button>
+                                                </>
+                                            ) : 'Todavía no hay solicitudes. Creá la primera con «Nueva solicitud».'}
+                                        </td></tr>
                                     ) : filteredSolicitudes.map(s => (
                                         <tr key={s.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
                                             onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--text-primary) 5%, transparent)')}
                                             onMouseLeave={e => (e.currentTarget.style.background = '')}
                                         >
-                                            <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>#{s.id}</td>
+                                            <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{s.id}</td>
                                             <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{s.cliente?.nombre ?? '-'}</td>
                                             <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)' }}>
                                                 {s.vehiculo
@@ -557,7 +597,7 @@ export default function FinanciacionExternaPage() {
                                                     : <span className="text-muted">Sin definir</span>}
                                             </td>
                                             <td style={{ padding: '0.75rem 1rem' }}>{s.financiera?.nombre ?? '-'}</td>
-                                            <td style={{ padding: '0.75rem 1rem' }}>{s.montoSolicitado ? `$${fmt(s.montoSolicitado)}` : '-'}</td>
+                                            <td style={{ padding: '0.75rem 1rem' }} className="tabular-nums">{s.montoSolicitado ? fmt(s.montoSolicitado) : '-'}</td>
                                             <td style={{ padding: '0.75rem 1rem' }}>{s.plazoCuotas ? `${s.plazoCuotas} cuotas` : '-'}</td>
                                             <td style={{ padding: '0.75rem 1rem' }}>
                                                 <span style={{
@@ -571,15 +611,15 @@ export default function FinanciacionExternaPage() {
                                             <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(s.createdAt)}</td>
                                             <td style={{ padding: '0.75rem 1rem' }}>
                                                 <div className="flex gap-2">
-                                                    <button className="icon-btn" title="Ver detalle" onClick={() => setDetailSolicitud(s)}>
+                                                    <button type="button" className="icon-btn" title="Ver detalle" aria-label={`Ver la solicitud ${s.id}`} onClick={() => setDetailSolicitud(s)}>
                                                         <Eye size={15} />
                                                     </button>
                                                     {ESTADO_SOL_TRANSITIONS[s.estado].length > 0 && (
-                                                        <button className="icon-btn" title="Cambiar estado" onClick={() => { setTransicionSol(s); setNuevoEstado(''); setExtraTransicion({}); }}>
+                                                        <button type="button" className="icon-btn" title="Cambiar estado" aria-label={`Cambiar el estado de la solicitud ${s.id}`} onClick={() => { setTransicionSol(s); setNuevoEstado(''); setExtraTransicion({}); }}>
                                                             <ArrowRight size={15} />
                                                         </button>
                                                     )}
-                                                    <button className="icon-btn danger" title="Eliminar" onClick={() => setDeletingSol(s)}>
+                                                    <button type="button" className="icon-btn danger" title="Eliminar" aria-label={`Eliminar la solicitud ${s.id}`} onClick={() => setDeletingSol(s)}>
                                                         <Trash2 size={15} />
                                                     </button>
                                                 </div>
@@ -611,29 +651,38 @@ export default function FinanciacionExternaPage() {
                 <div className="flex flex-col gap-4">
                     {/* Filters */}
                     <div className="card glass filters-bar">
-                        <select value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
-                            <option value="">Todos los tipos</option>
+                        <select aria-label="Filtrar por tipo" value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
+                            <option value="">Tipo: todos</option>
                             <option value="financiera">Financiera</option>
                             <option value="banco">Banco</option>
                             <option value="otra">Otra</option>
                         </select>
-                        <select value={filterActivo} onChange={e => setFilterActivo(e.target.value)}>
-                            <option value="">Todos</option>
-                            <option value="true">Activos</option>
-                            <option value="false">Inactivos</option>
+                        <select aria-label="Filtrar por estado" value={filterActivo} onChange={e => setFilterActivo(e.target.value)}>
+                            <option value="">Activas e inactivas</option>
+                            <option value="true">Activas</option>
+                            <option value="false">Inactivas</option>
                         </select>
                         {(filterTipo || filterActivo) && (
-                            <Button variant="secondary" onClick={() => { setFilterTipo(''); setFilterActivo(''); }}>
-                                <X size={14} /> Limpiar
+                            <Button variant="ghost" onClick={() => { setFilterTipo(''); setFilterActivo(''); }}>
+                                <X size={14} /> Limpiar filtros
                             </Button>
                         )}
                     </div>
 
                     {/* Grid */}
                     {loadingFin ? (
-                        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>Cargando...</div>
+                        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>Cargando…</div>
+                    ) : errorFin ? (
+                        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--danger)' }}>
+                            <p style={{ marginBottom: '0.75rem' }}>No se pudieron cargar las financieras.</p>
+                            <Button variant="secondary" size="sm" onClick={() => loadFinancieras()}>Reintentar</Button>
+                        </div>
                     ) : filteredFinancieras.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>No hay financieras registradas</div>
+                        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                            {(filterTipo || filterActivo)
+                                ? 'Ninguna financiera coincide con los filtros.'
+                                : 'Todavía no hay financieras. Cargá la primera con «Nueva financiera».'}
+                        </div>
                     ) : (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
                             {filteredFinancieras.map(f => (
@@ -702,7 +751,7 @@ export default function FinanciacionExternaPage() {
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                         <Button variant="secondary" onClick={() => setShowFinancieraModal(false)}>Cancelar</Button>
                         <Button variant="primary" onClick={handleSaveFinanciera} disabled={submittingFin} loading={submittingFin}>
-                            {submittingFin ? 'Guardando...' : editingFinanciera ? 'Actualizar' : 'Crear'}
+                            {editingFinanciera ? 'Guardar' : 'Crear financiera'}
                         </Button>
                     </div>
                 </ModalOverlay>
@@ -711,7 +760,7 @@ export default function FinanciacionExternaPage() {
             {/* ─── Modal: Eliminar Financiera ─── */}
             {deletingFinanciera && (
                 <ModalOverlay onClose={() => setDeletingFinanciera(null)}>
-                    <h2 style={{ margin: '0 0 1rem', fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--danger)' }}>Eliminar Financiera</h2>
+                    <h2 style={{ margin: '0 0 1rem', fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--danger)' }}>Eliminar financiera</h2>
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                         ¿Eliminar <strong>{deletingFinanciera.nombre}</strong>? Esta acción no se puede deshacer.
                     </p>
@@ -725,7 +774,7 @@ export default function FinanciacionExternaPage() {
             {/* ─── Modal: Crear Solicitud ─── */}
             {showSolModal && (
                 <ModalOverlay onClose={() => setShowSolModal(false)}>
-                    <h2 style={{ margin: '0 0 1.5rem', fontSize: 'var(--text-lg)', fontWeight: 700 }}>Nueva Solicitud de Financiación</h2>
+                    <h2 style={{ margin: '0 0 1.5rem', fontSize: 'var(--text-lg)', fontWeight: 700 }}>Nueva solicitud de financiación</h2>
                     <div style={{ display: 'grid', gap: '1rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                             <Select dense label="Cliente *" value={solForm.clienteId} onChange={e => setSolForm(p => ({ ...p, clienteId: Number(e.target.value) }))}>
@@ -783,11 +832,11 @@ export default function FinanciacionExternaPage() {
                                 {ESTADO_SOL_LABELS[detailSolicitud.estado]}
                             </span>
                         </div>
-                        <button onClick={() => setDetailSolicitud(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={20} /></button>
+                        <button type="button" aria-label="Cerrar" title="Cerrar" onClick={() => setDetailSolicitud(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={20} /></button>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                        <InfoBlock title="Datos Generales">
+                        <InfoBlock title="Datos generales">
                             <InfoRow label="Cliente" value={detailSolicitud.cliente?.nombre ?? '-'} />
                             <InfoRow
                                 label="Vehículo"
@@ -799,21 +848,21 @@ export default function FinanciacionExternaPage() {
                             <InfoRow label="Tipo" value={detailSolicitud.financiera?.tipo ? TIPO_FINANCIERA_LABELS[detailSolicitud.financiera.tipo] : '-'} />
                         </InfoBlock>
                         <InfoBlock title="Condiciones">
-                            <InfoRow label="Monto Solicitado" value={detailSolicitud.montoSolicitado ? `$${fmt(detailSolicitud.montoSolicitado)}` : '-'} />
+                            <InfoRow label="Monto pedido" value={detailSolicitud.montoSolicitado ? fmt(detailSolicitud.montoSolicitado) : '-'} />
                             <InfoRow label="Plazo" value={detailSolicitud.plazoCuotas ? `${detailSolicitud.plazoCuotas} cuotas` : '-'} />
-                            <InfoRow label="Tasa Estimada" value={detailSolicitud.tasaEstimada ? `${detailSolicitud.tasaEstimada}%` : '-'} />
+                            <InfoRow label="Tasa estimada" value={detailSolicitud.tasaEstimada ? `${detailSolicitud.tasaEstimada}%` : '-'} />
                         </InfoBlock>
                         {(detailSolicitud.estado === 'aprobada') && (
-                            <InfoBlock title="Resultado Aprobación">
-                                <InfoRow label="Monto Aprobado" value={detailSolicitud.montoAprobado ? `$${fmt(detailSolicitud.montoAprobado)}` : '-'} />
-                                <InfoRow label="Tasa Final" value={detailSolicitud.tasaFinal ? `${detailSolicitud.tasaFinal}%` : '-'} />
-                                <InfoRow label="Fecha Respuesta" value={fmtDate(detailSolicitud.fechaRespuesta)} />
+                            <InfoBlock title="Resultado de la aprobación">
+                                <InfoRow label="Monto aprobado" value={detailSolicitud.montoAprobado ? fmt(detailSolicitud.montoAprobado) : '-'} />
+                                <InfoRow label="Tasa final" value={detailSolicitud.tasaFinal ? `${detailSolicitud.tasaFinal}%` : '-'} />
+                                <InfoRow label="Fecha de respuesta" value={fmtDia(detailSolicitud.fechaRespuesta)} />
                             </InfoBlock>
                         )}
                         <InfoBlock title="Fechas">
                             <InfoRow label="Creación" value={fmtDate(detailSolicitud.createdAt)} />
                             <InfoRow label="Envío" value={fmtDate(detailSolicitud.fechaEnvio)} />
-                            <InfoRow label="Respuesta" value={fmtDate(detailSolicitud.fechaRespuesta)} />
+                            <InfoRow label="Respuesta" value={fmtDia(detailSolicitud.fechaRespuesta)} />
                         </InfoBlock>
                     </div>
 
@@ -851,10 +900,10 @@ export default function FinanciacionExternaPage() {
                                                 {fmtDate(a.createdAt)}
                                             </div>
                                         </div>
-                                        <a href={a.url} target="_blank" rel="noreferrer" style={{ color: 'var(--text-secondary)', padding: '0.25rem' }} title="Ver">
+                                        <a href={a.url} target="_blank" rel="noreferrer" style={{ color: 'var(--text-secondary)', padding: '0.25rem' }} title="Ver archivo" aria-label="Ver archivo">
                                             <ExternalLink size={14} />
                                         </a>
-                                        <button className="icon-btn danger" onClick={() => handleDeleteArchivoSol(a)} title="Eliminar">
+                                        <button type="button" className="icon-btn danger" onClick={() => handleDeleteArchivoSol(a)} title="Eliminar archivo" aria-label={`Eliminar el archivo ${a.originalName ?? a.descripcion ?? a.id}`}>
                                             <Trash2 size={14} />
                                         </button>
                                     </div>
@@ -882,7 +931,7 @@ export default function FinanciacionExternaPage() {
                                 setExtraTransicion({});
                                 setDetailSolicitud(null);
                             }}>
-                                <ArrowRight size={15} /> Cambiar Estado
+                                <ArrowRight size={15} /> Cambiar estado
                             </Button>
                         </div>
                     )}
@@ -893,12 +942,12 @@ export default function FinanciacionExternaPage() {
             {transicionSol && (
                 <ModalOverlay onClose={() => setTransicionSol(null)}>
                     <h2 style={{ margin: '0 0 1.5rem', fontSize: 'var(--text-lg)', fontWeight: 700 }}>
-                        Cambiar Estado — Solicitud #{transicionSol.id}
+                        Cambiar estado · solicitud N° {transicionSol.id}
                     </h2>
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: 'var(--text-base)' }}>
                         Estado actual: <strong style={{ color: ESTADO_SOL_COLORS[transicionSol.estado] }}>{ESTADO_SOL_LABELS[transicionSol.estado]}</strong>
                     </p>
-                    <Select dense label="Nuevo Estado *" placeholder="Seleccionar..." value={nuevoEstado} onChange={e => { setNuevoEstado(e.target.value as EstadoSolicitud); setExtraTransicion({}); }}>
+                    <Select dense label="Nuevo estado *" placeholder="Elegí el estado" value={nuevoEstado} onChange={e => { setNuevoEstado(e.target.value as EstadoSolicitud); setExtraTransicion({}); }}>
                         {ESTADO_SOL_TRANSITIONS[transicionSol.estado].map(e => (
                             <option key={e} value={e}>{ESTADO_SOL_LABELS[e]}</option>
                         ))}
@@ -907,13 +956,13 @@ export default function FinanciacionExternaPage() {
                     {nuevoEstado === 'aprobada' && (
                         <div style={{ marginTop: '1rem', display: 'grid', gap: '0.75rem' }}>
                             <p style={{ color: 'var(--success)', fontSize: 'var(--text-sm)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                <CheckCircle size={14} /> Complete los datos de aprobación
+                                <CheckCircle size={14} aria-hidden="true" /> Completá los datos de la aprobación
                             </p>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                                <Input dense label="Monto Aprobado" type="number" placeholder="0.00" value={extraTransicion.montoAprobado ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, montoAprobado: e.target.value }))} />
-                                <Input dense label="Tasa Final (%)" type="number" step="0.01" placeholder="0.0" value={extraTransicion.tasaFinal ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, tasaFinal: e.target.value }))} />
+                                <Input dense label="Monto aprobado" type="number" placeholder="0" value={extraTransicion.montoAprobado ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, montoAprobado: e.target.value }))} />
+                                <Input dense label="Tasa final (%)" type="number" step="0.01" placeholder="0.0" value={extraTransicion.tasaFinal ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, tasaFinal: e.target.value }))} />
                             </div>
-                            <Input dense label="Fecha de Respuesta" type="date" value={extraTransicion.fechaRespuesta ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, fechaRespuesta: e.target.value }))} />
+                            <Input dense label="Fecha de respuesta" type="date" value={extraTransicion.fechaRespuesta ?? ''} onChange={e => setExtraTransicion(p => ({ ...p, fechaRespuesta: e.target.value }))} />
                         </div>
                     )}
 
@@ -924,7 +973,7 @@ export default function FinanciacionExternaPage() {
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                         <Button variant="secondary" onClick={() => setTransicionSol(null)}>Cancelar</Button>
                         <Button variant="primary" onClick={handleTransicion} disabled={!nuevoEstado || submittingSol} loading={submittingSol}>
-                            {submittingSol ? 'Actualizando...' : 'Confirmar'}
+                            Guardar
                         </Button>
                     </div>
                 </ModalOverlay>
@@ -933,9 +982,9 @@ export default function FinanciacionExternaPage() {
             {/* ─── Modal: Eliminar Solicitud ─── */}
             {deletingSol && (
                 <ModalOverlay onClose={() => setDeletingSol(null)}>
-                    <h2 style={{ margin: '0 0 1rem', fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--danger)' }}>Eliminar Solicitud</h2>
+                    <h2 style={{ margin: '0 0 1rem', fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--danger)' }}>Eliminar solicitud</h2>
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                        ¿Eliminar la solicitud <strong>#{deletingSol.id}</strong> de <strong>{deletingSol.cliente?.nombre}</strong>? Esta acción no se puede deshacer.
+                        ¿Eliminar la solicitud <strong>N° {deletingSol.id}</strong> de <strong>{deletingSol.cliente?.nombre}</strong>? No se puede deshacer.
                     </p>
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                         <Button variant="secondary" onClick={() => setDeletingSol(null)}>Cancelar</Button>
