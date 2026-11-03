@@ -409,7 +409,7 @@ const ImportClientesModal: React.FC<ImportClientesModalProps> = ({ isOpen, onClo
                                 onChange={(e) => setEstadoInicial(e.target.value as 'contactado' | 'nuevo')}
                             >
                                 <option value="contactado">Cartera histórica (no dispara alertas)</option>
-                                <option value="nuevo">Leads frescos a trabajar</option>
+                                <option value="nuevo">Clientes nuevos para trabajar</option>
                             </Select>
                             <Select
                                 dense

@@ -241,13 +241,13 @@ const PreguntasPage = () => {
             addToast(
                 res.creado
                     ? (simulada
-                        ? 'Lead creado a partir de una pregunta simulada: queda en Clientes rotulado como SIMULACIÓN'
-                        : 'Lead creado y vinculado a la pregunta')
+                        ? 'Cliente creado a partir de una pregunta simulada: queda en Clientes rotulado como Simulación'
+                        : 'Cliente registrado y vinculado a la pregunta')
                     // El contacto cargado a mano matcheó con una ficha REAL. Como
                     // la pregunta era simulada, no se le tocó ni el origen ni el
                     // estado del lead: sólo quedó la línea rotulada.
                     : res.sobreFichaReal === true
-                        ? 'Ese contacto ya era de un cliente REAL del CRM. Como la pregunta era simulada, sólo se le anotó la consulta (rotulada) en observaciones: no se le cambió el origen ni se le reabrió el lead.'
+                        ? 'Ese contacto ya era de un cliente real. Como la pregunta era simulada, sólo se le anotó la consulta (rotulada) en observaciones: no se le cambió el canal ni la etapa.'
                         : 'La pregunta quedó vinculada a un cliente que ya existía',
                 'success',
             );
@@ -255,7 +255,7 @@ const PreguntasPage = () => {
             qc.invalidateQueries({ queryKey: ['ml-preguntas'] });
             qc.invalidateQueries({ queryKey: ['clientes'] });
         },
-        onError: (e) => addToast(getErrorMessage(e, 'No se pudo registrar el lead'), 'error'),
+        onError: (e) => addToast(getErrorMessage(e, 'No se pudo registrar el cliente'), 'error'),
     });
 
     const sincronizar = useMutation({
@@ -333,7 +333,7 @@ const PreguntasPage = () => {
                         <h1>Mercado Libre</h1>
                         {bandejaSimulada && <Badge variant="warning">SIMULACIÓN</Badge>}
                     </div>
-                    <p>Preguntas de tus publicaciones: respondé, asigná el vendedor y convertí la consulta en un lead.</p>
+                    <p>Preguntas de tus publicaciones: respondé, asigná el vendedor y registrá a quien pregunta como cliente.</p>
                     {bandejaSimulada && (
                         <p className="preguntas-nota-simulacion">
                             <strong>Modo demostración:</strong> estas consultas las generó el sistema para mostrar
@@ -349,7 +349,7 @@ const PreguntasPage = () => {
                             loading={sincronizar.isPending}
                             title={cuentaEsDemo
                                 ? 'Corre la pasada de ingesta contra la cuenta simulada: no se consulta Mercado Libre'
-                                : 'Trae las preguntas nuevas sin esperar al worker'}
+                                : 'Trae las preguntas nuevas sin esperar la sincronización automática'}
                             onClick={() => sincronizar.mutate()}
                         >
                             <RefreshCw size={14} /> Sincronizar
@@ -509,10 +509,10 @@ const PreguntasPage = () => {
                                         <Button
                                             variant="secondary"
                                             size="sm"
-                                            title="Da de alta al interesado como lead y lo vincula a esta pregunta"
+                                            title="Da de alta a quien pregunta como cliente y lo vincula a esta pregunta"
                                             onClick={() => abrirLead(seleccionada)}
                                         >
-                                            <UserPlus size={14} /> Registrar como lead
+                                            <UserPlus size={14} /> Registrar como cliente
                                         </Button>
                                     )}
 
@@ -618,7 +618,7 @@ const PreguntasPage = () => {
             <Modal
                 isOpen={leadAbierto}
                 onClose={() => setLeadAbierto(false)}
-                title="Registrar como lead"
+                title="Registrar como cliente"
                 subtitle={seleccionada ? vehiculoDe(seleccionada) : undefined}
                 maxWidth="520px"
                 footer={

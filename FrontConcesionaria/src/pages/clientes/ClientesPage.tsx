@@ -421,7 +421,7 @@ const ClientesPage: React.FC = () => {
                             Importar
                         </Button>
                     )}
-                    <Button variant="secondary" onClick={() => setIsConsultaOpen(true)} title="Registrar una consulta entrante (lead) por cualquier canal">
+                    <Button variant="secondary" onClick={() => setIsConsultaOpen(true)} title="Registrar una consulta que entró por cualquier canal">
                         <MessageSquarePlus size={18} />
                         Nueva consulta
                     </Button>
