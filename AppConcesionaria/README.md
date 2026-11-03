@@ -16,10 +16,7 @@ Se desarrolla iOS **y** Android desde Windows (sin Mac): la app corre en el tel�
    ```
 3. Escaneá el QR que aparece en la terminal con Expo Go (Android) o con la cámara (iOS).
 
-La app apunta por defecto a **producción**, así que podés entrar directo con una cuenta demo:
-
-- **Vendedor:** `vendedor2@demo.com` / `demo1234`
-- **Admin/Tasador:** `admin@demo.com` / `demo1234`
+La app apunta por defecto a **producción**: entrás con tu usuario de AUTENZA (el mismo de la web). Para probar sin tocar datos reales, apuntala a un backend local (abajo) y usá los usuarios que crea el seed de ese entorno.
 
 > En un dispositivo nativo **no hay CORS** (es cosa del navegador), así que la app habla con el backend de prod sin configuración extra.
 
@@ -33,23 +30,35 @@ EXPO_PUBLIC_API_BASE_URL=http://TU_IP_LAN:3000/api npm start
 
 - **Emulador Android:** el `localhost` del host es `10.0.2.2`.
 - **Dispositivo real:** usá la IP de tu PC en la LAN (ej. `http://192.168.0.15:3000/api`).
+- **La web** ("¿Olvidaste tu contraseña?" y los roles sin app) se abre en el mismo origen que la API; si en desarrollo corre en otro puerto: `EXPO_PUBLIC_WEB_BASE_URL=http://TU_IP_LAN:5173`.
 
 ## Estructura
 
 ```
 src/
   config.ts            # URL del backend (override con EXPO_PUBLIC_API_BASE_URL)
-  theme/tokens.ts      # colores, tipografía y gradiente de marca AUTENZA
+  theme/tokens.ts      # paletas clara y oscura, tipografía y gradiente de marca AUTENZA
+  theme/theme.ts       # useTheme() (sigue el tema del sistema) y makeStyles()
   api/                 # cliente axios (auth + refresh) y módulos por recurso
   store/authStore.ts   # sesión + tokens en almacenamiento seguro (Keychain/Keystore)
-  components/ui.tsx    # botones, campos, badges, tarjetas
-  navigation/          # gate de auth + tabs del vendedor + stack del mostrador
-  screens/             # Login, Mostrador (atenciones), detalle, ...
+  components/ui.tsx    # botones, campos, badges, tarjetas, estados de error/vacío (accesibles)
+  hooks/               # listas paginadas con scroll infinito y búsqueda con debounce
+  lib/                 # funciones puras: formatos, errores legibles, URLs, paginación
+  navigation/          # gate de auth y por rol + tabs (Mostrador, Clientes, Stock, Más)
+  screens/             # Login, Mostrador, atención, fichas de unidad/cliente/tasación, ...
 ```
 
 ## Estado
 
-Primera rebanada funcionando de punta a punta: **login → Mostrador (lista de atenciones + alertas) → detalle**. Las secciones Clientes, Vehículos y Tasaciones están como *placeholder* y se van completando por iteración (alcance objetivo: rol vendedor + rol tasador completos).
+Cubre el trabajo del **vendedor** y del **tasador**:
+
+- **Mostrador:** abrir la atención, relevar qué busca, mostrar unidades, cargar el canje, cerrar con resultado y pasar a presupuesto o venta con el cliente (y la unidad) ya cargados.
+- **Clientes** y **Stock:** listas con búsqueda y ficha (la de la unidad, con fotos y "Compartir por WhatsApp"; nunca el precio de compra).
+- **Más:** presupuestos, ventas y tasaciones (lista, alta y detalle).
+- Login con verificación en dos pasos (código de la app o de recuperación).
+- Sigue el tema claro/oscuro del sistema.
+
+Los roles **cobrador**, **postventa** y **lectura** todavía no tienen pantallas: al entrar ven un aviso que los manda a la web.
 
 ## Generar un APK para instalar y probar (Android)
 
