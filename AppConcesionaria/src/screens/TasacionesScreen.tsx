@@ -6,6 +6,7 @@ import { colors, spacing, radius, fonts, fontSize } from '../theme/tokens';
 import { Card, Badge, Field, GradientButton, GhostButton, Segmented, Sheet, T, BadgeTone } from '../components/ui';
 import { errorMessage } from '../api/client';
 import { num } from '../api/atenciones.api';
+import { formatMontoInput, montoATexto, parseMonto, waLink } from '../lib/formato';
 import {
     tasacionesApi, Tasacion, CondicionTasacion, CONDICION_LABEL, CONDICIONES, estaPendiente, hoyLocal,
 } from '../api/tasaciones.api';
@@ -18,7 +19,6 @@ const money = (v: any, m = 'ARS') => {
 const COND_TONE: Record<CondicionTasacion, BadgeTone> = {
     excelente: 'success', muy_bueno: 'cyan', bueno: 'accent', regular: 'warning', malo: 'danger',
 };
-const soloDigitos = (s?: string | null) => (s ?? '').replace(/\D+/g, '');
 
 export default function TasacionesScreen() {
     const qc = useQueryClient();
@@ -38,8 +38,8 @@ export default function TasacionesScreen() {
     const crear = useMutation({
         mutationFn: () => tasacionesApi.create({
             marca: f.marca.trim(), modelo: f.modelo.trim(), dominio: f.dominio.trim(), fecha: hoyLocal(),
-            anio: f.anio ? Number(f.anio) : undefined, km: f.km ? Number(f.km) : undefined,
-            condicion: f.condicion, valorEstimado: f.valor ? Number(f.valor) : undefined,
+            anio: f.anio ? Number(f.anio) : undefined, km: parseMonto(f.km) ?? undefined,
+            condicion: f.condicion, valorEstimado: parseMonto(f.valor) ?? undefined,
             moneda: f.moneda, observaciones: f.obs.trim() || undefined,
         }),
         onSuccess: () => {
@@ -65,20 +65,20 @@ export default function TasacionesScreen() {
     const [tObs, setTObs] = useState('');
 
     const abrirTasar = (t: Tasacion) => {
-        setTasar(t); setTDominio(t.dominio ?? ''); setTValor(num(t.valorEstimado) != null ? String(num(t.valorEstimado)) : '');
+        setTasar(t); setTDominio(t.dominio ?? ''); setTValor(montoATexto(num(t.valorEstimado)));
         setTMoneda(t.moneda); setTObs(t.observaciones ?? '');
     };
     const completar = useMutation({
         mutationFn: () => tasacionesApi.update(tasar!.id, {
-            dominio: tDominio.trim(), valorEstimado: Number(tValor), moneda: tMoneda, observaciones: tObs.trim() || undefined,
+            dominio: tDominio.trim(), valorEstimado: parseMonto(tValor) ?? 0, moneda: tMoneda, observaciones: tObs.trim() || undefined,
         }),
         onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasaciones'] }); setTasar(null); },
         onError: (e) => Alert.alert('No se pudo completar', errorMessage(e)),
     });
     const guardarTasar = () => {
         if (!tDominio.trim()) return Alert.alert('Falta el dominio', 'Es obligatorio para tasar.');
-        const v = Number(tValor);
-        if (!tValor.trim() || !Number.isFinite(v) || v < 0) return Alert.alert('Valor inválido', 'Poné un valor de tasación válido.');
+        const v = parseMonto(tValor);
+        if (v == null || !Number.isFinite(v) || v < 0) return Alert.alert('Valor inválido', 'Poné un valor de tasación válido.');
         completar.mutate();
     };
 
@@ -94,11 +94,10 @@ export default function TasacionesScreen() {
         ]);
 
     const enviarWhatsapp = (t: Tasacion) => {
-        const tel = soloDigitos(t.cliente?.telefono);
-        const veh = `${t.marca} ${t.modelo}${t.anio ? ` ${t.anio}` : ''}`;
+                const veh = `${t.marca} ${t.modelo}${t.anio ? ` ${t.anio}` : ''}`;
         const val = num(t.valorEstimado) != null ? ` Valor estimado: ${money(t.valorEstimado, t.moneda)}.` : '';
-        const msg = encodeURIComponent(`Hola${t.cliente?.nombre ? ` ${t.cliente.nombre}` : ''}, te paso la tasación de tu ${veh}.${val} Es orientativa y sujeta a inspección.`);
-        Linking.openURL(tel ? `https://wa.me/${tel}?text=${msg}` : `https://wa.me/?text=${msg}`).catch(() => Alert.alert('No se pudo abrir WhatsApp'));
+        const msg = `Hola${t.cliente?.nombre ? ` ${t.cliente.nombre}` : ''}, te paso la tasación de tu ${veh}.${val} Es orientativa y sujeta a inspección.`;
+        Linking.openURL(waLink(t.cliente?.telefono, msg)).catch(() => Alert.alert('No se pudo abrir WhatsApp'));
     };
 
     return (
@@ -171,12 +170,12 @@ export default function TasacionesScreen() {
                 <Field label="Dominio *" placeholder="AB123CD" autoCapitalize="characters" value={f.dominio} onChangeText={(v) => setFF('dominio', v)} style={{ marginTop: spacing.sm }} />
                 <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
                     <Field label="Año" keyboardType="numeric" value={f.anio} onChangeText={(v) => setFF('anio', v)} style={{ flex: 1 }} />
-                    <Field label="Km" keyboardType="numeric" value={f.km} onChangeText={(v) => setFF('km', v)} style={{ flex: 1 }} />
+                    <Field label="Km" keyboardType="numeric" value={f.km} onChangeText={(v) => setFF('km', formatMontoInput(v))} style={{ flex: 1 }} />
                 </View>
                 <Text style={s.miniLabel}>CONDICIÓN</Text>
                 <Segmented value={f.condicion} onChange={(v) => setFF('condicion', v)} options={CONDICIONES.map((c) => ({ value: c, label: CONDICION_LABEL[c].split(' ')[0] }))} style={{ marginTop: spacing.xs }} />
                 <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
-                    <Field label="Valor estimado" keyboardType="numeric" placeholder="Opcional" value={f.valor} onChangeText={(v) => setFF('valor', v)} style={{ flex: 1 }} />
+                    <Field label="Valor estimado" keyboardType="numeric" placeholder="Opcional" value={f.valor} onChangeText={(v) => setFF('valor', formatMontoInput(v))} style={{ flex: 1 }} />
                     <View style={{ width: 130 }}>
                         <Text style={[s.miniLabel, { marginTop: 0 }]}>MONEDA</Text>
                         <Segmented value={f.moneda} onChange={(v) => setFF('moneda', v)} options={[{ value: 'ARS', label: '$' }, { value: 'USD', label: 'US$' }]} style={{ marginTop: spacing.xs }} />
@@ -197,7 +196,7 @@ export default function TasacionesScreen() {
             >
                 <Field label="Dominio *" placeholder="AB123CD" autoCapitalize="characters" value={tDominio} onChangeText={setTDominio} />
                 <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
-                    <Field label="Valor estimado *" keyboardType="numeric" placeholder="12000000" value={tValor} onChangeText={setTValor} style={{ flex: 1 }} />
+                    <Field label="Valor estimado *" keyboardType="numeric" placeholder="12.000.000" value={tValor} onChangeText={(v) => setTValor(formatMontoInput(v))} style={{ flex: 1 }} />
                     <View style={{ width: 130 }}>
                         <Text style={[s.miniLabel, { marginTop: 0 }]}>MONEDA</Text>
                         <Segmented value={tMoneda} onChange={setTMoneda} options={[{ value: 'ARS', label: '$' }, { value: 'USD', label: 'US$' }]} style={{ marginTop: spacing.xs }} />

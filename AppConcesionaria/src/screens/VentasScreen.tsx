@@ -6,13 +6,14 @@ import { colors, spacing, radius, fonts, fontSize } from '../theme/tokens';
 import { Card, Badge, Field, GhostButton, T } from '../components/ui';
 import { num } from '../api/atenciones.api';
 import { ventasApi, Venta, ESTADO_ENTREGA_LABEL } from '../api/ventas.api';
+import { fechaDia } from '../lib/formato';
 
 const money = (v: any, m = 'ARS') => {
     const n = num(v);
     if (n == null) return '—';
     return `${m === 'USD' ? 'US$' : '$'}${n.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
 };
-const fecha = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('es-AR') : '');
+const fecha = fechaDia;
 const veh = (v: Venta) => v.vehiculo ? [v.vehiculo.marca, v.vehiculo.modelo].filter(Boolean).join(' ') : `Unidad #${v.vehiculoId}`;
 
 export default function VentasScreen({ navigation }: any) {

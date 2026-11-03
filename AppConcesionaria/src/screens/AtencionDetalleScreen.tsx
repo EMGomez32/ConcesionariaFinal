@@ -12,13 +12,14 @@ import {
     CONDICION_LABEL, CONDICIONES, ESTADO_PERMUTA_LABEL, MEDIO_CONTACTO_LABEL, MEDIOS_CONTACTO,
     faltanDatosDelCliente, codigoDeError, COD_SOLO_TASADOR,
 } from '../api/atenciones.api';
+import { formatMontoInput, montoATexto, parseMonto } from '../lib/formato';
 
 const money = (v: any, m = 'ARS') => {
     const n = num(v);
     if (n == null) return '—';
     return `${m === 'USD' ? 'US$' : '$'}${n.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
 };
-const numOr = (s: string): number | undefined => (s.trim() === '' ? undefined : Number(s));
+const numOr = (s: string): number | undefined => parseMonto(s) ?? undefined;
 const tituloUnidad = (u?: UnidadSugerida) => u ? [u.marca, u.modelo, u.version, u.anio].filter(Boolean).join(' ') : 'Unidad';
 const enDias = (n: number) => {
     const d = new Date(); d.setDate(d.getDate() + n);
@@ -50,11 +51,11 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
     useEffect(() => {
         if (a && !seeded) {
             if (a.modoBusqueda) setModo(a.modoBusqueda);
-            if (num(a.presupuestoMin) != null) setPresMin(String(num(a.presupuestoMin)));
-            if (num(a.presupuestoMax) != null) setPresMax(String(num(a.presupuestoMax)));
+            if (num(a.presupuestoMin) != null) setPresMin(montoATexto(num(a.presupuestoMin)));
+            if (num(a.presupuestoMax) != null) setPresMax(montoATexto(num(a.presupuestoMax)));
             if (a.moneda === 'USD' || a.moneda === 'ARS') setMoneda(a.moneda);
-            if (num(a.anticipo) != null) setAnticipo(String(num(a.anticipo)));
-            if (num(a.cuotaMaxima) != null) setCuota(String(num(a.cuotaMaxima)));
+            if (num(a.anticipo) != null) setAnticipo(montoATexto(num(a.anticipo)));
+            if (num(a.cuotaMaxima) != null) setCuota(montoATexto(num(a.cuotaMaxima)));
             if (a.tipoFinanciamiento) setTipoFin(a.tipoFinanciamiento);
             setSeeded(true);
         }
@@ -206,8 +207,8 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
 
                 {modo === 'presupuesto' ? (
                     <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-                        <Field label="Desde" placeholder="0" keyboardType="numeric" value={presMin} onChangeText={setPresMin} style={{ flex: 1 }} />
-                        <Field label="Hasta" placeholder="Tope" keyboardType="numeric" value={presMax} onChangeText={setPresMax} style={{ flex: 1 }} />
+                        <Field label="Desde" placeholder="0" keyboardType="numeric" value={presMin} onChangeText={(v) => setPresMin(formatMontoInput(v))} style={{ flex: 1 }} />
+                        <Field label="Hasta" placeholder="Tope" keyboardType="numeric" value={presMax} onChangeText={(v) => setPresMax(formatMontoInput(v))} style={{ flex: 1 }} />
                     </View>
                 ) : modo === 'modelo' ? (
                     <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
@@ -222,8 +223,8 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
                 <Segmented value={moneda} onChange={setMoneda} options={[{ value: 'ARS', label: 'Pesos' }, { value: 'USD', label: 'Dólares' }]} style={{ marginTop: spacing.xs }} />
 
                 <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-                    <Field label="Anticipo" placeholder="0" keyboardType="numeric" value={anticipo} onChangeText={setAnticipo} style={{ flex: 1 }} />
-                    <Field label="Cuota máx." placeholder="0" keyboardType="numeric" value={cuota} onChangeText={setCuota} style={{ flex: 1 }} />
+                    <Field label="Anticipo" placeholder="0" keyboardType="numeric" value={anticipo} onChangeText={(v) => setAnticipo(formatMontoInput(v))} style={{ flex: 1 }} />
+                    <Field label="Cuota máx." placeholder="0" keyboardType="numeric" value={cuota} onChangeText={(v) => setCuota(formatMontoInput(v))} style={{ flex: 1 }} />
                 </View>
                 <Text style={s.miniLabel}>FINANCIAMIENTO</Text>
                 <Segmented
@@ -309,7 +310,7 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
                         <Field label="Dominio *" placeholder="AB123CD" autoCapitalize="characters" value={pDominio} onChangeText={setPDominio} style={{ marginTop: spacing.sm }} />
                         <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
                             <Field label="Año" keyboardType="numeric" value={pAnio} onChangeText={setPAnio} style={{ flex: 1 }} />
-                            <Field label="Km" keyboardType="numeric" value={pKm} onChangeText={setPKm} style={{ flex: 1 }} />
+                            <Field label="Km" keyboardType="numeric" value={pKm} onChangeText={(v) => setPKm(formatMontoInput(v))} style={{ flex: 1 }} />
                         </View>
                         <Text style={s.miniLabel}>ESTADO GENERAL</Text>
                         <Segmented
@@ -317,7 +318,7 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
                             options={CONDICIONES.map((c) => ({ value: c, label: CONDICION_LABEL[c].split(' ')[0] }))}
                             style={{ marginTop: spacing.xs }}
                         />
-                        <Field label="Valor estimado de toma" placeholder="Lo que estimás" keyboardType="numeric" value={pValor} onChangeText={setPValor} style={{ marginTop: spacing.sm }} />
+                        <Field label="Valor estimado de toma" placeholder="Lo que estimás" keyboardType="numeric" value={pValor} onChangeText={(v) => setPValor(formatMontoInput(v))} style={{ marginTop: spacing.sm }} />
                         <GhostButton title="Cargar permuta" onPress={() => guardarPermuta.mutate(false)} style={{ marginTop: spacing.md }} />
                     </View>
                 )}

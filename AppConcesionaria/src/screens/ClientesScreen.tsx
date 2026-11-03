@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { colors, spacing, radius, fonts, fontSize } from '../theme/tokens';
 import { Card, Badge, Field, T } from '../components/ui';
 import { clientesApi, Cliente, ESTADO_LEAD_LABEL, ORIGEN_LEAD_LABEL } from '../api/clientes.api';
+import { waLink } from '../lib/formato';
 
 const nombre = (c: Cliente) => [c.nombre, c.apellido].filter(Boolean).join(' ');
 const soloDigitos = (s?: string | null) => (s ?? '').replace(/\D+/g, '');
@@ -21,7 +22,7 @@ export default function ClientesScreen() {
     const whatsapp = (c: Cliente) => {
         const d = soloDigitos(c.telefono);
         if (!d) return;
-        Linking.openURL(`https://wa.me/${d}?text=${encodeURIComponent(`Hola ${c.nombre},`)}`);
+        Linking.openURL(waLink(d, `Hola ${c.nombre},`));
     };
 
     return (

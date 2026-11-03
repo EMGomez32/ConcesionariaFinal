@@ -5,6 +5,7 @@ import { colors, spacing, fonts, fontSize } from '../theme/tokens';
 import { Card, Badge, T } from '../components/ui';
 import { num } from '../api/atenciones.api';
 import { ventasApi, Venta, FORMA_PAGO_LABEL, ESTADO_ENTREGA_LABEL } from '../api/ventas.api';
+import { fechaDia } from '../lib/formato';
 
 const money = (v: any, m = 'ARS') => {
     const n = num(v);
@@ -45,7 +46,7 @@ export default function VentaDetalleScreen({ route }: any) {
                 <Fila k="Cliente" v={v.cliente?.nombre ?? '—'} />
                 <Fila k="Vendedor" v={v.vendedor?.nombre ?? '—'} />
                 <Fila k="Forma de pago" v={FORMA_PAGO_LABEL[v.formaPago]} />
-                <Fila k="Fecha" v={v.fechaVenta ? new Date(v.fechaVenta).toLocaleDateString('es-AR') : '—'} />
+                <Fila k="Fecha" v={v.fechaVenta ? fechaDia(v.fechaVenta) : '—'} />
             </Card>
 
             <Card style={{ marginTop: spacing.md }}>

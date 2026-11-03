@@ -5,13 +5,14 @@ import { colors, spacing, fonts, fontSize } from '../theme/tokens';
 import { Card, Badge, Field, GhostButton, T } from '../components/ui';
 import { num } from '../api/atenciones.api';
 import { presupuestosApi, Presupuesto, ESTADO_PRESUPUESTO_LABEL } from '../api/presupuestos.api';
+import { fechaDia } from '../lib/formato';
 
 const money = (v: any, m = 'ARS') => {
     const n = num(v);
     if (n == null) return '—';
     return `${m === 'USD' ? 'US$' : '$'}${n.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
 };
-const fecha = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('es-AR') : '');
+const fecha = fechaDia;
 
 export default function PresupuestosScreen({ navigation }: any) {
     const [search, setSearch] = useState('');

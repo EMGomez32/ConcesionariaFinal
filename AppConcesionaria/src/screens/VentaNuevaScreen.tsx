@@ -9,8 +9,8 @@ import { useAuthStore } from '../store/authStore';
 import { clientesApi } from '../api/clientes.api';
 import { vehiculosApi } from '../api/vehiculos.api';
 import { ventasApi, FormaPagoVenta, FORMAS_PAGO, FORMA_PAGO_LABEL } from '../api/ventas.api';
-import { num } from '../api/atenciones.api';
 import { hoyLocal } from '../api/tasaciones.api';
+import { formatMontoInput, parseMonto } from '../lib/formato';
 
 const nombreCli = (c: { nombre: string; apellido?: string | null }) => [c.nombre, c.apellido].filter(Boolean).join(' ');
 
@@ -28,7 +28,7 @@ export default function VentaNuevaScreen({ navigation }: any) {
     const crear = useMutation({
         mutationFn: () => ventasApi.create({
             sucursalId: user!.sucursalId!, clienteId: cliente!.id, vendedorId: user!.id, vehiculoId: vehiculo!.id,
-            precioVenta: Number(precio), moneda, formaPago, fechaVenta: hoyLocal(),
+            precioVenta: parseMonto(precio) ?? 0, moneda, formaPago, fechaVenta: hoyLocal(),
             observaciones: obs.trim() || undefined,
         }),
         onSuccess: () => { qc.invalidateQueries({ queryKey: ['ventas'] }); navigation.goBack(); },
@@ -39,8 +39,8 @@ export default function VentaNuevaScreen({ navigation }: any) {
         if (!user?.sucursalId) return Alert.alert('Sin sucursal', 'Tu usuario no tiene una sucursal asignada; no se puede registrar la venta.');
         if (!cliente) return Alert.alert('Falta el cliente');
         if (!vehiculo) return Alert.alert('Falta el vehículo');
-        const p = num(precio);
-        if (p == null || p <= 0) return Alert.alert('Precio inválido', 'Poné el precio de venta.');
+        const p = parseMonto(precio);
+        if (p == null || !(p > 0)) return Alert.alert('Precio inválido', 'Poné el precio de venta.');
         crear.mutate();
     };
 
@@ -62,7 +62,7 @@ export default function VentaNuevaScreen({ navigation }: any) {
             </View>
 
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg }}>
-                <Field label="Precio de venta" placeholder="0" keyboardType="numeric" value={precio} onChangeText={setPrecio} style={{ flex: 1 }} />
+                <Field label="Precio de venta" placeholder="0" keyboardType="numeric" value={precio} onChangeText={(v) => setPrecio(formatMontoInput(v))} style={{ flex: 1 }} />
                 <View style={{ width: 130 }}>
                     <Text style={s.miniLabel}>MONEDA</Text>
                     <Segmented value={moneda} onChange={setMoneda} options={[{ value: 'ARS', label: '$' }, { value: 'USD', label: 'US$' }]} style={{ marginTop: spacing.sm }} />

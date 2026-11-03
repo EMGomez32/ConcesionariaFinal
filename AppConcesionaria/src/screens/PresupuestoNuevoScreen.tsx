@@ -9,7 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { clientesApi } from '../api/clientes.api';
 import { vehiculosApi } from '../api/vehiculos.api';
 import { presupuestosApi } from '../api/presupuestos.api';
-import { num } from '../api/atenciones.api';
+import { formatMontoInput, parseMonto } from '../lib/formato';
 import { hoyLocal } from '../api/tasaciones.api';
 
 const nombreCli = (c: { nombre: string; apellido?: string | null }) => [c.nombre, c.apellido].filter(Boolean).join(' ');
@@ -28,8 +28,8 @@ export default function PresupuestoNuevoScreen({ navigation }: any) {
     const [validoHasta, setValidoHasta] = useState('');
     const [obs, setObs] = useState('');
 
-    const lista = num(precioLista) ?? 0;
-    const desc = num(descuento) ?? 0;
+    const lista = parseMonto(precioLista) ?? 0;
+    const desc = parseMonto(descuento) ?? 0;
     const precioFinal = Math.max(0, lista - desc);
 
     const crear = useMutation({
@@ -47,7 +47,8 @@ export default function PresupuestoNuevoScreen({ navigation }: any) {
         if (!user?.sucursalId) return Alert.alert('Sin sucursal', 'Tu usuario no tiene una sucursal asignada.');
         if (!cliente) return Alert.alert('Falta el cliente');
         if (!vehiculo) return Alert.alert('Falta el vehículo');
-        if (lista <= 0) return Alert.alert('Precio inválido', 'Poné el precio de lista.');
+        if (!(lista > 0)) return Alert.alert('Precio inválido', 'Poné el precio de lista.');
+        if (!(desc >= 0) || desc > lista) return Alert.alert('Descuento inválido', 'El descuento no puede superar el precio de lista.');
         crear.mutate();
     };
 
@@ -69,8 +70,8 @@ export default function PresupuestoNuevoScreen({ navigation }: any) {
             </View>
 
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg }}>
-                <Field label="Precio de lista" placeholder="0" keyboardType="numeric" value={precioLista} onChangeText={setPrecioLista} style={{ flex: 1 }} />
-                <Field label="Descuento" placeholder="0" keyboardType="numeric" value={descuento} onChangeText={setDescuento} style={{ flex: 1 }} />
+                <Field label="Precio de lista" placeholder="0" keyboardType="numeric" value={precioLista} onChangeText={(v) => setPrecioLista(formatMontoInput(v))} style={{ flex: 1 }} />
+                <Field label="Descuento" placeholder="0" keyboardType="numeric" value={descuento} onChangeText={(v) => setDescuento(formatMontoInput(v))} style={{ flex: 1 }} />
             </View>
             <View style={{ width: 160, marginTop: spacing.md }}>
                 <Text style={s.miniLabel}>MONEDA</Text>

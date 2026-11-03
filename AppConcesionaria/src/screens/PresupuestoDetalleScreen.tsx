@@ -5,6 +5,7 @@ import { colors, spacing, fonts, fontSize } from '../theme/tokens';
 import { Card, Badge, T } from '../components/ui';
 import { num } from '../api/atenciones.api';
 import { presupuestosApi, PresupuestoItem, ESTADO_PRESUPUESTO_LABEL } from '../api/presupuestos.api';
+import { fechaDia } from '../lib/formato';
 
 const money = (v: any, m = 'ARS') => {
     const n = num(v);
@@ -31,7 +32,7 @@ export default function PresupuestoDetalleScreen({ route }: any) {
                 <Badge label={est.label} tone={est.tone} />
                 {p.cliente?.nombre ? <T.Muted>{p.cliente.nombre}</T.Muted> : null}
             </View>
-            {p.validoHasta ? <T.Muted style={{ marginTop: spacing.xs }}>Válido hasta {new Date(p.validoHasta).toLocaleDateString('es-AR')}</T.Muted> : null}
+            {p.validoHasta ? <T.Muted style={{ marginTop: spacing.xs }}>Válido hasta {fechaDia(p.validoHasta)}</T.Muted> : null}
 
             <Card style={{ marginTop: spacing.lg }}>
                 <T.H2>Unidades</T.H2>

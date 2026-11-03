@@ -47,7 +47,12 @@ export default function MostradorScreen({ navigation }: any) {
 
     const identificar = useMutation({
         mutationFn: () => atencionesApi.identificar({ nombre: nombre.trim() || undefined, telefono: telefono.trim() || undefined }),
-        onSuccess: setIdent,
+        onSuccess: (r) => {
+            setIdent(r);
+            // Se puede buscar solo con el teléfono, pero el backend exige nombre para
+            // abrir la atención: si el cliente ya existe, el nombre sale de su ficha.
+            if (r.cliente && !nombre.trim()) setNombre(nombreCompleto(r.cliente));
+        },
         onError: (e) => Alert.alert('No pudimos buscar', errorMessage(e)),
     });
 
@@ -161,9 +166,12 @@ export default function MostradorScreen({ navigation }: any) {
                             style={{ marginTop: spacing.sm }}
                         />
 
+                        {!nombre.trim() ? (
+                            <T.Muted style={{ marginTop: spacing.lg }}>Escribí el nombre para abrir la visita.</T.Muted>
+                        ) : null}
                         <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg }}>
                             <Pressable onPress={limpiar} style={s.cancelBtn}><Text style={s.cancelText}>Descartar</Text></Pressable>
-                            <GradientButton title="Abrir atención" loading={abrir.isPending} onPress={() => abrir.mutate(undefined)} style={{ flex: 1 }} />
+                            <GradientButton title="Abrir atención" loading={abrir.isPending} disabled={!nombre.trim()} onPress={() => abrir.mutate(undefined)} style={{ flex: 1 }} />
                         </View>
                     </View>
                 )}
