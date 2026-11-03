@@ -53,3 +53,69 @@ export const waLink = (telefono: string | null | undefined, mensaje: string): st
     if (d.length < 8) return `https://wa.me/?${texto}`;
     return `https://wa.me/${d.startsWith('54') ? d : `54${d}`}?${texto}`;
 };
+
+/** Link para COMPARTIR un mensaje por WhatsApp sin destinatario (el usuario elige el chat). */
+export const waShareLink = (mensaje: string): string => waLink(null, mensaje);
+
+/** Monto con su moneda: "US$22.300" / "$14.500.000". Sin monto, `vacio`. */
+export const formatMoneda = (monto: number | string | null | undefined, moneda?: string | null, vacio = '—'): string => {
+    const n = monto === null || monto === undefined || monto === '' ? NaN : Number(monto);
+    if (!Number.isFinite(n)) return vacio;
+    return `${moneda === 'USD' ? 'US$' : '$'}${n.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
+};
+
+/** Cantidad con el sustantivo bien flexionado: "1 atención", "3 atenciones". */
+export const plural = (n: number, singular: string, enPlural: string): string =>
+    `${n} ${n === 1 ? singular : enPlural}`;
+
+const capitalizar = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ') : s);
+
+/** Nombre legible de cada rol (en la base van en minúscula y con guion bajo). */
+export const ROL_LABEL: Record<string, string> = {
+    super_admin: 'Superadministrador',
+    admin: 'Administrador',
+    vendedor: 'Vendedor',
+    tasador: 'Tasador',
+    cobrador: 'Cobrador',
+    postventa: 'Postventa',
+    lectura: 'Solo lectura',
+};
+export const rolLegible = (rol: string): string => ROL_LABEL[rol] ?? capitalizar(rol);
+export const rolesLegibles = (roles: string[]): string => roles.map(rolLegible).join(', ');
+
+/** Método de un pago (enum MetodoPago del backend). */
+export const METODO_PAGO_LABEL: Record<string, string> = {
+    efectivo: 'Efectivo',
+    transferencia: 'Transferencia',
+    tarjeta: 'Tarjeta',
+    cheque: 'Cheque',
+    otro: 'Otro',
+};
+export const metodoPagoLegible = (metodo: string | null | undefined): string =>
+    metodo ? (METODO_PAGO_LABEL[metodo] ?? capitalizar(metodo)) : 'Sin método';
+
+/** Kilómetros con separador de miles: "45.000 km". */
+export const formatKm = (km: number | string | null | undefined): string | null => {
+    const n = km === null || km === undefined || km === '' ? NaN : Number(km);
+    return Number.isFinite(n) ? `${n.toLocaleString('es-AR')} km` : null;
+};
+
+/**
+ * Mensaje para ofrecer una unidad por WhatsApp. No lleva el dominio (la patente
+ * no se publica) ni ningún dato de compra: lo mismo que se ve en el salón.
+ */
+export const mensajeUnidad = (v: {
+    marca: string; modelo: string; version?: string | null; anio?: number | null;
+    kmIngreso?: number | string | null; color?: string | null;
+    precioLista?: number | string | null; moneda?: string | null;
+}): string => {
+    const titulo = [v.marca, v.modelo, v.version, v.anio].filter(Boolean).join(' ');
+    const datos = [formatKm(v.kmIngreso), v.color].filter(Boolean).join(' · ');
+    const precio = formatMoneda(v.precioLista, v.moneda, '');
+    return [
+        `¡Hola! Te paso esta unidad: ${titulo}.`,
+        datos ? `${datos}.` : null,
+        precio ? `Precio: ${precio}.` : 'Precio: consultanos.',
+        '¿Te interesa? Escribime y coordinamos para que la veas.',
+    ].filter(Boolean).join('\n');
+};

@@ -1,4 +1,5 @@
 import { api } from './client';
+import { Paginado } from '../lib/paginacion';
 import type { BadgeTone } from '../components/ui';
 
 /** API de Clientes (la cartera del vendedor). */
@@ -22,7 +23,6 @@ export interface Cliente {
     ultimaInteraccionEn?: string | null;
 }
 
-interface Paginado<T> { results: T[]; page: number; limit: number; totalPages: number; totalResults: number }
 
 export const clientesApi = {
     list: (search?: string, page = 1, limit = 30) =>
@@ -43,3 +43,10 @@ export const ORIGEN_LEAD_LABEL: Record<OrigenLead, string> = {
     deruedas: 'DeRuedas', mercadolibre: 'Mercado Libre', instagram: 'Instagram', facebook: 'Facebook',
     whatsapp: 'WhatsApp', web: 'Web', mostrador: 'Mostrador', referido: 'Referido', otro: 'Otro',
 };
+
+/** Un cliente como opción de selector. */
+export const clienteAOpcion = (c: { id: number; nombre: string; apellido?: string | null; telefono?: string | null }) => ({
+    id: c.id,
+    label: [c.nombre, c.apellido].filter(Boolean).join(' '),
+    sub: c.telefono ?? undefined,
+});

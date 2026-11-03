@@ -1,18 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, ActivityIndicator, Pressable, Alert } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
-import { colors, spacing, radius, fonts, fontSize } from '../theme/tokens';
-import { Card, Badge, Field, GradientButton, GhostButton, Segmented, Sheet, T } from '../components/ui';
+import { spacing, radius, fontSize, touchMin } from '../theme/tokens';
+import { makeStyles, useTheme } from '../theme/theme';
+import {
+    Card, Badge, Checkbox, Chips, Field, GradientButton, GhostButton, IconButton, KeyboardSafeView, Segmented, Sheet, T, ErrorCarga,
+} from '../components/ui';
 import { errorMessage } from '../api/client';
 import {
-    atencionesApi, AtencionDetalle, ModoBusqueda, TipoFinanciamiento, CondicionTasacion,
+    atencionesApi, unidadDeLaVisita, ModoBusqueda, TipoFinanciamiento, CondicionTasacion,
     ResultadoAtencion, ResultadoBusqueda, Sugerencia, UnidadSugerida, TipoSeguimiento,
-    num, MOTIVO_LABEL, RESULTADO_LABEL, RESULTADOS_DEFINITIVOS, FINANCIAMIENTO_LABEL,
+    num, MOTIVO_LABEL, RESULTADO_LABEL, RESULTADOS_DEFINITIVOS,
     CONDICION_LABEL, CONDICIONES, ESTADO_PERMUTA_LABEL, MEDIO_CONTACTO_LABEL, MEDIOS_CONTACTO,
     faltanDatosDelCliente, codigoDeError, COD_SOLO_TASADOR,
 } from '../api/atenciones.api';
-import { formatMontoInput, montoATexto, parseMonto } from '../lib/formato';
+import { clienteAOpcion } from '../api/clientes.api';
+import { unidadAOpcion } from '../api/vehiculos.api';
+import { formatKm, formatMontoInput, montoATexto, parseMonto } from '../lib/formato';
 
 const money = (v: any, m = 'ARS') => {
     const n = num(v);
@@ -25,8 +30,15 @@ const enDias = (n: number) => {
     const d = new Date(); d.setDate(d.getDate() + n);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+const MONEDAS = [
+    { value: 'ARS' as const, label: 'Pesos' },
+    { value: 'USD' as const, label: 'Dólares' },
+];
+
 
 export default function AtencionDetalleScreen({ route, navigation }: any) {
+    const s = useStyles();
+    const { colors } = useTheme();
     const id: number = route.params?.id;
     const qc = useQueryClient();
     const detalleKey = ['atencion', id];
@@ -40,11 +52,24 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
     const [moneda, setMoneda] = useState<'ARS' | 'USD'>('ARS');
     const [anticipo, setAnticipo] = useState('');
     const [cuota, setCuota] = useState('');
-    const [tipoFin, setTipoFin] = useState<TipoFinanciamiento | ''>('');
+    // Lo que se ve elegido es lo que se manda: arranca en Contado (antes se veía
+    // "Contado" y se enviaba undefined).
+    const [tipoFin, setTipoFin] = useState<TipoFinanciamiento>('contado');
     // Búsqueda por modelo/unidad.
     const [bMarca, setBMarca] = useState('');
     const [bModelo, setBModelo] = useState('');
     const [bDominio, setBDominio] = useState('');
+
+    // ── Canje (el usado que entrega el cliente) ─────────────────────────────
+    const [pMarca, setPMarca] = useState('');
+    const [pModelo, setPModelo] = useState('');
+    const [pDominio, setPDominio] = useState('');
+    const [pAnio, setPAnio] = useState('');
+    const [pKm, setPKm] = useState('');
+    const [pCondicion, setPCondicion] = useState<CondicionTasacion>('bueno');
+    const [pValor, setPValor] = useState('');
+    // El canje tiene su PROPIA moneda: antes quedaba atada a la de la búsqueda.
+    const [pMoneda, setPMoneda] = useState<'ARS' | 'USD'>('ARS');
 
     // Sembramos desde la atención cargada (una vez).
     const [seeded, setSeeded] = useState(false);
@@ -53,22 +78,13 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
             if (a.modoBusqueda) setModo(a.modoBusqueda);
             if (num(a.presupuestoMin) != null) setPresMin(montoATexto(num(a.presupuestoMin)));
             if (num(a.presupuestoMax) != null) setPresMax(montoATexto(num(a.presupuestoMax)));
-            if (a.moneda === 'USD' || a.moneda === 'ARS') setMoneda(a.moneda);
+            if (a.moneda === 'USD' || a.moneda === 'ARS') { setMoneda(a.moneda); setPMoneda(a.moneda); }
             if (num(a.anticipo) != null) setAnticipo(montoATexto(num(a.anticipo)));
             if (num(a.cuotaMaxima) != null) setCuota(montoATexto(num(a.cuotaMaxima)));
             if (a.tipoFinanciamiento) setTipoFin(a.tipoFinanciamiento);
             setSeeded(true);
         }
     }, [a, seeded]);
-
-    // ── Permuta ───────────────────────────────────────────────────────────
-    const [pMarca, setPMarca] = useState('');
-    const [pModelo, setPModelo] = useState('');
-    const [pDominio, setPDominio] = useState('');
-    const [pAnio, setPAnio] = useState('');
-    const [pKm, setPKm] = useState('');
-    const [pCondicion, setPCondicion] = useState<CondicionTasacion>('bueno');
-    const [pValor, setPValor] = useState('');
 
     // ── Datos del cliente (gate Ley 25.326) ────────────────────────────────
     const [datosOpen, setDatosOpen] = useState(false);
@@ -95,7 +111,7 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
             presupuestoMax: numOr(presMax),
             anticipo: numOr(anticipo),
             cuotaMaxima: numOr(cuota),
-            tipoFinanciamiento: tipoFin || undefined,
+            tipoFinanciamiento: tipoFin,
             moneda,
             marca: bMarca.trim() || undefined,
             modelo: bModelo.trim() || undefined,
@@ -109,28 +125,30 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
         mutationFn: (v: { vehiculoId: number; tipo: 'buscada' | 'sugerida'; motivoSugerencia?: string }) =>
             atencionesApi.registrarUnidad(id, { ...v, accion: 'vista' }),
         onSuccess: () => { Alert.alert('Registrado', 'Quedó anotado en la visita.'); qc.invalidateQueries({ queryKey: detalleKey }); },
-        onError: (e) => {
-            if (faltanDatosDelCliente(e)) return pedirDatos(() => {});
+        onError: (e, vars) => {
+            // Faltaban datos del cliente: se completan y la unidad SE REGISTRA (antes
+            // se completaban y la unidad quedaba sin anotar).
+            if (faltanDatosDelCliente(e)) return pedirDatos(() => registrar.mutate(vars));
             Alert.alert('No se pudo registrar', errorMessage(e));
         },
     });
 
     const [soloTasador, setSoloTasador] = useState(false);
-    const guardarPermuta = useMutation({
+    const guardarCanje = useMutation({
         mutationFn: (sinValor: boolean) => atencionesApi.registrarPermuta(id, {
             marca: pMarca.trim(), modelo: pModelo.trim(), dominio: pDominio.trim(),
             anio: numOr(pAnio), km: numOr(pKm), condicion: pCondicion,
-            valorEstimado: sinValor ? undefined : numOr(pValor), moneda,
+            valorEstimado: sinValor ? undefined : numOr(pValor), moneda: pMoneda,
         }),
         onSuccess: () => {
-            Alert.alert('Permuta cargada', soloTasador ? 'Quedó sin tasar: la completa el tasador.' : 'Registrada.');
+            Alert.alert('Canje cargado', soloTasador ? 'Quedó sin tasar: lo completa el tasador.' : 'Quedó registrado.');
             setPMarca(''); setPModelo(''); setPDominio(''); setPAnio(''); setPKm(''); setPValor('');
             qc.invalidateQueries({ queryKey: detalleKey });
         },
         onError: (e) => {
-            if (faltanDatosDelCliente(e)) return pedirDatos(() => guardarPermuta.mutate(soloTasador));
-            if (codigoDeError(e) === COD_SOLO_TASADOR) { setSoloTasador(true); setPValor(''); guardarPermuta.mutate(true); return; }
-            Alert.alert('No se pudo cargar la permuta', errorMessage(e));
+            if (faltanDatosDelCliente(e)) return pedirDatos(() => guardarCanje.mutate(soloTasador));
+            if (codigoDeError(e) === COD_SOLO_TASADOR) { setSoloTasador(true); setPValor(''); guardarCanje.mutate(true); return; }
+            Alert.alert('No se pudo cargar el canje', errorMessage(e));
         },
     });
 
@@ -147,6 +165,15 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
         onError: (e) => Alert.alert('No se guardó', errorMessage(e)),
     });
 
+    /** Parámetros para presupuestar o vender con lo que ya se sabe de la visita. */
+    const paramsVenta = () => {
+        const u = a ? unidadDeLaVisita(a) : undefined;
+        return {
+            ...(a?.cliente ? { cliente: clienteAOpcion(a.cliente) } : {}),
+            ...(u ? { vehiculo: unidadAOpcion(u) } : {}),
+        };
+    };
+
     const cerrar = useMutation({
         mutationFn: () => atencionesApi.cerrar(id, {
             resultado: resElegido!,
@@ -157,6 +184,18 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
         onSuccess: () => {
             setCierreOpen(false);
             qc.invalidateQueries({ queryKey: ['atenciones'] });
+            qc.invalidateQueries({ queryKey: detalleKey });
+            if (resElegido === 'cotizacion') {
+                // Se le entregó un presupuesto: se ofrece cargarlo ya, con el cliente
+                // (y la unidad) puestos. La espera deja cerrar el modal antes del aviso.
+                setTimeout(() => {
+                    Alert.alert('Atención cerrada', '¿Cargás ahora el presupuesto que le entregaste?', [
+                        { text: 'Ahora no', style: 'cancel', onPress: () => navigation.goBack() },
+                        { text: 'Crear presupuesto', onPress: () => navigation.replace('PresupuestoNuevo', paramsVenta()) },
+                    ]);
+                }, 400);
+                return;
+            }
             navigation.goBack();
         },
         onError: (e) => Alert.alert('No se pudo cerrar', errorMessage(e)),
@@ -169,233 +208,287 @@ export default function AtencionDetalleScreen({ route, navigation }: any) {
         setDatosOpen(true);
     };
 
-    const permutaActual = a?.tasaciones?.[0];
+    const vender = () => {
+        const p = paramsVenta();
+        const detalle = [
+            p.cliente ? `Cliente: ${p.cliente.label}` : null,
+            p.vehiculo ? `Unidad: ${p.vehiculo.label}` : 'La unidad la elegís en el paso siguiente.',
+        ].filter(Boolean).join('\n');
+        Alert.alert('Vender', detalle, [
+            { text: 'Cancelar', style: 'cancel' },
+            { text: 'Crear presupuesto', onPress: () => navigation.navigate('PresupuestoNuevo', p) },
+            { text: 'Registrar venta', onPress: () => navigation.navigate('VentaNueva', p) },
+        ]);
+    };
+
+    const canjeActual = a?.tasaciones?.[0];
     const soloLectura = a?.estado === 'cerrada';
 
-    if (q.isLoading) return <View style={s.center}><ActivityIndicator color={colors.accent} /></View>;
-    if (!a) return <View style={s.center}><T.Muted>No se pudo cargar la atención.</T.Muted></View>;
+    if (q.isLoading) return <View style={s.center}><ActivityIndicator color={colors.accentText} accessibilityLabel="Cargando" /></View>;
+    if (!a) {
+        return (
+            <View style={[s.center, { padding: spacing.lg }]}>
+                <ErrorCarga que="la atención" error={q.error} onRetry={() => { q.refetch(); }} style={{ alignSelf: 'stretch' }} />
+            </View>
+        );
+    }
 
     const cliente = a.cliente ? [a.cliente.nombre, a.cliente.apellido].filter(Boolean).join(' ') : 'Sin cliente';
     const abierta = a.estado === 'abierta';
 
     return (
-        <ScrollView style={s.root} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
-            {/* Header */}
-            <T.H1>{cliente}</T.H1>
-            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Badge label={abierta ? 'ABIERTA' : 'CERRADA'} tone={abierta ? 'warning' : 'muted'} />
-                <T.Muted>{MOTIVO_LABEL[a.motivo]}</T.Muted>
-                {a.cliente?.telefono ? <T.Muted>· {a.cliente.telefono}</T.Muted> : null}
-            </View>
-
-            {abierta ? (
-                <GradientButton title="Cerrar atención" onPress={() => setCierreOpen(true)} style={{ marginTop: spacing.lg }} />
-            ) : a.resultado ? (
-                <View style={{ marginTop: spacing.lg }}>
-                    <Badge label={RESULTADO_LABEL[a.resultado].toUpperCase()} tone="cyan" />
+        <KeyboardSafeView style={s.root}>
+            <ScrollView style={s.root} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+                {/* Header */}
+                <T.H1>{cliente}</T.H1>
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Badge label={abierta ? 'ABIERTA' : 'CERRADA'} tone={abierta ? 'warning' : 'muted'} />
+                    <T.Muted>{MOTIVO_LABEL[a.motivo]}</T.Muted>
+                    {a.cliente?.telefono ? <T.Muted>· {a.cliente.telefono}</T.Muted> : null}
                 </View>
-            ) : null}
 
-            {/* Relevamiento */}
-            <Card style={{ marginTop: spacing.lg }}>
-                <T.H2>Qué está buscando</T.H2>
-                <Segmented
-                    value={modo} onChange={setModo}
-                    options={[{ value: 'presupuesto', label: 'Presupuesto' }, { value: 'modelo', label: 'Modelo' }, { value: 'unidad', label: 'Unidad' }]}
-                    style={{ marginTop: spacing.md }}
-                />
-
-                {modo === 'presupuesto' ? (
-                    <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-                        <Field label="Desde" placeholder="0" keyboardType="numeric" value={presMin} onChangeText={(v) => setPresMin(formatMontoInput(v))} style={{ flex: 1 }} />
-                        <Field label="Hasta" placeholder="Tope" keyboardType="numeric" value={presMax} onChangeText={(v) => setPresMax(formatMontoInput(v))} style={{ flex: 1 }} />
-                    </View>
-                ) : modo === 'modelo' ? (
-                    <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-                        <Field label="Marca" placeholder="Toyota" value={bMarca} onChangeText={setBMarca} style={{ flex: 1 }} />
-                        <Field label="Modelo" placeholder="Corolla" value={bModelo} onChangeText={setBModelo} style={{ flex: 1 }} />
-                    </View>
-                ) : (
-                    <Field label="Dominio" placeholder="AB123CD" autoCapitalize="characters" value={bDominio} onChangeText={setBDominio} style={{ marginTop: spacing.md }} />
-                )}
-
-                <Text style={s.miniLabel}>MONEDA</Text>
-                <Segmented value={moneda} onChange={setMoneda} options={[{ value: 'ARS', label: 'Pesos' }, { value: 'USD', label: 'Dólares' }]} style={{ marginTop: spacing.xs }} />
-
-                <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-                    <Field label="Anticipo" placeholder="0" keyboardType="numeric" value={anticipo} onChangeText={(v) => setAnticipo(formatMontoInput(v))} style={{ flex: 1 }} />
-                    <Field label="Cuota máx." placeholder="0" keyboardType="numeric" value={cuota} onChangeText={(v) => setCuota(formatMontoInput(v))} style={{ flex: 1 }} />
-                </View>
-                <Text style={s.miniLabel}>FINANCIAMIENTO</Text>
-                <Segmented
-                    value={tipoFin || 'contado'} onChange={(v) => setTipoFin(v as TipoFinanciamiento)}
-                    options={[{ value: 'contado', label: 'Contado' }, { value: 'credito', label: 'Crédito' }, { value: 'plan_de_ahorro', label: 'Plan' }]}
-                    style={{ marginTop: spacing.xs }}
-                />
-
-                {!soloLectura ? (
-                    <GradientButton title="Buscar unidades" loading={buscar.isPending} onPress={() => buscar.mutate()} style={{ marginTop: spacing.lg }} />
-                ) : null}
-            </Card>
-
-            {/* Resultado de búsqueda */}
-            {busq ? (
-                <Card style={{ marginTop: spacing.md }}>
-                    <T.H2>Para mostrarle</T.H2>
-                    {busq.relevamiento.presupuestoQueMandaElFiltro != null ? (
-                        <T.Muted style={{ marginTop: spacing.xs }}>
-                            Se filtró con {money(busq.relevamiento.presupuestoQueMandaElFiltro, moneda)} ({busq.relevamiento.origenDelFiltro}).
-                        </T.Muted>
-                    ) : null}
-                    {/* Autos de otra moneda convertidos al blue para poder compararlos.
-                        El equivalente en pesos es orientativo; el precio real sigue en su moneda. */}
-                    {busq.relevamiento.cotizacion && (busq.relevamiento.unidadesConvertidas ?? 0) > 0 ? (
-                        <T.Muted style={{ marginTop: spacing.xs, color: colors.accent3 }}>
-                            {busq.relevamiento.unidadesConvertidas} en otra moneda, convertida{(busq.relevamiento.unidadesConvertidas ?? 0) === 1 ? '' : 's'} al dólar {busq.relevamiento.cotizacion.tipo} (${busq.relevamiento.cotizacion.valor.toLocaleString('es-AR')}) para compararlas.
-                        </T.Muted>
-                    ) : null}
-
-                    {busq.exacta ? (
-                        <UnidadRow u={busq.exacta} tag={busq.exactaPorEncimaDelMaximo ? 'sobre el máximo' : 'la buscada'}
-                            onRegistrar={() => registrar.mutate({ vehiculoId: busq.exacta!.id, tipo: 'buscada' })} />
-                    ) : busq.estadoDeLaExacta ? (
-                        <T.Muted style={{ marginTop: spacing.sm }}>La unidad buscada no está disponible ({busq.estadoDeLaExacta}).</T.Muted>
-                    ) : null}
-
-                    {busq.alternativas.map((alt: Sugerencia) => (
-                        <UnidadRow key={alt.unidad.id} u={alt.unidad} motivo={alt.motivo}
-                            tag={alt.porEncimaDelMaximo ? 'sobre el máximo' : 'sugerida'}
-                            onRegistrar={() => registrar.mutate({ vehiculoId: alt.unidad.id, tipo: 'sugerida', motivoSugerencia: alt.motivo })} />
-                    ))}
-
-                    {busq.aviso ? <T.Muted style={{ marginTop: spacing.sm }}>{busq.aviso}</T.Muted> : null}
-                    {busq.exacta == null && busq.alternativas.length === 0 ? (
-                        <T.Muted style={{ marginTop: spacing.sm }}>No hay ninguna alternativa que cumpla los criterios.</T.Muted>
-                    ) : null}
-                </Card>
-            ) : null}
-
-            {/* Unidades ya mostradas en la visita */}
-            {a.vehiculos?.length ? (
-                <Card style={{ marginTop: spacing.md }}>
-                    <T.H2>En esta visita</T.H2>
-                    {a.vehiculos.map((v) => (
-                        <View key={v.id} style={s.vehRow}>
-                            <T.Body>{tituloUnidad(v.vehiculo)}</T.Body>
-                            <Badge label={v.tipo === 'sugerida' ? 'sugerida' : 'la buscó'} tone={v.tipo === 'sugerida' ? 'violet' : 'accent'} />
-                        </View>
-                    ))}
-                </Card>
-            ) : null}
-
-            {/* Permuta */}
-            <Card style={{ marginTop: spacing.md }}>
-                <T.H2>Permuta</T.H2>
-                {permutaActual ? (
-                    <View style={s.permutaBox}>
-                        <T.Body style={{ fontWeight: '700' }}>{[permutaActual.marca, permutaActual.modelo, permutaActual.anio].filter(Boolean).join(' ')}</T.Body>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs }}>
-                            <Badge label={ESTADO_PERMUTA_LABEL[permutaActual.estado].toUpperCase()} tone={permutaActual.estado === 'tasada' ? 'success' : permutaActual.estado === 'rechazada' ? 'danger' : 'warning'} />
-                            <T.Muted>{money(permutaActual.valorEstimado, permutaActual.moneda)}</T.Muted>
-                        </View>
-                    </View>
-                ) : soloLectura ? (
-                    <T.Muted style={{ marginTop: spacing.sm }}>No se cargó permuta.</T.Muted>
-                ) : (
-                    <View>
-                        <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-                            <Field label="Marca" placeholder="Del usado" value={pMarca} onChangeText={setPMarca} style={{ flex: 1 }} />
-                            <Field label="Modelo" value={pModelo} onChangeText={setPModelo} style={{ flex: 1 }} />
-                        </View>
-                        <Field label="Dominio *" placeholder="AB123CD" autoCapitalize="characters" value={pDominio} onChangeText={setPDominio} style={{ marginTop: spacing.sm }} />
-                        <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
-                            <Field label="Año" keyboardType="numeric" value={pAnio} onChangeText={setPAnio} style={{ flex: 1 }} />
-                            <Field label="Km" keyboardType="numeric" value={pKm} onChangeText={(v) => setPKm(formatMontoInput(v))} style={{ flex: 1 }} />
-                        </View>
-                        <Text style={s.miniLabel}>ESTADO GENERAL</Text>
-                        <Segmented
-                            value={pCondicion} onChange={setPCondicion}
-                            options={CONDICIONES.map((c) => ({ value: c, label: CONDICION_LABEL[c].split(' ')[0] }))}
-                            style={{ marginTop: spacing.xs }}
+                {abierta ? (
+                    <View style={{ gap: spacing.sm, marginTop: spacing.lg }}>
+                        <GradientButton title="Cerrar atención" onPress={() => setCierreOpen(true)} />
+                        <GhostButton
+                            title="Vender" icon="dollar-sign" onPress={vender}
+                            accessibilityHint="Crear un presupuesto o registrar la venta con este cliente"
                         />
-                        <Field label="Valor estimado de toma" placeholder="Lo que estimás" keyboardType="numeric" value={pValor} onChangeText={(v) => setPValor(formatMontoInput(v))} style={{ marginTop: spacing.sm }} />
-                        <GhostButton title="Cargar permuta" onPress={() => guardarPermuta.mutate(false)} style={{ marginTop: spacing.md }} />
                     </View>
-                )}
-            </Card>
-
-            {/* Modal: completar datos del cliente (Ley 25.326) */}
-            <Sheet
-                visible={datosOpen}
-                onClose={() => setDatosOpen(false)}
-                title="Completar los datos del cliente"
-                subtitle="Para test drive, cotización, reserva o permuta hacen falta (Ley 25.326)."
-                footer={<>
-                    <GhostButton title="Cancelar" onPress={() => setDatosOpen(false)} style={{ flex: 1 }} />
-                    <GradientButton title="Guardar" loading={completarDatos.isPending} onPress={() => completarDatos.mutate()} style={{ flex: 1 }} />
-                </>}
-            >
-                <Field label="DNI" keyboardType="numeric" value={dDni} onChangeText={setDDni} />
-                <Field label="Email" keyboardType="email-address" autoCapitalize="none" value={dEmail} onChangeText={setDEmail} style={{ marginTop: spacing.sm }} />
-                <Field label="Domicilio" value={dDir} onChangeText={setDDir} style={{ marginTop: spacing.sm }} />
-                <Pressable onPress={() => setDConsent((v) => !v)} style={s.check}>
-                    <View style={[s.checkbox, dConsent && s.checkboxOn]}>{dConsent ? <Feather name="check" size={14} color={colors.onAccent} /> : null}</View>
-                    <Text style={s.checkText}>El cliente presta conformidad para ser contactado (Ley 25.326).</Text>
-                </Pressable>
-            </Sheet>
-
-            {/* Modal: cierre */}
-            <Sheet
-                visible={cierreOpen}
-                onClose={() => setCierreOpen(false)}
-                title="Cerrar la atención"
-                subtitle="Elegí el resultado. Ninguna visita queda sin explicar."
-                footer={<>
-                    <GhostButton title="Cancelar" onPress={() => setCierreOpen(false)} style={{ flex: 1 }} />
-                    <GradientButton title="Cerrar" loading={cerrar.isPending} disabled={!resElegido} onPress={() => cerrar.mutate()} style={{ flex: 1 }} />
-                </>}
-            >
-                {(Object.keys(RESULTADO_LABEL) as ResultadoAtencion[]).map((r) => {
-                    const on = resElegido === r;
-                    return (
-                        <Pressable key={r} onPress={() => setResElegido(r)} style={[s.resOpt, on && s.resOptOn]}>
-                            <Text style={[s.resText, on && { color: colors.text, fontWeight: '700' }]}>{RESULTADO_LABEL[r]}</Text>
-                            {on ? <Feather name="check" size={16} color={colors.accent} /> : null}
-                        </Pressable>
-                    );
-                })}
-                {resElegido && !RESULTADOS_DEFINITIVOS.includes(resElegido) ? (
-                    <View style={{ marginTop: spacing.md }}>
-                        <Text style={s.miniLabel}>PRÓXIMO CONTACTO</Text>
-                        <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs, flexWrap: 'wrap' }}>
-                            {[['Mañana', 1], ['En 3 días', 3], ['En 1 semana', 7]].map(([lbl, n]) => {
-                                const val = enDias(n as number);
-                                const on = proximo === val;
-                                return (
-                                    <Pressable key={lbl as string} onPress={() => setProximo(val)} style={[s.chip, on && s.chipOn]}>
-                                        <Text style={[s.chipText, on && { color: colors.onAccent }]}>{lbl}</Text>
-                                    </Pressable>
-                                );
-                            })}
-                        </View>
-                        <Text style={[s.miniLabel, { marginTop: spacing.md }]}>MEDIO</Text>
-                        <Segmented value={medio} onChange={setMedio}
-                            options={MEDIOS_CONTACTO.slice(0, 3).map((m) => ({ value: m, label: MEDIO_CONTACTO_LABEL[m] }))}
-                            style={{ marginTop: spacing.xs }} />
-                        <Field label="Nota" placeholder="Qué quedó pendiente" value={notaCierre} onChangeText={setNotaCierre} style={{ marginTop: spacing.sm }} />
+                ) : a.resultado ? (
+                    <View style={{ marginTop: spacing.lg }}>
+                        <Badge label={RESULTADO_LABEL[a.resultado].toUpperCase()} tone="cyan" />
                     </View>
                 ) : null}
-            </Sheet>
-        </ScrollView>
+
+                {/* Relevamiento */}
+                <Card style={{ marginTop: spacing.lg }}>
+                    <T.H2>Qué está buscando</T.H2>
+                    <Segmented
+                        value={modo} onChange={setModo} accessibilityLabel="Buscar por"
+                        options={[{ value: 'presupuesto', label: 'Presupuesto' }, { value: 'modelo', label: 'Modelo' }, { value: 'unidad', label: 'Unidad' }]}
+                        style={{ marginTop: spacing.md }}
+                    />
+
+                    {modo === 'presupuesto' ? (
+                        <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
+                            <Field label="Desde" placeholder="0" keyboardType="numeric" value={presMin} onChangeText={(v) => setPresMin(formatMontoInput(v))} style={{ flex: 1 }} />
+                            <Field label="Hasta" placeholder="Tope" keyboardType="numeric" value={presMax} onChangeText={(v) => setPresMax(formatMontoInput(v))} style={{ flex: 1 }} />
+                        </View>
+                    ) : modo === 'modelo' ? (
+                        <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
+                            <Field label="Marca" placeholder="Toyota" value={bMarca} onChangeText={setBMarca} style={{ flex: 1 }} />
+                            <Field label="Modelo" placeholder="Corolla" value={bModelo} onChangeText={setBModelo} style={{ flex: 1 }} />
+                        </View>
+                    ) : (
+                        <Field
+                            label="Dominio" placeholder="AB123CD" autoCapitalize="characters" autoCorrect={false} spellCheck={false} autoComplete="off"
+                            value={bDominio} onChangeText={setBDominio} style={{ marginTop: spacing.md }}
+                        />
+                    )}
+
+                    <Text style={s.miniLabel}>MONEDA</Text>
+                    <Segmented value={moneda} onChange={setMoneda} accessibilityLabel="Moneda de la búsqueda" options={MONEDAS} style={{ marginTop: spacing.xs }} />
+
+                    <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
+                        <Field label="Anticipo" placeholder="0" keyboardType="numeric" value={anticipo} onChangeText={(v) => setAnticipo(formatMontoInput(v))} style={{ flex: 1 }} />
+                        <Field label="Cuota máx." placeholder="0" keyboardType="numeric" value={cuota} onChangeText={(v) => setCuota(formatMontoInput(v))} style={{ flex: 1 }} />
+                    </View>
+                    <Text style={s.miniLabel}>FINANCIAMIENTO</Text>
+                    <Segmented
+                        value={tipoFin} onChange={setTipoFin} accessibilityLabel="Financiamiento"
+                        options={[{ value: 'contado', label: 'Contado' }, { value: 'credito', label: 'Crédito' }, { value: 'plan_de_ahorro', label: 'Plan', accessibilityLabel: 'Plan de ahorro' }]}
+                        style={{ marginTop: spacing.xs }}
+                    />
+
+                    {!soloLectura ? (
+                        <GradientButton title="Buscar unidades" loading={buscar.isPending} onPress={() => buscar.mutate()} style={{ marginTop: spacing.lg }} />
+                    ) : null}
+                </Card>
+
+                {/* Resultado de búsqueda */}
+                {busq ? (
+                    <Card style={{ marginTop: spacing.md }}>
+                        <T.H2>Para mostrarle</T.H2>
+                        {busq.relevamiento.presupuestoQueMandaElFiltro != null ? (
+                            <T.Muted style={{ marginTop: spacing.xs }}>
+                                Se filtró con {money(busq.relevamiento.presupuestoQueMandaElFiltro, moneda)} ({busq.relevamiento.origenDelFiltro}).
+                            </T.Muted>
+                        ) : null}
+                        {/* Autos de otra moneda convertidos al blue para poder compararlos.
+                            El equivalente en pesos es orientativo; el precio real sigue en su moneda. */}
+                        {busq.relevamiento.cotizacion && (busq.relevamiento.unidadesConvertidas ?? 0) > 0 ? (
+                            <T.Muted style={{ marginTop: spacing.xs, color: colors.accent3 }}>
+                                {busq.relevamiento.unidadesConvertidas} en otra moneda, convertida{(busq.relevamiento.unidadesConvertidas ?? 0) === 1 ? '' : 's'} al dólar {busq.relevamiento.cotizacion.tipo} (${busq.relevamiento.cotizacion.valor.toLocaleString('es-AR')}) para compararlas.
+                            </T.Muted>
+                        ) : null}
+
+                        {busq.exacta ? (
+                            <UnidadRow u={busq.exacta} tag={busq.exactaPorEncimaDelMaximo ? 'sobre el máximo' : 'la buscada'}
+                                onVer={() => navigation.navigate('VehiculoDetalle', { id: busq.exacta!.id })}
+                                onRegistrar={() => registrar.mutate({ vehiculoId: busq.exacta!.id, tipo: 'buscada' })} />
+                        ) : busq.estadoDeLaExacta ? (
+                            <T.Muted style={{ marginTop: spacing.sm }}>La unidad buscada no está disponible ({busq.estadoDeLaExacta}).</T.Muted>
+                        ) : null}
+
+                        {busq.alternativas.map((alt: Sugerencia) => (
+                            <UnidadRow key={alt.unidad.id} u={alt.unidad} motivo={alt.motivo}
+                                tag={alt.porEncimaDelMaximo ? 'sobre el máximo' : 'sugerida'}
+                                onVer={() => navigation.navigate('VehiculoDetalle', { id: alt.unidad.id })}
+                                onRegistrar={() => registrar.mutate({ vehiculoId: alt.unidad.id, tipo: 'sugerida', motivoSugerencia: alt.motivo })} />
+                        ))}
+
+                        {busq.aviso ? <T.Muted style={{ marginTop: spacing.sm }}>{busq.aviso}</T.Muted> : null}
+                        {busq.exacta == null && busq.alternativas.length === 0 ? (
+                            <T.Muted style={{ marginTop: spacing.sm }}>No hay ninguna alternativa que cumpla los criterios.</T.Muted>
+                        ) : null}
+                    </Card>
+                ) : null}
+
+                {/* Unidades ya mostradas en la visita */}
+                {a.vehiculos?.length ? (
+                    <Card style={{ marginTop: spacing.md }}>
+                        <T.H2>En esta visita</T.H2>
+                        {a.vehiculos.map((v) => (
+                            <View key={v.id} style={s.vehRow}>
+                                <T.Body style={{ flex: 1 }}>{tituloUnidad(v.vehiculo)}</T.Body>
+                                <Badge label={v.tipo === 'sugerida' ? 'sugerida' : 'la buscó'} tone={v.tipo === 'sugerida' ? 'violet' : 'accent'} />
+                            </View>
+                        ))}
+                    </Card>
+                ) : null}
+
+                {/* Canje */}
+                <Card style={{ marginTop: spacing.md }}>
+                    <T.H2>Canje</T.H2>
+                    {canjeActual ? (
+                        <View style={s.canjeBox}>
+                            <T.Body style={{ fontWeight: '700' }}>{[canjeActual.marca, canjeActual.modelo, canjeActual.anio].filter(Boolean).join(' ')}</T.Body>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs }}>
+                                <Badge label={ESTADO_PERMUTA_LABEL[canjeActual.estado].toUpperCase()} tone={canjeActual.estado === 'tasada' ? 'success' : canjeActual.estado === 'rechazada' ? 'danger' : 'warning'} />
+                                <T.Muted>{money(canjeActual.valorEstimado, canjeActual.moneda)}</T.Muted>
+                            </View>
+                        </View>
+                    ) : soloLectura ? (
+                        <T.Muted style={{ marginTop: spacing.sm }}>No se cargó un canje.</T.Muted>
+                    ) : (
+                        <View>
+                            <T.Muted style={{ marginTop: spacing.xs }}>El usado que el cliente entrega en parte de pago.</T.Muted>
+                            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
+                                <Field label="Marca" placeholder="Del usado" value={pMarca} onChangeText={setPMarca} style={{ flex: 1 }} />
+                                <Field label="Modelo" value={pModelo} onChangeText={setPModelo} style={{ flex: 1 }} />
+                            </View>
+                            <Field
+                                label="Dominio *" placeholder="AB123CD" autoCapitalize="characters" autoCorrect={false} spellCheck={false} autoComplete="off"
+                                value={pDominio} onChangeText={setPDominio} style={{ marginTop: spacing.sm }}
+                            />
+                            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
+                                <Field label="Año" keyboardType="numeric" value={pAnio} onChangeText={(v) => setPAnio(v.replace(/\D/g, '').slice(0, 4))} style={{ flex: 1 }} />
+                                <Field label="Km" keyboardType="numeric" value={pKm} onChangeText={(v) => setPKm(formatMontoInput(v))} style={{ flex: 1 }} />
+                            </View>
+                            <Text style={s.miniLabel}>ESTADO GENERAL</Text>
+                            {/* Etiquetas completas: "Muy bueno" no se corta en "Muy". */}
+                            <Chips
+                                value={pCondicion} onChange={setPCondicion} accessibilityLabel="Estado general del usado"
+                                options={CONDICIONES.map((c) => ({ value: c, label: CONDICION_LABEL[c] }))}
+                                style={{ marginTop: spacing.xs }}
+                            />
+                            <Field label="Valor estimado de toma" placeholder="Lo que estimás" keyboardType="numeric" value={pValor} onChangeText={(v) => setPValor(formatMontoInput(v))} style={{ marginTop: spacing.sm }} />
+                            <Text style={s.miniLabel}>MONEDA DEL CANJE</Text>
+                            <Segmented value={pMoneda} onChange={setPMoneda} accessibilityLabel="Moneda del canje" options={MONEDAS} style={{ marginTop: spacing.xs }} />
+                            <GhostButton title="Cargar canje" onPress={() => guardarCanje.mutate(false)} disabled={guardarCanje.isPending} style={{ marginTop: spacing.md }} />
+                        </View>
+                    )}
+                </Card>
+
+                {/* Modal: completar datos del cliente (Ley 25.326) */}
+                <Sheet
+                    visible={datosOpen}
+                    onClose={() => setDatosOpen(false)}
+                    title="Completar los datos del cliente"
+                    subtitle="Para test drive, presupuesto, reserva o canje hacen falta (Ley 25.326)."
+                    footer={<>
+                        <GhostButton title="Cancelar" onPress={() => setDatosOpen(false)} style={{ flex: 1, paddingHorizontal: spacing.md }} />
+                        <GradientButton title="Guardar" loading={completarDatos.isPending} onPress={() => completarDatos.mutate()} style={{ flex: 1 }} />
+                    </>}
+                >
+                    <Field label="DNI" keyboardType="numeric" value={dDni} onChangeText={setDDni} />
+                    <Field label="Email" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" value={dEmail} onChangeText={setDEmail} style={{ marginTop: spacing.sm }} />
+                    <Field label="Domicilio" value={dDir} onChangeText={setDDir} style={{ marginTop: spacing.sm }} />
+                    <Checkbox
+                        checked={dConsent}
+                        onChange={setDConsent}
+                        label="El cliente presta conformidad para ser contactado (Ley 25.326)."
+                    />
+                </Sheet>
+
+                {/* Modal: cierre */}
+                <Sheet
+                    visible={cierreOpen}
+                    onClose={() => setCierreOpen(false)}
+                    title="Cerrar la atención"
+                    subtitle="Elegí el resultado. Ninguna visita queda sin explicar."
+                    footer={<>
+                        <GhostButton title="Cancelar" onPress={() => setCierreOpen(false)} style={{ flex: 1, paddingHorizontal: spacing.md }} />
+                        <GradientButton title="Cerrar" loading={cerrar.isPending} disabled={!resElegido} onPress={() => cerrar.mutate()} style={{ flex: 1 }} />
+                    </>}
+                >
+                    <View accessibilityRole="radiogroup" accessibilityLabel="Resultado de la atención">
+                        {(Object.keys(RESULTADO_LABEL) as ResultadoAtencion[]).map((r) => {
+                            const on = resElegido === r;
+                            return (
+                                <Pressable
+                                    key={r}
+                                    onPress={() => setResElegido(r)}
+                                    accessibilityRole="radio"
+                                    accessibilityLabel={RESULTADO_LABEL[r]}
+                                    accessibilityState={{ selected: on, checked: on }}
+                                    style={({ pressed }) => [s.resOpt, on && s.resOptOn, pressed && !on && { opacity: 0.7 }]}
+                                >
+                                    <Text style={[s.resText, on && { color: colors.text, fontWeight: '700' }]}>{RESULTADO_LABEL[r]}</Text>
+                                    {on ? <Feather name="check" size={16} color={colors.accentText} /> : null}
+                                </Pressable>
+                            );
+                        })}
+                    </View>
+                    {resElegido && !RESULTADOS_DEFINITIVOS.includes(resElegido) ? (
+                        <View style={{ marginTop: spacing.md }}>
+                            <Text style={s.miniLabel}>PRÓXIMO CONTACTO</Text>
+                            <Chips
+                                value={proximo}
+                                onChange={setProximo}
+                                accessibilityLabel="Próximo contacto"
+                                options={[['Mañana', 1], ['En 3 días', 3], ['En 1 semana', 7]].map(([lbl, n]) => ({ value: enDias(n as number), label: lbl as string }))}
+                                style={{ marginTop: spacing.xs }}
+                            />
+                            <Text style={[s.miniLabel, { marginTop: spacing.md }]}>MEDIO</Text>
+                            <Segmented value={medio} onChange={setMedio} accessibilityLabel="Medio del próximo contacto"
+                                options={MEDIOS_CONTACTO.slice(0, 3).map((m) => ({ value: m, label: MEDIO_CONTACTO_LABEL[m] }))}
+                                style={{ marginTop: spacing.xs }} />
+                            <Field label="Nota" placeholder="Qué quedó pendiente" value={notaCierre} onChangeText={setNotaCierre} style={{ marginTop: spacing.sm }} />
+                        </View>
+                    ) : null}
+                </Sheet>
+            </ScrollView>
+        </KeyboardSafeView>
     );
 }
 
-function UnidadRow({ u, motivo, tag, onRegistrar }: { u: UnidadSugerida; motivo?: string; tag: string; onRegistrar: () => void }) {
+function UnidadRow({ u, motivo, tag, onRegistrar, onVer }: { u: UnidadSugerida; motivo?: string; tag: string; onRegistrar: () => void; onVer: () => void }) {
+    const s = useStyles();
+    const { colors } = useTheme();
+    const titulo = tituloUnidad(u);
     return (
         <View style={s.unidad}>
-            <View style={{ flex: 1 }}>
-                <T.Body style={{ fontWeight: '700' }}>{tituloUnidad(u)}</T.Body>
-                <T.Muted>{u.dominio ? `${u.dominio} · ` : ''}{money(u.precioLista, u.moneda)}{u.kmIngreso != null ? ` · ${Number(u.kmIngreso).toLocaleString('es-AR')} km` : ''}</T.Muted>
+            <Pressable
+                onPress={onVer}
+                accessibilityRole="button"
+                accessibilityLabel={`${titulo}, ${money(u.precioLista, u.moneda)}`}
+                accessibilityHint="Abre la ficha con las fotos"
+                style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.7 }]}
+            >
+                <T.Body style={{ fontWeight: '700' }}>{titulo}</T.Body>
+                <T.Muted>{[u.dominio, money(u.precioLista, u.moneda), formatKm(u.kmIngreso)].filter(Boolean).join(' · ')}</T.Muted>
                 {/* Precio equivalente en la moneda del presupuesto (blue). Sólo cuando el
                     auto está en otra moneda y se lo convirtió. ORIENTATIVO: el de arriba es el real. */}
                 {u.precioEnMonedaPresupuesto != null && u.monedaPresupuesto ? (
@@ -405,28 +498,20 @@ function UnidadRow({ u, motivo, tag, onRegistrar }: { u: UnidadSugerida; motivo?
                 ) : null}
                 {motivo ? <T.Muted style={{ marginTop: 2, color: colors.accent3 }}>{motivo}</T.Muted> : null}
                 <View style={{ marginTop: spacing.xs }}><Badge label={tag} tone={tag === 'sugerida' ? 'violet' : tag === 'sobre el máximo' ? 'warning' : 'accent'} /></View>
-            </View>
-            <Pressable onPress={onRegistrar} hitSlop={8} style={s.regBtn}><Feather name="plus" size={18} color={colors.accent} /></Pressable>
+            </Pressable>
+            <IconButton icon="plus" label={`Anotar que le mostraste ${titulo}`} color={colors.accentText} onPress={onRegistrar} />
         </View>
     );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     root: { flex: 1, backgroundColor: colors.bg },
     center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
     miniLabel: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: '700', letterSpacing: 0.5, marginTop: spacing.md },
     vehRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.sm },
-    permutaBox: { backgroundColor: colors.bgElevated, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginTop: spacing.sm },
+    canjeBox: { backgroundColor: colors.bgElevated, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginTop: spacing.sm },
     unidad: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md },
-    regBtn: { width: 40, height: 40, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
-    check: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
-    checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1, borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
-    checkboxOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-    checkText: { color: colors.textSecondary, fontSize: fontSize.sm, flex: 1 },
-    resOpt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginTop: spacing.sm },
+    resOpt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: touchMin, paddingVertical: 10, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginTop: spacing.sm },
     resOptOn: { borderColor: colors.accent, backgroundColor: colors.accent + '14' },
     resText: { color: colors.textSecondary, fontSize: fontSize.base },
-    chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.borderStrong },
-    chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-    chipText: { color: colors.textSecondary, fontWeight: '600', fontSize: fontSize.sm },
-});
+}));
