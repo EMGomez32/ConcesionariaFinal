@@ -121,7 +121,7 @@ const ComparadorPage = () => {
         { label: 'Versión', render: (v) => v.version || '—' },
         { label: 'Color', render: (v) => v.color || '—' },
         { label: 'Tipo', render: (v) => (v.tipo === 'CERO_KM' ? '0 km' : 'Usado') },
-        { label: 'Dominio', render: (v) => v.dominio || 'S/D' },
+        { label: 'Dominio', render: (v) => v.dominio || 'Sin dominio' },
         { label: 'Estado', render: (v) => <span className="cmp-chip">{ESTADO_LABEL[v.estado] ?? v.estado}</span> },
         { label: 'Sucursal', render: (v) => v.sucursal?.nombre || '—' },
         { label: 'Vence VTV', render: (v) => (v.vencimientoVtv ? formatFecha(v.vencimientoVtv) : '—') },
@@ -134,8 +134,8 @@ const ComparadorPage = () => {
                 <div className="cmp-title">
                     <div className="cmp-badge"><GitCompare size={22} /></div>
                     <div>
-                        <h1>Comparador de vehículos</h1>
-                        <p>Elegí hasta 3 unidades del stock y compará specs, precio y documentación lado a lado.</p>
+                        <h1>Comparador</h1>
+                        <p>Elegí hasta 3 unidades del stock y comparalas lado a lado: datos, precio y documentación.</p>
                     </div>
                 </div>
                 <div className="cmp-actions">

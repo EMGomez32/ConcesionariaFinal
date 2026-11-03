@@ -50,7 +50,7 @@ export const VENTAJAS: Ventaja[] = [
             'Reportes → Rentabilidad: por unidad vendida, precio de venta, precio de compra, gastos, ganancia y margen. Baja a Excel',
             'Reportes → Caja mensual: lo que entró (ventas y cuotas) contra lo que salió (gastos de unidades y gastos fijos), con el neto por moneda',
             'Gastos Fijos: alquiler, sueldos, servicios, por mes, por sucursal y por categoría',
-            'Dashboard → alerta de stock estancado: qué unidades pasaron los 60 días en el playón y cuánta plata tenés parada ahí, a precio de compra',
+            'Inicio → alerta de stock estancado: qué unidades pasaron los 60 días en el playón y cuánta plata tenés parada ahí, a precio de compra',
             'Ficha del vehículo → pestaña Precios: cada cambio de precio de lista, con el valor anterior, el nuevo, el motivo y quién lo tocó',
         ],
     },
@@ -104,7 +104,7 @@ export const VENTAJAS: Ventaja[] = [
             'Reportes → Objetivos: la meta mensual de cada vendedor y el porcentaje que lleva cumplido',
             'Reportes → Ranking: unidades, facturado y rentabilidad por vendedor en el período',
             'Reportes → Comisiones: lo que le tenés que pagar a cada uno, por moneda, con la liquidación en PDF',
-            'Dashboard: la meta del mes de la concesionaria con la barra de avance, la tendencia de ventas de los últimos seis meses y la actividad reciente del equipo',
+            'Inicio: la meta del mes de la concesionaria con la barra de avance, la tendencia de ventas de los últimos seis meses y la actividad reciente del equipo',
             'Auditoría: el registro de cada operación con usuario, fecha, dirección y detalle. Se filtra por fecha, por persona y por tipo de operación, y baja a Excel',
             'Ficha del vehículo → pestaña Precios: quién repreció, cuándo y por qué',
         ],
@@ -131,7 +131,7 @@ export const VENTAJAS: Ventaja[] = [
             'Movimientos: a qué taller mandaste cada unidad y desde cuándo está afuera, con el botón para marcar el retorno',
             'Ajustes: el logo, los colores y el pie que salen impresos en todos los documentos',
             'Vehículos → Catálogo PDF y exportación a Excel del listado filtrado',
-            'Dashboard → alertas: documentación por vencer, reservas por vencer, cuotas en mora, turnos de taller y seguimientos agendados',
+            'Inicio → alertas: documentación por vencer, reservas por vencer, cuotas en mora, turnos de taller y seguimientos agendados',
             'Buscador de arriba (Ctrl o Cmd + K): encontrás un auto, un cliente o un proveedor escribiendo, desde cualquier pantalla',
         ],
     },
@@ -303,7 +303,7 @@ export const ROLES: Rol[] = [
         diaTipico:
             'Abre el tablero y le aparecen tres cosas: las consultas que todavía no atendió, las reservas que están por vencer y los clientes que tenía agendado llamar hoy. Arranca por las consultas más viejas, sigue por la Bandeja —WhatsApp, los mensajes directos de Instagram y de Messenger y los comentarios de las dos redes, todo en una sola lista— y por las preguntas de Mercado Libre, y va cargando lo que sale: una tasación, un presupuesto, una seña, una venta.',
         modulos: [
-            'Dashboard',
+            'Inicio',
             'Consultas',
             'Bandeja (WhatsApp, Instagram y Facebook)',
             'Mercado Libre (preguntas)',
@@ -473,7 +473,7 @@ export const ROLES: Rol[] = [
         diaTipico:
             'Abre el tablero y sus dos señales son las cuotas que están en mora y las que vencen en los próximos días: son las únicas alertas que le aparecen. Con eso arma la ruta del día. Cada cobro que registra queda con fecha, monto, método y referencia, y el recibo sale al momento.',
         modulos: [
-            'Dashboard',
+            'Inicio',
             'Financiación',
             'Reportes → Caja mensual',
             'Reportes → Cartera de mora',
@@ -547,7 +547,7 @@ export const ROLES: Rol[] = [
         diaTipico:
             'Abre el tablero y ve los turnos de taller de los próximos días y las unidades del stock con la VTV o el seguro por vencer. Va abriendo los casos que entran, los clasifica, les da turno, carga los trabajos que se hicieron y los cierra. Antes de irse, deja agendado el próximo service de los clientes que atendió.',
         modulos: [
-            'Dashboard',
+            'Inicio',
             'Postventa → Casos',
             'Postventa → Agenda de taller',
             'Postventa → Tipos de caso',
@@ -759,7 +759,7 @@ export const ROLES: Rol[] = [
         diaTipico:
             'Entra, busca lo que necesita y se va. Aterriza en el tablero, que le muestra los contadores del stock, las ventas, las reservas y los clientes, más el gráfico de cómo está repartido el stock. Lo que no le aparece son las Acciones del día: no tiene cola de trabajo ni bandejas que atender. Después ve el stock, los clientes, las ventas, las reservas, los presupuestos, los gastos, las financiaciones, la postventa, los proveedores y las sucursales. Y no opera: no registra una venta, no toma una seña, no arma un plan de cuotas, no carga el ingreso de una unidad ni le sube un archivo a la ficha de un auto, y tampoco da de baja nada. En las pantallas de operación directamente no le aparecen los botones de alta ni los de baja, y si alguien probara la dirección a mano el servidor tampoco lo dejaría: el límite está en los dos lados.',
         modulos: [
-            'Dashboard (los contadores, sin las alertas de trabajo)',
+            'Inicio (los contadores, sin las alertas de trabajo)',
             'Vehículos y Comparador',
             'Clientes',
             'Reservas',
@@ -888,7 +888,7 @@ const TODOS = ['admin', 'vendedor', 'cobrador', 'postventa', 'lectura'];
 
 export const MODULOS: Modulo[] = [
     {
-        nombre: 'Dashboard',
+        nombre: 'Inicio',
         seccion: 'General',
         qué: 'El tablero de entrada. Cada rol ve las señales de su trabajo: el vendedor sus consultas y reservas, el cobrador su mora, el de postventa sus turnos. El administrador ve además el resultado del mes, la tendencia de ventas, la meta y las ocho alertas juntas.',
         roles: TODOS,

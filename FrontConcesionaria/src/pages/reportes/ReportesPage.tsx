@@ -429,7 +429,7 @@ const ReportesPage = () => {
                 const msg = `Hola ${r.cliente}, te recordamos que la cuota N° ${r.nroCuota}${r.vehiculo ? ` de ${r.vehiculo}` : ''} venció el ${formatFecha(r.vencimiento)} y registra un saldo de ${money(r.saldo, r.moneda)}. ¿Coordinamos el pago? ¡Gracias!`;
                 const href = waLink(r.telefono, msg);
                 return href
-                    ? <a href={href} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar por WhatsApp (revisá antes de enviar)"><MessageCircle size={16} /></a>
+                    ? <a href={href} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar por WhatsApp (revisá antes de enviar)" aria-label="Recordar por WhatsApp"><MessageCircle size={16} aria-hidden="true" /></a>
                     : <span className="text-muted">—</span>;
             }
         },
@@ -492,7 +492,7 @@ const ReportesPage = () => {
                 const msg = `Hola ${r.cliente}, te recordamos que la cuota N° ${r.nroCuota}${r.vehiculo ? ` de ${r.vehiculo}` : ''} ${cuando}, por ${money(r.saldo, r.moneda)}. ¡Gracias!`;
                 const href = waLink(r.telefono, msg);
                 return href
-                    ? <a href={href} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar por WhatsApp (revisá antes de enviar)"><MessageCircle size={16} /></a>
+                    ? <a href={href} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar por WhatsApp (revisá antes de enviar)" aria-label="Recordar por WhatsApp"><MessageCircle size={16} aria-hidden="true" /></a>
                     : <span className="text-muted">—</span>;
             }
         },
@@ -617,7 +617,7 @@ const ReportesPage = () => {
                 const msg = `Hola ${r.cliente}, te recordamos que ${r.vehiculo || 'tu vehículo'} tiene su próximo service el ${formatFecha(r.proximoServiceFecha)}. Coordinemos un turno para hacerlo. ¡Gracias!`;
                 const href = waLink(r.telefono, msg);
                 return href
-                    ? <a href={href} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar por WhatsApp (revisá antes de enviar)"><MessageCircle size={16} /></a>
+                    ? <a href={href} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar por WhatsApp (revisá antes de enviar)" aria-label="Recordar por WhatsApp"><MessageCircle size={16} aria-hidden="true" /></a>
                     : <span className="text-muted">—</span>;
             }
         },

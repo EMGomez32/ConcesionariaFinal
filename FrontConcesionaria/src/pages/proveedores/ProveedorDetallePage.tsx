@@ -5,6 +5,11 @@ import type { Proveedor } from '../../types/proveedor.types';
 import { formatFecha } from '../../utils/fecha';
 import { labelTipoProveedor } from '../../constants/proveedorTipos';
 import Button from '../../components/ui/Button';
+import Badge, { type BadgeVariant } from '../../components/ui/Badge';
+import PageTitle from '../../components/ui/PageTitle';
+import { formatMoneda } from '../../utils/moneda';
+import { ESTADO_VEHICULO, estadoVehiculoLabel } from '../vehiculos/vehiculoTextos';
+import type { EstadoVehiculo } from '../../types/vehiculo.types';
 import {
     ArrowLeft, Building2, Phone, Mail, MapPin, Tag,
     Car, DollarSign, Wrench, RefreshCw, Truck
@@ -50,19 +55,22 @@ interface PostventaItemDet {
     caso?: { id: number };
 }
 
-const TIPO_COLORS: Record<string, string> = {
-    // Servicios a los que se envían unidades: tonos cálidos.
-    mecanico: '#f59e0b',
-    taller: '#f59e0b',
-    chapa_pintura: '#ef4444',
-    lavadero: '#06b6d4',
-    electricista: '#eab308',
-    gomeria: '#8b5cf6',
-    // Contrapartes comerciales: tonos fríos.
-    importadora: '#6366f1',
-    particular: '#10b981',
-    financiera: '#3b82f6',
-    otro: '#94a3b8',
+// Tipo de proveedor → variante del Badge del sistema. Antes eran hex fijos con
+// alfa pegado ("#f59e0b22") y un verde #d1fae5/#065f46 para "Activo" que en el
+// tema oscuro quedaba como una mancha clara: con tokens se adapta solo.
+const TIPO_VARIANT: Record<string, BadgeVariant> = {
+    // Servicios a los que se envían unidades.
+    mecanico: 'warning',
+    taller: 'warning',
+    chapa_pintura: 'danger',
+    lavadero: 'cyan',
+    electricista: 'warning',
+    gomeria: 'violet',
+    // Contrapartes comerciales.
+    importadora: 'violet',
+    particular: 'success',
+    financiera: 'info',
+    otro: 'default',
 };
 
 const ProveedorDetallePage = () => {
@@ -110,8 +118,8 @@ const ProveedorDetallePage = () => {
     }, [id]);
 
     if (loading) return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '0.75rem', color: 'var(--text-secondary)' }}>
-            <RefreshCw size={20} className="spin" /> Cargando...
+        <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '0.75rem', color: 'var(--text-secondary)' }}>
+            <RefreshCw size={20} className="spin" aria-hidden="true" /> Cargando el proveedor…
         </div>
     );
 
@@ -119,12 +127,11 @@ const ProveedorDetallePage = () => {
         <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>
             <p style={{ marginBottom: '1.5rem' }}>{error || 'Proveedor no encontrado.'}</p>
             <Button variant="secondary" onClick={() => navigate('/proveedores')}>
-                <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} /> Volver a Proveedores
+                <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} aria-hidden="true" /> Volver a Proveedores
             </Button>
         </div>
     );
 
-    const tipoColor = TIPO_COLORS[proveedor.tipo || 'otro'];
 
     const tabs: { key: Tab; label: string; icon: React.ComponentType<{ size?: number }>; count?: number }[] = [
         { key: 'info', label: 'Información', icon: Building2 },
@@ -136,25 +143,26 @@ const ProveedorDetallePage = () => {
 
     return (
         <div className="detalle-container">
+            <PageTitle title={proveedor.nombre} />
             <div className="detalle-header">
-                <button className="back-btn" onClick={() => navigate('/proveedores')}>
-                    <ArrowLeft size={20} />
+                <button type="button" className="back-btn" onClick={() => navigate('/proveedores')} aria-label="Volver a Proveedores" title="Volver">
+                    <ArrowLeft size={20} aria-hidden="true" />
                 </button>
                 <div className="proveedor-hero">
-                    <div className="proveedor-avatar-lg" style={{ background: `linear-gradient(135deg, ${tipoColor}, ${tipoColor}99)` }}>
+                    <div className="proveedor-avatar-lg" aria-hidden="true">
                         <Building2 size={32} />
                     </div>
                     <div>
                         <h1>{proveedor.nombre}</h1>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.4rem' }}>
                             {proveedor.tipo && (
-                                <span className="tipo-badge" style={{ background: `${tipoColor}22`, color: tipoColor }}>
+                                <Badge variant={TIPO_VARIANT[proveedor.tipo] ?? 'default'}>
                                     {labelTipoProveedor(proveedor.tipo)}
-                                </span>
+                                </Badge>
                             )}
-                            <span className={`status-badge ${proveedor.activo ? 'active' : 'inactive'}`}>
+                            <Badge variant={proveedor.activo ? 'success' : 'default'}>
                                 {proveedor.activo ? 'Activo' : 'Inactivo'}
-                            </span>
+                            </Badge>
                         </div>
                     </div>
                 </div>
@@ -184,10 +192,13 @@ const ProveedorDetallePage = () => {
                 </div>
             </div>
 
-            <div className="tabs-bar glass">
+            <div className="tabs-bar glass" role="tablist" aria-label="Secciones del proveedor">
                 {tabs.map(t => (
                     <button
                         key={t.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === t.key}
                         className={`tab-btn ${activeTab === t.key ? 'active' : ''}`}
                         onClick={() => setActiveTab(t.key)}
                     >
@@ -222,17 +233,17 @@ const ProveedorDetallePage = () => {
                                 <div className="info-row">
                                     <Phone size={16} />
                                     <span className="info-label">Teléfono</span>
-                                    <span className="info-value">{proveedor.telefono || '-'}</span>
+                                    <span className="info-value">{proveedor.telefono || 'Sin cargar'}</span>
                                 </div>
                                 <div className="info-row">
                                     <Mail size={16} />
                                     <span className="info-label">Email</span>
-                                    <span className="info-value">{proveedor.email || '-'}</span>
+                                    <span className="info-value">{proveedor.email || 'Sin cargar'}</span>
                                 </div>
                                 <div className="info-row">
                                     <MapPin size={16} />
                                     <span className="info-label">Dirección</span>
-                                    <span className="info-value">{proveedor.direccion || '-'}</span>
+                                    <span className="info-value">{proveedor.direccion || 'Sin cargar'}</span>
                                 </div>
                             </div>
                         </div>
@@ -250,11 +261,15 @@ const ProveedorDetallePage = () => {
                                 <tbody>
                                     {vehiculos.map((v) => (
                                         <tr key={v.id}>
-                                            <td><div className="fw-bold">{v.marca} {v.modelo}</div><div className="text-muted-sm">{v.anio}</div></td>
-                                            <td>{v.dominio || '-'}</td>
-                                            <td><span className="estado-badge">{v.estado}</span></td>
+                                            <td><div className="fw-bold">{v.marca} {v.modelo}</div>{v.anio && <div className="text-muted-sm">{v.anio}</div>}</td>
+                                            <td>{v.dominio || 'Sin dominio'}</td>
+                                            <td>
+                                                <Badge variant={ESTADO_VEHICULO[v.estado as EstadoVehiculo]?.variant ?? 'default'}>
+                                                    {estadoVehiculoLabel(v.estado)}
+                                                </Badge>
+                                            </td>
                                             {permisos.vePrecioDeCompra && (
-                                                <td>{v.precioCompra ? `$${Number(v.precioCompra).toLocaleString('es-AR')} ${v.moneda || 'ARS'}` : '-'}</td>
+                                                <td className="tabular-nums">{v.precioCompra ? formatMoneda(v.precioCompra, v.moneda) : 'Sin cargar'}</td>
                                             )}
                                         </tr>
                                     ))}
@@ -274,14 +289,14 @@ const ProveedorDetallePage = () => {
                                 <tbody>
                                     {enviadas.map((m) => (
                                         <tr key={m.id}>
-                                            <td className="fw-bold">{m.vehiculo ? `${m.vehiculo.marca} ${m.vehiculo.modelo}` : '-'}</td>
-                                            <td>{m.vehiculo?.dominio || '-'}</td>
+                                            <td className="fw-bold">{m.vehiculo ? `${m.vehiculo.marca} ${m.vehiculo.modelo}` : 'Unidad sin datos'}</td>
+                                            <td>{m.vehiculo?.dominio || 'Sin dominio'}</td>
                                             <td>{formatFecha(m.fecha)}</td>
-                                            <td>{m.motivo || '-'}</td>
+                                            <td>{m.motivo || <span className="text-muted">Sin motivo</span>}</td>
                                             <td>
                                                 {m.fechaRetorno
-                                                    ? <span className="text-muted">Volvió {formatFecha(m.fechaRetorno)}</span>
-                                                    : <span className="estado-badge">En el taller</span>}
+                                                    ? <Badge variant="success">Volvió el {formatFecha(m.fechaRetorno)}</Badge>
+                                                    : <Badge variant="warning">En preparación</Badge>}
                                             </td>
                                         </tr>
                                     ))}
@@ -301,10 +316,10 @@ const ProveedorDetallePage = () => {
                                 <tbody>
                                     {gastos.map((g) => (
                                         <tr key={g.id}>
-                                            <td>{g.descripcion || '-'}</td>
-                                            <td>{g.vehiculo ? `${g.vehiculo.marca} ${g.vehiculo.modelo}` : '-'}</td>
+                                            <td>{g.descripcion || <span className="text-muted">Sin descripción</span>}</td>
+                                            <td>{g.vehiculo ? `${g.vehiculo.marca} ${g.vehiculo.modelo}` : 'Sin unidad'}</td>
                                             <td>{formatFecha(g.fecha)}</td>
-                                            <td className="fw-bold">{g.monto ? `$${Number(g.monto).toLocaleString('es-AR')} ${g.moneda || 'ARS'}` : '-'}</td>
+                                            <td className="fw-bold tabular-nums">{g.monto ? formatMoneda(g.monto, g.moneda) : 'Sin importe'}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -323,10 +338,10 @@ const ProveedorDetallePage = () => {
                                 <tbody>
                                     {postventaItems.map((item) => (
                                         <tr key={item.id}>
-                                            <td>{item.descripcion || '-'}</td>
-                                            <td>{item.caso ? `#${item.caso.id}` : '-'}</td>
+                                            <td>{item.descripcion || <span className="text-muted">Sin descripción</span>}</td>
+                                            <td>{item.caso ? `Caso #${item.caso.id}` : 'Sin caso'}</td>
                                             <td>{formatFecha(item.fecha)}</td>
-                                            <td className="fw-bold">{item.monto ? `$${Number(item.monto).toLocaleString('es-AR')}` : '-'}</td>
+                                            <td className="fw-bold tabular-nums">{item.monto ? formatMoneda(item.monto) : 'Sin importe'}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -342,7 +357,7 @@ const ProveedorDetallePage = () => {
                 .back-btn:hover { background: var(--bg-secondary); color: var(--text-primary); transform: translateX(-2px); }
 
                 .proveedor-hero { display: flex; align-items: center; gap: 1.25rem; }
-                .proveedor-avatar-lg { width: 64px; height: 64px; border-radius: var(--radius-lg); color: var(--text-white); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+                .proveedor-avatar-lg { width: 64px; height: 64px; border-radius: var(--radius-lg); background: var(--accent-light); color: var(--accent); border: 1px solid rgba(var(--accent-rgb), 0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
                 .proveedor-hero h1 { font-size: var(--text-2xl); font-weight: 800; letter-spacing: -0.03em; }
 
                 .stats-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
@@ -353,7 +368,8 @@ const ProveedorDetallePage = () => {
                 .tabs-bar { display: flex; gap: 0.5rem; padding: 0.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); width: fit-content; }
                 .tab-btn { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 1.25rem; border-radius: var(--radius-md); font-weight: 600; font-size: var(--text-sm); color: var(--text-secondary); transition: all 0.15s; }
                 .tab-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }
-                .tab-btn.active { background: var(--accent); color: var(--text-white); }
+                .tab-btn.active { background: var(--accent); color: var(--text-on-accent); }
+                .tab-btn:focus-visible { box-shadow: 0 0 0 3px var(--ring); }
                 .tab-badge { background: color-mix(in srgb, currentColor 25%, transparent); padding: 0.125rem 0.5rem; border-radius: var(--radius-pill); font-size: var(--text-2xs); font-weight: 700; }
                 .tab-btn:not(.active) .tab-badge { background: var(--bg-secondary); color: var(--text-muted); }
 
@@ -367,11 +383,6 @@ const ProveedorDetallePage = () => {
                 .info-label { font-size: var(--text-sm); color: var(--text-secondary); width: 100px; flex-shrink: 0; }
                 .info-value { font-weight: 600; font-size: var(--text-base); }
 
-                .tipo-badge { padding: 0.25rem 0.75rem; border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: 700; }
-                .status-badge { padding: 0.25rem 0.75rem; border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-                .status-badge.active { background: #d1fae5; color: #065f46; }
-                .status-badge.inactive { background: var(--bg-secondary); color: var(--text-secondary); }
-                .estado-badge { padding: 0.2rem 0.6rem; border-radius: var(--radius-pill); font-size: var(--text-2xs); font-weight: 700; background: var(--bg-secondary); color: var(--text-secondary); }
 
                 .data-table { width: 100%; border-collapse: collapse; }
                 .data-table th { padding: 0.75rem 1rem; background: var(--bg-secondary); color: var(--text-secondary); font-weight: 700; font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); text-align: left; }

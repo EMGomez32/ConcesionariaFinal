@@ -1959,7 +1959,7 @@ const ConfiguracionPage = () => {
         <div className="page-container animate-fade-in" style={{ maxWidth: '900px' }}>
             <header className="page-header">
                 <div className="header-title">
-                    <h1>Configuración</h1>
+                    <h1>Ajustes</h1>
                     <p>Administrá tu concesionaria, tu perfil y la seguridad de tu cuenta.</p>
                 </div>
             </header>

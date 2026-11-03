@@ -6,6 +6,7 @@ import { reservasApi } from '../api/reservas.api';
 import { reportesApi } from '../api/reportes.api';
 import { metasApi } from '../api/metas.api';
 import { objetivosApi } from '../api/objetivos.api';
+import { EN_STOCK } from '../pages/vehiculos/vehiculoTextos';
 
 export const dashboardKeys = {
     all: ['dashboard'] as const,
@@ -24,7 +25,9 @@ export const useDashboardStats = () => {
         queryKey: dashboardKeys.stats(),
         queryFn: async () => {
             const [vehiculos, ventas, clientes, reservas] = await Promise.all([
-                vehiculosApi.getAll({ estado: 'publicado' }),
+                // "En stock" = en preparación + publicados + reservados (misma
+                // definición que "Distribución de stock" y el listado de Vehículos).
+                vehiculosApi.getAll({ estado: EN_STOCK }, { limit: 1 }),
                 ventasApi.getAll({}),
                 clientesApi.getAll({}),
                 reservasApi.getAll({ estado: 'activa' })
@@ -42,28 +45,38 @@ export const useDashboardStats = () => {
 };
 
 export interface StockSlice {
-    estado: 'preparacion' | 'publicado' | 'reservado' | 'vendido';
+    estado: 'preparacion' | 'publicado' | 'reservado';
     label: string;
     value: number;
     color: string;
 }
 
+/** El stock por estado (sólo lo que está en la concesionaria) y, aparte, cuántas se vendieron. */
+export interface StockDistribution {
+    slices: StockSlice[];
+    vendidos: number;
+}
+
 export const useStockDistribution = () => {
     return useQuery({
         queryKey: dashboardKeys.stockDistribution(),
-        queryFn: async (): Promise<StockSlice[]> => {
+        queryFn: async (): Promise<StockDistribution> => {
             const [prep, pub, res, ven] = await Promise.all([
                 vehiculosApi.getAll({ estado: 'preparacion' }, { limit: 1 }),
                 vehiculosApi.getAll({ estado: 'publicado' }, { limit: 1 }),
                 vehiculosApi.getAll({ estado: 'reservado' }, { limit: 1 }),
                 vehiculosApi.getAll({ estado: 'vendido' }, { limit: 1 }),
             ]);
-            return [
-                { estado: 'preparacion', label: 'En preparación', value: prep.totalResults ?? 0, color: 'var(--warning)' },
-                { estado: 'publicado', label: 'Publicados', value: pub.totalResults ?? 0, color: 'var(--accent)' },
-                { estado: 'reservado', label: 'Reservados', value: res.totalResults ?? 0, color: 'var(--accent-3)' },
-                { estado: 'vendido', label: 'Vendidos', value: ven.totalResults ?? 0, color: 'var(--accent-2)' },
-            ];
+            // Los vendidos ya no son stock: sumarlos al gráfico lo hacía decir 19
+            // cuando la tarjeta "Vehículos en stock" decía 11. Se informan aparte.
+            return {
+                slices: [
+                    { estado: 'preparacion', label: 'En preparación', value: prep.totalResults ?? 0, color: 'var(--warning)' },
+                    { estado: 'publicado', label: 'Publicados', value: pub.totalResults ?? 0, color: 'var(--accent)' },
+                    { estado: 'reservado', label: 'Reservados', value: res.totalResults ?? 0, color: 'var(--accent-3)' },
+                ],
+                vendidos: ven.totalResults ?? 0,
+            };
         },
         staleTime: 1000 * 60 * 2,
     });

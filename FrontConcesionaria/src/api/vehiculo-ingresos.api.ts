@@ -16,7 +16,8 @@ export interface IngresoVehiculo {
     ventaId?: number;
     concesionariaId?: number;
     createdAt?: string;
-    vehiculo?: { id: number; marca: string; modelo: string; dominio?: string };
+    // `moneda` es la del vehículo: el valor tomado sale de su precio de compra.
+    vehiculo?: { id: number; marca: string; modelo: string; version?: string; dominio?: string; moneda?: 'ARS' | 'USD' };
     sucursal?: { id: number; nombre: string };
     clienteOrigen?: { id: number; nombre: string };
     proveedorOrigen?: { id: number; nombre: string };
