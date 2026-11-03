@@ -12,6 +12,7 @@ import { BaseException, NotFoundException } from '../../../domain/exceptions/Bas
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { assertMismoTenant } from '../../security/tenantGuard';
 import { parsePagination, parseOrderBy } from '../queryOptions';
+import { whereDeBusqueda, clienteCoincide, vehiculoCoincide } from '../busqueda';
 
 /**
  * Vencimiento de la cuota nro `i` (1-based) contando desde la fecha de inicio.
@@ -94,8 +95,16 @@ export class PrismaFinanciacionRepository implements IFinanciacionRepository {
         const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
         const { limit: limitNum, page: pageNum } = parsePagination(options);
 
-        const where = coerceFilter(filter);
+        // q no es columna: fuera del filtro antes de coerceFilter (ver busqueda.ts).
+        const { q, ...resto } = filter ?? {};
+        const where = coerceFilter(resto);
 
+        // La unidad de un plan es la de su venta.
+        const busqueda = whereDeBusqueda(q, (t) => [
+            { cliente: clienteCoincide(t) },
+            { venta: { vehiculo: vehiculoCoincide(t) } },
+        ]);
+        if (busqueda) where.AND = busqueda;
 
         const results = await prisma.financiacion.findMany({
             where,
