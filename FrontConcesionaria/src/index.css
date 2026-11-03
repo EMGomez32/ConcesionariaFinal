@@ -83,7 +83,7 @@
   /* Border */
   --border: #e2e6ef;
   --border-strong: #cdd3e0;
-  --ring: rgba(16, 185, 129, 0.35);
+  --ring: #059669; /* emerald profundo: 3,8:1 sobre blanco (el 35% no llegaba a 3:1 como indicador de foco) */
   /* Anillo de foco del sistema: TODO interactivo lo muestra con :focus-visible. */
   --focus-ring: 0 0 0 3px var(--ring);
 
@@ -210,7 +210,7 @@
 
   --border: rgba(255, 255, 255, 0.07);
   --border-strong: rgba(255, 255, 255, 0.14);
-  --ring: rgba(20, 216, 163, 0.45);
+  --ring: rgba(20, 216, 163, 0.7); /* 5,6:1 sobre el fondo oscuro */
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
@@ -2159,6 +2159,9 @@ select.form-input {
 
 /* --- Breakpoints de las clases compartidas del layout --- */
 .app-main { padding: 2rem; }
+/* .app-main ya da el margen: el contenedor de la página no suma otro de 2,5rem
+   (eran 72 px arriba y a los costados que le quitaban filas y columnas a los listados). */
+.app-main .page-container { padding: 0 0 2rem; }
 
 @media (max-width: 1024px) {
   .page-container { padding: 1.75rem; }

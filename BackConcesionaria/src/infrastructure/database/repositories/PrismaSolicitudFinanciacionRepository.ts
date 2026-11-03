@@ -2,6 +2,7 @@ import { ISolicitudFinanciacionRepository } from '../../../domain/repositories/I
 import { SolicitudFinanciacion } from '../../../domain/entities/SolicitudFinanciacion';
 import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
+import { whereDeBusqueda, clienteCoincide, vehiculoCoincide } from '../busqueda';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { firmarRuta } from '../../security/urlFirmada';
 import { parsePagination, parseOrderBy } from '../queryOptions';
@@ -64,7 +65,16 @@ export class PrismaSolicitudFinanciacionRepository implements ISolicitudFinancia
         const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
         const { limit: limitNum, page: pageNum } = parsePagination(options);
 
-        const where = coerceFilter(filter);
+        // q no es columna: fuera del filtro antes de coerceFilter (ver busqueda.ts).
+        const { q, ...resto } = filter ?? {};
+        const where = coerceFilter(resto);
+
+        const busqueda = whereDeBusqueda(q, (t) => [
+            { cliente: clienteCoincide(t) },
+            { vehiculo: vehiculoCoincide(t) },
+            { financiera: { nombre: { contains: t, mode: 'insensitive' as const } } },
+        ]);
+        if (busqueda) where.AND = busqueda;
 
         const results = await prisma.solicitudFinanciacion.findMany({
             where,

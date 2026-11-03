@@ -377,8 +377,16 @@ export class ComprobanteController {
             const moneda = venta.moneda || 'ARS';
             const totalPagos = venta.pagos.reduce((s: number, p: any) => s + Number(p.monto), 0);
             const totalExtras = venta.extras.reduce((s: number, e: any) => s + Number(e.monto), 0);
+            const totalCanjes = venta.canjes.reduce((s: number, c: any) => s + Number(c.valorTomado), 0);
             const totalVenta = Number(venta.precioVenta) + totalExtras;
-            const saldo = totalVenta - totalPagos;
+            // El canje es parte del pago (la unidad que entrega el cliente): descuenta
+            // del saldo igual que un pago en dinero. Antes se listaba con "-" pero el
+            // saldo no lo restaba, y el comprobante no cerraba.
+            const saldo = totalVenta - totalPagos - totalCanjes;
+            const FORMA_PAGO: Record<string, string> = {
+                contado: 'contado', transferencia: 'transferencia', financiado_propio: 'financiación propia',
+                financiado_externo: 'crédito externo', canje_mas_diferencia: 'canje más diferencia', mixto: 'mixto',
+            };
 
             // Cabeceras de descarga. Se genera en memoria y se hace pipe a la respuesta.
             res.setHeader('Content-Type', 'application/pdf');
@@ -445,18 +453,18 @@ export class ComprobanteController {
             doc.moveTo(50, y).lineTo(545, y).strokeColor('#e5e7eb').stroke();
             y += 8;
 
-            fila(`Vehículo (${venta.formaPago})`, money(venta.precioVenta, moneda));
+            fila(`Vehículo (${FORMA_PAGO[venta.formaPago] ?? venta.formaPago})`, money(venta.precioVenta, moneda));
             for (const e of venta.extras) fila(`Extra: ${e.descripcion}`, money(e.monto, moneda));
-            for (const c of venta.canjes) {
-                const v = c.vehiculo;
-                fila(`Canje: ${v?.marca || ''} ${v?.modelo || ''} ${v?.dominio ? `(${v.dominio})` : ''}`.trim(), `- ${money(c.valorTomado, moneda)}`);
-            }
 
             y += 4;
             doc.moveTo(50, y).lineTo(545, y).strokeColor('#e5e7eb').stroke();
             y += 8;
             fila('TOTAL', money(totalVenta, moneda), true);
             fila('Pagado', money(totalPagos, moneda));
+            for (const c of venta.canjes) {
+                const v = c.vehiculo;
+                fila(`Canje: ${v?.marca || ''} ${v?.modelo || ''} ${v?.dominio ? `(${v.dominio})` : ''}`.trim(), money(c.valorTomado, moneda));
+            }
             fila('Saldo pendiente', money(saldo, moneda), true);
 
             // ── Pagos ─────────────────────────────────────────────────────────────

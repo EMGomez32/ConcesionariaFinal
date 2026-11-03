@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useDebounce } from '../../hooks/useDebounce';
 import {
     Plus, Search, X, ChevronLeft, ChevronRight,
     Building2, FileText, CheckCircle, XCircle, Clock, Landmark, RefreshCw,
@@ -121,6 +122,8 @@ export default function FinanciacionExternaPage() {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [searchSol, setSearchSol] = useState('');
+    // La búsqueda va al backend (`q`): filtrar la página cargada no encontraba lo que estaba en la página 2.
+    const qSol = useDebounce(searchSol.trim(), 300);
     const [filterEstado, setFilterEstado] = useState('');
     const [filterFinanciera, setFilterFinanciera] = useState('');
 
@@ -183,6 +186,7 @@ export default function FinanciacionExternaPage() {
             const params: Record<string, unknown> = { page, limit: 20 };
             if (filterEstado) params.estado = filterEstado;
             if (filterFinanciera) params.financieraId = filterFinanciera;
+            if (qSol) params.q = qSol;
             const res = await solicitudesFinanciacionApi.getAll(params) as { results?: SolicitudFinanciacion[]; totalPages?: number };
             const raw = res?.results ?? [];
             setSolicitudes(Array.isArray(raw) ? raw : []);
@@ -192,7 +196,7 @@ export default function FinanciacionExternaPage() {
         } finally {
             setLoadingSol(false);
         }
-    }, [page, filterEstado, filterFinanciera]);
+    }, [page, filterEstado, filterFinanciera, qSol]);
 
     // Conteos por estado. Se piden con limit=1 y se lee `totalResults`, que es el
     // total real del backend y no lo que entró en la página actual.
@@ -423,16 +427,7 @@ export default function FinanciacionExternaPage() {
         return true;
     });
 
-    const filteredSolicitudes = solicitudes.filter(s => {
-        if (!searchSol) return true;
-        const q = searchSol.toLowerCase();
-        return (
-            s.cliente?.nombre?.toLowerCase().includes(q) ||
-            s.financiera?.nombre?.toLowerCase().includes(q) ||
-            etiquetaVehiculo(s.vehiculo).toLowerCase().includes(q) ||
-            String(s.id).includes(q)
-        );
-    });
+    const filteredSolicitudes = solicitudes;
 
     // ─────────────────────────────────────────────────────────────────────────
     // RENDER
@@ -530,10 +525,10 @@ export default function FinanciacionExternaPage() {
                             <Search size={18} className="text-muted" aria-hidden="true" />
                             <input
                                 type="search"
-                                aria-label="Buscar en esta página"
-                                placeholder="Buscar en esta página: cliente, financiera o unidad"
+                                aria-label="Buscar solicitudes"
+                                placeholder="Buscá por cliente, financiera o unidad"
                                 value={searchSol}
-                                onChange={e => setSearchSol(e.target.value)}
+                                onChange={e => { setSearchSol(e.target.value); setPage(1); }}
                                 className="w-full text-sm font-medium"
                             />
                         </div>

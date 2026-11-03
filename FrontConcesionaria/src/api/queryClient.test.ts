@@ -52,14 +52,22 @@ describe('queryClient: aviso global de errores sin doble toast', () => {
         expect(toasts()[0].message).toBe('No hay conexión con el servidor. Revisá tu internet y probá de nuevo.');
     });
 
-    it('una query que falla toastea, salvo con meta.silenciarError', async () => {
+    it('la primera carga fallida no toastea: la muestra la pantalla con su estado de error', async () => {
         const q1 = new QueryObserver(queryClient, { queryKey: ['x1'], queryFn: falla('No se pudo cargar'), retry: false });
         await q1.refetch();
-        expect(toasts().map((t) => t.message)).toEqual(['No se pudo cargar']);
+        expect(toasts()).toHaveLength(0);
+    });
+
+    it('si falla el refresco de datos que ya estaban en pantalla, toastea (salvo meta.silenciarError)', async () => {
+        queryClient.setQueryData(['x2'], ['dato']);
+        const q2 = new QueryObserver(queryClient, { queryKey: ['x2'], queryFn: falla('No se pudo actualizar'), retry: false });
+        await q2.refetch();
+        expect(toasts().map((t) => t.message)).toEqual(['No se pudo actualizar']);
 
         useUIStore.setState({ toasts: [] });
-        const q2 = new QueryObserver(queryClient, { queryKey: ['x2'], queryFn: falla(), retry: false, meta: { silenciarError: true } });
-        await q2.refetch();
+        queryClient.setQueryData(['x3'], ['dato']);
+        const q3 = new QueryObserver(queryClient, { queryKey: ['x3'], queryFn: falla(), retry: false, meta: { silenciarError: true } });
+        await q3.refetch();
         expect(toasts()).toHaveLength(0);
     });
 

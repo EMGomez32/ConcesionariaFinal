@@ -65,7 +65,7 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
             popover: {
                 title: 'Tu tablero de un vistazo',
                 description:
-                    'Los números que importan: stock, ventas, reservas y clientes. Más abajo, las finanzas del mes y las alertas del día.',
+                    'Arriba, las acciones del día: consultas sin atender, cuotas en mora y documentación por vencer. Más abajo, los números del negocio y las finanzas del mes.',
                 side: 'bottom',
                 align: 'center',
             },

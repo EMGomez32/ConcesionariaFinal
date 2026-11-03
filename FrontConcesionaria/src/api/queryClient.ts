@@ -50,6 +50,10 @@ export const queryClient = new QueryClient({
             // (login/recupero) no montan queries, así que no se silencia nada real.
             if (!useAuthStore.getState().isAuthenticated) return;
             if (esSesionVencida(error) || silenciado(query.meta)) return;
+            // La primera carga fallida la muestra cada pantalla con su estado de error
+            // ("Reintentar"): un toast encima repetiría el mismo aviso. Se avisa solo
+            // cuando falla el refresco de datos que ya estaban en pantalla.
+            if (query.state.data === undefined) return;
             useUIStore.getState().addToast(getErrorMessage(error, 'No se pudieron cargar los datos'), 'error');
         },
     }),

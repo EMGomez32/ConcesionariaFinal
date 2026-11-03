@@ -14,6 +14,7 @@ import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
+import Combobox from '../../components/ui/Combobox';
 import Textarea from '../../components/ui/Textarea';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import PageTitle from '../../components/ui/PageTitle';
@@ -327,16 +328,11 @@ const ReservasPage = () => {
             >
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div style={{ gridColumn: '1 / -1' }}>
-                        <Select dense label="Unidad *" hint="Sólo se pueden reservar unidades publicadas." placeholder="Elegí la unidad" value={form.vehiculoId} onChange={e => elegirUnidad(e.target.value)}>
-                            {vehiculos.map(v => (
-                                <option key={v.id} value={v.id}>
-                                    {v.marca} {v.modelo} {v.version ? `${v.version} ` : ''}{v.dominio ? `— ${v.dominio}` : ''}
-                                </option>
-                            ))}
-                        </Select>
+                        <Combobox dense label="Unidad *" hint="Sólo se pueden reservar unidades publicadas." placeholder="Buscá por marca, modelo o dominio" value={form.vehiculoId} onChange={v => elegirUnidad(v == null ? '' : String(v))}
+                            options={vehiculos.map(v => ({ value: v.id, label: `${v.marca} ${v.modelo}${v.version ? ` ${v.version}` : ''}`, sub: v.dominio || undefined }))} />
                     </div>
 
-                    <Select dense label="Cliente *" placeholder="Elegí el cliente" options={clientes.map(c => ({ value: c.id, label: c.nombre }))} value={form.clienteId} onChange={e => setForm(f => ({ ...f, clienteId: e.target.value }))} />
+                    <Combobox dense label="Cliente *" placeholder="Buscá el cliente por nombre" options={clientes.map(c => ({ value: c.id, label: c.nombre }))} value={form.clienteId} onChange={v => setForm(f => ({ ...f, clienteId: v == null ? '' : String(v) }))} />
 
                     <Select dense label="Vendedor *" placeholder="Elegí el vendedor" options={usuarios.map(u => ({ value: u.id, label: u.nombre }))} value={form.vendedorId} onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))} />
 

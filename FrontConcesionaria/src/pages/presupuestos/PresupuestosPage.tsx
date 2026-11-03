@@ -83,6 +83,7 @@ import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
+import Combobox from '../../components/ui/Combobox';
 import Textarea from '../../components/ui/Textarea';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import PageTitle from '../../components/ui/PageTitle';
@@ -775,13 +776,13 @@ const PresupuestosPage = () => {
                             value={form.sucursalId}
                             onChange={e => setForm(f => ({ ...f, sucursalId: e.target.value }))}
                         />
-                        <Select
+                        <Combobox
                             dense
                             label="Cliente *"
-                            placeholder="Elegí el cliente"
+                            placeholder="Buscá el cliente por nombre"
                             options={clientes.map(c => ({ value: c.id, label: c.nombre }))}
                             value={form.clienteId}
-                            onChange={e => setForm(f => ({ ...f, clienteId: e.target.value }))}
+                            onChange={v => setForm(f => ({ ...f, clienteId: v == null ? '' : String(v) }))}
                         />
                         <Select
                             dense
@@ -812,16 +813,15 @@ const PresupuestosPage = () => {
                         </div>
                         {form.items.map((item, i) => (
                             <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end mb-2">
-                                <Select
+                                <Combobox
                                     dense
                                     containerClassName="md:col-span-5 mb-0"
                                     label="Unidad *"
-                                    placeholder="Elegí una unidad publicada"
+                                    placeholder="Buscá por marca, modelo o dominio"
+                                    options={vehiculos.map(v => ({ value: v.id, label: `${v.marca} ${v.modelo}`, sub: v.dominio ?? v.vin ?? `#${v.id}` }))}
                                     value={item.vehiculoId}
-                                    onChange={e => updItem(i, 'vehiculoId', e.target.value)}
-                                >
-                                    {vehiculos.map(v => <option key={v.id} value={v.id}>{v.marca} {v.modelo} — {v.dominio ?? v.vin ?? `#${v.id}`}</option>)}
-                                </Select>
+                                    onChange={v => updItem(i, 'vehiculoId', v == null ? '' : String(v))}
+                                />
                                 <Input
                                     dense
                                     containerClassName="md:col-span-2 mb-0"

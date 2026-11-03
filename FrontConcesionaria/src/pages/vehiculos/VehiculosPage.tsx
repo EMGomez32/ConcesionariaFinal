@@ -16,7 +16,6 @@ import Select from '../../components/ui/Select';
 import PageTitle from '../../components/ui/PageTitle';
 import { Listado, ListadoTabla, CampoFiltro, BusquedaListado, type ColumnaListado } from '../../components/listado';
 import { formatMoneda } from '../../utils/moneda';
-import type { ApiError } from '../../types/api.types';
 import {
     ESTADO_VEHICULO,
     EN_STOCK,
@@ -183,9 +182,8 @@ const VehiculosPage: React.FC = () => {
             await changeEstadoMutation.mutateAsync({ id: estadoModal.vehiculo.id, estado: nuevoEstado as EstadoVehiculo });
             addToast(`Estado cambiado a "${ESTADO_VEHICULO[nuevoEstado as EstadoVehiculo].label}"`, 'success');
             setEstadoModal(null);
-        } catch (err: unknown) {
-            const apiError = err as ApiError;
-            addToast(apiError?.message || 'No se pudo cambiar el estado', 'error');
+        } catch {
+            // El aviso de error lo da el MutationCache global (la mutación no define onError).
         }
     };
 

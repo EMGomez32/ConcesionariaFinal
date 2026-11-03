@@ -14,6 +14,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
+import Combobox from '../../components/ui/Combobox';
 import Textarea from '../../components/ui/Textarea';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import PageTitle from '../../components/ui/PageTitle';
@@ -23,7 +24,6 @@ import {
     CheckCircle2, TrendingUp, Printer, Package, FileText, FileDown
 } from 'lucide-react';
 import type { FormaPagoVenta, EstadoEntrega, Venta } from '../../types/venta.types';
-import type { ApiError } from '../../types/api.types';
 import VentaSubResources from '../../components/ventas/VentaSubResources';
 import VentaFacturaPanel from '../../components/ventas/VentaFacturaPanel';
 import { ENTREGA_ESTADO, FORMA_PAGO_LABEL, METODO_PAGO_LABEL, rotuloEstado } from '../../components/ventas/estados';
@@ -222,9 +222,8 @@ const VentasPage = () => {
             addToast('Venta registrada', 'success');
             setCreateOpen(false);
             setForm(emptyForm());
-        } catch (err: unknown) {
-            const apiError = err as ApiError;
-            addToast(apiError?.message ?? 'No se pudo registrar la venta', 'error');
+        } catch {
+            // El aviso de error lo da el MutationCache global (la mutación no define onError).
         }
     };
 
@@ -255,9 +254,8 @@ const VentasPage = () => {
                 try {
                     await deleteMutation.mutateAsync(v.id);
                     addToast('Venta eliminada. La unidad volvió a Publicado.', 'success');
-                } catch (err: unknown) {
-                    const apiError = err as ApiError;
-                    addToast(apiError?.message ?? 'No se pudo eliminar la venta', 'error');
+                } catch {
+                    // El aviso de error lo da el MutationCache global (la mutación no define onError).
                 }
             }
         });
@@ -318,15 +316,11 @@ const VentasPage = () => {
         }
     };
 
+    // Si falla, el aviso lo da el MutationCache global (la mutación no define onError)
+    // y el rechazo sigue de largo para que el diálogo de confirmación no se cierre.
     const cambiarEntrega = async (id: number, estadoEntrega: EstadoEntrega) => {
-        try {
-            await changeEstadoEntregaMutation.mutateAsync({ id, estadoEntrega });
-            addToast(`Entrega: ${ENTREGA_ESTADO[estadoEntrega].label}`, 'success');
-        } catch (err: unknown) {
-            const apiError = err as ApiError;
-            addToast(apiError?.message ?? 'No se pudo cambiar el estado de la entrega', 'error');
-            throw err;
-        }
+        await changeEstadoEntregaMutation.mutateAsync({ id, estadoEntrega });
+        addToast(`Entrega: ${ENTREGA_ESTADO[estadoEntrega].label}`, 'success');
     };
 
     /** Los pasos finales (entregar, anular) piden confirmación: no tienen vuelta atrás. */
@@ -623,15 +617,11 @@ const VentasPage = () => {
             >
                 <div className="flex flex-col gap-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Select dense label="Unidad *" placeholder="Elegí una unidad publicada" value={form.vehiculoId || ''} onChange={e => elegirUnidad(+e.target.value)}
-                            hint={unidadElegida && Number(unidadElegida.precioLista) > 0 ? `Precio de lista: ${formatMoneda(unidadElegida.precioLista, unidadElegida.moneda)}` : undefined}>
-                            {vehiculos.map(v => (
-                                <option key={v.id} value={v.id}>{v.marca} {v.modelo} — {v.dominio || `#${v.id}`}</option>
-                            ))}
-                        </Select>
-                        <Select dense label="Cliente *" placeholder="Elegí el cliente" value={form.clienteId || ''} onChange={e => setForm(f => ({ ...f, clienteId: +e.target.value }))}>
-                            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                        </Select>
+                        <Combobox dense label="Unidad *" placeholder="Buscá por marca, modelo o dominio" value={form.vehiculoId || null} onChange={v => elegirUnidad(Number(v) || 0)}
+                            options={vehiculos.map(v => ({ value: v.id, label: `${v.marca} ${v.modelo}`, sub: v.dominio || `#${v.id}` }))}
+                            hint={unidadElegida && Number(unidadElegida.precioLista) > 0 ? `Precio de lista: ${formatMoneda(unidadElegida.precioLista, unidadElegida.moneda)}` : undefined} />
+                        <Combobox dense label="Cliente *" placeholder="Buscá el cliente por nombre" value={form.clienteId || null} onChange={v => setForm(f => ({ ...f, clienteId: Number(v) || 0 }))}
+                            options={clientes.map(c => ({ value: c.id, label: c.nombre }))} />
                         <Select dense label="Vendedor *" placeholder="Elegí el vendedor" value={form.vendedorId || ''} onChange={e => setForm(f => ({ ...f, vendedorId: +e.target.value }))}>
                             {vendedores.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
                         </Select>
