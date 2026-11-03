@@ -19,6 +19,7 @@ import {
     ArrowRight, AlertCircle, User, MapPin, CheckCircle2
 } from 'lucide-react';
 import { usePermisos } from '../../hooks/usePermisos';
+import { hoyLocal } from '../../utils/fecha';
 
 const TIPO_BADGE: Record<string, string> = {
     traslado: 'info',
@@ -44,7 +45,7 @@ const EMPTY_FORM = {
     hastaSucursalId: '',
     proveedorDestinoId: '',       // a qué proveedor externo va la unidad
     motivo: '',
-    fechaMovimiento: new Date().toISOString().slice(0, 10),
+    fechaMovimiento: hoyLocal(),
 };
 
 const MovimientosPage = () => {

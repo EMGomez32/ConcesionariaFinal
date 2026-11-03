@@ -420,7 +420,7 @@ const VehiculoDetallePage = () => {
         {
             header: 'Monto',
             accessor: (g) => (
-                <span className="fw-bold">${Number(g.monto).toLocaleString('es-AR')}</span>
+                <span className="fw-bold">{money(Number(g.monto), g.moneda)}</span>
             )
         },
         {
@@ -646,8 +646,8 @@ const VehiculoDetallePage = () => {
     const totalGastosLabel = useMemo(() => {
         const partes = Object.entries(totalesGastos)
             .filter(([, monto]) => monto > 0)
-            .map(([moneda, monto]) => `$${monto.toLocaleString('es-AR')} ${moneda}`);
-        return partes.length ? partes.join(' · ') : '$0 ARS';
+            .map(([moneda, monto]) => money(monto, moneda));
+        return partes.length ? partes.join(' · ') : money(0);
     }, [totalesGastos]);
 
     if (loading) return (
@@ -724,7 +724,7 @@ const VehiculoDetallePage = () => {
                 <div className="stat-card glass">
                     <DollarSign size={20} style={{ color: 'var(--accent)' }} />
                     <div>
-                        <div className="stat-value">{vehiculo.precioLista ? `$${Number(vehiculo.precioLista).toLocaleString('es-AR')}` : '-'}</div>
+                        <div className="stat-value">{vehiculo.precioLista ? money(Number(vehiculo.precioLista), vehiculo.moneda) : '-'}</div>
                         <div className="stat-label">Precio lista</div>
                     </div>
                 </div>
@@ -735,7 +735,7 @@ const VehiculoDetallePage = () => {
                     <div className="stat-card glass">
                         <DollarSign size={20} style={{ color: 'var(--warning)' }} />
                         <div>
-                            <div className="stat-value">{vehiculo.precioCompra ? `$${Number(vehiculo.precioCompra).toLocaleString('es-AR')}` : '-'}</div>
+                            <div className="stat-value">{vehiculo.precioCompra ? money(Number(vehiculo.precioCompra), vehiculo.moneda) : '-'}</div>
                             <div className="stat-label">Precio compra</div>
                         </div>
                     </div>
@@ -798,17 +798,17 @@ const VehiculoDetallePage = () => {
                             { icon: Hash, label: 'Dominio', value: vehiculo.dominio },
                             { icon: Hash, label: 'VIN', value: vehiculo.vin },
                             { icon: Hash, label: 'Color', value: vehiculo.color },
-                            { icon: Hash, label: 'Km ingreso', value: vehiculo.kmIngreso ? `${vehiculo.kmIngreso.toLocaleString()} km` : undefined },
+                            { icon: Hash, label: 'Km ingreso', value: vehiculo.kmIngreso ? `${vehiculo.kmIngreso.toLocaleString('es-AR')} km` : undefined },
                         ]} />
                         <InfoSection title="Datos de compra" rows={[
                             { icon: MapPin, label: 'Sucursal', value: vehiculo.sucursal?.nombre },
-                            { icon: Calendar, label: 'Fecha ingreso', value: vehiculo.fechaIngreso ? new Date(vehiculo.fechaIngreso).toLocaleDateString('es-AR') : undefined },
+                            { icon: Calendar, label: 'Fecha ingreso', value: vehiculo.fechaIngreso ? formatFecha(vehiculo.fechaIngreso) : undefined },
                             // Datos de compra: sólo admin (ver la tarjeta de arriba). InfoSection
                             // saltea las filas con value undefined, así que para el resto del
                             // equipo estas dos no se dibujan.
-                            { icon: Calendar, label: 'Fecha compra', value: permisos.vePrecioDeCompra && vehiculo.fechaCompra ? new Date(vehiculo.fechaCompra).toLocaleDateString('es-AR') : undefined },
-                            { icon: DollarSign, label: 'Precio compra', value: permisos.vePrecioDeCompra && vehiculo.precioCompra ? `$${Number(vehiculo.precioCompra).toLocaleString('es-AR')}` : undefined },
-                            { icon: DollarSign, label: 'Precio lista', value: vehiculo.precioLista ? `$${Number(vehiculo.precioLista).toLocaleString('es-AR')}` : undefined },
+                            { icon: Calendar, label: 'Fecha compra', value: permisos.vePrecioDeCompra && vehiculo.fechaCompra ? formatFecha(vehiculo.fechaCompra) : undefined },
+                            { icon: DollarSign, label: 'Precio compra', value: permisos.vePrecioDeCompra && vehiculo.precioCompra ? money(Number(vehiculo.precioCompra), vehiculo.moneda) : undefined },
+                            { icon: DollarSign, label: 'Precio lista', value: vehiculo.precioLista ? money(Number(vehiculo.precioLista), vehiculo.moneda) : undefined },
                             // "El vendedor NO VE: … proveedor": el backend lo recorta en
                             // `sanitizarDatosDeCompra`, y el renglón se gatea acá para que no
                             // quede un campo vacío sin explicación.

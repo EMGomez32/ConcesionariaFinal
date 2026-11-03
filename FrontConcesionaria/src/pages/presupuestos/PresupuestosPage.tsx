@@ -8,7 +8,8 @@ import { vehiculosApi } from '../../api/vehiculos.api';
 import client from '../../api/client';
 import type { EstadoPresupuesto, Presupuesto } from '../../types/presupuesto.types';
 import type { FormaPagoVenta } from '../../types/venta.types';
-import { formatFecha } from '../../utils/fecha';
+import { formatFecha, hoyLocal } from '../../utils/fecha';
+import { formatTotales, totalesPorMoneda } from '../../utils/moneda';
 
 /* ── tipos locales ── */
 interface PresupuestoItem {
@@ -95,7 +96,7 @@ const FORMA_PAGO_OPTIONS_CONV: { value: FormaPagoVenta; label: string }[] = [
 ];
 
 /* ── helpers ── */
-const today = () => new Date().toISOString().slice(0, 10);
+const today = hoyLocal;
 
 const genNro = () => {
     const d = new Date();
@@ -184,7 +185,7 @@ const PresupuestosPage = () => {
     const [convertirForm, setConvertirForm] = useState({
         formaPago: 'contado' as FormaPagoVenta,
         moneda: 'ARS' as 'ARS' | 'USD',
-        fechaVenta: new Date().toISOString().slice(0, 10),
+        fechaVenta: hoyLocal(),
         observaciones: '',
     });
     const [convertirSaving, setConvertirSaving] = useState(false);
@@ -544,8 +545,9 @@ const PresupuestosPage = () => {
                         <div>
                             <span className="text-3xs font-black uppercase text-muted tracking-widest mb-2">Volumen de Proyección</span>
                             <div className="flex items-baseline gap-2">
+                                {/* Un total por moneda: sumar dólares con pesos no es ningún importe real. */}
                                 <span className="text-3xl font-black tabular-nums">
-                                    ${presupuestos.reduce((s, p) => s + calcTotal(p), 0).toLocaleString('es-AR')}
+                                    {formatTotales(totalesPorMoneda(presupuestos, calcTotal, (p) => p.moneda))}
                                 </span>
                                 <Badge variant="info">PRE-VENTA</Badge>
                             </div>
@@ -665,7 +667,7 @@ const PresupuestosPage = () => {
                                                         setConvertirForm({
                                                             formaPago: 'contado',
                                                             moneda: (p.moneda as 'ARS' | 'USD') || 'ARS',
-                                                            fechaVenta: new Date().toISOString().slice(0, 10),
+                                                            fechaVenta: hoyLocal(),
                                                             observaciones: '',
                                                         });
                                                     }}>
@@ -987,6 +989,59 @@ const PresupuestosPage = () => {
                                 </div>
                             </div>
                         )}
+
+                        {(detail.extras?.length ?? 0) > 0 && (
+                            <div>
+                                <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                                    <Plus size={16} className="text-accent" /> Extras
+                                </h3>
+                                <div className="table-container">
+                                    <table className="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Concepto</th>
+                                                <th style={{ textAlign: 'right' }}>Importe</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {detail.extras!.map((e, i) => (
+                                                <tr key={e.id ?? i}>
+                                                    <td className="font-bold">{e.descripcion || 'Extra'}</td>
+                                                    <td style={{ textAlign: 'right' }} className="font-black">{currencyFmt(e.monto, detail.moneda)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {detail.observaciones && (
+                            <div>
+                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Observaciones</span>
+                                <p style={{ whiteSpace: 'pre-line' }}>{detail.observaciones}</p>
+                            </div>
+                        )}
+
+                        {/* La cuenta que lleva al total: sin ella, un presupuesto con extras o
+                            canje muestra un total que no coincide con la tabla de unidades. */}
+                        <div>
+                            <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Cuenta del total</span>
+                            {[
+                                { label: 'Unidades', valor: (detail.items ?? []).reduce((s, it) => s + Number(it.precioFinal ?? 0), 0), signo: '' },
+                                { label: 'Extras', valor: (detail.extras ?? []).reduce((s, e) => s + Number(e.monto ?? 0), 0), signo: '+' },
+                                { label: 'Canje', valor: detail.canje ? Number(detail.canje.valorTomado ?? 0) : 0, signo: '−' },
+                            ].filter((r) => r.signo === '' || r.valor !== 0).map((r) => (
+                                <div key={r.label} className="flex justify-between text-sm tabular-nums">
+                                    <span className="text-secondary">{r.signo} {r.label}</span>
+                                    <span className="font-bold">{currencyFmt(r.valor, detail.moneda)}</span>
+                                </div>
+                            ))}
+                            <div className="flex justify-between text-sm tabular-nums font-black">
+                                <span>Total</span>
+                                <span>{currencyFmt(calcTotal(detail), detail.moneda)}</span>
+                            </div>
+                        </div>
                     </div>
                 )}
             </Modal>

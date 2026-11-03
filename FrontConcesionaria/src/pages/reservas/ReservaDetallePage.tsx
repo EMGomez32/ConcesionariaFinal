@@ -17,6 +17,7 @@ import {
     CheckCircle, Clock, User, ShoppingBag, FileDown
 } from 'lucide-react';
 import type { FormaPagoVenta } from '../../types/venta.types';
+import { hoyLocal } from '../../utils/fecha';
 
 const FORMA_PAGO_OPTIONS: { value: FormaPagoVenta; label: string }[] = [
     { value: 'contado', label: 'Contado / Efectivo' },
@@ -88,7 +89,7 @@ const ReservaDetallePage = () => {
         precioVenta: 0,
         moneda: 'ARS' as 'ARS' | 'USD',
         formaPago: 'contado' as FormaPagoVenta,
-        fechaVenta: new Date().toISOString().slice(0, 10),
+        fechaVenta: hoyLocal(),
         observaciones: '',
     });
 
@@ -254,7 +255,7 @@ const ReservaDetallePage = () => {
                                 precioVenta: Number(reserva.monto) || 0,
                                 moneda: reserva.moneda,
                                 formaPago: 'contado',
-                                fechaVenta: new Date().toISOString().slice(0, 10),
+                                fechaVenta: hoyLocal(),
                                 observaciones: '',
                             });
                             setShowConvertirModal(true);
@@ -308,7 +309,7 @@ const ReservaDetallePage = () => {
                     <InfoRow icon={DollarSign} label="Monto" value={`${reserva.moneda} $${Number(reserva.monto).toLocaleString('es-AR')}`} />
                     <InfoRow icon={Calendar} label="Vencimiento" value={
                         <span style={{ color: (vencida || reserva.estado === 'vencida') ? '#ef4444' : proximo ? '#f59e0b' : 'inherit' }}>
-                            {reserva.fechaVencimiento ? new Date(reserva.fechaVencimiento).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }) : '-'}
+                            {reserva.fechaVencimiento ? new Date(reserva.fechaVencimiento).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '-'}
                         </span>
                     } />
                     <InfoRow icon={Calendar} label="Creada el" value={reserva.createdAt ? new Date(reserva.createdAt).toLocaleDateString('es-AR') : undefined} />

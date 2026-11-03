@@ -19,7 +19,7 @@ import { ventasApi } from '../../api/ventas.api';
 import { sucursalesApi } from '../../api/sucursales.api';
 import { proveedoresApi } from '../../api/proveedores.api';
 import { useUIStore } from '../../store/uiStore';
-import { formatFecha } from '../../utils/fecha';
+import { formatFecha, hoyLocal } from '../../utils/fecha';
 import { getList } from '../../utils/lista';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 
@@ -55,7 +55,7 @@ const fmt = (v?: string | number | null) =>
 // las bajaba un día en UTC-3. formatFecha parsea el ISO como texto.
 const fmtDate = formatFecha;
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = hoyLocal;
 
 // Fecha local YYYY-MM-DD (no toISOString, que pasa a UTC y de noche en UTC-3 ya
 // es "mañana"): se usa para clasificar los turnos en Hoy / Mañana / Vencido.

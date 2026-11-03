@@ -26,6 +26,8 @@ import VentaSubResources from '../../components/ventas/VentaSubResources';
 import VentaFacturaPanel from '../../components/ventas/VentaFacturaPanel';
 import { usePermisos } from '../../hooks/usePermisos';
 import { ventasApi } from '../../api/ventas.api';
+import { formatMoneda } from '../../utils/moneda';
+import { formatFecha, hoyLocal } from '../../utils/fecha';
 
 // ─── Tipos auxiliares ──────────────────────────────────────────────────────
 interface PagoRow { monto: number; metodo: 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro'; referencia: string; observaciones: string }
@@ -86,10 +88,9 @@ const metodoLabels: Record<string, string> = {
     tarjeta: 'Tarjeta', cheque: 'Cheque', otro: 'Otro / Billetera',
 };
 
-const today = () => new Date().toISOString().split('T')[0];
 const emptyForm = (): VentaForm => ({
     sucursalId: 0, clienteId: 0, vendedorId: 0, vehiculoId: 0,
-    fechaVenta: today(), precioVenta: 0, moneda: 'ARS',
+    fechaVenta: hoyLocal(), precioVenta: 0, moneda: 'ARS',
     formaPago: 'contado', observaciones: '',
     pagos: [], externos: [], canjes: [],
 });
@@ -356,7 +357,7 @@ const VentasPage = () => {
             accessor: (v) => (
                 <div className="flex flex-col">
                     <span className="font-black text-base tabular-nums">
-                        ${Number(v.precioVenta).toLocaleString('es-AR')}
+                        {formatMoneda(v.precioVenta, v.moneda)}
                     </span>
                     <span className="text-3xs font-bold text-accent uppercase tracking-tight">
                         {formaPagoLabels[v.formaPago] || v.formaPago}
@@ -444,11 +445,10 @@ const VentasPage = () => {
                             {/* Un solo número mezclando ARS y USD no representa ningún
                                 importe real: se muestra un renglón por moneda. */}
                             {volumenPorMoneda.length === 0 ? (
-                                <div className="text-3xl font-black">$0 <span className="text-xs text-muted">ARS</span></div>
+                                <div className="text-3xl font-black">{formatMoneda(0, 'ARS')}</div>
                             ) : volumenPorMoneda.map(({ moneda, total }) => (
                                 <div key={moneda} className="text-3xl font-black">
-                                    ${total.toLocaleString('es-AR')}
-                                    <span className="text-xs text-muted" style={{ marginLeft: '0.35rem' }}>{moneda}</span>
+                                    {formatMoneda(total, moneda)}
                                 </div>
                             ))}
                         </div>
@@ -458,8 +458,7 @@ const VentasPage = () => {
                                 <p className="text-xl font-bold text-muted">-</p>
                             ) : volumenPorMoneda.map(({ moneda, total, cantidad }) => (
                                 <p key={moneda} className="text-xl font-bold">
-                                    ${Math.round(total / cantidad).toLocaleString('es-AR')}
-                                    <span className="text-xs text-muted" style={{ marginLeft: '0.35rem' }}>{moneda}</span>
+                                    {formatMoneda(Math.round(total / cantidad), moneda)}
                                 </p>
                             ))}
                         </div>
@@ -641,7 +640,7 @@ const VentasPage = () => {
                     <div className="flex justify-between items-center">
                         <div>
                             <p className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Impacto de Caja Final</p>
-                            <p className="text-3xl font-black">${Number(form.precioVenta || 0).toLocaleString('es-AR')} <span className="text-sm font-normal text-muted">({form.moneda})</span></p>
+                            <p className="text-3xl font-black">{formatMoneda(form.precioVenta, form.moneda)}</p>
                         </div>
                         <div className="flex gap-4">
                             <Button variant="secondary" onClick={() => setCreateOpen(false)}>Abortar</Button>
@@ -688,7 +687,7 @@ const VentasPage = () => {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                             <div>
                                 <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Fecha Operación</span>
-                                <p className="text-lg font-bold">{new Date(detail.fechaVenta).toLocaleDateString()}</p>
+                                <p className="text-lg font-bold">{formatFecha(detail.fechaVenta)}</p>
                             </div>
                             <div>
                                 <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Sucursal Radicación</span>
@@ -696,7 +695,7 @@ const VentasPage = () => {
                             </div>
                             <div>
                                 <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Aforo Venta</span>
-                                <p className="text-xl font-black text-accent">${Number(detail.precioVenta).toLocaleString('es-AR')}</p>
+                                <p className="text-xl font-black text-accent">{formatMoneda(detail.precioVenta, detail.moneda)}</p>
                             </div>
                             <div>
                                 <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Modalidad</span>
@@ -774,7 +773,7 @@ const VentasPage = () => {
                                                 <td className="font-mono text-3xs text-muted">PAG-{p.id}</td>
                                                 <td><Badge variant="default">{metodoLabels[p.metodo]?.toUpperCase() || p.metodo.toUpperCase()}</Badge></td>
                                                 <td className="text-xs italic text-muted">{p.referencia || '-'}</td>
-                                                <td style={{ textAlign: 'right' }} className="font-black">${Number(p.monto).toLocaleString('es-AR')}</td>
+                                                <td style={{ textAlign: 'right' }} className="font-black">{formatMoneda(p.monto, detail.moneda)}</td>
                                             </tr>
                                         )) : (
                                             <tr><td colSpan={4} className="text-center text-xs italic text-muted">No se registran pagos individuales (Ingreso Contado Total)</td></tr>
@@ -784,7 +783,7 @@ const VentasPage = () => {
                                                 <td className="font-mono text-3xs text-warning">CAN-{c.id}</td>
                                                 <td><Badge variant="warning">TOMA UNIDAD</Badge></td>
                                                 <td className="text-xs italic font-bold uppercase">ID-VEHÍCULO: {c.vehiculoCanjeId}</td>
-                                                <td style={{ textAlign: 'right' }} className="font-black text-warning">-${Number(c.valorTomado).toLocaleString('es-AR')}</td>
+                                                <td style={{ textAlign: 'right' }} className="font-black text-warning">{formatMoneda(-Number(c.valorTomado), detail.moneda)}</td>
                                             </tr>
                                         ))}
                                     </tbody>

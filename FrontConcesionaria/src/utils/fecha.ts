@@ -13,3 +13,13 @@ export const formatFecha = (value?: string | null): string => {
     const [y, m, d] = value.split('T')[0].split('-');
     return d && m && y ? `${d}/${m}/${y}` : value;
 };
+
+/**
+ * La fecha de hoy como "aaaa-mm-dd" en la hora LOCAL, para el valor por defecto
+ * de un `<input type="date">`. `new Date().toISOString().slice(0, 10)` da la
+ * fecha en UTC: en Argentina, después de las 21 h ya es "mañana".
+ */
+export const hoyLocal = (ahora: Date = new Date()): string => {
+    const dos = (n: number) => String(n).padStart(2, '0');
+    return `${ahora.getFullYear()}-${dos(ahora.getMonth() + 1)}-${dos(ahora.getDate())}`;
+};

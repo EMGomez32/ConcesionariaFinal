@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { usePermisos } from '../../hooks/usePermisos';
 import { getErrorMessage } from '../../utils/getErrorMessage';
+import { formatFecha } from '../../utils/fecha';
 
 const TIPO_INGRESO_OPTS: { value: TipoIngreso; label: string }[] = [
     { value: 'compra_proveedor', label: 'Compra Proveedor' },
@@ -246,7 +247,7 @@ const IngresosPage = () => {
                                     <div className="flex items-center gap-2 text-muted">
                                         <Calendar size={14} />
                                         <span className="text-sm font-bold">
-                                            {i.fechaIngreso ? new Date(i.fechaIngreso).toLocaleDateString('es-AR') : '-'}
+                                            {formatFecha(i.fechaIngreso)}
                                         </span>
                                     </div>
                                 </td>
