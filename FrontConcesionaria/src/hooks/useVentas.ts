@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { ventasApi, type CreateVentaDto, type VentaFilters } from '../api/ventas.api';
 import type { PaginationOptions } from '../types/vehiculo.types';
 import type { EstadoEntrega } from '../types/venta.types';
@@ -7,6 +7,7 @@ export const VENTAS_KEYS = {
     all: ['ventas'] as const,
     list: (filters: VentaFilters, options: PaginationOptions) => [...VENTAS_KEYS.all, 'list', { ...filters, ...options }] as const,
     detail: (id: number) => [...VENTAS_KEYS.all, 'detail', id] as const,
+    conteo: (filters: VentaFilters) => [...VENTAS_KEYS.all, 'conteo', filters] as const,
 };
 
 export const useVentas = (filters: VentaFilters = {}, options: PaginationOptions = {}) => {
@@ -16,6 +17,26 @@ export const useVentas = (filters: VentaFilters = {}, options: PaginationOptions
             const res = await ventasApi.getAll(filters, options);
             return res;
         },
+        // Al cambiar de página o de búsqueda la tabla conserva las filas
+        // anteriores hasta que llegan las nuevas, en vez de parpadear vacía.
+        placeholderData: keepPreviousData,
+    });
+};
+
+/**
+ * Cantidad de ventas que cumplen un filtro, contada por el backend
+ * (`totalResults` con limit=1). Los indicadores de la pantalla se calculan así
+ * y no sobre la página visible: "Ventas del mes" contaba las 15 filas de la
+ * página actual.
+ */
+export const useVentasConteo = (filters: VentaFilters, enabled = true) => {
+    return useQuery({
+        queryKey: VENTAS_KEYS.conteo(filters),
+        queryFn: async () => {
+            const res = await ventasApi.getAll(filters, { page: 1, limit: 1 });
+            return res?.totalResults ?? 0;
+        },
+        enabled,
     });
 };
 

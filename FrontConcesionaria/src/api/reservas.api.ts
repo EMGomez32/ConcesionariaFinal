@@ -24,6 +24,8 @@ export interface Reserva {
 }
 
 export interface ReservaFilter {
+    /** Búsqueda en el servidor (contrato 1): cliente, vehículo o número de reserva. */
+    q?: string;
     estado?: EstadoReserva;
     clienteId?: number;
     vehiculoId?: number;

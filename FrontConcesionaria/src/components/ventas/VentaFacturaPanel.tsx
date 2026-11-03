@@ -4,6 +4,8 @@ import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import { useUIStore } from '../../store/uiStore';
 import { ventasApi, type ComprobanteAfip } from '../../api/ventas.api';
+import { formatFecha } from '../../utils/fecha';
+import { formatMoneda } from '../../utils/moneda';
 
 // Panel de facturación electrónica AFIP dentro del detalle de la venta: muestra el
 // estado fiscal (si ya se facturó, tipo/número/CAE/vencimiento + descarga del PDF)
@@ -14,10 +16,14 @@ const TIPO_LABEL: Record<ComprobanteAfip['tipoComprobante'], string> = {
     factura_c: 'Factura C',
 };
 
-// fechaComprobante y caeVencimiento son columnas @db.Date (medianoche UTC): se
-// formatean en UTC para no correr el día en zonas de offset negativo (AR, UTC-3).
-const fmtFecha = (s: string | null | undefined) =>
-    s ? new Date(s).toLocaleDateString('es-AR', { timeZone: 'UTC' }) : '—';
+// fechaComprobante y caeVencimiento son columnas @db.Date (medianoche UTC):
+// formatFecha las lee como texto para no correr el día en UTC-3.
+const fmtFecha = (s: string | null | undefined) => formatFecha(s);
+
+/** AFIP codifica la moneda como "PES"/"DOL"; la UI usa ARS/USD. */
+const monedaAfip = (m?: string | null) => (m === 'DOL' || m === 'USD' ? 'USD' : 'ARS');
+
+const AYUDA_CAE = 'CAE: Código de Autorización Electrónico. Es el número que otorga AFIP y le da validez a la factura.';
 
 const nroComprobante = (c: ComprobanteAfip) =>
     `${String(c.puntoVenta).padStart(4, '0')}-${String(c.numero).padStart(8, '0')}`;
@@ -32,16 +38,21 @@ const VentaFacturaPanel = ({ ventaId }: Props) => {
     const [loading, setLoading] = useState(true);
     const [emitting, setEmitting] = useState(false);
     const [downloading, setDownloading] = useState(false);
+    const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
+        setErrorCarga(null);
         try {
             const c = await ventasApi.getFactura(ventaId) as unknown as ComprobanteAfip;
             setComp(c);
-        } catch {
-            // 404 = todavía no facturada. Cualquier otro error también cae acá y se
-            // muestra el botón de emitir (el POST devolverá el detalle real si falla).
+        } catch (err: unknown) {
+            // 404 (NOT_FOUND) = todavía no facturada: se ofrece emitir. Otro error
+            // es un problema al consultar, y ofrecer "Emitir" ahí podía llevar a
+            // creer que la venta no estaba facturada cuando sí lo estaba.
             setComp(null);
+            const e = err as { error?: string; message?: string };
+            if (e?.error !== 'NOT_FOUND') setErrorCarga(e?.message || 'No se pudo consultar la factura de esta venta.');
         } finally {
             setLoading(false);
         }
@@ -73,7 +84,7 @@ const VentaFacturaPanel = ({ ventaId }: Props) => {
         try {
             const c = await ventasApi.emitirFactura(ventaId) as unknown as ComprobanteAfip;
             setComp(c);
-            addToast('Factura AFIP emitida — CAE obtenido', 'success');
+            addToast('Factura emitida: AFIP otorgó el CAE', 'success');
         } catch (err: unknown) {
             const e = err as { error?: string; message?: string };
             if (e?.error === 'COMPROBANTE_YA_EMITIDO') {
@@ -90,10 +101,15 @@ const VentaFacturaPanel = ({ ventaId }: Props) => {
     return (
         <div>
             <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
-                <FileText size={14} className="text-accent" /> Facturación Electrónica (AFIP)
+                <FileText size={14} className="text-accent" aria-hidden="true" /> Factura electrónica (AFIP)
             </h3>
 
-            {loading ? (
+            {errorCarga ? (
+                <div className="text-sm">
+                    <p className="text-danger mb-2">{errorCarga}</p>
+                    <Button variant="secondary" size="sm" onClick={load}>Reintentar</Button>
+                </div>
+            ) : loading ? (
                 <div className="text-xs italic text-muted flex items-center gap-2">
                     <RefreshCw size={14} className="animate-spin" /> Consultando comprobante fiscal…
                 </div>
@@ -101,21 +117,21 @@ const VentaFacturaPanel = ({ ventaId }: Props) => {
                 <div>
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="flex items-center gap-3">
-                            <Badge variant="success">{TIPO_LABEL[comp.tipoComprobante]?.toUpperCase()}</Badge>
+                            <Badge variant="success">{TIPO_LABEL[comp.tipoComprobante]}</Badge>
                             <span className="font-mono text-sm font-bold">N° {nroComprobante(comp)}</span>
                         </div>
                         {comp.entorno === 'mock' && (
-                            <Badge variant="warning">MODO DEMO — CAE SIMULADO</Badge>
+                            <Badge variant="warning" title="Todavía no hay certificado de AFIP cargado: el CAE es de prueba y la factura no tiene validez fiscal.">Modo demo: CAE simulado</Badge>
                         )}
                     </div>
 
                     <div className="grid">
                         <div>
-                            <p className="text-3xs font-black text-muted uppercase tracking-widest">CAE</p>
+                            <p className="text-3xs font-black text-muted uppercase tracking-widest"><abbr title={AYUDA_CAE}>CAE</abbr></p>
                             <p className="font-mono text-xs font-bold">{comp.cae || '—'}</p>
                         </div>
                         <div>
-                            <p className="text-3xs font-black text-muted uppercase tracking-widest">Vto. CAE</p>
+                            <p className="text-3xs font-black text-muted uppercase tracking-widest" title={AYUDA_CAE}>Vencimiento del CAE</p>
                             <p className="text-xs font-bold">{fmtFecha(comp.caeVencimiento)}</p>
                         </div>
                         <div>
@@ -124,19 +140,17 @@ const VentaFacturaPanel = ({ ventaId }: Props) => {
                         </div>
                         <div>
                             <p className="text-3xs font-black text-muted uppercase tracking-widest">Total</p>
-                            <p className="text-xs font-black text-accent">
-                                {comp.moneda === 'DOL' ? 'US$ ' : '$ '}{Number(comp.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                            </p>
+                            <p className="text-xs font-black tabular-nums">{formatMoneda(comp.total, monedaAfip(comp.moneda))}</p>
                         </div>
                         {comp.tipoComprobante === 'factura_a' && (
                             <>
                                 <div>
-                                    <p className="text-3xs font-black text-muted uppercase tracking-widest">Neto Gravado</p>
-                                    <p className="text-xs font-bold">$ {Number(comp.neto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                                    <p className="text-3xs font-black text-muted uppercase tracking-widest">Neto gravado</p>
+                                    <p className="text-xs font-bold tabular-nums">{formatMoneda(comp.neto, monedaAfip(comp.moneda))}</p>
                                 </div>
                                 <div>
                                     <p className="text-3xs font-black text-muted uppercase tracking-widest">IVA {Number(comp.alicuotaIva)}%</p>
-                                    <p className="text-xs font-bold">$ {Number(comp.iva).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                                    <p className="text-xs font-bold tabular-nums">{formatMoneda(comp.iva, monedaAfip(comp.moneda))}</p>
                                 </div>
                             </>
                         )}
@@ -150,12 +164,12 @@ const VentaFacturaPanel = ({ ventaId }: Props) => {
                 <div>
                     <p className="text-xs text-muted leading-relaxed flex items-start gap-2">
                         <ShieldCheck size={16} className="text-muted" />
-                        Esta venta todavía no tiene comprobante fiscal. Al emitir se calcula el tipo (A si el cliente es
-                        Responsable Inscripto, B si es consumidor final) y se obtiene el CAE. Hoy en <strong>modo demo</strong>:
-                        el CAE es simulado, sin validez fiscal.
+                        Esta venta todavía no tiene factura. Al emitirla se elige el tipo (A si el cliente es
+                        Responsable Inscripto, B si es consumidor final) y AFIP otorga el <abbr title={AYUDA_CAE}>CAE</abbr>.
+                        Hoy funciona en <strong>modo demo</strong>: el CAE es simulado y la factura no tiene validez fiscal.
                     </p>
                     <Button variant="primary" onClick={emitir} disabled={emitting}>
-                        <FileText size={16} /> {emitting ? 'Emitiendo…' : 'Emitir factura AFIP'}
+                        <FileText size={16} /> {emitting ? 'Emitiendo…' : 'Emitir factura'}
                     </Button>
                 </div>
             )}
