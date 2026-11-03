@@ -65,8 +65,8 @@ export class FinanciacionController {
                     cuotas: n,
                     tasaMensual: tasaMensual != null && tasaMensual !== '' ? Number(tasaMensual) : 0,
                     moneda: moneda || 'ARS',
-                    // La 1ª cuota puede ser 1 centavo mayor por el reparto del resto;
-                    // el detalle exacto va en el array `cuotas`.
+                    // Todas las cuotas valen esto salvo la última, que absorbe el
+                    // redondeo; el detalle exacto va en el array `cuotas`.
                     valorCuota: cuotasPlan[0]?.montoCuota ?? 0,
                     totalAPagar,
                     costoFinanciero: Math.round((totalAPagar - total) * 100) / 100,
