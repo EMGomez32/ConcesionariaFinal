@@ -18,7 +18,7 @@ export interface Reserva {
     createdAt?: string;
     updatedAt?: string;
     cliente?: { id: number; nombre: string; dni?: string; telefono?: string };
-    vehiculo?: { id: number; marca: string; modelo: string; dominio?: string; version?: string };
+    vehiculo?: { id: number; marca: string; modelo: string; dominio?: string; version?: string; precioLista?: number | string | null; moneda?: MonedaReserva | null };
     sucursal?: { id: number; nombre: string };
     creadaPor?: { nombre: string; email: string };
 }

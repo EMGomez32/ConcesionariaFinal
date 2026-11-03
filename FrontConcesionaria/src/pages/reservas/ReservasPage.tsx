@@ -1,12 +1,13 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { reservasApi, type Reserva, type EstadoReserva } from '../../api/reservas.api';
-import type { BadgeVariant } from '../../components/ui/Badge';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { reservasApi, type Reserva } from '../../api/reservas.api';
 import { vehiculosApi } from '../../api/vehiculos.api';
 import { sucursalesApi } from '../../api/sucursales.api';
 import { clientesApi } from '../../api/clientes.api';
 import { usuariosApi } from '../../api/usuarios.api';
 import { useUIStore } from '../../store/uiStore';
+import { useAuthStore } from '../../store/authStore';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
@@ -14,75 +15,66 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
+import DataTable, { type Column } from '../../components/ui/DataTable';
+import PageTitle from '../../components/ui/PageTitle';
 import { getList } from '../../utils/lista';
-import {
-    Plus, Search, Filter, RefreshCw,
-    Bookmark, ChevronLeft, ChevronRight,
-    Eye, XCircle, X
-} from 'lucide-react';
+import { getErrorMessage } from '../../utils/getErrorMessage';
+import { Plus, Search, RefreshCw, Bookmark, Eye, XCircle, X } from 'lucide-react';
 import { usePermisos } from '../../hooks/usePermisos';
-import { formatFecha } from '../../utils/fecha';
+import { formatFecha, hoyLocal } from '../../utils/fecha';
+import { formatMoneda } from '../../utils/moneda';
+import { RESERVA_ESTADO, rotuloEstado } from '../../components/ventas/estados';
+import { useFiltrosUrl } from '../../components/ventas/useFiltrosUrl';
+import type { PaginatedResponse } from '../../types/api.types';
 
-const ESTADO_OPTS: { value: EstadoReserva; label: string }[] = [
-    { value: 'activa', label: 'Activa' },
-    { value: 'convertida_en_venta', label: 'Convertida en venta' },
-    { value: 'cancelada', label: 'Cancelada' },
-    { value: 'vencida', label: 'Vencida' },
-];
-
-const ESTADO_BADGE: Record<EstadoReserva, BadgeVariant> = {
-    activa: 'success',
-    convertida_en_venta: 'info',
-    cancelada: 'default',
-    vencida: 'danger',
+/** Usuario actual como vendedor por defecto, si tiene ese rol. */
+const vendedorPorDefecto = (): string => {
+    const u = useAuthStore.getState().user;
+    return u?.roles?.includes('vendedor') ? String(u.id) : '';
 };
 
-
-const EMPTY_FORM = {
+const emptyForm = () => ({
     vehiculoId: '',
     clienteId: '',
-    vendedorId: '',
+    vendedorId: vendedorPorDefecto(),
     sucursalId: '',
     monto: '',
     moneda: 'ARS' as 'ARS' | 'USD',
     fechaVencimiento: '',
     observaciones: '',
-};
+});
 
+/** Vence en los próximos 3 días (comparando fechas de calendario, sin corrimiento de zona). */
 const isVencimientoProximo = (fecha: string) => {
-    const diff = new Date(fecha).getTime() - Date.now();
-    return diff > 0 && diff < 3 * 24 * 60 * 60 * 1000; // < 3 days
+    const vence = fecha.slice(0, 10);
+    const hoy = hoyLocal();
+    const en3 = hoyLocal(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000));
+    return vence >= hoy && vence <= en3;
 };
 
 const ReservasPage = () => {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const { addToast } = useUIStore();
     // Tomar una seña y cancelarla son las dos caras del mismo trabajo del vendedor
     // (el cliente se arrepiente y la unidad vuelve a `publicado`), y las dos van por
     // rutas admin+vendedor. Lo que no puede es verlas `lectura`. Ver usePermisos.ts.
     const permisos = usePermisos();
 
-    // List state
-    const [reservas, setReservas] = useState<Reserva[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [total, setTotal] = useState(0);
-
-    // Filters
-    const [filterEstado, setFilterEstado] = useState('');
-    const [filterSucursal, setFilterSucursal] = useState('');
-    const [filterCliente, setFilterCliente] = useState('');
+    // Filtros, búsqueda y página en la URL (sobreviven a entrar a una reserva y volver).
+    const { filtros, q, busqueda, setBusqueda, page, setPage, setFiltro, limpiar, hayFiltros } =
+        useFiltrosUrl(['estado', 'sucursalId'] as const);
 
     // Catalog data
     const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([]);
-    const [vehiculos, setVehiculos] = useState<{ id: number; marca: string; modelo: string; version?: string; dominio?: string }[]>([]);
+    const [vehiculos, setVehiculos] = useState<{ id: number; marca: string; modelo: string; version?: string; dominio?: string; sucursalId?: number }[]>([]);
     const [clientes, setClientes] = useState<{ id: number; nombre: string }[]>([]);
     const [usuarios, setUsuarios] = useState<{ id: number; nombre: string }[]>([]);
+    const [catalogoError, setCatalogoError] = useState<string | null>(null);
 
     // Modal
     const [showModal, setShowModal] = useState(false);
-    const [form, setForm] = useState({ ...EMPTY_FORM });
+    const [form, setForm] = useState(emptyForm());
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
 
@@ -90,54 +82,54 @@ const ReservasPage = () => {
     const [cancelingId, setCancelingId] = useState<number | null>(null);
     const [cancelLoading, setCancelLoading] = useState(false);
 
-    // Load catalogs
+    // Catálogos. Antes cada uno tenía un `.catch(() => {})`: si fallaba, el
+    // select quedaba vacío y nadie sabía por qué.
     useEffect(() => {
-        sucursalesApi.getAll().then((res: unknown) => setSucursales(getList(res))).catch(() => { });
-        vehiculosApi.getAll({ estado: 'publicado' }, { limit: 1000 }).then((res: unknown) => setVehiculos(getList(res))).catch(() => { });
-        clientesApi.getAll({}, { limit: 1000 }).then((res: unknown) => setClientes(getList(res))).catch(() => { });
-        usuariosApi.getAll({}, { limit: 1000 }).then((res: unknown) => setUsuarios(getList(res))).catch(() => { });
+        const fallos: string[] = [];
+        const cargar = <T,>(p: Promise<unknown>, set: (v: T[]) => void, nombre: string) =>
+            p.then((res) => set(getList<T>(res))).catch(() => { fallos.push(nombre); });
+        Promise.all([
+            cargar(sucursalesApi.getAll(), setSucursales, 'sucursales'),
+            cargar(vehiculosApi.getAll({ estado: 'publicado' }, { limit: 1000 }), setVehiculos, 'vehículos'),
+            cargar(clientesApi.getAll({}, { limit: 1000 }), setClientes, 'clientes'),
+            cargar(usuariosApi.getAll({}, { limit: 1000 }), setUsuarios, 'vendedores'),
+        ]).then(() => {
+            if (fallos.length) setCatalogoError(`No se pudieron cargar: ${fallos.join(', ')}. Recargá la página para reintentar.`);
+        });
     }, []);
 
-    const loadReservas = useCallback(async (pg = page) => {
-        setLoading(true);
-        try {
-            const params: Record<string, string | number> = { page: pg, limit: 15 };
-            if (filterEstado) params.estado = filterEstado;
-            if (filterSucursal) params.sucursalId = filterSucursal;
-            if (filterCliente) params.clienteId = filterCliente;
-
-            const raw = await reservasApi.getAll(params) as unknown as { results?: Reserva[]; totalPages?: number; totalResults?: number };
-            setReservas(raw?.results ?? []);
-            setTotalPages(raw?.totalPages ?? 1);
-            setTotal(raw?.totalResults ?? 0);
-        } catch {
-            addToast('Error al cargar reservas', 'error');
-        } finally {
-            setLoading(false);
-        }
-    }, [page, filterEstado, filterSucursal, filterCliente, addToast]);
-
-    useEffect(() => {
-        loadReservas(page);
-    }, [page, loadReservas]);
-
-    const handleClear = () => {
-        setFilterEstado('');
-        setFilterSucursal('');
-        setFilterCliente('');
-        setPage(1);
-    };
+    // Listado: la búsqueda la resuelve el backend (contrato 1).
+    const listaQuery = useQuery({
+        queryKey: ['reservas', 'list', { q, ...filtros, page }],
+        queryFn: async () => {
+            const params: Record<string, string | number> = { page, limit: 15 };
+            if (filtros.estado) params.estado = filtros.estado;
+            if (filtros.sucursalId) params.sucursalId = filtros.sucursalId;
+            if (q) params.q = q;
+            return await reservasApi.getAll(params) as unknown as PaginatedResponse<Reserva>;
+        },
+        placeholderData: keepPreviousData,
+    });
+    const reservas = listaQuery.data?.results ?? [];
+    const total = listaQuery.data?.totalResults ?? 0;
+    const recargar = () => queryClient.invalidateQueries({ queryKey: ['reservas'] });
 
     const openModal = () => {
-        setForm({ ...EMPTY_FORM });
+        setForm(emptyForm());
         setFormError('');
         setShowModal(true);
+    };
+
+    /** Al elegir la unidad se precarga su sucursal. */
+    const elegirUnidad = (vehiculoId: string) => {
+        const v = vehiculos.find(x => String(x.id) === vehiculoId);
+        setForm(f => ({ ...f, vehiculoId, ...(v?.sucursalId ? { sucursalId: String(v.sucursalId) } : {}) }));
     };
 
     const handleSubmit = async () => {
         const { vehiculoId, clienteId, vendedorId, sucursalId, monto, moneda, fechaVencimiento } = form;
         if (!vehiculoId || !clienteId || !vendedorId || !sucursalId || !monto || !fechaVencimiento) {
-            setFormError('Todos los campos obligatorios deben completarse.');
+            setFormError('Completá todos los campos con *.');
             return;
         }
         setSaving(true);
@@ -153,12 +145,12 @@ const ReservasPage = () => {
                 fechaVencimiento: new Date(fechaVencimiento).toISOString(),
                 observaciones: form.observaciones || undefined,
             });
-            addToast('Reserva creada correctamente', 'success');
+            addToast('Reserva creada', 'success');
             setShowModal(false);
             setPage(1);
-            loadReservas(1);
+            recargar();
         } catch (e: unknown) {
-            setFormError((e as { message?: string })?.message ?? 'Error al crear reserva');
+            setFormError(getErrorMessage(e, 'No se pudo crear la reserva'));
         } finally {
             setSaving(false);
         }
@@ -169,207 +161,202 @@ const ReservasPage = () => {
         setCancelLoading(true);
         try {
             await reservasApi.update(cancelingId, { estado: 'cancelada' });
-            addToast('Reserva cancelada', 'success');
+            addToast('Reserva cancelada. La unidad volvió a Publicado.', 'success');
             setCancelingId(null);
-            loadReservas(page);
-        } catch {
-            addToast('Error al cancelar reserva', 'error');
+            recargar();
+        } catch (e: unknown) {
+            addToast(getErrorMessage(e, 'No se pudo cancelar la reserva'), 'error');
         } finally {
             setCancelLoading(false);
         }
     };
 
-    return (
-        <div className="page-container">
-            {/* Header */}
-            <div className="page-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <Bookmark size={28} style={{ color: 'var(--accent)' }} />
-                    <div>
-                        <h1 className="page-title">Reservas</h1>
-                        <p className="page-subtitle">{total} reserva{total !== 1 ? 's' : ''} en total</p>
+    const columns: Column<Reserva>[] = [
+        {
+            header: 'N°',
+            accessor: (r) => <span className="font-mono text-xs font-bold">{r.id}</span>,
+        },
+        {
+            header: 'Unidad',
+            accessor: (r) => (
+                <div className="flex flex-col">
+                    <span className="font-bold text-sm">{r.vehiculo ? `${r.vehiculo.marca} ${r.vehiculo.modelo}` : `Unidad #${r.vehiculoId}`}</span>
+                    <span className="text-xs text-muted">{r.vehiculo?.dominio || 'Sin dominio'}</span>
+                </div>
+            ),
+        },
+        { header: 'Cliente', accessor: (r) => <span className="text-sm">{r.cliente?.nombre ?? '-'}</span> },
+        { header: 'Sucursal', accessor: (r) => <span className="text-sm text-muted">{r.sucursal?.nombre ?? '-'}</span> },
+        {
+            header: 'Seña',
+            align: 'right',
+            accessor: (r) => <span className="font-bold tabular-nums" style={{ whiteSpace: 'nowrap' }}>{formatMoneda(r.monto, r.moneda)}</span>,
+        },
+        {
+            header: 'Vence',
+            accessor: (r) => {
+                const proximo = r.estado === 'activa' && !!r.fechaVencimiento && isVencimientoProximo(r.fechaVencimiento);
+                return (
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm tabular-nums">{formatFecha(r.fechaVencimiento)}</span>
+                        {proximo && <Badge variant="warning">Vence pronto</Badge>}
                     </div>
+                );
+            },
+        },
+        {
+            header: 'Estado',
+            accessor: (r) => {
+                const e = rotuloEstado(RESERVA_ESTADO, r.estado);
+                return <Badge variant={e.variant}>{e.label}</Badge>;
+            },
+        },
+        {
+            header: 'Acciones',
+            align: 'right',
+            accessor: (r) => (
+                <div className="flex justify-end gap-1">
+                    <button type="button" className="icon-btn" title="Ver detalle" aria-label={`Ver la reserva ${r.id}`}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/reservas/${r.id}`); }}>
+                        <Eye size={15} />
+                    </button>
+                    {r.estado === 'activa' && permisos.reservasOperar && (
+                        <button type="button" className="icon-btn danger" title="Cancelar reserva" aria-label={`Cancelar la reserva ${r.id}`}
+                            onClick={(e) => { e.stopPropagation(); setCancelingId(r.id); }}>
+                            <XCircle size={15} />
+                        </button>
+                    )}
                 </div>
-                {permisos.reservasOperar && (
-                    <Button data-tour="res-nueva" variant="primary" onClick={openModal}>
-                        <Plus size={16} style={{ marginRight: '0.5rem' }} /> Nueva Reserva
-                    </Button>
-                )}
-            </div>
+            ),
+        },
+    ];
 
-            {/* Filters */}
-            <div className="glass filter-bar" data-tour="res-filtros" style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap', padding: '1rem 1.5rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem' }}>
-                <div className="filter-group">
-                    <label className="filter-label"><Filter size={12} /> Estado</label>
-                    <select className="form-input" value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }} style={{ minWidth: '140px' }}>
-                        <option value="">Todos</option>
-                        {ESTADO_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
+    return (
+        <div className="page-container animate-fade-in">
+            <PageTitle title="Reservas" />
+            <header className="page-header">
+                <div className="header-title">
+                    <div className="flex items-center gap-3 mb-1">
+                        <div className="icon-badge primary">
+                            <Bookmark size={20} />
+                        </div>
+                        <h1>Reservas</h1>
+                    </div>
+                    <p>
+                        Señas tomadas sobre unidades del stock
+                        {listaQuery.isSuccess ? ` · ${total} ${total === 1 ? 'reserva' : 'reservas'}${hayFiltros ? ' con estos filtros' : ''}` : ''}.
+                    </p>
                 </div>
-                <div className="filter-group">
-                    <label className="filter-label"><Filter size={12} /> Sucursal</label>
-                    <select className="form-input" value={filterSucursal} onChange={e => { setFilterSucursal(e.target.value); setPage(1); }} style={{ minWidth: '150px' }}>
-                        <option value="">Todas</option>
-                        {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                    </select>
+                <div className="header-actions">
+                    <Button variant="secondary" onClick={() => recargar()} aria-label="Actualizar listado" title="Actualizar listado">
+                        <RefreshCw size={18} className={listaQuery.isFetching ? 'animate-spin' : ''} />
+                    </Button>
+                    {permisos.reservasOperar && (
+                        <Button data-tour="res-nueva" variant="primary" onClick={openModal}>
+                            <Plus size={16} /> Nueva reserva
+                        </Button>
+                    )}
                 </div>
-                <div className="filter-group">
-                    <label className="filter-label"><Search size={12} /> Cliente</label>
-                    <select className="form-input" value={filterCliente} onChange={e => { setFilterCliente(e.target.value); setPage(1); }} style={{ minWidth: '160px' }}>
-                        <option value="">Todos</option>
-                        {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                    </select>
+            </header>
+
+            {catalogoError && (
+                <div className="uploader-alert uploader-alert-error" role="alert">{catalogoError}</div>
+            )}
+
+            {/* Filtros */}
+            <div className="filters-bar" data-tour="res-filtros">
+                <div className="search-box">
+                    <Search size={18} className="text-muted" aria-hidden="true" />
+                    <input
+                        type="search"
+                        placeholder="Buscar por cliente, DNI, dominio, marca, modelo o N°"
+                        aria-label="Buscar reservas"
+                        value={busqueda}
+                        onChange={e => setBusqueda(e.target.value)}
+                    />
                 </div>
-                <Button variant="ghost" size="sm" onClick={handleClear}>
-                    <X size={14} style={{ marginRight: '0.4rem' }} /> Limpiar
+                <select aria-label="Filtrar por estado" value={filtros.estado} onChange={e => setFiltro('estado', e.target.value)}>
+                    <option value="">Estado: todos</option>
+                    {Object.entries(RESERVA_ESTADO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+                <select aria-label="Filtrar por sucursal" value={filtros.sucursalId} onChange={e => setFiltro('sucursalId', e.target.value)}>
+                    <option value="">Sucursal: todas</option>
+                    {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                </select>
+                <Button variant="ghost" onClick={limpiar} disabled={!hayFiltros}>
+                    <X size={16} /> Limpiar filtros
                 </Button>
             </div>
 
-            {/* Table */}
-            <div className="glass table-container" data-tour="res-tabla">
-                {loading ? (
-                    <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                        <RefreshCw size={24} className="spin" />
-                    </div>
-                ) : reservas.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                        <Bookmark size={32} style={{ opacity: 0.3, marginBottom: '0.75rem' }} />
-                        <p>No hay reservas registradas.</p>
-                    </div>
-                ) : (
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Vehículo</th>
-                                <th>Cliente</th>
-                                <th>Sucursal</th>
-                                <th>Seña</th>
-                                <th>Vencimiento</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {reservas.map(r => {
-                                const proximo = r.estado === 'activa' && r.fechaVencimiento && isVencimientoProximo(r.fechaVencimiento);
-                                return (
-                                    <tr key={r.id}>
-                                        <td className="fw-bold text-muted">#{r.id}</td>
-                                        <td>
-                                            <span className="fw-bold">
-                                                {r.vehiculo ? `${r.vehiculo.marca} ${r.vehiculo.modelo}` : `ID ${r.vehiculoId}`}
-                                            </span>
-                                            {r.vehiculo?.dominio && (
-                                                <span className="dominio-tag" style={{ marginLeft: '0.5rem', fontSize: 'var(--text-xs)' }}>
-                                                    {r.vehiculo.dominio}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td>{r.cliente?.nombre ?? '-'}</td>
-                                        <td>{r.sucursal?.nombre ?? '-'}</td>
-                                        <td className="fw-bold">
-                                            {r.moneda} ${Number(r.monto).toLocaleString('es-AR')}
-                                        </td>
-                                        <td>
-                                            <span style={{ color: proximo ? 'var(--warning)' : 'inherit', fontWeight: proximo ? 700 : undefined }}>
-                                                {formatFecha(r.fechaVencimiento)}
-                                                {proximo && ' ⚠️'}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <Badge variant={ESTADO_BADGE[r.estado]}>
-                                                {ESTADO_OPTS.find(o => o.value === r.estado)?.label ?? r.estado}
-                                            </Badge>
-                                        </td>
-                                        <td>
-                                            <div style={{ display: 'flex', gap: '0.4rem' }}>
-                                                <button
-                                                    className="icon-btn"
-                                                    title="Ver detalle"
-                                                    onClick={() => navigate(`/reservas/${r.id}`)}
-                                                >
-                                                    <Eye size={15} />
-                                                </button>
-                                                {r.estado === 'activa' && permisos.reservasOperar && (
-                                                    <button
-                                                        className="icon-btn danger"
-                                                        title="Cancelar reserva"
-                                                        onClick={() => setCancelingId(r.id)}
-                                                    >
-                                                        <XCircle size={15} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                )}
+            <div data-tour="res-tabla">
+                <DataTable
+                    columns={columns}
+                    data={reservas}
+                    isLoading={listaQuery.isLoading}
+                    isError={listaQuery.isError}
+                    errorMessage="No se pudieron cargar las reservas"
+                    onRetry={() => listaQuery.refetch()}
+                    onRowClick={(r) => navigate(`/reservas/${r.id}`)}
+                    currentPage={page}
+                    totalPages={listaQuery.data?.totalPages ?? 1}
+                    onPageChange={setPage}
+                    emptyMessage={hayFiltros
+                        ? 'Ninguna reserva coincide con la búsqueda o los filtros'
+                        : 'Todavía no hay reservas. Tomá la primera seña con «Nueva reserva».'}
+                    emptyIcon={<Bookmark size={40} className="dt-empty-icon" />}
+                    onClearFilters={hayFiltros ? limpiar : undefined}
+                />
             </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'flex-end', marginTop: '1rem' }}>
-                    <Button variant="ghost" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-                        <ChevronLeft size={16} />
-                    </Button>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Página {page} de {totalPages}</span>
-                    <Button variant="ghost" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-                        <ChevronRight size={16} />
-                    </Button>
-                </div>
-            )}
 
             <Modal
                 isOpen={showModal}
                 onClose={() => setShowModal(false)}
-                title="Nueva Reserva"
+                title="Nueva reserva"
+                subtitle="La unidad queda reservada hasta la fecha de vencimiento. Los campos con * son obligatorios."
                 maxWidth="620px"
                 footer={
                     <>
                         <Button variant="secondary" onClick={() => setShowModal(false)}>Cancelar</Button>
                         <Button variant="primary" onClick={handleSubmit} loading={saving}>
-                            <Plus size={14} />
-                            Crear Reserva
+                            <Plus size={14} /> Crear reserva
                         </Button>
                     </>
                 }
             >
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div style={{ gridColumn: '1 / -1' }}>
-                        <Select dense label="Vehículo * (solo publicados)" placeholder="Seleccionar vehículo..." value={form.vehiculoId} onChange={e => setForm(f => ({ ...f, vehiculoId: e.target.value }))}>
+                        <Select dense label="Unidad *" hint="Sólo se pueden reservar unidades publicadas." placeholder="Elegí la unidad" value={form.vehiculoId} onChange={e => elegirUnidad(e.target.value)}>
                             {vehiculos.map(v => (
                                 <option key={v.id} value={v.id}>
-                                    {v.marca} {v.modelo} {v.version ? `${v.version} ` : ''}{v.dominio ? `(${v.dominio})` : ''}
+                                    {v.marca} {v.modelo} {v.version ? `${v.version} ` : ''}{v.dominio ? `— ${v.dominio}` : ''}
                                 </option>
                             ))}
                         </Select>
                     </div>
 
-                    <Select dense label="Cliente *" placeholder="Seleccionar cliente..." options={clientes.map(c => ({ value: c.id, label: c.nombre }))} value={form.clienteId} onChange={e => setForm(f => ({ ...f, clienteId: e.target.value }))} />
+                    <Select dense label="Cliente *" placeholder="Elegí el cliente" options={clientes.map(c => ({ value: c.id, label: c.nombre }))} value={form.clienteId} onChange={e => setForm(f => ({ ...f, clienteId: e.target.value }))} />
 
-                    <Select dense label="Vendedor *" placeholder="Seleccionar vendedor..." options={usuarios.map(u => ({ value: u.id, label: u.nombre }))} value={form.vendedorId} onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))} />
+                    <Select dense label="Vendedor *" placeholder="Elegí el vendedor" options={usuarios.map(u => ({ value: u.id, label: u.nombre }))} value={form.vendedorId} onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))} />
 
-                    <Select dense label="Sucursal *" placeholder="Seleccionar sucursal..." options={sucursales.map(s => ({ value: s.id, label: s.nombre }))} value={form.sucursalId} onChange={e => setForm(f => ({ ...f, sucursalId: e.target.value }))} />
+                    <Select dense label="Sucursal *" placeholder="Elegí la sucursal" options={sucursales.map(s => ({ value: s.id, label: s.nombre }))} value={form.sucursalId} onChange={e => setForm(f => ({ ...f, sucursalId: e.target.value }))} />
 
-                    <Input dense label="Fecha de vencimiento *" type="date" value={form.fechaVencimiento} onChange={e => setForm(f => ({ ...f, fechaVencimiento: e.target.value }))} />
+                    <Input dense label="Vence el *" type="date" min={hoyLocal()} value={form.fechaVencimiento} onChange={e => setForm(f => ({ ...f, fechaVencimiento: e.target.value }))} />
 
-                    <Input dense label="Monto de seña *" type="number" placeholder="0" value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} />
+                    <Input dense label="Monto de la seña *" type="number" min="0" placeholder="0" className="tabular-nums" value={form.monto}
+                        onChange={e => setForm(f => ({ ...f, monto: e.target.value }))}
+                        hint={form.monto ? formatMoneda(form.monto, form.moneda) : undefined} />
 
                     <Select dense label="Moneda *" value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}>
-                        <option value="ARS">ARS</option>
-                        <option value="USD">USD</option>
+                        <option value="ARS">Pesos ($)</option>
+                        <option value="USD">Dólares (US$)</option>
                     </Select>
 
                     <div style={{ gridColumn: '1 / -1' }}>
-                        <Textarea dense label="Observaciones" rows={3} placeholder="Observaciones opcionales..." value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} />
+                        <Textarea dense label="Observaciones" rows={3} placeholder="Opcional" value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} />
                     </div>
 
                     {formError && (
-                        <div className="uploader-alert uploader-alert-error" style={{ gridColumn: '1 / -1' }}>
+                        <div className="uploader-alert uploader-alert-error" style={{ gridColumn: '1 / -1' }} role="alert">
                             <span>{formError}</span>
                         </div>
                     )}
@@ -379,22 +366,14 @@ const ReservasPage = () => {
             <ConfirmDialog
                 isOpen={cancelingId !== null}
                 title="Cancelar reserva"
-                message={`¿Confirmar cancelación de la reserva #${cancelingId}? El vehículo volverá a estado "Publicado".`}
-                confirmLabel="Confirmar cancelación"
+                message={`¿Cancelar la reserva N° ${cancelingId}? La unidad vuelve a estar publicada para la venta.`}
+                confirmLabel="Cancelar reserva"
                 cancelLabel="Volver"
                 type="danger"
                 onConfirm={handleCancel}
                 onCancel={() => setCancelingId(null)}
                 loading={cancelLoading}
             />
-
-            <style>{`
-                .filter-group { display: flex; flex-direction: column; gap: 0.3rem; }
-                .filter-label { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem; }
-                .modal-footer { display: flex; justify-content: flex-end; gap: 0.75rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border); }
-                @keyframes spin { to { transform: rotate(360deg); } }
-                .spin { animation: spin 0.8s linear infinite; }
-            `}</style>
         </div>
     );
 };
