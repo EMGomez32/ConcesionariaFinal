@@ -47,14 +47,22 @@ import { authorize } from '../interface/middlewares/authorize.middleware';
 import { auditoriaExport } from '../interface/middlewares/auditoriaExport.middleware';
 import { accesoSoporte } from '../interface/middlewares/accesoSoporte.middleware';
 import ApiResponse from '../utils/ApiResponse';
+import prisma from '../infrastructure/database/prisma';
 
 const router = express.Router();
 
 // ── Rutas públicas (sin autenticación) ───────────────────────────────────────
 
-// Health check
-router.get('/health', (req, res) => {
-    res.send(ApiResponse.success({ status: 'UP', timestamp: new Date() }));
+// Health check. Consulta la base: si sólo respondiera que el proceso está vivo, ni el
+// monitor externo (.github/workflows/uptime.yml) ni el smoke de scripts/deploy.sh se
+// enterarían de una base caída. Responde 503 sin detalles del error (es público).
+router.get('/health', async (_req, res) => {
+    try {
+        await (prisma as any).$queryRaw`SELECT 1`;
+        res.send(ApiResponse.success({ status: 'UP', timestamp: new Date() }));
+    } catch {
+        res.status(503).send(ApiResponse.error('Base de datos no disponible', 503, 'DB_UNAVAILABLE'));
+    }
 });
 
 // Auth (login/refresh/logout son públicos por definición)
