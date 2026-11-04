@@ -134,15 +134,16 @@ export const updateFinanciacionSchema = z.object({
 });
 
 // PATCH /financiaciones/cuotas/:cuotaId/pagar — registrar pago de cuota.
-// `referencia` y `observaciones` son parte del DTO pero RegistrarPagoCuota sólo
-// persiste monto/metodo/fechaPago/idempotencyKey; los demás se aceptan y se ignoran.
+// `referencia` (n° de transferencia / recibo / cheque) y `observaciones` se
+// PERSISTEN desde PROC-35: antes se aceptaban y se ignoraban, y sin la referencia
+// el cobro no se puede conciliar contra el banco.
 // `idempotencyKey`: clave que el front genera al abrir el modal de cobro; el
 // backend la usa para no duplicar el pago ante reenvíos (doble-submit / retry).
 export const pagarCuotaSchema = z.object({
     monto: montoField('El monto del pago'),
     metodo: metodoPagoEnum,
-    referencia: z.string().optional(),
-    observaciones: z.string().optional(),
+    referencia: z.string().trim().max(120, 'La referencia es demasiado larga').optional(),
+    observaciones: z.string().trim().max(500, 'Las observaciones son demasiado largas').optional(),
     // Fecha parseable: sin esto un string basura llega a new Date() y explota como
     // 500 en el create (en vez de un 400 de validación).
     fechaPago: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Fecha de pago inválida').optional(),

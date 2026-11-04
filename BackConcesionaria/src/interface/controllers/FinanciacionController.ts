@@ -158,13 +158,10 @@ export class FinanciacionController {
     static async pagarCuota(req: Request, res: Response, next: NextFunction) {
         try {
             const cuotaId = parseInt(req.params.cuotaId as string, 10);
+            // La auditoría (lo cobrado, la referencia y el saldo antes/después) la
+            // escribe RegistrarPagoCuota dentro de su transacción. Un reenvío idempotente
+            // no deja un segundo rastro, igual que no deja un segundo cobro.
             const result = await registrarPagoUC.execute(cuotaId, req.body);
-            await audit({
-                entidad: 'Financiacion',
-                accion: 'update',
-                entidadId: (result as any)?.financiacionId ?? (result as any)?.id ?? cuotaId,
-                detalle: `Pago de cuota ${cuotaId} registrado`,
-            });
             res.json(result);
         } catch (error) {
             next(error);
