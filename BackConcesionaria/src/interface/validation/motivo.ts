@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MOTIVO_MAX, MOTIVO_MIN } from '../../domain/services/motivo';
 
 /**
  * MOTIVO de una operación de control (anular una venta, cancelar un contrato o una
@@ -10,9 +11,11 @@ import { z } from 'zod';
  * "." o "error" no le dicen nada; diez caracteres alcanzan para "error de carga",
  * "el cliente desistió" o "duplicada con la 1234", y no son una traba para nadie
  * que de verdad tenga un motivo.
+ *
+ * El número vive en el dominio (domain/services/motivo.ts): también lo exige
+ * UpdateVehiculo, que es el único que sabe si el precio de lista BAJÓ.
  */
-export const MOTIVO_MIN = 10;
-export const MOTIVO_MAX = 500;
+export { MOTIVO_MAX, MOTIVO_MIN };
 
 /** `que`: de qué es el motivo, con preposición ("de la anulación"). */
 export const motivoObligatorio = (que: string) =>

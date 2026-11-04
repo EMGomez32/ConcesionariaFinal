@@ -100,6 +100,7 @@ export class PrismaVentaRepository implements IVentaRepository {
                 estadoEntrega: true,
                 deletedAt: true,
                 motivoAnulacion: true,
+                bajoPiso: true,
                 cliente: { select: { id: true, nombre: true, dni: true } },
                 vehiculo: { select: VEHICULO_PUBLICO },
                 vendedor: { select: USUARIO_PUBLICO },
@@ -218,7 +219,8 @@ export class PrismaVentaRepository implements IVentaRepository {
             v.vendedor,
             v.extras,
             v.pagos,
-            v.canjes
+            v.canjes,
+            v.bajoPiso ?? false
         );
     }
 }

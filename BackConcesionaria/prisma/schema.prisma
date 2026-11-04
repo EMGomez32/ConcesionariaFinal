@@ -1102,6 +1102,12 @@ model Venta {
   observaciones           String?
   estadoEntrega           EstadoEntrega           @default(pendiente) @map("estado_entrega")
   fechaEntrega            DateTime?               @map("fecha_entrega") @db.Date
+  // Se vendió por DEBAJO del precio mínimo de la ficha (PROC-34): con una
+  // autorización vigente o por un admin, que son los únicos caminos que CreateVenta
+  // deja. Es la marca del reporte de descuentos; el detalle (quién autorizó, qué
+  // solicitud) va en la auditoría de la venta. No lleva el valor del piso: GET
+  // /ventas lo ve el vendedor y el piso es el dato que no tiene que ver.
+  bajoPiso                Boolean                 @default(false) @map("bajo_piso")
   createdAt               DateTime                @default(now()) @map("created_at")
   updatedAt               DateTime                @updatedAt @map("updated_at")
   deletedAt               DateTime?               @map("deleted_at")

@@ -58,13 +58,9 @@ export class VentaController {
 
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
+            // La auditoría (con el control del precio mínimo) la escribe CreateVenta
+            // dentro de su transacción.
             const result = await createVentaUC.execute(req.body);
-            await audit({
-                entidad: 'Venta',
-                accion: 'create',
-                entidadId: (result as any)?.id,
-                detalle: `Venta ${(result as any)?.id} creada`,
-            });
             res.status(201).json(result);
         } catch (error) {
             next(error);

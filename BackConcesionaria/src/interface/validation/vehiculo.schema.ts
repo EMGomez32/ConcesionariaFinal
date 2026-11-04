@@ -168,7 +168,9 @@ export const updateVehiculoSchema = z.object({
     clienteOrigenId: optionalFk,
     // Por qué se cambió el precio de lista. NO es columna del vehículo: UpdateVehiculo
     // lo saca del update y lo guarda en el historial (VehiculoPrecioHistorial.motivo)
-    // sólo si el precio cambió de verdad. '' cuenta como "sin motivo".
+    // sólo si el precio cambió de verdad. '' cuenta como "sin motivo". Es OBLIGATORIO
+    // (10+ caracteres) cuando el precio BAJA (PROC-34), pero eso sólo se sabe contra
+    // el precio actual: lo exige UpdateVehiculo, no este schema.
     motivoCambioPrecio: z.string().trim().max(500, 'El motivo es demasiado largo').optional(),
 });
 
