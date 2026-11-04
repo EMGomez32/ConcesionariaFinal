@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { urlComprobanteAnulable } from './urlComprobante';
 
 // Schemas de validación de gastos fijos. Migración 1:1 de
 // modules/gastos-fijos/gasto-fijo.validation.ts (express-validator). Payloads
@@ -24,12 +25,6 @@ const nullableInt = () =>
     z.preprocess(
         (v) => (v === '' ? undefined : v),
         z.coerce.number().int().positive().nullable().optional(),
-    );
-
-const nullableString = () =>
-    z.preprocess(
-        (v) => (v === '' ? undefined : v),
-        z.string().nullable().optional(),
     );
 
 // concesionariaId lo resuelve el controller (resolveConcesionariaId) desde el
@@ -61,7 +56,7 @@ export const createGastoFijoSchema = z.object({
     monto: z.coerce.number({ error: 'El monto tiene que ser un número' }),
     moneda: z.enum(['ARS', 'USD'], { error: 'Elegí una moneda válida: ARS o USD' }).optional(),
     descripcion: z.string({ error: 'La descripción es obligatoria' }).min(1, 'La descripción es obligatoria'),
-    comprobanteUrl: nullableString(),
+    comprobanteUrl: urlComprobanteAnulable(),
     concesionariaId: optionalFk,
 });
 
@@ -77,5 +72,5 @@ export const updateGastoFijoSchema = z.object({
     monto: z.coerce.number().optional(),
     moneda: z.enum(['ARS', 'USD'], { error: 'Elegí una moneda válida: ARS o USD' }).optional(),
     descripcion: z.string().min(1, 'La descripción no puede quedar vacía').optional(),
-    comprobanteUrl: nullableString(),
+    comprobanteUrl: urlComprobanteAnulable(),
 });
