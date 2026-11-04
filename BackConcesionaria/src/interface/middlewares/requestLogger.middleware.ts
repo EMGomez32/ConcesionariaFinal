@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../../infrastructure/logging/logger';
 import { context } from '../../infrastructure/security/context';
+import { textoParaLog } from '../../utils/textoParaLog';
+
+export { textoParaLog };
 
 /**
  * Query params que no pueden quedar escritos en el log. En producción el log sale a
@@ -44,12 +47,6 @@ const PARAMS_SENSIBLES = new Set([
     'apellido',
     'direccion',
 ]);
-
-/**
- * Texto que viene del request, apto para una línea de log: sin CR/LF, para que nadie
- * pueda fabricar líneas de log falsas (CWE-117).
- */
-export const textoParaLog = (texto: string): string => texto.replace(/\n|\r/g, '');
 
 /**
  * URL para el log: mismo path, con los valores sensibles enmascarados y sin saltos de

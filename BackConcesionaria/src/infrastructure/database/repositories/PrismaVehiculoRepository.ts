@@ -4,6 +4,7 @@ import prisma from '../prisma';
 import { conUrlParaCliente } from '../../storage/zonaPrivada';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { parsePagination } from '../queryOptions';
+import { claveDeOrden } from '../queryFilter';
 
 // Sólo se puede ordenar por columnas reales: `sortBy` viene de la query y hasta
 // ahora se pasaba crudo a Prisma (un valor inventado → 500). El orden por
@@ -14,7 +15,7 @@ export class PrismaVehiculoRepository implements IVehiculoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Vehiculo>> {
         const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
         const { limit: limitNum, page: pageNum } = parsePagination(options);
-        const orderKey = SORTABLE.includes(String(sortBy)) ? String(sortBy) : 'createdAt';
+        const orderKey = claveDeOrden(SORTABLE, sortBy, 'createdAt');
         const orderDir = sortOrder === 'asc' ? 'asc' : 'desc';
 
         // A diferencia del resto de los repos, acá `filter` NO son query params

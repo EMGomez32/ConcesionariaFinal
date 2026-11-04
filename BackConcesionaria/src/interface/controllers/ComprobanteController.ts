@@ -9,6 +9,7 @@ import { storage } from '../../infrastructure/storage/LocalStorageAdapter';
 import { sniffImageType } from '../middlewares/upload.middleware';
 import { drawTopBand } from './pdf/branding';
 import { context } from '../../infrastructure/security/context';
+import { claveDeOrden } from '../../infrastructure/database/queryFilter';
 
 // Campos de marca que cada PDF necesita de su concesionaria (logo/colores/pie).
 const marcaSelect = {
@@ -60,7 +61,7 @@ export class ComprobanteController {
             if (sucursalId) where.sucursalId = Number(sucursalId);
 
             const SORTABLE = ['createdAt', 'fechaIngreso', 'precioLista', 'anio', 'kmIngreso', 'marca', 'modelo'];
-            const orderKey = SORTABLE.includes(String(sortBy)) ? String(sortBy) : 'createdAt';
+            const orderKey = claveDeOrden(SORTABLE, sortBy, 'createdAt');
             const orderDir = sortOrder === 'asc' ? 'asc' : 'desc';
 
             // Tope defensivo: un catálogo gigante no tiene sentido y evita leer miles

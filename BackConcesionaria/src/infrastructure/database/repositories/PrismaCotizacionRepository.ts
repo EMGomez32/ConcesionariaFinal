@@ -3,6 +3,7 @@ import { Cotizacion } from '../../../domain/entities/Cotizacion';
 import prisma from '../prisma';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { parsePagination } from '../queryOptions';
+import { claveDeOrden } from '../queryFilter';
 
 /**
  * Normaliza una fecha a la medianoche UTC de ese día. La columna es @db.Date:
@@ -34,7 +35,7 @@ export class PrismaCotizacionRepository implements ICotizacionRepository {
             if (filter.hasta) where.fecha.lte = toDateOnly(filter.hasta);
         }
 
-        const orderKey = SORTABLE.includes(String(sortBy)) ? String(sortBy) : 'fecha';
+        const orderKey = claveDeOrden(SORTABLE, sortBy, 'fecha');
         const orderDir = sortOrder === 'asc' ? 'asc' : 'desc';
 
         const results = await prisma.cotizacion.findMany({

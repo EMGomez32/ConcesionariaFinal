@@ -7,6 +7,7 @@ import { logger } from '../../infrastructure/logging/logger';
 import { llamarApi } from '../../infrastructure/mercadolibre/meliClient';
 import { conContextoSistema, ingestarConsulta } from './consultaIngest';
 import { reconciliarPublicacion } from './meliPublicacion';
+import { textoParaLog } from '../../utils/textoParaLog';
 
 /**
  * Preguntas de Mercado Libre: bandeja de consultas del canal.
@@ -355,7 +356,7 @@ async function buscarCuentaPorMlUserId(mlUserId: string): Promise<MercadoLibreCu
     // silencio significa escribir las consultas de un vendedor en el CRM de otra
     // concesionaria: se avisa fuerte en vez de repartir por id.
     if (cuentas.length > 1) {
-        logger.error(`[meli-webhook] el user_id ${mlUserId} está vinculado y activo en más de una concesionaria: hay que desvincularlo de todas menos una para que las preguntas entren donde corresponde`);
+        logger.error(textoParaLog(`[meli-webhook] el user_id ${mlUserId} está vinculado y activo en más de una concesionaria: hay que desvincularlo de todas menos una para que las preguntas entren donde corresponde`));
     }
     return cuentas[0] ?? null;
 }
@@ -403,7 +404,7 @@ async function ingestarPreguntaPorResource(cuenta: MercadoLibreCuenta, resource:
     // único que ata la pregunta a esta cuenta es su vendedor.
     const vendedor = pregunta?.seller_id != null ? String(pregunta.seller_id) : null;
     if (vendedor !== null && vendedor !== cuenta.mlUserId) {
-        logger.warn(`[meli-webhook] la pregunta ${questionId} es del vendedor ${vendedor}, no de la cuenta ${cuenta.id} (${cuenta.mlUserId}): se descarta`);
+        logger.warn(textoParaLog(`[meli-webhook] la pregunta ${questionId} es del vendedor ${vendedor}, no de la cuenta ${cuenta.id} (${cuenta.mlUserId}): se descarta`));
         return;
     }
     await upsertPregunta(cuenta, pregunta);
@@ -446,7 +447,7 @@ export async function procesarNotificacionMl(n: {
         if (topic !== 'questions' && topic !== 'items') {
             // ML manda muchos topics a los que uno queda suscripto sin querer
             // (orders, messages, shipments): no son un error, son ruido.
-            logger.debug(`[meli-webhook] topic ignorado: ${topic || '(vacío)'}`);
+            logger.debug(textoParaLog(`[meli-webhook] topic ignorado: ${topic || '(vacío)'}`));
             return;
         }
 
@@ -455,13 +456,13 @@ export async function procesarNotificacionMl(n: {
         // applicationId se EXIGE (antes, omitirlo salteaba el filtro entero).
         const appId = process.env.ML_CLIENT_ID;
         if (appId && String(n.applicationId ?? '') !== appId) {
-            logger.warn(`[meli-webhook] notificación de otra aplicación (${n.applicationId ?? 'sin application_id'}), se ignora`);
+            logger.warn(textoParaLog(`[meli-webhook] notificación de otra aplicación (${n.applicationId ?? 'sin application_id'}), se ignora`));
             return;
         }
 
         const cuenta = await buscarCuentaPorMlUserId(String(n?.userId ?? ''));
         if (!cuenta) {
-            logger.warn(`[meli-webhook] no hay cuenta vinculada para el user_id ${n?.userId}`);
+            logger.warn(textoParaLog(`[meli-webhook] no hay cuenta vinculada para el user_id ${n?.userId}`));
             return;
         }
 
@@ -482,7 +483,7 @@ export async function procesarNotificacionMl(n: {
             }
         });
     } catch (err) {
-        logger.error(`[meli-webhook] topic ${topic} · resource ${n?.resource}: ${mensajeCorto(err)}`);
+        logger.error(textoParaLog(`[meli-webhook] topic ${topic} · resource ${n?.resource}: ${mensajeCorto(err)}`));
     }
 }
 

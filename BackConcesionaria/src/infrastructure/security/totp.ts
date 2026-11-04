@@ -112,9 +112,10 @@ const ALFABETO_CODIGOS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O/1/I: se 
 
 /** `xxxxx-xxxxx` (10 caracteres de un alfabeto de 32 = 50 bits). */
 export function generarCodigoRecuperacion(): string {
-    const bytes = crypto.randomBytes(10);
+    // crypto.randomInt elige sin sesgo para cualquier largo de alfabeto (con `byte % n`
+    // sólo no hay sesgo cuando n divide 256; hoy 32 lo divide, pero no conviene depender de eso).
     let s = '';
-    for (let i = 0; i < 10; i++) s += ALFABETO_CODIGOS[bytes[i] % ALFABETO_CODIGOS.length];
+    for (let i = 0; i < 10; i++) s += ALFABETO_CODIGOS[crypto.randomInt(ALFABETO_CODIGOS.length)];
     return `${s.slice(0, 5)}-${s.slice(5)}`;
 }
 

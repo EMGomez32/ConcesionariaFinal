@@ -2,7 +2,7 @@ import { IGastoFijoRepository } from '../../../domain/repositories/IGastoFijoRep
 import { GastoFijo } from '../../../domain/entities/GastoFijo';
 import prisma from '../prisma';
 import { PROVEEDOR_PUBLICO } from '../proyecciones';
-import { coerceFilter } from '../queryFilter';
+import { coerceFilter, claveDeOrden } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { parsePagination } from '../queryOptions';
 
@@ -36,7 +36,7 @@ export class PrismaGastoFijoRepository implements IGastoFijoRepository {
         const { limit: limitNum, page: pageNum } = parsePagination(options);
 
         const where = coerceFilter(filter, { numericKeys: NUMERIC_KEYS });
-        const orderKey = SORTABLE.includes(String(sortBy)) ? String(sortBy) : 'createdAt';
+        const orderKey = claveDeOrden(SORTABLE, sortBy, 'createdAt');
         const orderDir = sortOrder === 'asc' ? 'asc' : 'desc';
 
         const results = await prisma.gastoFijo.findMany({

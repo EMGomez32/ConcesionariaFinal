@@ -37,4 +37,16 @@ describe('resolverVerificacionMeta', () => {
     ])('%s → null', (_caso, token, mode, configurado) => {
         expect(resolverVerificacionMeta(integracion(configurado as string | undefined), q(token, mode as string))).toBeNull();
     });
+
+    test.each([
+        ['markup', '<script>alert(1)</script>'],
+        ['comillas', '"x"'],
+        ['salto de línea', '123\n456'],
+        ['vacío', ''],
+        ['no string', ['123']],
+        ['demasiado largo', '1'.repeat(257)],
+    ])('token correcto pero challenge con %s → null (no se refleja)', (_caso, challenge) => {
+        const query = { 'hub.mode': 'subscribe', 'hub.verify_token': 'mi-token-secreto', 'hub.challenge': challenge };
+        expect(resolverVerificacionMeta(integracion('mi-token-secreto'), query)).toBeNull();
+    });
 });

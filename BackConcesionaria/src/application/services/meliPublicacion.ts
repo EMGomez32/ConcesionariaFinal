@@ -13,6 +13,7 @@ import {
     llamarApi,
     sugerirCategoria,
 } from '../../infrastructure/mercadolibre/meliClient';
+import { textoParaLog } from '../../utils/textoParaLog';
 
 /**
  * Publicación de vehículos en Mercado Libre: el lado de NEGOCIO del canal.
@@ -757,7 +758,7 @@ export async function sincronizarPorVehiculo(vehiculoId: number): Promise<void> 
                     ultimaSyncAt: new Date(),
                 },
             });
-            logger.info(`[meli-publicacion] vehículo ${vehiculoId}: precio sincronizado (${precioPublicado ?? '—'} → ${precio})`);
+            logger.info(textoParaLog(`[meli-publicacion] vehículo ${vehiculoId}: precio sincronizado (${precioPublicado ?? '—'} → ${precio})`));
         }
 
         if (vehiculo.estado === 'reservado' && publicacion.estado === 'activa') {
@@ -776,7 +777,7 @@ export async function sincronizarPorVehiculo(vehiculoId: number): Promise<void> 
             await reactivarPublicacion(publicacion.id);
         }
     } catch (err) {
-        logger.error(`[meli-publicacion] vehículo ${vehiculoId}: no se pudo sincronizar con Mercado Libre: ${mensajeCorto(err)}`);
+        logger.error(textoParaLog(`[meli-publicacion] vehículo ${vehiculoId}: no se pudo sincronizar con Mercado Libre: ${mensajeCorto(err)}`));
         if (publicacionId != null) await registrarUltimoError(publicacionId, err);
     }
 }

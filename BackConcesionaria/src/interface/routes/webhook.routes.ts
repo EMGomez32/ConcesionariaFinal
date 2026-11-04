@@ -14,6 +14,7 @@ import {
     validarFirmaMeta,
     procesarNotificacionMeta,
 } from '../../infrastructure/integraciones/metaWebhook';
+import { textoParaLog } from '../../utils/textoParaLog';
 
 /**
  * Webhooks PÚBLICOS (sin JWT) — montados en app.ts FUERA del router /api (que
@@ -309,7 +310,7 @@ router.post('/mercadolibre', async (req: Request, res: Response, next: NextFunct
         // entero, y ML siempre lo manda.
         const appId = process.env.ML_CLIENT_ID;
         if (appId && String(cuerpo.application_id ?? '') !== appId) {
-            logger.warn(`[meli-webhook] notificación de otra aplicación (${cuerpo.application_id ?? 'sin application_id'}): ignorada`);
+            logger.warn(textoParaLog(`[meli-webhook] notificación de otra aplicación (${cuerpo.application_id ?? 'sin application_id'}): ignorada`));
             return;
         }
 
@@ -324,7 +325,7 @@ router.post('/mercadolibre', async (req: Request, res: Response, next: NextFunct
             userId: String(cuerpo.user_id),
             applicationId: cuerpo.application_id != null ? String(cuerpo.application_id) : undefined,
         }).catch((err) => {
-            logger.error(`[meli-webhook] procesamiento falló (${cuerpo.topic} ${cuerpo.resource}): ${mensajeCorto(err)}`);
+            logger.error(textoParaLog(`[meli-webhook] procesamiento falló (${cuerpo.topic} ${cuerpo.resource}): ${mensajeCorto(err)}`));
         });
     } catch (error) {
         next(error);

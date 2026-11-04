@@ -23,28 +23,47 @@ export interface CoerceOptions {
     numericKeys?: string[];
 }
 
-export function coerceFilter(filter: any = {}, options: CoerceOptions = {}): Record<string, any> {
-    const where: Record<string, any> = {};
-    const numericKeys = options.numericKeys ?? [];
+/**
+ * Claves que nunca pueden llegar a un objeto como nombre de propiedad: con
+ * `where[key] = …`, `__proto__` le cambiaría el prototipo al objeto.
+ */
+const CLAVES_PROHIBIDAS = new Set(['__proto__', 'constructor', 'prototype']);
 
-    for (const [key, value] of Object.entries(filter)) {
+export function coerceFilter(filter: any = {}, options: CoerceOptions = {}): Record<string, any> {
+    const numericKeys = options.numericKeys ?? [];
+    const pares: Array<[string, unknown]> = [];
+
+    for (const [key, value] of Object.entries(filter ?? {})) {
         if (value === undefined || value === null || value === '') continue;
+        if (CLAVES_PROHIBIDAS.has(key)) continue;
 
         if (ID_KEY.test(key) || numericKeys.includes(key)) {
             const num = Number(value);
             if (!Number.isNaN(num)) {
-                where[key] = num;
+                pares.push([key, num]);
                 continue;
             }
         }
 
         if (value === 'true' || value === 'false') {
-            where[key] = value === 'true';
+            pares.push([key, value === 'true']);
             continue;
         }
 
-        where[key] = value;
+        pares.push([key, value]);
     }
 
-    return where;
+    // Object.fromEntries crea propiedades PROPIAS (aun con una clave rara no toca el
+    // prototipo) en vez de asignar `where[key]` con una clave que viene del query string.
+    return Object.fromEntries(pares);
+}
+
+/**
+ * Columna de orden: la pedida SOLO si está en la lista permitida; si no, el default.
+ * Devuelve el elemento de la LISTA, no el valor del request: la clave del `orderBy`
+ * nunca sale directo del query string.
+ */
+export function claveDeOrden<T extends string>(permitidas: readonly T[], pedida: unknown, porDefecto: T): T {
+    const texto = String(pedida);
+    return permitidas.find((k) => k === texto) ?? porDefecto;
 }

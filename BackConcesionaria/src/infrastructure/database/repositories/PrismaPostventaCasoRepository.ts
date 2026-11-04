@@ -2,7 +2,7 @@ import { IPostventaCasoRepository } from '../../../domain/repositories/IPostvent
 import { PostventaCaso } from '../../../domain/entities/PostventaCaso';
 import prisma from '../prisma';
 import { VEHICULO_PUBLICO } from '../proyecciones';
-import { coerceFilter } from '../queryFilter';
+import { coerceFilter, claveDeOrden } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { parsePagination } from '../queryOptions';
 
@@ -40,7 +40,7 @@ export class PrismaPostventaCasoRepository implements IPostventaCasoRepository {
         const { limit: limitNum, page: pageNum } = parsePagination(options);
 
         const where = coerceFilter(filter);
-        const orderKey = SORTABLE.includes(String(sortBy)) ? String(sortBy) : 'createdAt';
+        const orderKey = claveDeOrden(SORTABLE, sortBy, 'createdAt');
         const orderDir = sortOrder === 'asc' ? 'asc' : 'desc';
 
         const results = await prisma.postventaCaso.findMany({
