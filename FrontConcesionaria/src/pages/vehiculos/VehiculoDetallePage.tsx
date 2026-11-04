@@ -946,6 +946,13 @@ const VehiculoDetallePage = () => {
                                         onChange={e => setArchivoDescripcion(e.target.value)}
                                     />
                                 </div>
+                                {/* Lo que no es foto (título, cédula, boleto) queda en la zona privada del
+                                    servidor: se abre con un enlace que vence y no sale en Mercado Libre. */}
+                                <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+                                    {archivoTipo === 'foto'
+                                        ? 'Las fotos se publican: las ven la ficha PDF del cliente y Mercado Libre.'
+                                        : 'Este archivo queda privado: lo abre sólo quien entra a la ficha, con un enlace que vence a los 30 minutos. No se publica en Mercado Libre.'}
+                                </p>
                                 <FileUploader
                                     endpoint={vehiculoArchivosApi.uploadEndpoint}
                                     extraFields={{
