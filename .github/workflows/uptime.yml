@@ -1,0 +1,48 @@
+name: Uptime
+
+# Monitoreo externo mínimo: cada 15 minutos pide /api/health de producción desde los
+# servidores de GitHub (o sea, desde AFUERA de la Pi y de su red, por el mismo camino
+# que un usuario: Cloudflare → túnel → nginx → backend). Si no responde OK después de
+# varios reintentos, el workflow falla y GitHub le manda un mail a quien hizo el
+# último cambio al cron de este archivo (el dueño). Sin issues ni comentarios: el repo
+# es público y no hace falta anunciar las caídas.
+#
+# Límites: GitHub puede demorar unos minutos las corridas programadas, y las pausa
+# si el repo pasa 60 días sin actividad (se reactivan desde la pestaña Actions).
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+# El job no necesita el token para nada.
+permissions: {}
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  health:
+    name: Producción responde /api/health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Pedir /api/health (con reintentos)
+        env:
+          URL: https://autenza.nebulant.com.ar/api/health
+        run: |
+          # 5 intentos separados por 20 s: un corte de unos segundos (un deploy, un
+          # reinicio del túnel) no dispara la alerta; una caída de más de ~2 min sí.
+          for i in 1 2 3 4 5; do
+            codigo="$(curl -sS -o cuerpo.json -w '%{http_code}' -m 15 -H 'Cache-Control: no-cache' "$URL")" || codigo=000
+            # JSON con "status": que responda el backend y no una página de error de
+            # Cloudflare o el index.html del front (que también devuelve 200).
+            if [ "$codigo" = "200" ] && grep -Eq '"status" *: *"(UP|ok)"' cuerpo.json; then
+              echo "OK en el intento $i"
+              exit 0
+            fi
+            echo "intento $i: HTTP $codigo"
+            [ "$i" -lt 5 ] && sleep 20
+          done
+          echo "::error title=AUTENZA caída::$URL no respondió OK en 5 intentos (último HTTP $codigo)"
+          exit 1
