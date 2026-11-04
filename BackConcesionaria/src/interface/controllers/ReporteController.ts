@@ -4,6 +4,7 @@ import { BaseException } from '../../domain/exceptions/BaseException';
 import { Col, sendCsv } from '../../utils/csv';
 import { context } from '../../infrastructure/security/context';
 import { actorEsVendedorPuro } from '../../infrastructure/security/roles';
+import { filtroCartera } from '../../application/services/carteraCliente';
 import { contarAtencionesCerradasPorSistema } from '../../infrastructure/atencion/cierreDiarioWorker';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -418,6 +419,9 @@ export class ReporteController {
             // medianoche UTC de hoy, que además garantiza diasAtraso >= 1.
             const ahora = new Date();
             const inicioHoy = new Date(Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
+            // Vendedor puro: sólo los deudores de SU cartera (nombre + teléfono + deuda de todo
+            // el tenant, exportable a CSV, es la cartera completa). Cobrador y admin, todo.
+            const cartera = await filtroCartera();
 
             const cuotas = await prisma.cuota.findMany({
                 where: {
@@ -431,7 +435,7 @@ export class ReporteController {
                     // relación en el where de primer nivel descarta la cuota
                     // entera, que es justamente lo que se busca. La extensión de
                     // soft-delete no cubre esto: sólo mira el modelo consultado.
-                    financiacion: { deletedAt: null },
+                    financiacion: { deletedAt: null, ...(cartera ? { cliente: cartera } : {}) },
                 },
                 orderBy: { vencimiento: 'asc' },
                 include: {
@@ -706,6 +710,8 @@ export class ReporteController {
             // va de 0 (hoy) a dias-1.
             const finVentana = new Date(inicioHoy);
             finVentana.setUTCDate(finVentana.getUTCDate() + dias);
+            // Mismo recorte que mora: el vendedor puro ve los vencimientos de su cartera.
+            const cartera = await filtroCartera();
 
             const cuotas = await prisma.cuota.findMany({
                 where: {
@@ -715,7 +721,7 @@ export class ReporteController {
                     // refinanciada movió su saldo a otro contrato (ver enum EstadoCuota).
                     estado: { notIn: ['pagada', 'refinanciada'] },
                     // Igual que en mora: una financiación borrada no tiene deuda viva.
-                    financiacion: { deletedAt: null },
+                    financiacion: { deletedAt: null, ...(cartera ? { cliente: cartera } : {}) },
                 },
                 orderBy: { vencimiento: 'asc' },
                 include: {
