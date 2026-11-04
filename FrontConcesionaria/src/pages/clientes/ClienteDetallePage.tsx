@@ -25,6 +25,7 @@ import { formatFecha } from '../../utils/fecha';
 import { formatMoneda, formatTotales, totalesPorMoneda } from '../../utils/moneda';
 import { useConfirm } from '../../hooks/useConfirm';
 import { etiquetaDocumento, AYUDA_DOCUMENTO } from '../../components/clientes/documento';
+import PrivacidadTitular from '../../components/clientes/PrivacidadTitular';
 import {
     ENTREGA_ESTADO, FINANCIACION_ESTADO, POSTVENTA_ESTADO, PRESUPUESTO_ESTADO,
     RESERVA_ESTADO, SOLICITUD_ESTADO, VEHICULO_ESTADO, rotuloEstado, type EstadoMeta,
@@ -400,6 +401,12 @@ const ClienteDetallePage = () => {
                             )}
                             {/* Lead nacido de una pregunta simulada: sobrevive a
                                 apagar la demostración, así que la ficha lo dice. */}
+                            {/* Ley 25.326: revocó el consentimiento o pidió el bloqueo. */}
+                            {(cliente.bloqueadoEn || cliente.consentimientoRevocadoEn) && (
+                                <Badge variant="danger" title={cliente.bloqueadoEn ? 'Datos bloqueados: no se lo contacta ni se le cargan datos' : 'Revocó el consentimiento de contacto'}>
+                                    No contactar
+                                </Badge>
+                            )}
                             {cliente.origenSimulado && (
                                 <Badge variant="warning" title="La consulta que originó esta ficha la generó el modo demostración de Mercado Libre: no la hizo un interesado real">
                                     Simulación
@@ -536,6 +543,14 @@ const ClienteDetallePage = () => {
                                 <p className="observaciones-text">{cliente.observaciones}</p>
                             </div>
                         )}
+                        <PrivacidadTitular
+                            cliente={cliente}
+                            onActualizado={() => setRecarga((n) => n + 1)}
+                            onSuprimidoTotal={() => {
+                                queryClient.invalidateQueries({ queryKey: ['clientes'] });
+                                navigate('/clientes');
+                            }}
+                        />
                     </div>
                 )}
 

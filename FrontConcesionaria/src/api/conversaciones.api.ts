@@ -38,6 +38,17 @@ export type EstadoMensajeWhatsapp =
     | 'recibido';
 
 /** Referencia mínima a un usuario (vendedor asignado, autor del saliente). */
+/**
+ * El cliente vinculado al hilo. Trae el bloqueo y la revocación del consentimiento
+ * (Ley 25.326) para rotular el hilo "No contactar".
+ */
+export interface ClienteDelHilo {
+    id: number;
+    nombre: string;
+    bloqueadoEn?: string | null;
+    consentimientoRevocadoEn?: string | null;
+}
+
 export interface UsuarioRef {
     id: number;
     nombre: string;
@@ -103,7 +114,7 @@ export interface ConversacionListItem {
     noLeidos: number;
     ultimoMensajeAt: string | null;
     ultimoMensajeDir: DireccionMensaje;
-    cliente: { id: number; nombre: string } | null;
+    cliente: ClienteDelHilo | null;
     asignadoA: UsuarioRef | null;
     /** Preview del último mensaje (texto plano). */
     ultimoMensaje: string | null;
@@ -215,7 +226,7 @@ export interface ConversacionDetalle {
     /** Estado del composer, ya resuelto por el backend. */
     envio: CondicionesEnvio;
     /** Relaciones que el backend puede expandir además del contrato mínimo. */
-    cliente?: { id: number; nombre: string } | null;
+    cliente?: ClienteDelHilo | null;
     asignadoA?: UsuarioRef | null;
 }
 

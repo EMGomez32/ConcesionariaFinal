@@ -797,6 +797,19 @@ const BandejaPage = () => {
                                                 lista se oculta al abrir un hilo, así que este badge es la
                                                 ÚNICA señal de por dónde entró la charla. Esperar al
                                                 detalle la hacía desaparecer justo cuando más falta hace. */}
+                                            {/* Ley 25.326: el titular revocó el consentimiento o pidió el bloqueo.
+                                                Se puede leer lo que escribe, pero no hay que contactarlo por fuera
+                                                de la respuesta a su propia consulta. */}
+                                            {hilo?.cliente && (hilo.cliente.bloqueadoEn || hilo.cliente.consentimientoRevocadoEn) && (
+                                                <Badge
+                                                    variant="danger"
+                                                    title={hilo.cliente.bloqueadoEn
+                                                        ? 'Pidió el bloqueo de sus datos: no lo contactes ni le cargues datos nuevos'
+                                                        : 'Revocó el consentimiento de contacto: respondé sólo lo que pregunta, sin ofertas ni seguimientos'}
+                                                >
+                                                    No contactar
+                                                </Badge>
+                                            )}
                                             {canalDelHilo && (
                                                 <>
                                                     <Badge variant={metaHilo.variant} title={metaHilo.largo}>

@@ -82,6 +82,19 @@ export interface Cliente {
     tipoDoc?: TipoDocumento | null;
     /** Condición frente al IVA (AFIP). Determina Factura A vs B. */
     condicionIva?: CondicionIva | null;
+    // ── Privacidad (Ley 25.326) ──────────────────────────────────────────────
+    /** Conformidad del titular para ser contactado, con la fecha en que la dio. */
+    consentimientoContacto?: boolean;
+    consentimientoEn?: string | null;
+    /** Versión del texto que se le informó (null = consentimiento histórico, sin versión). */
+    consentimientoVersion?: string | null;
+    /** Revocó el consentimiento: no se lo contacta. */
+    consentimientoRevocadoEn?: string | null;
+    /** Datos bloqueados (art. 16): no se lo contacta ni se usan sus datos. */
+    bloqueadoEn?: string | null;
+    bloqueoMotivo?: string | null;
+    /** Supresión ejecutada: lo que queda se conserva sólo por obligación legal. */
+    suprimidoEn?: string | null;
     createdAt: string;
     updatedAt: string;
     concesionaria?: {

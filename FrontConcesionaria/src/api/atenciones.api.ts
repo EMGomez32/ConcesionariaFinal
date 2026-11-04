@@ -514,6 +514,8 @@ export interface CompletarClienteDto {
     telefono?: string;
     direccion?: string;
     consentimientoContacto?: boolean;
+    /** Evidencia (Ley 25.326): qué versión del texto se le mostró al titular. Ver privacidad.api.ts. */
+    consentimientoVersion?: string;
 }
 
 /**

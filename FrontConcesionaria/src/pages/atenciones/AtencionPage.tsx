@@ -53,6 +53,7 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
 import Modal from '../../components/ui/Modal';
+import { CONSENTIMIENTO_CONTACTO } from '../../api/privacidad.api';
 
 /*
  * LA ATENCIÓN EN CURSO — la pantalla donde el vendedor trabaja con el cliente
@@ -397,6 +398,8 @@ const AtencionPage = () => {
                 email: dEmail.trim() || undefined,
                 direccion: dDireccion.trim() || undefined,
                 consentimientoContacto: dConsentimiento || undefined,
+                // Qué texto se le informó: el backend lo guarda como evidencia del consentimiento.
+                consentimientoVersion: dConsentimiento ? CONSENTIMIENTO_CONTACTO.version : undefined,
             }),
         networkMode: 'always',
         onSuccess: () => {
