@@ -4,7 +4,7 @@ import type { CreateVentaDto } from '../../api/ventas.api';
 import { useUIStore } from '../../store/uiStore';
 import { useAuthStore } from '../../store/authStore';
 import { useConfirm } from '../../hooks/useConfirm';
-import { useVentas, useVenta, useVentasConteo, useCreateVenta, useDeleteVenta, useChangeEstadoEntrega } from '../../hooks/useVentas';
+import { useVentas, useVenta, useVentasConteo, useCreateVenta, useDeleteVenta, useChangeEstadoEntrega, useAnularOperacionVenta } from '../../hooks/useVentas';
 import { useClientes } from '../../hooks/useClientes';
 import { useUsuarios } from '../../hooks/useUsuarios';
 import { useSucursales } from '../../hooks/useSucursales';
@@ -18,10 +18,12 @@ import Combobox from '../../components/ui/Combobox';
 import Textarea from '../../components/ui/Textarea';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import PageTitle from '../../components/ui/PageTitle';
+import MotivoDialog from '../../components/ui/MotivoDialog';
+import VentasAnuladasModal from '../../components/ventas/VentasAnuladasModal';
 import {
     Plus, Search, Eye, Trash2, X, RefreshCw, DollarSign,
     ArrowRightLeft, User, ShoppingBag, Car, MapPin,
-    CheckCircle2, TrendingUp, Printer, Package, FileText, FileDown
+    CheckCircle2, TrendingUp, Printer, Package, FileText, FileDown, Ban
 } from 'lucide-react';
 import type { FormaPagoVenta, EstadoEntrega, Venta } from '../../types/venta.types';
 import VentaSubResources from '../../components/ventas/VentaSubResources';
@@ -118,6 +120,12 @@ const VentasPage = () => {
     const [createOpen, setCreateOpen] = useState(false);
     const [form, setForm] = useState<VentaForm>(emptyForm());
     const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
+    /**
+     * Anulación en curso (pide motivo). `baja`: DELETE, la unidad vuelve al stock.
+     * `entrega`: estado de entrega `cancelada`, terminal y SIN devolver la unidad.
+     */
+    const [anulacion, setAnulacion] = useState<{ venta: Venta; modo: 'baja' | 'entrega' } | null>(null);
+    const [anuladasOpen, setAnuladasOpen] = useState(false);
     // Facturas en curso (por venta): evita doble emisión al doble-clickear.
     const [facturaEnCurso, setFacturaEnCurso] = useState<Set<number>>(new Set());
     const [imprimiendo, setImprimiendo] = useState(false);
@@ -185,6 +193,7 @@ const VentasPage = () => {
     const createMutation = useCreateVenta();
     const changeEstadoEntregaMutation = useChangeEstadoEntrega();
     const deleteMutation = useDeleteVenta();
+    const anularOperacionMutation = useAnularOperacionVenta();
 
     /** Al elegir la unidad se precargan su precio de lista, su moneda y su sucursal. */
     const elegirUnidad = (vehiculoId: number) => {
@@ -244,21 +253,23 @@ const VentasPage = () => {
     const updCanje = (i: number, cambios: Partial<CanjeRow>) =>
         setForm(f => ({ ...f, canjes: f.canjes.map((c, j) => (j === i ? { ...c, ...cambios } : c)) }));
 
-    const handleDelete = async (v: Venta) => {
-        await confirm({
-            title: 'Eliminar venta',
-            message: `La venta N° ${nroVenta(v.id)} (${v.vehiculo?.marca ?? ''} ${v.vehiculo?.modelo ?? ''}) se borra del listado y la unidad vuelve a quedar publicada para la venta. No se puede deshacer.`,
-            type: 'danger',
-            confirmLabel: 'Eliminar venta',
-            onConfirm: async () => {
-                try {
-                    await deleteMutation.mutateAsync(v.id);
-                    addToast('Venta eliminada. La unidad volvió a Publicado.', 'success');
-                } catch {
-                    // El aviso de error lo da el MutationCache global (la mutación no define onError).
-                }
-            }
-        });
+    // Anular pide MOTIVO (queda en la venta y en la auditoría) y puede rebotar con un
+    // 409 que dice qué revertir antes (pagos, financiación, factura): ese mensaje lo
+    // muestra el diálogo adentro, por eso acá no hay try/catch.
+    const handleDelete = (v: Venta) => setAnulacion({ venta: v, modo: 'baja' });
+
+    const confirmarAnulacion = async (motivo: string) => {
+        if (!anulacion) return;
+        const { venta, modo } = anulacion;
+        if (modo === 'baja') {
+            await deleteMutation.mutateAsync({ id: venta.id, motivo });
+            if (selectedDetailId === venta.id) setSelectedDetailId(null);
+            addToast('Venta anulada. La unidad volvió a Publicado.', 'success');
+        } else {
+            await anularOperacionMutation.mutateAsync({ id: venta.id, motivo });
+            addToast(`Entrega: ${ENTREGA_ESTADO.cancelada.label}`, 'success');
+        }
+        setAnulacion(null);
     };
 
     const handleComprobante = async (id: number) => {
@@ -332,13 +343,7 @@ const VentasPage = () => {
         }
         const unidad = `${v.vehiculo?.marca ?? ''} ${v.vehiculo?.modelo ?? ''}${v.vehiculo?.dominio ? ` (${v.vehiculo.dominio})` : ''}`.trim();
         if (t.next === 'cancelada') {
-            await confirm({
-                title: 'Anular venta',
-                message: `La venta N° ${nroVenta(v.id)} queda anulada y no se puede volver atrás. La unidad ${unidad} no vuelve sola al stock: si corresponde, cambiá su estado desde Vehículos.`,
-                type: 'danger',
-                confirmLabel: 'Anular venta',
-                onConfirm: () => cambiarEntrega(v.id, 'cancelada'),
-            });
+            setAnulacion({ venta: v, modo: 'entrega' });
         } else {
             await confirm({
                 title: 'Marcar como entregada',
@@ -456,7 +461,7 @@ const VentasPage = () => {
                         <button type="button" className="icon-btn" title="Emitir o descargar la factura electrónica (AFIP)" aria-label={`Factura AFIP de la venta ${nroVenta(v.id)}`} disabled={facturaEnCurso.has(v.id)} onClick={(e) => { e.stopPropagation(); handleFactura(v.id); }}><FileText size={16} /></button>
                     )}
                     {permisos.ventasAnular && (
-                        <button type="button" className="icon-btn danger" title="Eliminar venta" aria-label={`Eliminar la venta ${nroVenta(v.id)}`} onClick={e => { e.stopPropagation(); handleDelete(v); }}><Trash2 size={16} /></button>
+                        <button type="button" className="icon-btn danger" title="Anular venta" aria-label={`Anular la venta ${nroVenta(v.id)}`} onClick={e => { e.stopPropagation(); handleDelete(v); }}><Trash2 size={16} /></button>
                     )}
                 </div>
             )
@@ -484,6 +489,11 @@ const VentasPage = () => {
                     <Button variant="secondary" onClick={() => refetchVentas()} aria-label="Actualizar listado" title="Actualizar listado">
                         <RefreshCw size={18} className={isFetching ? 'animate-spin' : ''} />
                     </Button>
+                    {permisos.ventasAnular && (
+                        <Button variant="secondary" onClick={() => setAnuladasOpen(true)} title="Ventas anuladas, con su motivo y quién las anuló">
+                            <Ban size={18} aria-hidden="true" /> Anuladas
+                        </Button>
+                    )}
                     {permisos.ventasOperar && (
                         <Button data-tour="ventas-nueva" variant="primary" onClick={() => { setForm(emptyForm()); setCreateOpen(true); }}>
                             <Plus size={18} /> Registrar venta
@@ -864,6 +874,23 @@ const VentasPage = () => {
                     </div>
                 )}
             </Modal>
+
+            {anulacion && (
+                <MotivoDialog
+                    isOpen
+                    title={`Anular la venta N° ${nroVenta(anulacion.venta.id)}`}
+                    message={anulacion.modo === 'baja'
+                        ? `La venta (${`${anulacion.venta.vehiculo?.marca ?? ''} ${anulacion.venta.vehiculo?.modelo ?? ''}`.trim()}) sale del listado y la unidad vuelve a quedar publicada. Si tiene pagos, una financiación o una factura ante AFIP, primero hay que revertirlos.`
+                        : `La operación queda anulada y no se puede volver atrás. La unidad no vuelve sola al stock: si corresponde, cambiá su estado desde Vehículos.`}
+                    label="Motivo de la anulación"
+                    placeholder="Ej.: el cliente desistió, error de carga, venta duplicada…"
+                    confirmLabel="Anular venta"
+                    onCancel={() => setAnulacion(null)}
+                    onConfirm={confirmarAnulacion}
+                />
+            )}
+
+            <VentasAnuladasModal isOpen={anuladasOpen} onClose={() => setAnuladasOpen(false)} />
 
             <style>{`
                 .ventas-kpi-montos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
