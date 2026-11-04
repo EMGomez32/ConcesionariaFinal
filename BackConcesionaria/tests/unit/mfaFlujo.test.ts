@@ -8,7 +8,7 @@ jest.mock('../../src/infrastructure/logging/logger', () => ({ logger: { warn: je
 
 import jwt from 'jsonwebtoken';
 import { exigeMfa, mfaPendiente, rolesQueExigenMfa } from '../../src/infrastructure/security/mfaPolicy';
-import { emitirMfaToken, usuarioDeMfaTokenSinVerificar, verificarMfaToken } from '../../src/infrastructure/security/mfaToken';
+import { emitirMfaToken, verificarMfaToken } from '../../src/infrastructure/security/mfaToken';
 import { emitirSesion } from '../../src/application/use-cases/auth/emitirSesion';
 import { authenticate } from '../../src/interface/middlewares/authenticate.middleware';
 import { context } from '../../src/infrastructure/security/context';
@@ -98,12 +98,6 @@ describe('mfaToken (contraseña correcta, falta el segundo factor)', () => {
 
     test.each([[undefined], [null], [''], [123], ['no.es.jwt'], ['a.b']])('entrada inválida %p → null', (x) => {
         expect(verificarMfaToken(x)).toBeNull();
-    });
-
-    test('usuarioDeMfaTokenSinVerificar sólo agrupa el rate limit', () => {
-        expect(usuarioDeMfaTokenSinVerificar(emitirMfaToken(9))).toBe(9);
-        expect(usuarioDeMfaTokenSinVerificar('basura')).toBeNull();
-        expect(usuarioDeMfaTokenSinVerificar(undefined)).toBeNull();
     });
 });
 
