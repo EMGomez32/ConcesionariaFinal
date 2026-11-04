@@ -58,7 +58,15 @@ const ORIGENES_VALIDOS = new Set<string>(Object.values(OrigenLead));
 
 // Mismo criterio laxo que el emailOpcional del schema de cliente: alcanza con
 // algo@algo.algo — acá se valida a mano (no Zod) para poder reportar por fila.
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Lineal a propósito: la versión anterior (`[^\s@]+\.[^\s@]+` después de la @)
+// tenía backtracking cuadrático y un email de ~100 KB con muchos puntos tardaba
+// segundos en validarse (ReDoS). Los segmentos del dominio no admiten '.', así que
+// cada punto tiene un solo lugar posible. Además se corta por largo (RFC 5321: 254).
+const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
+const EMAIL_MAX = 254;
+
+export const emailDeImportacionValido = (email: string): boolean =>
+    email.length <= EMAIL_MAX && EMAIL_RE.test(email);
 
 /** '' / espacios / undefined → null; si no, el string trimmeado. */
 const limpiar = (v?: string | null): string | null => {
@@ -92,7 +100,7 @@ export async function importarClientes(filas: FilaImport[], opciones: OpcionesIm
             }
 
             const email = limpiar(fila.email)?.toLowerCase() ?? null;
-            if (email && !EMAIL_RE.test(email)) {
+            if (email && !emailDeImportacionValido(email)) {
                 resultado.errores.push({ indice, motivo: 'Email inválido' });
                 continue;
             }

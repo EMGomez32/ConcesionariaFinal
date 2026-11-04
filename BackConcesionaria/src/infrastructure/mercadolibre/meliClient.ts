@@ -3,7 +3,7 @@ import { cifrarSecreto, descifrarSecreto, hayClaveDeSecretos } from '../security
 import { logger } from '../logging/logger';
 import { BaseException } from '../../domain/exceptions/BaseException';
 import { simularLlamada } from './meliSimulador';
-import { assertMismoOrigen } from '../security/destinoSeguro';
+import { assertMismoOrigen, DestinoNoPermitidoError } from '../security/destinoSeguro';
 
 /**
  * Cliente de la API de Mercado Libre con OAuth y refresh transparente.
@@ -275,9 +275,16 @@ export async function llamarApi<T>(
     const cuenta = await prisma.mercadoLibreCuenta.findFirst({ where: { id: cuentaId } });
     if (cuenta?.modo === 'demo') return simularLlamada<T>(cuenta, ruta, init);
 
+    // El Bearer va a donde diga la URL: sólo se aceptan rutas RELATIVAS de la API
+    // ("/items/123"). El host lo fija la constante (prefijo terminado en '/'), nunca
+    // el que llama; antes se aceptaba también una URL absoluta y la única barrera
+    // era assertMismoOrigen, que queda como segunda red.
+    if (!ruta.startsWith('/') || ruta.startsWith('//')) {
+        throw new DestinoNoPermitidoError(`Ruta de Mercado Libre no permitida: tiene que ser relativa a la API`);
+    }
+    const rutaRelativa = ruta.replace(/^\/+/, '');
     const ejecutar = async (token: string): Promise<Response> => {
-        const url = new URL(ruta.startsWith('http') ? ruta : `${API}${ruta}`);
-        // El Bearer va a donde diga la URL: una ruta absoluta sólo se acepta si es de la API de ML.
+        const url = new URL(`${API}/${rutaRelativa}`);
         assertMismoOrigen(url, API);
         for (const [k, v] of Object.entries(init.query ?? {})) {
             if (v !== undefined) url.searchParams.set(k, String(v));

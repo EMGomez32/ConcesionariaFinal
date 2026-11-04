@@ -15,6 +15,7 @@ import {
     normalizarComentarioInstagram,
     normalizarMensajeria,
 } from './metaCanales';
+import { textoParaLog } from '../../utils/textoParaLog';
 
 /**
  * Webhook de Meta: verificación de suscripción (GET), validación de firma HMAC
@@ -80,7 +81,14 @@ export function secretosIguales(a: string, b: string): boolean {
  * Handshake de suscripción (GET): si hub.mode === 'subscribe' y el token
  * coincide con el configurado, devuelve el challenge a responder en texto
  * plano; si no, null (→ 403).
+ *
+ * El challenge se devuelve tal cual (es lo que Meta espera), así que sólo se
+ * acepta con la forma que usa Meta: dígitos/letras, sin markup. Aunque la
+ * respuesta va como text/plain con nosniff, un challenge con `<` o comillas no
+ * tiene por qué salir reflejado.
  */
+const CHALLENGE_META = /^[A-Za-z0-9_-]{1,256}$/;
+
 export function resolverVerificacionMeta(
     integracion: IntegracionCanal,
     query: Record<string, unknown>,
@@ -88,8 +96,10 @@ export function resolverVerificacionMeta(
     const config = integracion.config as ConfigMeta | null;
     const modo = query['hub.mode'];
     const token = query['hub.verify_token'];
+    const challenge = query['hub.challenge'];
     if (modo === 'subscribe' && typeof token === 'string' && config?.verifyToken && secretosIguales(token, config.verifyToken)) {
-        return String(query['hub.challenge'] ?? '');
+        if (typeof challenge !== 'string' || !CHALLENGE_META.test(challenge)) return null;
+        return challenge;
     }
     return null;
 }
@@ -148,7 +158,7 @@ export async function procesarNotificacionMeta(integracion: IntegracionCanal, pa
 
     const anotarError = (contexto: string, err: unknown): void => {
         ultimoErrorMsg = `${contexto}: ${mensajeCorto(err)}`;
-        logger.error(`[meta-webhook] integración ${integracion.id} · ${ultimoErrorMsg}`);
+        logger.error(textoParaLog(`[meta-webhook] integración ${integracion.id} · ${ultimoErrorMsg}`));
     };
 
     /** Ingesta común de DM y comentarios: normalizar arriba, persistir acá. */
@@ -183,8 +193,8 @@ export async function procesarNotificacionMeta(integracion: IntegracionCanal, pa
         const entryId = texto(entry?.id);
         if (idEsperado && entryId && entryId !== idEsperado) {
             logger.warn(
-                `[meta-webhook] integración ${integracion.id}: entry.id '${entryId}' no es la cuenta configurada `
-                + `('${idEsperado}' para el objeto '${objeto}'): se descarta el entry entero`,
+                textoParaLog(`[meta-webhook] integración ${integracion.id}: entry.id '${entryId}' no es la cuenta configurada `
+                + `('${idEsperado}' para el objeto '${objeto}'): se descarta el entry entero`),
             );
             continue;
         }
@@ -230,7 +240,7 @@ export async function procesarNotificacionMeta(integracion: IntegracionCanal, pa
                     // sastre (posts, reacciones, shares, ediciones): el filtro de
                     // item/verb vive en el normalizador.
                     if (objeto && objeto !== 'page') {
-                        logger.warn(`[meta-webhook] integración ${integracion.id}: campo 'feed' con object '${objeto}' (se esperaba 'page')`);
+                        logger.warn(textoParaLog(`[meta-webhook] integración ${integracion.id}: campo 'feed' con object '${objeto}' (se esperaba 'page')`));
                     }
                     await ingerir(normalizarComentarioFeed(valor, ctx), 'comentario de Facebook');
                     break;
@@ -238,7 +248,7 @@ export async function procesarNotificacionMeta(integracion: IntegracionCanal, pa
                 case 'comments':
                     // Comentario en una publicación de Instagram.
                     if (objeto && objeto !== 'instagram') {
-                        logger.warn(`[meta-webhook] integración ${integracion.id}: campo 'comments' con object '${objeto}' (se esperaba 'instagram')`);
+                        logger.warn(textoParaLog(`[meta-webhook] integración ${integracion.id}: campo 'comments' con object '${objeto}' (se esperaba 'instagram')`));
                     }
                     await ingerir(normalizarComentarioInstagram(valor, ctx), 'comentario de Instagram');
                     break;
@@ -248,7 +258,7 @@ export async function procesarNotificacionMeta(integracion: IntegracionCanal, pa
                     // ratings...). A debug y no a error: son ruido esperable, pero
                     // sin ESTA línea un campo mal suscripto es indistinguible de
                     // un bug nuestro.
-                    logger.debug(`[meta-webhook] integración ${integracion.id}: campo '${campo}' ignorado (object '${objeto}')`);
+                    logger.debug(textoParaLog(`[meta-webhook] integración ${integracion.id}: campo '${campo}' ignorado (object '${objeto}')`));
             }
         }
 
@@ -257,7 +267,7 @@ export async function procesarNotificacionMeta(integracion: IntegracionCanal, pa
         const messaging = Array.isArray(entry?.messaging) ? entry.messaging : [];
         for (const evento of messaging) {
             if (objeto !== 'page' && objeto !== 'instagram') {
-                logger.warn(`[meta-webhook] integración ${integracion.id}: messaging[] con object '${objeto}' desconocido, se descarta`);
+                logger.warn(textoParaLog(`[meta-webhook] integración ${integracion.id}: messaging[] con object '${objeto}' desconocido, se descarta`));
                 break;
             }
             await ingerir(normalizarMensajeria(evento, ctx), objeto === 'instagram' ? 'DM de Instagram' : 'DM de Messenger');
@@ -286,8 +296,8 @@ export async function procesarNotificacionMeta(integracion: IntegracionCanal, pa
 
     if (procesados > 0 || duplicados > 0) {
         logger.info(
-            `[meta-webhook] integración ${integracion.id} (object '${objeto}'): ` +
-            `${procesados} evento(s) procesado(s), ${duplicados} duplicado(s) descartado(s)`,
+            textoParaLog(`[meta-webhook] integración ${integracion.id} (object '${objeto}'): ` +
+            `${procesados} evento(s) procesado(s), ${duplicados} duplicado(s) descartado(s)`),
         );
     }
 }

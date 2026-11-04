@@ -1,7 +1,7 @@
 import { IAuditLogRepository } from '../../../domain/repositories/IAuditLogRepository';
 import { AuditLog } from '../../../domain/entities/AuditLog';
 import prisma from '../prisma';
-import { coerceFilter } from '../queryFilter';
+import { coerceFilter, claveDeOrden } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 
 // Sólo columnas reales: `sortBy` llega de la query y pasarlo crudo a Prisma
@@ -12,7 +12,7 @@ export class PrismaAuditLogRepository implements IAuditLogRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<AuditLog>> {
         const limit = Math.min(Math.max(Number(options.limit) || 50, 1), 10000);
         const page = Math.max(Number(options.page) || 1, 1);
-        const orderKey = SORTABLE.includes(String(options.sortBy)) ? String(options.sortBy) : 'createdAt';
+        const orderKey = claveDeOrden(SORTABLE, options.sortBy, 'createdAt');
         const orderDir = options.sortOrder === 'asc' ? 'asc' : 'desc';
 
         const where = coerceFilter(filter);

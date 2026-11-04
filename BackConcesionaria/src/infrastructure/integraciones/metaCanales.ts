@@ -63,6 +63,7 @@ import {
     type ContextoNotificacion,
     type EventoEntranteMeta,
 } from '../../domain/services/metaNormalizacion';
+import { textoParaLog } from '../../utils/textoParaLog';
 
 export {
     claveHiloDe,
@@ -299,8 +300,8 @@ async function nombreDesdeGraph(
         return [texto(perfil.first_name), texto(perfil.last_name)].filter(Boolean).join(' ') || null;
     } catch (err) {
         logger.warn(
-            `[meta-canales] integración ${integracion.id}: el Graph API no devolvió el nombre de ${evento.contactoExternoId}: `
-            + (err instanceof Error ? err.message : String(err)),
+            textoParaLog(`[meta-canales] integración ${integracion.id}: el Graph API no devolvió el nombre de ${evento.contactoExternoId}: `
+            + (err instanceof Error ? err.message : String(err))),
         );
         return null;
     }

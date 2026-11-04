@@ -1,7 +1,7 @@
 import { ISucursalRepository } from '../../../domain/repositories/ISucursalRepository';
 import { Sucursal } from '../../../domain/entities/Sucursal';
 import prisma from '../prisma';
-import { coerceFilter } from '../queryFilter';
+import { coerceFilter, claveDeOrden } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 
 // Sólo se puede ordenar por columnas reales: `sortBy` viene de la query y
@@ -28,7 +28,7 @@ export class PrismaSucursalRepository implements ISucursalRepository {
         const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
         const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
         const pageNum = Math.max(Number(page) || 1, 1);
-        const orderKey = SORTABLE.includes(String(sortBy)) ? String(sortBy) : 'createdAt';
+        const orderKey = claveDeOrden(SORTABLE, sortBy, 'createdAt');
         const orderDir = sortOrder === 'asc' ? 'asc' : 'desc';
 
         const where = coerceFilter(filter);
