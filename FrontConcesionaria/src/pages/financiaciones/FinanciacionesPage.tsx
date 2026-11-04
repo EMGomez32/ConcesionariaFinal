@@ -1,8 +1,10 @@
-import { useEffect, useState, useCallback, useMemo, type MouseEvent } from 'react';
+import { useEffect, useState, useCallback, type MouseEvent } from 'react';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { financiacionesApi, type CreateFinanciacionDto, type PagarCuotaDto, type SimulacionResult } from '../../api/financiaciones.api';
 import { clientesApi } from '../../api/clientes.api';
 import { usuariosApi } from '../../api/usuarios.api';
 import { ventasApi } from '../../api/ventas.api';
+import { reportesApi } from '../../api/reportes.api';
 import { useUIStore } from '../../store/uiStore';
 import Badge, { type BadgeVariant } from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -11,14 +13,19 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
+import DataTable, { type Column } from '../../components/ui/DataTable';
+import PageTitle from '../../components/ui/PageTitle';
+import { useFiltrosUrl } from '../../components/ventas/useFiltrosUrl';
+import '../../components/ventas/listados.css';
+import type { PaginatedResponse } from '../../types/api.types';
 import {
-    Plus, Search, Eye, Trash2, RefreshCw,
-    CreditCard, DollarSign, ChevronLeft,
-    ChevronRight, Calendar, User, ShoppingBag,
+    Plus, Search, Eye, Trash2, RefreshCw, X,
+    CreditCard, DollarSign, Calendar,
     AlertCircle, CheckCircle2, Car, TrendingUp, Receipt, Calculator, MessageCircle
 } from 'lucide-react';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 import { usePermisos } from '../../hooks/usePermisos';
+import { useConfirm } from '../../hooks/useConfirm';
 import { waShareLink } from '../../utils/whatsapp';
 import { formatFecha, hoyLocal } from '../../utils/fecha';
 import { formatMoneda } from '../../utils/moneda';
@@ -62,6 +69,9 @@ interface VehiculoRef {
 
 interface VentaRef {
     id: number;
+    clienteId?: number;
+    moneda?: string;
+    precioVenta?: number | string;
     cliente?: { nombre: string };
     vehiculo?: VehiculoRef;
 }
@@ -127,14 +137,28 @@ const cuotaStatusMap: Record<EstadoCuota, { label: string; variant: BadgeVariant
 // Refinanciar NO está acá: no es un cambio de estado suelto, sino que crea un
 // contrato nuevo por el saldo. Tiene su propio botón y su modal.
 const finTransitions: Record<EstadoFinanciacion, { label: string; next: EstadoFinanciacion }[]> = {
-    activa: [{ label: 'Declarar Mora', next: 'en_mora' }, { label: 'Cerrar Contrato', next: 'cancelada' }],
-    en_mora: [{ label: 'Regularizar', next: 'activa' }, { label: 'Cerrar Contrato', next: 'cancelada' }],
+    activa: [{ label: 'Marcar en mora', next: 'en_mora' }, { label: 'Cancelar plan', next: 'cancelada' }],
+    en_mora: [{ label: 'Marcar al día', next: 'activa' }, { label: 'Cancelar plan', next: 'cancelada' }],
     refinanciada: [],
     cancelada: [],
 };
 
 /** Un contrato se refinancia sólo si está vivo y le queda deuda. */
 const puedeRefinanciarse = (estado: string) => estado === 'activa' || estado === 'en_mora';
+
+/** Redondeo a centavos: sumar saldos con decimales dejaba residuos como "$0,0000001". */
+const centavos = (n: number) => Math.round(n * 100) / 100;
+
+/** Lo que falta cobrar del plan: saldo de las cuotas no pagadas ni refinanciadas. */
+const saldoPorCobrar = (cuotas?: { estado: string; saldoCuota: number | string }[]) =>
+    centavos((cuotas ?? [])
+        .filter(c => c.estado !== 'pagada' && c.estado !== 'refinanciada')
+        .reduce((s, c) => s + (Number(c.saldoCuota) || 0), 0));
+
+const cuotasPagas = (f: { cuotasPlan?: { estado: string }[] }) =>
+    (f.cuotasPlan ?? []).filter(c => c.estado === 'pagada').length;
+
+const nroPlan = (id: number) => String(id).padStart(6, '0');
 
 const metodoLabels: Record<string, string> = {
     efectivo: 'Efectivo', transferencia: 'Transferencia',
@@ -167,34 +191,10 @@ const FinanciacionesPage = () => {
     const [cobradores, setCobradores] = useState<CobradorRef[]>([]);
     const [ventas, setVentas] = useState<VentaRef[]>([]);
 
-    // Lista
-    const [financiaciones, setFinanciaciones] = useState<FinanciacionRow[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-
-    // Cartera por moneda. `financiado` es lo prestado y `saldo` lo que queda por
-    // cobrar (suma de saldoCuota). Se agrupa por moneda porque sumar ARS y USD
-    // daría un importe inexistente. Los Decimal de Prisma llegan como string:
-    // de ahí el Number() en cada acumulador.
-    const carteraPorMoneda = useMemo(() => {
-        const acc: Record<string, { financiado: number; saldo: number }> = {};
-        for (const f of financiaciones) {
-            const moneda = f.moneda || 'ARS';
-            if (!acc[moneda]) acc[moneda] = { financiado: 0, saldo: 0 };
-            acc[moneda].financiado += Number(f.montoFinanciado) || 0;
-            acc[moneda].saldo += (f.cuotasPlan ?? []).reduce(
-                (s, c) => s + (Number(c.saldoCuota) || 0), 0
-            );
-        }
-        return Object.entries(acc)
-            .map(([moneda, v]) => ({ moneda, ...v }))
-            .sort((a, b) => (a.moneda === 'ARS' ? -1 : b.moneda === 'ARS' ? 1 : a.moneda.localeCompare(b.moneda)));
-    }, [financiaciones]);
-
-    // Filtros
-    const [search, setSearch] = useState('');
-    const [filterEstado, setFilterEstado] = useState('');
+    // Filtros, búsqueda y página en la URL (sobreviven a entrar a una ficha y volver).
+    const { filtros, q, busqueda, setBusqueda, page, setPage, setFiltro, limpiar, hayFiltros } =
+        useFiltrosUrl(['estado'] as const);
+    const queryClient = useQueryClient();
 
     // Modales
     const [createOpen, setCreateOpen] = useState(false);
@@ -203,6 +203,7 @@ const FinanciacionesPage = () => {
 
     const [detailId, setDetailId] = useState<number | null>(null);
     const [detail, setDetail] = useState<FinanciacionRow | null>(null);
+    const [detailError, setDetailError] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
     // Pagar cuota sub-modal
@@ -211,6 +212,7 @@ const FinanciacionesPage = () => {
     const [savingPago, setSavingPago] = useState(false);
 
     const { addToast } = useUIStore();
+    const confirm = useConfirm();
     // Ésta es la pantalla donde vive el cobrador, y hasta ahora le mostraba entera
     // la caja de herramientas del admin. "Anular Contrato" (DELETE /financiaciones/:id)
     // es sólo del admin: era un botón muerto en la pantalla de uso diario de otro rol.
@@ -228,42 +230,60 @@ const FinanciacionesPage = () => {
             setClientes((c.results ?? []) as ClienteRef[]);
             setCobradores(((u as { results?: CobradorRef[] }).results ?? []));
             setVentas((v.results ?? []) as VentaRef[]);
-        } catch { /* silencioso */ }
-    }, []);
+        } catch (e: unknown) {
+            // Sin esto el alta quedaba con los selects vacíos y sin explicación.
+            addToast(getErrorMessage(e, 'No se pudieron cargar las ventas, clientes y cobradores para el alta'), 'error');
+        }
+    }, [addToast]);
 
     // ── Lista ────────────────────────────────────────────────────────────────
-    const loadList = useCallback(async (pg = page) => {
-        setLoading(true);
-        try {
-            const filters: Record<string, unknown> = {};
-            if (filterEstado) filters.estado = filterEstado;
-            const res = await financiacionesApi.getAll(filters, { limit: 15, page: pg });
-            // El interceptor de axios ya devuelve el body: la respuesta es
-            // {results, totalPages, ...} en la raíz. Un `.data.data` acá dejaba
-            // la lista siempre vacía, hubiera o no financiaciones.
-            const data = res as { results?: FinanciacionRow[]; totalPages?: number };
-            setFinanciaciones(Array.isArray(data?.results) ? data.results : []);
-            setTotalPages(data?.totalPages ?? 1);
-        } catch {
-            addToast('Fallo crítico al sincronizar cartera', 'error');
-        } finally {
-            setLoading(false);
-        }
-    }, [page, filterEstado, addToast]);
+    // Búsqueda y filtros resueltos por el backend (contrato 1).
+    const listaQuery = useQuery({
+        queryKey: ['financiaciones', 'list', { q, estado: filtros.estado, page }],
+        queryFn: async () => {
+            const params: Record<string, unknown> = {};
+            if (filtros.estado) params.estado = filtros.estado;
+            if (q) params.q = q;
+            // El interceptor de axios ya devuelve el body: {results, totalPages, ...}.
+            return await financiacionesApi.getAll(params, { limit: 15, page }) as unknown as PaginatedResponse<FinanciacionRow>;
+        },
+        placeholderData: keepPreviousData,
+    });
+    const financiaciones = listaQuery.data?.results ?? [];
+    const recargarLista = () => queryClient.invalidateQueries({ queryKey: ['financiaciones'] });
+
+    // ── Indicadores (del backend, no de la página visible) ───────────────────
+    // "Cuotas en mora" usa la MISMA fuente que la alerta del Inicio
+    // (/reportes/mora: cuotas vencidas con saldo), así los dos números coinciden.
+    // /reportes/mora es admin/vendedor/cobrador.
+    const puedeVerMora = permisos.tiene('admin', 'super_admin', 'vendedor', 'cobrador');
+    const moraQuery = useQuery({
+        queryKey: ['financiaciones', 'mora-resumen'],
+        queryFn: () => reportesApi.mora(),
+        enabled: puedeVerMora,
+        staleTime: 60 * 1000,
+    });
+    const activasQuery = useQuery({
+        queryKey: ['financiaciones', 'conteo', 'activa'],
+        queryFn: async () => {
+            const res = await financiacionesApi.getAll({ estado: 'activa' }, { page: 1, limit: 1 }) as unknown as PaginatedResponse<unknown>;
+            return res?.totalResults ?? 0;
+        },
+    });
 
     useEffect(() => { loadCatalogos(); }, [loadCatalogos]);
-    useEffect(() => { loadList(page); }, [loadList, page]);
 
     // ── Detalle ──────────────────────────────────────────────────────────────
     const openDetail = async (id: number) => {
         setDetailId(id);
         setDetail(null);
+        setDetailError(false);
         try {
             const res = await financiacionesApi.getById(id);
             // El interceptor ya devuelve el body: la financiación viene plana.
             setDetail((res as unknown as FinanciacionRow) ?? null);
         } catch {
-            addToast('Error al recuperar expediente digital', 'error');
+            setDetailError(true);
         }
     };
 
@@ -271,7 +291,9 @@ const FinanciacionesPage = () => {
         try {
             const res = await financiacionesApi.getById(id);
             setDetail((res as unknown as FinanciacionRow) ?? null);
-        } catch { /* silencioso */ }
+        } catch {
+            addToast('El cambio se guardó, pero no se pudo actualizar el detalle. Cerralo y abrilo de nuevo.', 'info');
+        }
     };
 
     // ── Refinanciación ───────────────────────────────────────────────────────
@@ -286,9 +308,7 @@ const FinanciacionesPage = () => {
 
     // El saldo se calcula acá sólo para mostrarlo: el backend lo recalcula de las
     // cuotas reales, así que la UI no puede inventar el monto a refinanciar.
-    const saldoRefinanciable = (detail?.cuotasPlan ?? [])
-        .filter(c => c.estado !== 'pagada' && c.estado !== 'refinanciada')
-        .reduce((s, c) => s + (Number(c.saldoCuota) || 0), 0);
+    const saldoRefinanciable = saldoPorCobrar(detail?.cuotasPlan);
 
     const abrirRefinanciar = () => {
         if (!detail) return;
@@ -316,13 +336,13 @@ const FinanciacionesPage = () => {
                 ...(refiForm.tasaMensual !== '' ? { tasaMensual: Number(refiForm.tasaMensual) } : {}),
                 ...(refiForm.diaVencimiento !== '' ? { diaVencimiento: Number(refiForm.diaVencimiento) } : {}),
             }) as unknown as { id: number };
-            addToast(`Contrato refinanciado en el #${String(nueva.id).padStart(6, '0')}`, 'success');
+            addToast(`Plan refinanciado: el saldo pasó al plan N° ${String(nueva.id).padStart(6, '0')}`, 'success');
             setRefiOpen(false);
-            await loadList(page);
+            await recargarLista();
             // Se abre el contrato nuevo: es donde vive la deuda ahora.
             await openDetail(nueva.id);
         } catch (err: unknown) {
-            addToast((err as { message?: string })?.message ?? 'Error al refinanciar', 'error');
+            addToast((err as { message?: string })?.message ?? 'No se pudo refinanciar el plan', 'error');
         } finally {
             setRefiSaving(false);
         }
@@ -332,21 +352,45 @@ const FinanciacionesPage = () => {
     const handleCambioEstado = async (id: number, estado: string) => {
         try {
             await financiacionesApi.updateEstado(id, estado);
-            addToast('Estado legal actualizado correctamente', 'success');
-            loadList(page);
+            addToast(`Plan: ${finStatusMap[estado as EstadoFinanciacion]?.label ?? estado}`, 'success');
+            recargarLista();
             if (detailId === id) refreshDetail(id);
         } catch (e: unknown) {
             // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
             // el body YA desempaquetado: leer `err.response.data.message` daba siempre
             // undefined, y el motivo real del backend nunca llegaba a la pantalla.
-            addToast(getErrorMessage(e, 'Fallo en la transición de estado'), 'error');
+            addToast(getErrorMessage(e, 'No se pudo cambiar el estado del plan'), 'error');
         }
+    };
+
+    // Los cambios de estado se confirman: cancelar el plan no tiene vuelta atrás.
+    const confirmarCambioEstado = (id: number, t: { label: string; next: EstadoFinanciacion }) => confirm({
+        title: t.label,
+        message: t.next === 'cancelada'
+            ? `El plan N° ${nroPlan(id)} queda cancelado: ya no se puede reactivar ni refinanciar.`
+            : t.next === 'en_mora'
+                ? `El plan N° ${nroPlan(id)} queda marcado en mora.`
+                : `El plan N° ${nroPlan(id)} vuelve a figurar al día.`,
+        type: t.next === 'cancelada' ? 'danger' : t.next === 'en_mora' ? 'warning' : 'question',
+        confirmLabel: t.label,
+        onConfirm: () => handleCambioEstado(id, t.next),
+    });
+
+    // Al elegir la venta se precargan su cliente y su moneda.
+    const elegirVenta = (ventaId: number) => {
+        const v = ventas.find(x => x.id === ventaId);
+        setForm(f => ({
+            ...f,
+            ventaId,
+            ...(v?.clienteId ? { clienteId: v.clienteId } : {}),
+            ...(v?.moneda === 'ARS' || v?.moneda === 'USD' ? { moneda: v.moneda } : {}),
+        }));
     };
 
     // ── Crear ────────────────────────────────────────────────────────────────
     const handleCreate = async () => {
         if (!form.ventaId || !form.clienteId || !form.montoFinanciado || !form.cuotas || !form.diaVencimiento) {
-            addToast('Complete la información mandatoria para instrumentar el plan', 'error'); return;
+            addToast('Completá la venta, el cliente, el monto, las cuotas y el día de vencimiento', 'error'); return;
         }
         setSaving(true);
         try {
@@ -363,15 +407,16 @@ const FinanciacionesPage = () => {
                 observaciones: form.observaciones || undefined,
             };
             await financiacionesApi.create(dto);
-            addToast('Plan de financiación activado y cronograma generado', 'success');
+            addToast('Plan de financiación creado con sus cuotas', 'success');
             setCreateOpen(false);
             setForm(emptyForm());
-            loadList(1);
+            setPage(1);
+            recargarLista();
         } catch (e: unknown) {
             // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
             // el body YA desempaquetado: leer `err.response.data.message` daba siempre
             // undefined, y el motivo real del backend nunca llegaba a la pantalla.
-            addToast(getErrorMessage(e, 'Error estructural al generar plan'), 'error');
+            addToast(getErrorMessage(e, 'No se pudo crear el plan'), 'error');
         } finally {
             setSaving(false);
         }
@@ -382,14 +427,14 @@ const FinanciacionesPage = () => {
         if (!deleteId) return;
         try {
             await financiacionesApi.delete(deleteId);
-            addToast('Contrato de financiación revocado', 'success');
+            addToast('Plan de financiación anulado', 'success');
             setDeleteId(null);
-            loadList(page);
+            recargarLista();
         } catch (e: unknown) {
             // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
             // el body YA desempaquetado: leer `err.response.data.message` daba siempre
             // undefined, y el motivo real del backend nunca llegaba a la pantalla.
-            addToast(getErrorMessage(e, 'Error al revocar plan'), 'error');
+            addToast(getErrorMessage(e, 'No se pudo anular el plan'), 'error');
         }
     };
 
@@ -407,7 +452,7 @@ const FinanciacionesPage = () => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch {
-            addToast('Error al generar el recibo', 'error');
+            addToast('No se pudo generar el recibo', 'error');
         }
     };
 
@@ -420,23 +465,23 @@ const FinanciacionesPage = () => {
     const handlePagarCuota = async (e: MouseEvent<HTMLButtonElement>) => {
         e.preventDefault();
         if (!pagarCuota) return;
-        if (pagoForm.monto <= 0) { addToast('El importe a cobrar debe ser mayor a 0', 'error'); return; }
+        if (pagoForm.monto <= 0) { addToast('El monto cobrado tiene que ser mayor a 0', 'error'); return; }
         // El cobro es por cuota: no se puede acreditar más que su saldo (evita
         // registrar una sobre-recaudación; el backend además tope el saldo en 0).
         if (pagoForm.monto > Number(pagarCuota.saldoCuota)) {
-            addToast('El importe no puede superar el saldo de la cuota', 'error');
+            addToast('El monto no puede superar el saldo de la cuota', 'error');
             return;
         }
         const finId = detailId;
         setSavingPago(true);
         try {
             await financiacionesApi.pagarCuota(pagarCuota.id, pagoForm);
-            addToast('Cobro registrado y saldo actualizado', 'success');
+            addToast('Cobro registrado', 'success');
             setPagarCuota(null);
-            // Refresca el expediente abierto (cuotas y saldos) y la cartera (saldo,
+            // Refresca el detalle abierto (cuotas y saldos) y el listado (saldo,
             // estado y mora de la fila) para que el cobro se vea reflejado.
             if (finId !== null) await refreshDetail(Number(finId));
-            await loadList();
+            await recargarLista();
         } catch (err: unknown) {
             addToast(getApiErrorMessage(err, 'No se pudo registrar el cobro'), 'error');
         } finally {
@@ -445,22 +490,12 @@ const FinanciacionesPage = () => {
     };
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+    // Estimación sin interés, redondeada a centavos (la cuota real la calcula el
+    // backend; con tasa, usá el simulador).
     const calcMontoCuota = () => {
         if (!form.montoFinanciado || !form.cuotas) return 0;
-        return form.montoFinanciado / form.cuotas;
+        return Math.round((form.montoFinanciado / form.cuotas) * 100) / 100;
     };
-
-    const finFiltradas = search
-        ? financiaciones.filter(f => {
-            const term = search.toLowerCase();
-            return (
-                f.cliente?.nombre?.toLowerCase().includes(term) ||
-                f.venta?.vehiculo?.dominio?.toLowerCase().includes(term) ||
-                f.cobrador?.nombre?.toLowerCase().includes(term) ||
-                String(f.id).includes(term)
-            );
-        })
-        : financiaciones;
 
     // ── Simulador de cuotas (no persiste; misma amortización que el alta real) ──
     const [simOpen, setSimOpen] = useState(false);
@@ -497,7 +532,7 @@ const FinanciacionesPage = () => {
     };
     // Formatea con la moneda del resultado (o del form mientras no hay resultado).
     const simFmt = (n: number) =>
-        `${(simResult?.resumen.moneda ?? simForm.moneda) === 'USD' ? 'US$' : '$'}${Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
+        formatMoneda(n, simResult?.resumen.moneda ?? simForm.moneda);
 
     // Comparte la simulación por WhatsApp SIN destinatario: abre el borrador y el
     // vendedor elige el contacto (no se envía nada solo, patrón waShareLink).
@@ -536,238 +571,208 @@ const FinanciacionesPage = () => {
         setCreateOpen(true);
     };
 
+    const columns: Column<FinanciacionRow>[] = [
+        {
+            header: 'Plan',
+            accessor: (f) => <span className="font-mono text-xs font-bold">N° {nroPlan(f.id)}</span>,
+        },
+        {
+            // Cliente y cobrador juntos: a 1280 px la tabla entra sin scroll horizontal.
+            header: 'Cliente',
+            accessor: (f) => (
+                <div className="flex flex-col" style={{ minWidth: 0, maxWidth: 145 }}>
+                    <span className="font-bold text-sm truncate" title={f.cliente?.nombre}>{f.cliente?.nombre ?? `Cliente #${f.clienteId}`}</span>
+                    <span className="text-xs text-muted truncate">Cobrador: {f.cobrador?.nombre || 'sin asignar'}</span>
+                </div>
+            ),
+        },
+        {
+            header: 'Unidad',
+            accessor: (f) => (
+                <div className="flex flex-col">
+                    <span className="text-sm">{f.venta?.vehiculo ? `${f.venta.vehiculo.marca} ${f.venta.vehiculo.modelo}` : `Venta N° ${f.ventaId}`}</span>
+                    <span className="text-xs text-muted">{f.venta?.vehiculo?.dominio || 'Sin dominio'}</span>
+                </div>
+            ),
+        },
+        {
+            header: 'Monto financiado',
+            align: 'right',
+            accessor: (f) => <span className="font-bold tabular-nums" style={{ whiteSpace: 'nowrap' }}>{formatMoneda(f.montoFinanciado, f.moneda)}</span>,
+        },
+        {
+            header: 'Cuotas pagas',
+            accessor: (f) => {
+                const pagas = cuotasPagas(f);
+                const pct = f.cuotas ? Math.round((pagas / f.cuotas) * 100) : 0;
+                return (
+                    <div className="flex flex-col gap-1" style={{ minWidth: 90 }}>
+                        <span className="text-xs tabular-nums">{pagas} de {f.cuotas} · {pct}%</span>
+                        <div className="fin-progreso" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${pagas} de ${f.cuotas} cuotas pagas`}>
+                            <div style={{ width: `${pct}%` }} />
+                        </div>
+                    </div>
+                );
+            },
+        },
+        {
+            header: 'Estado',
+            accessor: (f) => (
+                <Badge variant={finStatusMap[f.estado as EstadoFinanciacion]?.variant ?? 'default'}>
+                    {finStatusMap[f.estado as EstadoFinanciacion]?.label ?? f.estado}
+                </Badge>
+            ),
+        },
+        {
+            header: 'Acciones',
+            align: 'right',
+            accessor: (f) => (
+                <div className="flex justify-end gap-1">
+                    <button type="button" className="icon-btn" title="Ver plan y cuotas" aria-label={`Ver el plan ${nroPlan(f.id)}`} onClick={e => { e.stopPropagation(); openDetail(f.id); }}><Eye size={16} /></button>
+                    {permisos.financiacionAnular && (
+                        <button type="button" className="icon-btn danger" onClick={e => { e.stopPropagation(); setDeleteId(f.id); }} title="Anular plan" aria-label={`Anular el plan ${nroPlan(f.id)}`}><Trash2 size={16} /></button>
+                    )}
+                </div>
+            ),
+        },
+    ];
+
+    const moraResumen = moraQuery.data?.resumen;
+    const moraPorMoneda = (moraResumen?.porMoneda ?? []).filter(m => Number(m.saldo ?? 0) !== 0);
+
     return (
         <div className="page-container animate-fade-in">
+            <PageTitle title="Financiación" />
             {/* Header */}
             <header className="page-header">
                 <div className="header-title">
                     <div className="flex items-center gap-3 mb-1">
-                        <div className="icon-badge primary shadow-glow">
+                        <div className="icon-badge primary">
                             <CreditCard size={20} />
                         </div>
-                        <h1>Estructuras de Financiación</h1>
+                        <h1>Financiación</h1>
                     </div>
-                    <p>Monitoreo de carteras de crédito, planes de pago y auditoría de recaudaciones internas.</p>
+                    <p>Planes de financiación propia, sus cuotas y los cobros.</p>
                 </div>
-                <div className="flex gap-3">
-                    <Button variant="secondary" onClick={() => loadList(page)}>
-                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                <div className="header-actions">
+                    <Button variant="secondary" onClick={() => recargarLista()} aria-label="Actualizar listado" title="Actualizar listado">
+                        <RefreshCw size={18} className={listaQuery.isFetching ? 'animate-spin' : ''} />
                     </Button>
-                    <Button data-tour="fin-simular" variant="secondary" onClick={openSimulador} title="Simular un plan de cuotas para mostrarle al cliente (no crea nada)">
+                    <Button data-tour="fin-simular" variant="secondary" onClick={openSimulador} title="Calcular un plan de cuotas para mostrarle al cliente (no crea nada)">
                         <Calculator size={18} /> Simular cuotas
                     </Button>
                     {permisos.financiacionOperar && (
                         <Button data-tour="fin-nuevo" variant="primary" onClick={() => { setForm(emptyForm()); setCreateOpen(true); }}>
-                            <Plus size={18} /> Instrumentar Nuevo Plan
+                            <Plus size={18} /> Nuevo plan
                         </Button>
                     )}
                 </div>
             </header>
 
-            {/* Quick Stats Overlay (Optional design element) */}
-            <div className="grid grid-cols-1 gap-6" data-tour="fin-kpis">
+            {/* Indicadores: del backend, no de la página visible */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6" data-tour="fin-kpis">
                 <div className="card glass stat-tile">
                     <div>
-                        <span className="stat-tile-label" style={{ color: 'var(--info)' }}>Planes Activos</span>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black">{financiaciones.filter(f => f.estado === 'activa').length}</span>
-                            <span className="text-xs text-muted font-bold">CONTRATOS</span>
+                        <span className="stat-tile-label">Planes activos</span>
+                        <div className="text-3xl font-black tabular-nums">
+                            {activasQuery.isError ? '—' : activasQuery.isLoading ? '…' : activasQuery.data}
                         </div>
+                        <span className="text-xs text-muted">Con cuotas por cobrar</span>
                     </div>
                     <TrendingUp size={60} className="stat-tile-bg" />
                 </div>
-                <div className="card glass stat-tile">
-                    <div>
-                        <span className="stat-tile-label" style={{ color: 'var(--danger)' }}>Alerta de Mora</span>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black">{financiaciones.filter(f => f.estado === 'en_mora').length}</span>
-                            <span className="text-xs text-muted font-bold">INCIDENCIAS</span>
-                        </div>
-                    </div>
-                    <AlertCircle size={60} className="stat-tile-bg" />
-                </div>
-                <div className="card glass stat-tile col-span-1">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <span className="stat-tile-label" style={{ color: 'var(--accent)' }}>Cartera Administrada</span>
-                            {carteraPorMoneda.length === 0 ? (
-                                <div className="text-3xl font-black">$0 <span className="text-xs text-muted">ARS</span></div>
-                            ) : carteraPorMoneda.map(({ moneda, financiado }) => (
-                                <div key={moneda} className="text-3xl font-black">
-                                    ${financiado.toLocaleString('es-AR')}
-                                    <span className="text-xs text-muted" style={{ marginLeft: '0.35rem' }}>{moneda}</span>
+                {puedeVerMora && (
+                    <>
+                        <div className="card glass stat-tile">
+                            <div>
+                                <span className="stat-tile-label" style={{ color: 'var(--danger)' }}>Cuotas en mora</span>
+                                <div className="text-3xl font-black tabular-nums">
+                                    {moraQuery.isError ? '—' : moraQuery.isLoading ? '…' : moraResumen?.cuotasVencidas ?? 0}
                                 </div>
-                            ))}
+                                <span className="text-xs text-muted">
+                                    {moraQuery.isError
+                                        ? 'No se pudo calcular'
+                                        : `Cuotas vencidas sin pagar · ${moraResumen?.clientes ?? 0} ${moraResumen?.clientes === 1 ? 'cliente' : 'clientes'}`}
+                                </span>
+                            </div>
+                            <AlertCircle size={60} className="stat-tile-bg" />
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                            <span className="stat-tile-label">Exigibilidad estimada</span>
-                            {carteraPorMoneda.length === 0 ? (
-                                <p className="text-xl font-bold text-muted">-</p>
-                            ) : carteraPorMoneda.map(({ moneda, saldo }) => (
-                                <p key={moneda} className="text-xl font-bold">
-                                    ${saldo.toLocaleString('es-AR')}
-                                    <span className="text-xs text-muted" style={{ marginLeft: '0.35rem' }}>{moneda}</span>
-                                </p>
-                            ))}
+                        <div className="card glass stat-tile">
+                            <div>
+                                <span className="stat-tile-label">Saldo vencido</span>
+                                {moraQuery.isError ? (
+                                    <div className="text-3xl font-black">—</div>
+                                ) : moraPorMoneda.length === 0 ? (
+                                    <div className="text-3xl font-black tabular-nums">{moraQuery.isLoading ? '…' : formatMoneda(0, 'ARS')}</div>
+                                ) : moraPorMoneda.map(m => (
+                                    <div key={m.moneda} className="text-2xl font-black tabular-nums">{formatMoneda(Number(m.saldo ?? 0), m.moneda)}</div>
+                                ))}
+                                <span className="text-xs text-muted">Lo que suman esas cuotas vencidas</span>
+                            </div>
+                            <DollarSign size={60} className="stat-tile-bg" />
                         </div>
-                    </div>
-                    <DollarSign size={80} className="stat-tile-bg" />
-                </div>
+                    </>
+                )}
             </div>
 
-            {/* Filters Bar */}
-            <div className="card glass filters-bar flex flex-wrap items-center justify-between gap-6 mb-6">
-                <div className="flex-1">
-                    <Search size={18} className="text-muted" />
+            {/* Filtros */}
+            <div className="filters-bar filtros-comerciales">
+                <div className="search-box">
+                    <Search size={18} className="text-muted" aria-hidden="true" />
                     <input
-                        type="text"
-                        placeholder="BUSCAR EXPEDIENTE POR CLIENTE, TÍTULO, UNIDAD O DOMINIO..."
-                        className="form-input-premium w-full"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
+                        type="search"
+                        placeholder="Buscar por cliente, DNI, dominio, marca, modelo o N° de plan"
+                        aria-label="Buscar planes de financiación"
+                        value={busqueda}
+                        onChange={e => setBusqueda(e.target.value)}
                     />
                 </div>
-                <div className="flex gap-6 items-center">
-                    <div>
-                        <label className="form-label-xs">Auditoría de Pagos</label>
-                        <select className="form-input-select w-full" value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }}>
-                            <option value="">FILTRAR TODOS LOS ESTADOS</option>
-                            {Object.entries(finStatusMap).map(([k, v]) => (
-                                <option key={k} value={k}>{v.label.toUpperCase()}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <Button variant="secondary" onClick={() => { setSearch(''); setFilterEstado(''); setPage(1); }}>
-                        <RefreshCw size={18} />
+                <select aria-label="Filtrar por estado" value={filtros.estado} onChange={e => setFiltro('estado', e.target.value)}>
+                    <option value="">Estado: todos</option>
+                    {Object.entries(finStatusMap).map(([k, v]) => (
+                        <option key={k} value={k}>{v.label}</option>
+                    ))}
+                </select>
+                {hayFiltros && (
+                    <Button variant="ghost" size="sm" onClick={limpiar}>
+                        <X size={16} /> Limpiar filtros
                     </Button>
-                </div>
+                )}
             </div>
 
-            {/* List Table */}
-            <div className="table-container card" data-tour="fin-tabla">
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            <th>Identificador</th>
-                            <th>Acreedor de Deuda</th>
-                            <th>Unidad / Activo</th>
-                            <th>Gestor Responsable</th>
-                            <th>Capital Financiado</th>
-                            <th>Performance Cobro</th>
-                            <th>Estado Operativo</th>
-                            <th style={{ textAlign: 'right' }}>Análisis</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr><td colSpan={8} style={{ padding: '8rem', textAlign: 'center' }}><RefreshCw className="animate-spin text-accent" size={40} /></td></tr>
-                        ) : finFiltradas.length === 0 ? (
-                            <tr>
-                                <td colSpan={8}>
-                                    <div className="flex flex-col items-center text-muted">
-                                        <div className="flex items-center justify-center mb-4">
-                                            <CreditCard size={40} className="text-secondary" />
-                                        </div>
-                                        <p className="text-xl font-black text-muted">Sin carteras para este criterio</p>
-                                        <p className="text-sm font-medium">No se registran financiaciones activas para los datos prospectados.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        ) : (
-                            finFiltradas.map(f => (
-                                <tr key={f.id} onClick={() => openDetail(f.id)} className="cursor-pointer">
-                                    <td>
-                                        <div className="flex flex-col">
-                                            <span className="text-2xs font-black text-info tracking-tight">CONTRATO</span>
-                                            <span className="font-mono text-xs font-bold"># {String(f.id).padStart(6, '0')}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex items-center justify-center text-muted">
-                                                <User size={14} />
-                                            </div>
-                                            <span className="font-bold uppercase text-xs">{f.cliente?.nombre ?? `CLIENTE ID-${f.clienteId}`}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-bold text-muted">
-                                                {f.venta?.vehiculo ? `${f.venta.vehiculo.marca} ${f.venta.vehiculo.modelo}` : `VENTA #${f.ventaId}`}
-                                            </span>
-                                            <span className="text-3xs font-black text-muted tracking-widest">{f.venta?.vehiculo?.dominio || 'S/DOMINIO'}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-3xs font-black text-muted uppercase">{f.cobrador?.nombre || 'SIN OFICIAL'}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span className="font-black text-base tabular-nums">
-                                            ${Number(f.montoFinanciado).toLocaleString('es-AR')}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div className="flex flex-col">
-                                            <div className="flex justify-between items-center text-3xs font-black uppercase tracking-tight">
-                                                <span className="text-accent">{(f.cuotasPlan?.filter((c: { estado: string }) => c.estado === 'pagada').length ?? 0)} de {f.cuotas} cuotas</span>
-                                                <span>{Math.round(((f.cuotasPlan?.filter((c: { estado: string }) => c.estado === 'pagada').length ?? 0) / f.cuotas) * 100)}%</span>
-                                            </div>
-                                            <div className="w-full">
-                                                <div
-                                                    style={{ width: `${((f.cuotasPlan?.filter((c: { estado: string }) => c.estado === 'pagada').length ?? 0) / f.cuotas) * 100}%` }}
-                                                />
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <Badge variant={finStatusMap[f.estado as EstadoFinanciacion]?.variant ?? 'default'}>
-                                            {finStatusMap[f.estado as EstadoFinanciacion]?.label.toUpperCase()}
-                                        </Badge>
-                                    </td>
-                                    <td style={{ textAlign: 'right' }}>
-                                        <div className="flex justify-end gap-2">
-                                            <button className="icon-btn" title="Ver Expediente"><Eye size={16} /></button>
-                                            {permisos.financiacionAnular && (
-                                                <button className="icon-btn danger" onClick={e => { e.stopPropagation(); setDeleteId(f.id); }} title="Anular Contrato"><Trash2 size={16} /></button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+            {/* Listado */}
+            <div data-tour="fin-tabla" className="listado-compacto">
+                <DataTable
+                    columns={columns}
+                    data={financiaciones}
+                    isLoading={listaQuery.isLoading}
+                    isError={listaQuery.isError}
+                    errorMessage="No se pudieron cargar los planes de financiación"
+                    onRetry={() => listaQuery.refetch()}
+                    onRowClick={(f) => openDetail(f.id)}
+                    currentPage={page}
+                    totalPages={listaQuery.data?.totalPages ?? 1}
+                    onPageChange={setPage}
+                    emptyMessage={hayFiltros
+                        ? 'Ningún plan coincide con la búsqueda o los filtros'
+                        : 'Todavía no hay planes de financiación. Creá el primero con «Nuevo plan».'}
+                    emptyIcon={<CreditCard size={40} className="dt-empty-icon" />}
+                    onClearFilters={hayFiltros ? limpiar : undefined}
+                />
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-6">
-                    <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
-                        <ChevronLeft size={16} /> Anterior
-                    </Button>
-                    <div className="flex items-center gap-2">
-                        <span className="flex items-center justify-center font-black text-sm">{page}</span>
-                    </div>
-                    <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
-                        Siguiente <ChevronRight size={16} />
-                    </Button>
-                </div>
-            )}
-
-            {/* MODAL CREAR PAN DE PAGOS */}
+            {/* ALTA DE PLAN */}
             <Modal
                 isOpen={createOpen}
                 onClose={() => setCreateOpen(false)}
-                title="Instrumentación de Crédito"
-                subtitle="Asegúrese de validar la solvencia del acreedor antes de activar el plan."
+                title="Nuevo plan de financiación"
+                subtitle="Elegí la venta y las condiciones. Los campos con * son obligatorios."
                 maxWidth="820px"
                 footer={(
                     <>
                         <Button variant="secondary" onClick={() => setCreateOpen(false)}>Cancelar</Button>
                         <Button variant="primary" onClick={handleCreate} loading={saving}>
-                            Instrumentar y Activar Plan
+                            Crear plan
                         </Button>
                     </>
                 )}
@@ -775,51 +780,51 @@ const FinanciacionesPage = () => {
                 <div>
                     <Select
                         dense
-                        label="Venta de Origen (Documento Base) *"
+                        label="Venta *"
                         containerClassName="col-span-2"
-                        className="text-lg font-bold"
-                        placeholder="SELECCIONAR CONTRATO DE TRANSFERENCIA..."
+                        placeholder="Elegí la venta que se financia"
                         value={form.ventaId || ''}
-                        onChange={e => setForm(f => ({ ...f, ventaId: +e.target.value }))}
+                        onChange={e => elegirVenta(+e.target.value)}
                     >
                         {ventas.map(v => (
                             <option key={v.id} value={v.id}>
-                                {`#${String(v.id).padStart(5, '0')} — CLIENTE: ${v.cliente?.nombre?.toUpperCase()} — VEHÍCULO: ${v.vehiculo?.marca?.toUpperCase()} ${v.vehiculo?.modelo?.toUpperCase()}`}
+                                {`N° ${String(v.id).padStart(6, '0')} — ${v.cliente?.nombre ?? 'Sin cliente'} — ${v.vehiculo?.marca ?? ''} ${v.vehiculo?.modelo ?? ''}`}
                             </option>
                         ))}
                     </Select>
 
-                    <div className="grid grid-cols-1 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Select
                             dense
-                            label="Titular Exigible *"
-                            placeholder="PERSONA FÍSICA / JURÍDICA..."
+                            label="Cliente *"
+                            placeholder="Elegí el cliente"
                             value={form.clienteId || ''}
                             onChange={e => setForm(f => ({ ...f, clienteId: +e.target.value }))}
                         >
-                            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre.toUpperCase()}</option>)}
+                            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                         </Select>
                         <Select
                             dense
-                            label="Oficial Responsable"
-                            placeholder="ASIGNAR GESTOR RECAUDADOR..."
+                            label="Cobrador"
+                            placeholder="Sin asignar"
                             value={form.cobradorId || ''}
                             onChange={e => setForm(f => ({ ...f, cobradorId: +e.target.value }))}
                         >
-                            {cobradores.map(u => <option key={u.id} value={u.id}>{u.nombre.toUpperCase()}</option>)}
+                            {cobradores.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
                         </Select>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <Input
                             dense
-                            label="Capital Liquidado *"
+                            label="Monto a financiar *"
                             icon={<DollarSign size={16} className="text-accent" />}
                             type="number"
                             className="font-bold"
                             value={form.montoFinanciado || ''}
                             onChange={e => setForm(f => ({ ...f, montoFinanciado: +e.target.value }))}
-                            placeholder="0.00"
+                            placeholder="0"
+                            hint={form.montoFinanciado > 0 ? formatMoneda(form.montoFinanciado, form.moneda) : undefined}
                         />
                         <Select
                             dense
@@ -832,61 +837,62 @@ const FinanciacionesPage = () => {
                         </Select>
                         <Select
                             dense
-                            label="Plan de Cuotas *"
+                            label="Cuotas *"
                             value={form.cuotas}
                             onChange={e => setForm(f => ({ ...f, cuotas: +e.target.value }))}
                         >
-                            {[1, 3, 6, 12, 18, 24, 36, 48, 60].map(n => <option key={n} value={n}>{n} CUOTAS MENSUALES</option>)}
+                            {[1, 3, 6, 12, 18, 24, 36, 48, 60].map(n => <option key={n} value={n}>{n} {n === 1 ? 'cuota' : 'cuotas'} mensuales</option>)}
                         </Select>
                         <Input
                             dense
-                            label="INTERÉS MENSUAL (%)"
+                            label="Interés mensual (%)"
                             icon={<TrendingUp size={16} className="text-info" />}
                             type="number"
                             step="0.1"
                             value={form.tasaMensual}
                             onChange={e => setForm(f => ({ ...f, tasaMensual: e.target.value }))}
-                            placeholder="0.0"
+                            placeholder="0 = sin interés"
                         />
                     </div>
 
-                    <div className="grid grid-cols-1 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Input
                             dense
-                            label="Fecha de Inicio Contable"
+                            label="Fecha de inicio *"
                             type="date"
                             value={form.fechaInicio}
                             onChange={e => setForm(f => ({ ...f, fechaInicio: e.target.value }))}
                         />
                         <Select
                             dense
-                            label="Día Fijo de Cobro"
+                            label="Día de vencimiento *"
                             value={form.diaVencimiento}
                             onChange={e => setForm(f => ({ ...f, diaVencimiento: +e.target.value }))}
                         >
-                            {[...Array(28)].map((_, i) => <option key={i + 1} value={i + 1}>DÍA {i + 1} DE CADA MES</option>)}
+                            {[...Array(28)].map((_, i) => <option key={i + 1} value={i + 1}>Día {i + 1} de cada mes</option>)}
                         </Select>
                     </div>
 
                     <Textarea
                         dense
-                        label="Notas del Contrato (Observaciones)"
+                        label="Observaciones"
                         rows={2}
                         value={form.observaciones}
                         onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))}
-                        placeholder="ESPECIFIQUE GARANTÍAS O ACUERDOS EXCEPCIONALES..."
+                        placeholder="Garantías o acuerdos especiales con el cliente…"
                         style={{ resize: 'none' }}
                     />
 
                     {form.montoFinanciado > 0 && (
-                        <div className="flex justify-between items-center shadow-glow-sm">
+                        <div className="flex justify-between items-center card" style={{ padding: 'var(--space-4)' }}>
                             <div>
-                                <p className="text-3xs font-black text-accent uppercase tracking-widest mb-1">Impacto de Cuota Base</p>
-                                <p className="text-3xl font-black">${calcMontoCuota().toLocaleString('es-AR')}</p>
+                                <p className="stat-tile-label">Cuota estimada {form.tasaMensual ? '(sin contar el interés)' : ''}</p>
+                                <p className="text-2xl font-black tabular-nums">{formatMoneda(calcMontoCuota(), form.moneda)}</p>
+                                <p className="text-xs text-muted">{form.cuotas} {form.cuotas === 1 ? 'cuota' : 'cuotas'}. El valor exacto lo calcula el sistema al crear el plan.</p>
                             </div>
                             <div className="text-right">
-                                <p className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Exigibilidad Total</p>
-                                <p className="text-xl font-bold">${Number(form.montoFinanciado).toLocaleString('es-AR')}</p>
+                                <p className="stat-tile-label">Monto financiado</p>
+                                <p className="text-xl font-bold tabular-nums">{formatMoneda(form.montoFinanciado, form.moneda)}</p>
                             </div>
                         </div>
                     )}
@@ -910,7 +916,7 @@ const FinanciacionesPage = () => {
                 }
             >
                 <div>
-                    <div className="grid grid-cols-1 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Input
                             dense
                             label="Monto a financiar *"
@@ -919,7 +925,7 @@ const FinanciacionesPage = () => {
                             className="font-bold"
                             value={simForm.montoFinanciado || ''}
                             onChange={e => setSimForm(f => ({ ...f, montoFinanciado: +e.target.value }))}
-                            placeholder="0.00"
+                            placeholder="0"
                         />
                         <Select
                             dense
@@ -975,20 +981,20 @@ const FinanciacionesPage = () => {
 
                     {simResult && (
                         <>
-                            <div className="grid grid-cols-1 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
-                                    <p className="text-3xs font-black text-accent uppercase tracking-widest mb-1">Valor de cuota</p>
+                                    <p className="stat-tile-label">Valor de cuota</p>
                                     <p className="text-2xl font-black">{simFmt(simResult.resumen.valorCuota)}</p>
                                     <p className="text-xs text-muted">{simResult.resumen.cuotas} cuotas mensuales</p>
                                 </div>
                                 <div>
-                                    <p className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Total a pagar</p>
+                                    <p className="stat-tile-label">Total a pagar</p>
                                     <p className="text-2xl font-black">{simFmt(simResult.resumen.totalAPagar)}</p>
                                     <p className="text-xs text-muted">sobre {simFmt(simResult.resumen.montoFinanciado)} financiados</p>
                                 </div>
                                 <div>
-                                    <p className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Costo financiero</p>
-                                    <p className="text-2xl font-black text-info">{simFmt(simResult.resumen.costoFinanciero)}</p>
+                                    <p className="stat-tile-label">Interés total</p>
+                                    <p className="text-2xl font-black">{simFmt(simResult.resumen.costoFinanciero)}</p>
                                     <p className="text-xs text-muted">interés total ({simResult.resumen.tasaMensual}% mensual)</p>
                                 </div>
                             </div>
@@ -1005,9 +1011,9 @@ const FinanciacionesPage = () => {
                                     <tbody>
                                         {simResult.cuotas.map(c => (
                                             <tr key={c.nroCuota}>
-                                                <td className="font-black"># {c.nroCuota}</td>
-                                                <td className="font-mono text-xs text-muted">{formatFecha(c.vencimiento)}</td>
-                                                <td className="font-bold" style={{ textAlign: 'right' }}>{simFmt(c.montoCuota)}</td>
+                                                <td className="font-bold tabular-nums">{c.nroCuota}</td>
+                                                <td className="text-xs text-muted tabular-nums">{formatFecha(c.vencimiento)}</td>
+                                                <td className="font-bold tabular-nums" style={{ textAlign: 'right' }}>{simFmt(c.montoCuota)}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -1029,74 +1035,68 @@ const FinanciacionesPage = () => {
                 </div>
             </Modal>
 
-            {/* MODAL EXPEDIENTE DIGITAL (DETALLE) */}
+            {/* DETALLE DEL PLAN */}
             <Modal
                 isOpen={detailId !== null}
                 onClose={() => { setDetailId(null); setDetail(null); }}
-                title={detail?.cliente?.nombre ? String(detail.cliente.nombre).toUpperCase() : 'Expediente Financiero'}
+                title={detailId !== null ? `Plan N° ${nroPlan(detailId)}${detail?.cliente?.nombre ? ` · ${detail.cliente.nombre}` : ''}` : 'Plan de financiación'}
                 subtitle={detail?.venta?.vehiculo
-                    ? `${detail.venta.vehiculo.marca} ${detail.venta.vehiculo.modelo} [${detail.venta.vehiculo.dominio}]`.toUpperCase()
-                    : 'OP. VENTA NO ESPECIFICADA'}
+                    ? `${detail.venta.vehiculo.marca} ${detail.venta.vehiculo.modelo} · ${detail.venta.vehiculo.dominio || 'sin dominio'}`
+                    : detail ? `Venta N° ${detail.ventaId}` : undefined}
                 maxWidth="900px"
                 footer={detail ? (
-                    <Button variant="secondary" onClick={() => { setDetailId(null); setDetail(null); }}>Cerrar Expediente</Button>
+                    <Button variant="secondary" onClick={() => { setDetailId(null); setDetail(null); }}>Cerrar</Button>
                 ) : undefined}
             >
-                {!detail ? (
-                    <div className="text-center"><RefreshCw className="animate-spin text-accent mb-4" size={48} /><p className="text-xs font-black text-muted uppercase tracking-widest">Recuperando expediente financiero...</p></div>
+                {detailError ? (
+                    <div className="dt-empty">
+                        <p className="dt-empty-text">No se pudo cargar el plan.</p>
+                        <Button variant="secondary" size="sm" onClick={() => detailId !== null && openDetail(detailId)}>Reintentar</Button>
+                    </div>
+                ) : !detail ? (
+                    <div className="text-center"><RefreshCw className="animate-spin text-accent mb-4" size={40} aria-hidden="true" /><p className="text-sm text-muted">Cargando el plan…</p></div>
                 ) : (
                     <div>
-                        <div className="flex items-center gap-6">
-                            <div className="flex items-center justify-center">
-                                <ShoppingBag size={32} />
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <Badge variant={finStatusMap[detail.estado as EstadoFinanciacion]?.variant ?? 'default'}>
-                                    {finStatusMap[detail.estado as EstadoFinanciacion]?.label?.toUpperCase()}
-                                </Badge>
-                                <p className="text-accent font-bold flex items-center gap-2">
-                                    <Car size={16} />
-                                    {detail.venta?.vehiculo ? `${detail.venta.vehiculo.marca} ${detail.venta.vehiculo.modelo} [${detail.venta.vehiculo.dominio}]`.toUpperCase() : `OP. VENTA NO ESPECIFICADA`.toUpperCase()}
-                                </p>
-                            </div>
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <Badge variant={finStatusMap[detail.estado as EstadoFinanciacion]?.variant ?? 'default'}>
+                                {finStatusMap[detail.estado as EstadoFinanciacion]?.label ?? detail.estado}
+                            </Badge>
+                            <p className="text-sm font-bold flex items-center gap-2">
+                                <Car size={16} aria-hidden="true" />
+                                {detail.venta?.vehiculo ? `${detail.venta.vehiculo.marca} ${detail.venta.vehiculo.modelo} · ${detail.venta.vehiculo.dominio || 'sin dominio'}` : `Venta N° ${detail.ventaId}`}
+                            </p>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-6">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                             <div>
-                                <span className="stat-tile-label">Exigibilidad Actual</span>
-                                <p className="text-2xl font-black text-accent">
-                                    ${(detail.cuotasPlan ?? []).reduce((s: number, c: Cuota) => s + (Number(c.saldoCuota) || 0), 0).toLocaleString('es-AR')}
-                                    <span className="text-xs text-muted" style={{ marginLeft: '0.35rem' }}>{detail.moneda || 'ARS'}</span>
-                                </p>
+                                <span className="stat-tile-label">Saldo por cobrar</span>
+                                {/* Suma de las cuotas no pagadas ni refinanciadas, redondeada a
+                                    centavos: sin esto aparecían residuos como "$0,0000001". */}
+                                <p className="text-2xl font-black tabular-nums">{formatMoneda(saldoPorCobrar(detail.cuotasPlan), detail.moneda)}</p>
                             </div>
                             <div>
-                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-2">Ratio de Cobro</span>
-                                <p className="text-2xl font-black text-accent">{detail.cuotasPlan?.filter((c: { estado: string }) => c.estado === 'pagada').length} / {detail.cuotas}</p>
+                                <span className="stat-tile-label">Cuotas pagas</span>
+                                <p className="text-2xl font-black tabular-nums">{cuotasPagas(detail)} de {detail.cuotas}</p>
                             </div>
                             {/* El modelo Cuota tiene montoCuota y saldoCuota: no existen
-                                montoCapital ni montoInteres, y sumarlos daba siempre $0. */}
-                            <div className="card glass p-4 text-center font-bold">
-                                <span className="stat-tile-label">Total contrato</span>
-                                ${(detail.cuotasPlan ?? []).reduce((s: number, c: Cuota) => s + (Number(c.montoCuota) || 0), 0).toLocaleString('es-AR')}
-                                <span className="text-xs text-muted" style={{ marginLeft: '0.35rem' }}>{detail.moneda || 'ARS'}</span>
-                            </div>
-                            <div className="card glass p-4 text-center font-bold">
-                                <span className="stat-tile-label">Saldo pendiente</span>
-                                ${(detail.cuotasPlan ?? []).filter((c: Cuota) => c.estado !== 'pagada').reduce((s: number, c: Cuota) => s + (Number(c.saldoCuota) || 0), 0).toLocaleString('es-AR')}
-                                <span className="text-xs text-muted" style={{ marginLeft: '0.35rem' }}>{detail.moneda || 'ARS'}</span>
+                                montoCapital ni montoInteres. */}
+                            <div>
+                                <span className="stat-tile-label">Total del plan</span>
+                                <p className="text-2xl font-black tabular-nums">{formatMoneda(centavos((detail.cuotasPlan ?? []).reduce((s: number, c: Cuota) => s + (Number(c.montoCuota) || 0), 0)), detail.moneda)}</p>
+                                <p className="text-xs text-muted">Suma de todas las cuotas, con interés</p>
                             </div>
                             <div>
-                                <span className="stat-tile-label">Valor de Cuota</span>
-                                {/* Se lee de la primera cuota real en vez de recalcular
-                                    monto/N, que arrastraba decimales infinitos. */}
-                                <p className="text-2xl font-black">
-                                    ${Number((detail.cuotasPlan ?? [])[0]?.montoCuota ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    <span className="text-xs text-muted" style={{ marginLeft: '0.35rem' }}>{detail.moneda || 'ARS'}</span>
-                                </p>
+                                <span className="stat-tile-label">Monto financiado</span>
+                                <p className="text-lg font-bold tabular-nums">{formatMoneda(detail.montoFinanciado, detail.moneda)}</p>
                             </div>
                             <div>
-                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-2">Cierre de Ciclo</span>
-                                <p className="text-2xl font-black text-info">DÍA {detail.diaVencimiento}</p>
+                                <span className="stat-tile-label">Valor de cuota</span>
+                                {/* Se lee de la primera cuota real en vez de recalcular monto/N. */}
+                                <p className="text-lg font-bold tabular-nums">{formatMoneda((detail.cuotasPlan ?? [])[0]?.montoCuota ?? 0, detail.moneda)}</p>
+                            </div>
+                            <div>
+                                <span className="stat-tile-label">Vencimiento</span>
+                                <p className="text-lg font-bold">Día {detail.diaVencimiento} de cada mes</p>
                             </div>
                         </div>
 
@@ -1106,15 +1106,15 @@ const FinanciacionesPage = () => {
                             <div className="card glass" style={{ borderColor: 'var(--accent)' }}>
                                 <div className="flex items-center justify-between gap-4">
                                     <div>
-                                        <h4 className="text-sm font-black uppercase tracking-tight">Contrato refinanciado</h4>
+                                        <h4 className="text-sm font-bold">Plan refinanciado</h4>
                                         <p className="text-xs text-muted">
-                                            Su saldo se trasladó al contrato #{String(detail.refinanciadaPor.id).padStart(6, '0')} por{' '}
-                                            ${Number(detail.refinanciadaPor.montoFinanciado).toLocaleString('es-AR')} {detail.refinanciadaPor.moneda}
-                                            {detail.refinanciadaPor.cuotas ? ` en ${detail.refinanciadaPor.cuotas} cuotas` : ''}. Acá no queda deuda por cobrar.
+                                            Su saldo pasó al plan N° {nroPlan(detail.refinanciadaPor.id)} por{' '}
+                                            {formatMoneda(detail.refinanciadaPor.montoFinanciado, detail.refinanciadaPor.moneda)}
+                                            {detail.refinanciadaPor.cuotas ? ` en ${detail.refinanciadaPor.cuotas} cuotas` : ''}. En este plan no queda nada por cobrar.
                                         </p>
                                     </div>
                                     <Button variant="primary" size="sm" onClick={() => openDetail(detail.refinanciadaPor!.id)}>
-                                        VER CONTRATO NUEVO
+                                        Ver el plan nuevo
                                     </Button>
                                 </div>
                             </div>
@@ -1125,13 +1125,13 @@ const FinanciacionesPage = () => {
                             <div className="card glass">
                                 <div className="flex items-center justify-between gap-4">
                                     <div>
-                                        <h4 className="text-sm font-black uppercase tracking-tight">Origen</h4>
+                                        <h4 className="text-sm font-bold">Origen</h4>
                                         <p className="text-xs text-muted">
-                                            Refinancia el saldo del contrato #{String(detail.refinanciaA.id).padStart(6, '0')}.
+                                            Refinancia el saldo del plan N° {nroPlan(detail.refinanciaA.id)}.
                                         </p>
                                     </div>
                                     <Button variant="secondary" size="sm" onClick={() => openDetail(detail.refinanciaA!.id)}>
-                                        VER CONTRATO ORIGINAL
+                                        Ver el plan original
                                     </Button>
                                 </div>
                             </div>
@@ -1140,13 +1140,13 @@ const FinanciacionesPage = () => {
                         {permisos.financiacionOperar && (finTransitions[detail.estado as EstadoFinanciacion]?.length > 0 || puedeRefinanciarse(detail.estado)) && (
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <h4 className="text-sm font-black uppercase tracking-widest mb-1">Control de Gestión Legal</h4>
-                                    <p className="text-xs text-muted">Transiciones de auditoría para el estado del contrato.</p>
+                                    <h4 className="text-sm font-bold mb-1">Estado del plan</h4>
+                                    <p className="text-xs text-muted">Refinanciá el saldo o cambiá el estado del plan.</p>
                                 </div>
                                 <div className="flex gap-3">
                                     {puedeRefinanciarse(detail.estado) && saldoRefinanciable > 0 && (
                                         <Button variant="primary" size="sm" onClick={abrirRefinanciar}>
-                                            REFINANCIAR
+                                            Refinanciar
                                         </Button>
                                     )}
                                     {finTransitions[detail.estado as EstadoFinanciacion].map(t => (
@@ -1154,9 +1154,9 @@ const FinanciacionesPage = () => {
                                             key={t.next}
                                             variant={t.next === 'cancelada' ? 'secondary' : t.next === 'en_mora' ? 'danger' : 'primary'}
                                             size="sm"
-                                            onClick={() => handleCambioEstado(detail.id, t.next)}
+                                            onClick={() => confirmarCambioEstado(detail.id, t)}
                                         >
-                                            {t.label.toUpperCase()}
+                                            {t.label}
                                         </Button>
                                     ))}
                                 </div>
@@ -1164,46 +1164,46 @@ const FinanciacionesPage = () => {
                         )}
 
                         <div className="flex flex-col gap-4">
-                            <h3 className="text-lg font-black uppercase tracking-tight flex items-center gap-2">
-                                <Calendar size={18} className="text-accent" /> Historial Analítico de Recaudación
+                            <h3 className="text-sm font-bold flex items-center gap-2">
+                                <Calendar size={18} aria-hidden="true" /> Cuotas
                             </h3>
                             <div className="table-container">
                                 <table className="data-table">
                                     <thead>
                                         <tr>
-                                            <th>Período</th>
+                                            <th>Cuota</th>
                                             <th>Vencimiento</th>
-                                            <th>Cuota Nominal</th>
-                                            <th>Deuda Residual</th>
+                                            <th style={{ textAlign: 'right' }}>Monto</th>
+                                            <th style={{ textAlign: 'right' }}>Saldo</th>
                                             <th>Estado</th>
-                                            <th style={{ textAlign: 'right' }}>Operatividad</th>
+                                            <th style={{ textAlign: 'right' }}>Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {detail.cuotasPlan?.map((c: Cuota) => (
                                             <tr key={c.id}>
-                                                <td className="font-black"># {c.nroCuota}</td>
-                                                <td className="font-mono text-xs text-muted">{formatFecha(c.vencimiento)}</td>
-                                                <td className="font-bold">${Number(c.montoCuota).toLocaleString('es-AR')}</td>
-                                                <td className="font-black text-accent">${Number(c.saldoCuota).toLocaleString('es-AR')}</td>
+                                                <td className="font-bold tabular-nums">{c.nroCuota}</td>
+                                                <td className="text-xs text-muted tabular-nums">{formatFecha(c.vencimiento)}</td>
+                                                <td className="tabular-nums" style={{ textAlign: 'right' }}>{formatMoneda(c.montoCuota, detail.moneda)}</td>
+                                                <td className="font-bold tabular-nums" style={{ textAlign: 'right' }}>{formatMoneda(c.saldoCuota, detail.moneda)}</td>
                                                 <td>
                                                     <Badge variant={cuotaStatusMap[c.estado as EstadoCuota]?.variant ?? 'default'}>
-                                                        {cuotaStatusMap[c.estado as EstadoCuota]?.label.toUpperCase()}
+                                                        {cuotaStatusMap[c.estado as EstadoCuota]?.label ?? c.estado}
                                                     </Badge>
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
                                                     <div className="flex items-center gap-2 justify-end">
                                                         {permisos.financiacionCobrarCuota && (c.estado === 'pendiente' || c.estado === 'parcial' || c.estado === 'vencida') && (
                                                             <Button variant="primary" size="sm" onClick={() => openPagarCuota(c)}>
-                                                                RECAUDAR
+                                                                Registrar cobro
                                                             </Button>
                                                         )}
                                                         {(c.estado === 'pagada' || c.estado === 'parcial') && (
-                                                            <button className="icon-btn" title="Descargar recibo de pago" onClick={() => handleRecibo(c.id)}>
+                                                            <button type="button" className="icon-btn" title="Descargar recibo del cobro" aria-label={`Descargar recibo de la cuota ${c.nroCuota}`} onClick={() => handleRecibo(c.id)}>
                                                                 <Receipt size={16} />
                                                             </button>
                                                         )}
-                                                        {c.estado === 'pagada' && <CheckCircle2 size={20} className="text-success" />}
+                                                        {c.estado === 'pagada' && <CheckCircle2 size={20} className="text-success" aria-label="Cuota pagada" />}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1216,57 +1216,58 @@ const FinanciacionesPage = () => {
                 )}
             </Modal>
 
-            {/* SUB-MODAL RECAUDACIÓN (PAGAR CUOTA) */}
+            {/* REGISTRAR COBRO DE CUOTA */}
             <Modal
                 isOpen={!!pagarCuota}
                 onClose={() => setPagarCuota(null)}
-                title="Certificación de Cobro"
-                subtitle="Valide el ingreso del capital antes de confirmar."
+                title={pagarCuota ? `Registrar cobro · cuota ${pagarCuota.nroCuota}` : 'Registrar cobro'}
+                subtitle="Revisá el monto y el medio de pago antes de guardar."
                 maxWidth="520px"
                 footer={(
                     <>
-                        <Button variant="secondary" onClick={() => setPagarCuota(null)}>Abortar</Button>
+                        <Button variant="secondary" onClick={() => setPagarCuota(null)}>Cancelar</Button>
                         <Button variant="primary" style={{ flex: 1 }} onClick={handlePagarCuota} loading={savingPago}>
-                            Efectivizar Ingreso
+                            Registrar cobro
                         </Button>
                     </>
                 )}
             >
                 {pagarCuota && (
                     <div>
-                        <div className="flex justify-between items-center shadow-glow-sm">
+                        <div className="flex justify-between items-center mb-4">
                             <div>
-                                <span className="text-3xs font-black text-muted mb-1">CONCILIACIÓN CUOTA #{pagarCuota.nroCuota}</span>
-                                <p className="text-xs text-accent font-bold">FECHA LÍMITE: {formatFecha(pagarCuota.vencimiento)}</p>
+                                <span className="stat-tile-label">Cuota {pagarCuota.nroCuota}</span>
+                                <p className="text-sm">Vence el {formatFecha(pagarCuota.vencimiento)}</p>
                             </div>
                             <div className="text-right">
-                                <span className="text-3xs font-black text-muted mb-1">EXIGIBILIDAD</span>
+                                <span className="stat-tile-label">Saldo de la cuota</span>
                                 <p className="text-2xl font-black">{formatMoneda(pagarCuota.saldoCuota, detail?.moneda)}</p>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Input
                                 dense
-                                label={`Recaudación Efectiva (${detail?.moneda || 'ARS'}) *`}
+                                label="Monto cobrado *"
                                 containerClassName="col-span-2"
                                 icon={<DollarSign size={16} className="text-accent" />}
                                 type="number"
                                 className="font-black text-lg"
                                 value={pagoForm.monto || ''}
                                 onChange={e => setPagoForm(f => ({ ...f, monto: +e.target.value }))}
+                                hint={pagoForm.monto > 0 ? formatMoneda(pagoForm.monto, detail?.moneda) : undefined}
                             />
                             <Select
                                 dense
-                                label="Vía de Ingreso *"
+                                label="Medio de pago *"
                                 value={pagoForm.metodo}
                                 onChange={e => setPagoForm(f => ({ ...f, metodo: e.target.value as PagarCuotaDto['metodo'] }))}
                             >
-                                {Object.entries(metodoLabels).map(([k, v]) => <option key={k} value={k}>{v.toUpperCase()}</option>)}
+                                {Object.entries(metodoLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                             </Select>
                             <Input
                                 dense
-                                label="Fecha del Pago"
+                                label="Fecha del cobro"
                                 type="date"
                                 value={pagoForm.fechaPago ?? today()}
                                 onChange={e => setPagoForm(f => ({ ...f, fechaPago: e.target.value }))}
@@ -1274,11 +1275,11 @@ const FinanciacionesPage = () => {
                         </div>
                         <Input
                             dense
-                            label="Referencia / Tracking Number"
+                            label="Referencia"
                             type="text"
                             value={pagoForm.referencia ?? ''}
                             onChange={e => setPagoForm(f => ({ ...f, referencia: e.target.value }))}
-                            placeholder="NRO DE RECIBO, TRANSFERENCIA..."
+                            placeholder="N° de recibo o de transferencia"
                         />
                     </div>
                 )}
@@ -1288,30 +1289,27 @@ const FinanciacionesPage = () => {
             <Modal
                 isOpen={refiOpen}
                 onClose={() => setRefiOpen(false)}
-                title="Refinanciar contrato"
+                title="Refinanciar plan"
                 footer={
                     <>
                         <Button variant="secondary" onClick={() => setRefiOpen(false)}>Cancelar</Button>
-                        <Button variant="primary" onClick={handleRefinanciar} disabled={refiSaving}>
-                            {refiSaving ? 'Refinanciando...' : 'Confirmar refinanciación'}
+                        <Button variant="primary" onClick={handleRefinanciar} loading={refiSaving}>
+                            Refinanciar
                         </Button>
                     </>
                 }
             >
                 <div className="flex flex-col gap-4">
                     <div className="card glass">
-                        <span className="stat-tile-label">Deuda a refinanciar</span>
-                        <div className="text-3xl font-black">
-                            ${saldoRefinanciable.toLocaleString('es-AR')}
-                            <span className="text-xs text-muted" style={{ marginLeft: '0.35rem' }}>{detail?.moneda || 'ARS'}</span>
-                        </div>
+                        <span className="stat-tile-label">Saldo a refinanciar</span>
+                        <div className="text-3xl font-black tabular-nums">{formatMoneda(saldoRefinanciable, detail?.moneda)}</div>
                         <p className="text-xs text-muted" style={{ marginTop: '0.5rem' }}>
-                            Es el saldo impago del contrato #{String(detail?.id ?? '').padStart(6, '0')}. Ese contrato queda
-                            cerrado como refinanciado y su deuda pasa al nuevo.
+                            Es lo que falta cobrar del plan N° {nroPlan(detail?.id ?? 0)}. Ese plan queda cerrado como
+                            refinanciado y el saldo pasa a un plan nuevo.
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Input
                             dense
                             label="Cantidad de cuotas *"
@@ -1328,7 +1326,7 @@ const FinanciacionesPage = () => {
                             step="0.01"
                             value={refiForm.tasaMensual}
                             onChange={e => setRefiForm(f => ({ ...f, tasaMensual: e.target.value }))}
-                            placeholder="Vacío = sin interés"
+                            placeholder="Vacío: sin interés"
                         />
                         <Input
                             dense
@@ -1358,92 +1356,17 @@ const FinanciacionesPage = () => {
             <ConfirmDialog
                 isOpen={deleteId !== null}
                 type="danger"
-                title="Anular financiación"
-                message={`¿Confirma la revocación total del contrato # ${deleteId ?? ''}? Esta acción es irreversible y anulará el cronograma de cobros.`}
-                confirmLabel="Confirmar Revocación"
-                cancelLabel="Desistir"
+                title="Anular plan de financiación"
+                message={`¿Anular el plan N° ${nroPlan(deleteId ?? 0)}? Deja de figurar en la cartera y sus cuotas ya no se cobran. No se puede deshacer.`}
+                confirmLabel="Anular plan"
+                cancelLabel="Cancelar"
                 onConfirm={handleDelete}
                 onCancel={() => setDeleteId(null)}
             />
 
             <style>{`
-                .form-input-premium {
-                    background: var(--bg-card);
-                    border: 1px solid var(--border);
-                    border-radius: var(--radius-lg);
-                    color: var(--text-primary);
-                    font-weight: 700;
-                    font-size: var(--text-sm);
-                    outline: none;
-                    transition: all 0.3s;
-                }
-                .form-input-premium:focus {
-                    border-color: var(--accent);
-                    background: var(--bg-card);
-                    box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.1);
-                }
-                .icon-badge {
-                    width: 44px;
-                    height: 44px;
-                    border-radius: var(--radius-md);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    background: var(--accent-light);
-                    color: var(--accent);
-                }
-                .shadow-glow { box-shadow: 0 0 20px rgba(var(--accent-2-rgb), 0.2); }
-                .shadow-glow-sm { box-shadow: 0 0 15px rgba(var(--accent-2-rgb), 0.1); }
-                
-                /* .form-label-xs: la define index.css (capa global). El
-                   .form-input-select de abajo NO se borra: es la variante
-                   protagónica de estos filtros (radius 1rem, 700) y gana la
-                   cascada a propósito sobre la global. */
-                .form-input-select {
-                    padding: 0.75rem 2.5rem 0.75rem 1rem;
-                    border-radius: var(--radius-lg);
-                    border: 1px solid var(--border);
-                    background: var(--bg-primary);
-                    font-size: var(--text-sm);
-                    font-weight: 700;
-                    color: var(--text-primary);
-                    appearance: none;
-                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-                    background-repeat: no-repeat;
-                    background-position: right 1rem center;
-                }
-                .filters-bar {
-                    padding: 1.5rem !important;
-                    background: var(--bg-card) !important;
-                    border: 1px solid var(--border) !important;
-                }
-                .icon-btn {
-                    padding: 0.6rem;
-                    border-radius: var(--radius-md);
-                    background: var(--bg-secondary);
-                    color: var(--text-secondary);
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    transition: all 0.2s;
-                    border: 1px solid var(--border);
-                }
-                .icon-btn:hover {
-                    background: var(--accent);
-                    color: var(--text-white);
-                    border-color: var(--accent);
-                    transform: scale(1.05);
-                }
-                .icon-btn.danger:hover {
-                    background: var(--danger);
-                    border-color: var(--danger);
-                }
-                .line-clamp-2 {
-                    display: -webkit-box;
-                    -webkit-line-clamp: 2;
-                    -webkit-box-orient: vertical;
-                    overflow: hidden;
-                }
+                .fin-progreso { height: 4px; border-radius: var(--radius-pill); background: var(--bg-secondary); overflow: hidden; }
+                .fin-progreso > div { height: 100%; background: var(--accent); }
             `}</style>
         </div >
     );

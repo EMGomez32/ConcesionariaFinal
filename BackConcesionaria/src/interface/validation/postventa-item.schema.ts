@@ -32,14 +32,14 @@ const nullableString = () =>
     );
 
 export const createItemSchema = z.object({
-    casoId: requiredId('casoId es obligatorio'),
+    casoId: requiredId('El caso es obligatorio'),
     // El repo hace `new Date(fecha)`; el front manda 'YYYY-MM-DD' del <input date>.
     // Se valida como string (igual que las fechas de venta.schema).
-    fecha: z.string({ error: 'fecha debe ser una fecha válida' }).min(1, 'fecha debe ser una fecha válida'),
+    fecha: z.string({ error: 'La fecha es obligatoria' }).min(1, 'La fecha es obligatoria'),
     descripcion: z.string({ error: 'La descripción es obligatoria' }).min(1, 'La descripción es obligatoria'),
     // isDecimal() + custom(v >= 0): el monto no puede ser negativo, pero SÍ puede
     // ser 0 (mantener la laxitud del validation viejo: no se usa .positive()).
-    monto: z.coerce.number({ error: 'monto debe ser un número' }).min(0, 'El monto no puede ser negativo'),
+    monto: z.coerce.number({ error: 'El monto tiene que ser un número' }).min(0, 'El monto no puede ser negativo'),
     proveedorId: nullableInt(),
     comprobanteUrl: nullableString(),
 });

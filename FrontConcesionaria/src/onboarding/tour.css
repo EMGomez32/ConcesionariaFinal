@@ -81,13 +81,20 @@
 }
 .autenza-tour-popover .driver-popover-navigation-btns button:last-child {
   background: var(--accent-gradient, linear-gradient(135deg, var(--accent), var(--accent-3, var(--accent))));
-  color: #fff;
+  /* Texto sobre el gradiente del acento: tinta oscura (el blanco daba 1.85:1 en
+     oscuro y 2.54:1 en claro). Ver --text-on-accent en index.css. */
+  color: var(--text-on-accent, #04060d);
   border: none;
   box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.35);
 }
 .autenza-tour-popover .driver-popover-navigation-btns button:last-child:hover {
   filter: brightness(1.07);
-  color: #fff;
+  color: var(--text-on-accent, #04060d);
+}
+.autenza-tour-popover .driver-popover-footer-btn:focus-visible,
+.autenza-tour-popover .driver-popover-close-btn:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 3px var(--ring);
 }
 .autenza-tour-popover .driver-popover-btn-disabled {
   opacity: 0.4;

@@ -12,6 +12,7 @@ import { BaseException, NotFoundException } from '../../../domain/exceptions/Bas
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { assertMismoTenant } from '../../security/tenantGuard';
 import { parsePagination, parseOrderBy } from '../queryOptions';
+import { whereDeBusqueda, clienteCoincide, vehiculoCoincide } from '../busqueda';
 
 /**
  * Vencimiento de la cuota nro `i` (1-based) contando desde la fecha de inicio.
@@ -45,9 +46,17 @@ function vencimientoDeCuota(fechaInicio: string | Date, diaVencimiento: number, 
  * Con `tasaMensual` se usa el sistema francés (cuota fija), que es el estándar
  * local: cuota = C · i / (1 - (1+i)^-n). Sin tasa, es el capital prorrateado.
  *
- * El total a pagar se reparte en centavos y el sobrante se distribuye de a uno
- * en las primeras cuotas: dividir y redondear cada cuota por separado dejaba una
- * diferencia contra el total del contrato.
+ * Todo se cuenta en centavos. Las cuotas 1..n-1 valen la cuota redondeada al
+ * centavo y la ÚLTIMA absorbe la diferencia de redondeo, así la suma de las cuotas
+ * es exactamente el total a pagar (sin tasa, el monto financiado: $11.200.000 en 12
+ * son 11 de $933.333,33 y una de $933.333,37). Repetir n veces la cuota redondeada
+ * deja un residuo contra el contrato (el seed demo lo hacía: $11.199.996), y
+ * repartir el sobrante de a un centavo en las primeras cuotas (lo que hacía esto
+ * antes) cerraba la suma pero mostraba cuotas distintas. Así el cliente ve una
+ * cuota pareja y el ajuste queda en un solo lugar, al final.
+ *
+ * Sólo se usa al GENERAR un plan (alta, refinanciación, simulador): los planes
+ * ya guardados no se recalculan.
  */
 export function planDeCuotas(
     capital: number,
@@ -61,13 +70,15 @@ export function planDeCuotas(
         ? (capital * i) / (1 - Math.pow(1 + i, -n))
         : capital / n;
 
-    const totalCentavos = Math.round(cuotaBruta * n * 100);
-    const baseCentavos = Math.floor(totalCentavos / n);
-    const resto = totalCentavos - baseCentavos * n;
+    // Sin tasa el total es el capital tal cual (no cuotaBruta·n, que puede
+    // arrastrar error de punto flotante).
+    const totalCentavos = i > 0 ? Math.round(cuotaBruta * n * 100) : Math.round(capital * 100);
+    const baseCentavos = Math.round(totalCentavos / n);
+    const ultimaCentavos = totalCentavos - baseCentavos * (n - 1);
 
     const cuotas = [];
     for (let k = 1; k <= n; k++) {
-        const montoCuota = (baseCentavos + (k <= resto ? 1 : 0)) / 100;
+        const montoCuota = (k === n ? ultimaCentavos : baseCentavos) / 100;
         cuotas.push({
             nroCuota: k,
             montoCuota,
@@ -84,8 +95,16 @@ export class PrismaFinanciacionRepository implements IFinanciacionRepository {
         const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
         const { limit: limitNum, page: pageNum } = parsePagination(options);
 
-        const where = coerceFilter(filter);
+        // q no es columna: fuera del filtro antes de coerceFilter (ver busqueda.ts).
+        const { q, ...resto } = filter ?? {};
+        const where = coerceFilter(resto);
 
+        // La unidad de un plan es la de su venta.
+        const busqueda = whereDeBusqueda(q, (t) => [
+            { cliente: clienteCoincide(t) },
+            { venta: { vehiculo: vehiculoCoincide(t) } },
+        ]);
+        if (busqueda) where.AND = busqueda;
 
         const results = await prisma.financiacion.findMany({
             where,

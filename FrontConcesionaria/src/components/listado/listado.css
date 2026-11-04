@@ -1,0 +1,548 @@
+/* ───────────────────────────────────────
+ * Listado — esqueleto común de las páginas de listado (components/listado).
+ * Encabezado + barra de búsqueda/filtros plegables + tabla con estados.
+ * Todo con tokens de index.css: funciona igual en tema claro y oscuro.
+ * ─────────────────────────────────────── */
+
+.listado {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* Encabezado */
+.listado-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.listado-titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.listado-titulo-texto {
+  min-width: 0;
+}
+
+/* El título va en un renglón: si no entra, se corta con "…" en vez de partirse. */
+.listado-titulo h1 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* El gradiente de texto recorta los descendentes con lh 1. */
+  padding-bottom: 0.08em;
+}
+
+.listado-icono {
+  flex-shrink: 0;
+}
+
+.listado-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.listado-accion-principal {
+  display: flex;
+}
+
+/* Botón de sólo ícono (Actualizar…): cuadrado, sin el padding lateral de un botón con texto. */
+.listado-acciones .btn-icono {
+  padding: 0.75rem;
+}
+
+/* Barra de búsqueda y filtros */
+.listado-filtros {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+
+.listado-filtros-barra {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3);
+}
+
+.listado-busqueda {
+  flex: 1 1 260px;
+  min-width: 0;
+  max-width: 520px;
+}
+
+.listado-search {
+  padding: 0.5rem 0.9rem;
+  gap: 0.6rem;
+  border-radius: var(--radius-md);
+}
+
+.listado-search:focus-within {
+  transform: none;
+}
+
+/* Nuestro propio botón de borrar reemplaza la cruz nativa del type="search". */
+.listado-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.listado-search-borrar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.listado-search-borrar:hover {
+  color: var(--text-primary);
+}
+
+.listado-search-borrar:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.listado-filtros-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  transition: border-color var(--duration-base) var(--easing-soft),
+    color var(--duration-base) var(--easing-soft);
+}
+
+.listado-filtros-toggle:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.listado-filtros-toggle:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.listado-filtros-chevron {
+  transition: transform var(--duration-base) var(--easing-soft);
+}
+
+.listado-filtros-toggle.is-abierto .listado-filtros-chevron {
+  transform: rotate(180deg);
+}
+
+.listado-filtros-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.listado-limpiar {
+  padding: 0.45rem 0.8rem;
+}
+
+.listado-resumen {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.listado-filtros-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.75rem 1rem;
+  padding: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.listado-filtros-panel[hidden] {
+  display: none;
+}
+
+/* Tabla */
+.listado-tabla-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.listado-tabla-card {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+
+.listado-tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.listado-tabla th {
+  background: var(--bg-secondary);
+  padding: 0.65rem 0.625rem;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.listado-tabla td {
+  padding: 0.55rem 0.625rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.listado-tabla tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.listado-tabla .is-right {
+  text-align: right;
+}
+
+.listado-tabla .is-center {
+  text-align: center;
+}
+
+/* Columna flexible: absorbe el espacio libre y se angosta (con "…") antes de
+   que la tabla necesite scroll horizontal. */
+.listado-tabla .is-flexible {
+  width: 100%;
+  max-width: 0;
+  min-width: 8rem;
+}
+
+.listado-tabla .is-flexible .listado-principal,
+.listado-tabla .is-flexible .listado-secundario {
+  max-width: 100%;
+}
+
+.listado-tabla tbody tr {
+  transition: background var(--duration-base) var(--easing-soft);
+}
+
+.listado-tabla tbody tr.is-navegable {
+  cursor: pointer;
+}
+
+.listado-tabla tbody tr.is-navegable:hover {
+  background: var(--accent-light);
+}
+
+/* Fila navegable con teclado: Tab llega a la fila, Enter la abre. */
+.listado-tabla tbody tr.is-navegable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--accent-light);
+}
+
+.listado-celda {
+  min-width: 0;
+}
+
+/* Piezas de celda reutilizables */
+.listado-principal {
+  display: block;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 26ch;
+}
+
+.listado-secundario {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 30ch;
+}
+
+.listado-nowrap {
+  white-space: nowrap;
+}
+
+.listado-acciones-fila {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.listado-acciones-fila .icon-btn {
+  padding: 0.45rem;
+}
+
+/* Un badge que además es una acción (p.ej. tocar el estado para cambiarlo). */
+.listado-badge-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.25rem 0.1rem 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.listado-badge-btn:hover .badge {
+  border-color: currentColor;
+}
+
+.listado-badge-btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+/* Estados: error, vacío, sin resultados */
+.listado-estado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: 3rem 1rem;
+}
+
+.listado-estado-icono {
+  width: 4rem;
+  height: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xl);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.listado-estado-icono.is-error {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  color: var(--danger);
+}
+
+.listado-estado-titulo {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.listado-estado-texto {
+  margin: 0;
+  max-width: 44ch;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* ── Pantallas angostas: cada fila es una tarjeta ── */
+@media (max-width: 720px) {
+  .listado-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .listado-titulo h1 {
+    white-space: normal;
+  }
+
+  .listado-acciones {
+    justify-content: flex-start;
+  }
+
+  /* El botón principal queda primero y a todo el ancho: siempre a mano. */
+  .listado-accion-principal {
+    order: -1;
+    flex: 1 1 100%;
+  }
+
+  .listado-accion-principal > .btn {
+    width: 100%;
+  }
+
+  /* Las secundarias, compactas: entran en un renglón debajo de la principal. */
+  .listado-acciones > .btn {
+    padding: 0.5rem 0.9rem;
+    font-size: var(--text-sm);
+  }
+
+  .listado-acciones > .btn.btn-icono {
+    padding: 0.5rem;
+  }
+
+  .listado-busqueda {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .listado-resumen {
+    margin-left: 0;
+  }
+
+  .listado-tabla-card {
+    overflow: visible;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .listado-tabla-card:has(.listado-estado) {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+
+  .listado-tabla thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .listado-tabla {
+    display: block;
+  }
+
+  .listado-tabla tbody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .listado-tabla tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.3rem;
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .listado-tabla td,
+  .listado-tabla tbody tr:last-child td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: 0.1rem 0;
+    border: none;
+    text-align: right;
+  }
+
+  .listado-tabla td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    text-align: left;
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+
+  .listado-tabla td .listado-celda {
+    text-align: right;
+  }
+
+  .listado-tabla td.en-tarjeta-titulo {
+    order: -1;
+    display: block;
+    text-align: left;
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.15rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .listado-tabla td.en-tarjeta-titulo .listado-celda {
+    text-align: left;
+  }
+
+  .listado-tabla td.en-tarjeta-acciones {
+    justify-content: flex-end;
+    padding-top: 0.45rem;
+    margin-top: 0.15rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .listado-tabla td.en-tarjeta-titulo::before,
+  .listado-tabla td.en-tarjeta-acciones::before {
+    content: none;
+  }
+
+  .listado-tabla td.en-tarjeta-oculta {
+    display: none;
+  }
+
+  .listado-tabla .is-flexible {
+    width: auto;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .listado-principal,
+  .listado-secundario,
+  .listado-tabla .is-flexible .listado-principal,
+  .listado-tabla .is-flexible .listado-secundario {
+    max-width: none;
+    white-space: normal;
+  }
+}

@@ -44,23 +44,23 @@ const optionalFk = z.preprocess(
 );
 
 export const createGastoFijoSchema = z.object({
-    categoriaId: requiredId('categoriaId debe ser un entero'),
+    categoriaId: requiredId('Elegí una categoría'),
     sucursalId: nullableInt(),
     proveedorId: nullableInt(),
     anio: z.coerce
-        .number({ error: 'anio debe ser un entero válido' })
-        .int('anio debe ser un entero válido')
-        .min(2000, 'anio debe ser un entero válido'),
+        .number({ error: 'El año no es válido' })
+        .int('El año no es válido')
+        .min(2000, 'El año no es válido'),
     mes: z.coerce
-        .number({ error: 'mes debe estar entre 1 y 12' })
-        .int('mes debe estar entre 1 y 12')
-        .min(1, 'mes debe estar entre 1 y 12')
-        .max(12, 'mes debe estar entre 1 y 12'),
+        .number({ error: 'El mes tiene que estar entre 1 y 12' })
+        .int('El mes tiene que estar entre 1 y 12')
+        .min(1, 'El mes tiene que estar entre 1 y 12')
+        .max(12, 'El mes tiene que estar entre 1 y 12'),
     // isDecimal() no tenía min: NO se agrega .positive() para no rechazar montos
     // que hoy pasan (mantener la laxitud de express-validator).
-    monto: z.coerce.number({ error: 'monto debe ser un número' }),
-    moneda: z.enum(['ARS', 'USD'], { error: 'moneda debe ser ARS o USD' }).optional(),
-    descripcion: z.string({ error: 'descripcion es obligatoria' }).min(1, 'descripcion es obligatoria'),
+    monto: z.coerce.number({ error: 'El monto tiene que ser un número' }),
+    moneda: z.enum(['ARS', 'USD'], { error: 'Elegí una moneda válida: ARS o USD' }).optional(),
+    descripcion: z.string({ error: 'La descripción es obligatoria' }).min(1, 'La descripción es obligatoria'),
     comprobanteUrl: nullableString(),
     concesionariaId: optionalFk,
 });
@@ -75,7 +75,7 @@ export const updateGastoFijoSchema = z.object({
     anio: z.coerce.number().int().min(2000).optional(),
     mes: z.coerce.number().int().min(1).max(12).optional(),
     monto: z.coerce.number().optional(),
-    moneda: z.enum(['ARS', 'USD'], { error: 'moneda debe ser ARS o USD' }).optional(),
-    descripcion: z.string().min(1, 'descripcion no puede quedar vacía').optional(),
+    moneda: z.enum(['ARS', 'USD'], { error: 'Elegí una moneda válida: ARS o USD' }).optional(),
+    descripcion: z.string().min(1, 'La descripción no puede quedar vacía').optional(),
     comprobanteUrl: nullableString(),
 });

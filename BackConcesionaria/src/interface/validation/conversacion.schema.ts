@@ -18,7 +18,7 @@ import { z } from 'zod';
 
 // Enum EstadoConversacion (prisma/schema.prisma).
 const estadoConversacionEnum = z.enum(['abierta', 'cerrada', 'archivada'], {
-    error: 'Estado inválido. Válidos: abierta, cerrada, archivada',
+    error: 'Elegí un estado válido: abierta, cerrada o archivada',
 });
 
 /**
@@ -47,7 +47,7 @@ const nullableFk = (msg: string) =>
 
 export const updateConversacionSchema = z.object({
     estado: estadoConversacionEnum.optional(),
-    asignadoAId: nullableFk('asignadoAId inválido'),
+    asignadoAId: nullableFk('El usuario asignado no es válido'),
 });
 
 /**

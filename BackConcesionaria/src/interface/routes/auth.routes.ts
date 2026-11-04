@@ -28,7 +28,7 @@ const router = Router();
  *   post:
  *     tags: [Auth]
  *     summary: Iniciar sesión
- *     description: Devuelve el perfil del usuario y un par de tokens (access + refresh). La auditoría registra `accion=login` con IP y userAgent.
+ *     description: Devuelve el perfil del usuario y un par de tokens (access + refresh). El refresh también va en la cookie httpOnly `autenza_rt` (Path=/api/auth, SameSite=Strict) para la web. La auditoría registra `accion=login` con IP y userAgent.
  *     security: []
  *     requestBody:
  *       required: true
@@ -56,15 +56,14 @@ router.post('/login', loginLimiter, loginAccountLimiter, validateBody(loginSchem
  *   post:
  *     tags: [Auth]
  *     summary: Renovar access token
- *     description: Intercambia un refresh token válido por un nuevo access token.
+ *     description: Intercambia un refresh token válido por un par nuevo (rotación). El token sale de `body.refreshToken` si viene (app móvil) y si no de la cookie httpOnly `autenza_rt` (web); la respuesta rota esa cookie.
  *     security: []
  *     requestBody:
- *       required: true
+ *       required: false
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [refreshToken]
  *             properties:
  *               refreshToken: { type: string }
  *     responses:
@@ -87,7 +86,7 @@ router.post('/refresh', refreshLimiter, validateBody(refreshSchema), AuthControl
  *   post:
  *     tags: [Auth]
  *     summary: Cerrar sesión
- *     description: Revoca el refresh token de la sesión (si se envía) y registra `accion=logout` en auditoría.
+ *     description: Revoca el refresh token de la sesión (el de `body.refreshToken` o, si no viene, el de la cookie `autenza_rt`), borra la cookie y registra `accion=logout` en auditoría.
  *     requestBody:
  *       required: false
  *       content:
@@ -143,7 +142,7 @@ router.post('/reset-password', resetPasswordLimiter, validateBody(resetPasswordS
  *   post:
  *     tags: [Auth]
  *     summary: Segundo paso del login con 2FA
- *     description: Con el mfaToken que devolvió /auth/login (5 min) y un código de la app o de recuperación. Devuelve la sesión.
+ *     description: Con el mfaToken que devolvió /auth/login (5 min) y un código de la app o de recuperación. Devuelve la sesión y pone la cookie httpOnly `autenza_rt` con el refresh (igual que el login).
  *     security: []
  */
 router.post('/login/2fa', mfaLoginIpLimiter, mfaLoginLimiter, validateBody(login2faSchema), AuthController.login2fa);

@@ -15,10 +15,17 @@ describe('Button Component', () => {
         expect(handleClick).toHaveBeenCalledTimes(1);
     });
 
-    it('displays loading state and disables the button', () => {
-        render(<Button loading>Submit</Button>);
-        expect(screen.getByText('Cargando...')).toBeInTheDocument();
-        expect(screen.getByRole('button')).toBeDisabled();
+    it('en loading conserva su texto (no dice "Cargando...") y se deshabilita', () => {
+        render(<Button loading>Guardar</Button>);
+        const boton = screen.getByRole('button', { name: 'Guardar' });
+        expect(boton).toBeDisabled();
+        expect(boton).toHaveAttribute('aria-busy', 'true');
+        expect(screen.queryByText('Cargando...')).not.toBeInTheDocument();
+    });
+
+    it('en loading usa loadingText si se pasa', () => {
+        render(<Button loading loadingText="Guardando…">Guardar</Button>);
+        expect(screen.getByRole('button', { name: 'Guardando…' })).toBeDisabled();
     });
 
     it('is disabled when the disabled prop is true', () => {

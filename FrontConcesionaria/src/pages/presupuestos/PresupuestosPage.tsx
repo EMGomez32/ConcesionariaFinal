@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { presupuestosApi } from '../../api/presupuestos.api';
 import { clientesApi } from '../../api/clientes.api';
 import { usuariosApi } from '../../api/usuarios.api';
@@ -8,8 +9,14 @@ import { vehiculosApi } from '../../api/vehiculos.api';
 import client from '../../api/client';
 import type { EstadoPresupuesto, Presupuesto } from '../../types/presupuesto.types';
 import type { FormaPagoVenta } from '../../types/venta.types';
+import type { PaginatedResponse } from '../../types/api.types';
 import { formatFecha, hoyLocal } from '../../utils/fecha';
-import { formatTotales, totalesPorMoneda } from '../../utils/moneda';
+import { formatMoneda } from '../../utils/moneda';
+import { useAuthStore } from '../../store/authStore';
+import { useConfirm } from '../../hooks/useConfirm';
+import { FORMA_PAGO_OPTIONS, PRESUPUESTO_ESTADO, rotuloEstado } from '../../components/ventas/estados';
+import { useFiltrosUrl } from '../../components/ventas/useFiltrosUrl';
+import '../../components/ventas/listados.css';
 
 /* ── tipos locales ── */
 interface PresupuestoItem {
@@ -63,6 +70,7 @@ interface VehiculoRef {
     vin?: string;
     precioLista?: number;
     moneda?: string;
+    sucursalId?: number;
 }
 
 interface VendedorRef {
@@ -75,25 +83,20 @@ import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
+import Combobox from '../../components/ui/Combobox';
 import Textarea from '../../components/ui/Textarea';
+import DataTable, { type Column } from '../../components/ui/DataTable';
+import PageTitle from '../../components/ui/PageTitle';
 import { useUIStore } from '../../store/uiStore';
 import {
-    Plus, Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
-    SendHorizonal, CheckCircle, XCircle, Clock, FileText, Car,
-    ArrowRightLeft, DollarSign, Calendar, User,
-    MapPin, Hash, RefreshCw, Briefcase, Calculator, ArrowRight, FileDown, MessageCircle
+    Plus, Search, Eye, Pencil, Trash2,
+    SendHorizonal, CheckCircle, FileText, Car,
+    ArrowRightLeft, DollarSign, X,
+    Hash, RefreshCw, ArrowRight, FileDown, MessageCircle, Clock
 } from 'lucide-react';
 import { getErrorMessage } from '../../utils/getErrorMessage';
+import { getList } from '../../utils/lista';
 import { waLink } from '../../utils/whatsapp';
-
-const FORMA_PAGO_OPTIONS_CONV: { value: FormaPagoVenta; label: string }[] = [
-    { value: 'contado', label: 'Contado / Efectivo' },
-    { value: 'transferencia', label: 'Transferencia Bancaria' },
-    { value: 'financiado_propio', label: 'Financiación Interna' },
-    { value: 'financiado_externo', label: 'Crédito Prendario / UVA' },
-    { value: 'canje_mas_diferencia', label: 'Canje + Saldo' },
-    { value: 'mixto', label: 'Pago Mixto' },
-];
 
 /* ── helpers ── */
 const today = hoyLocal;
@@ -107,34 +110,50 @@ const genNro = () => {
 // horaria para que no se corran un día.
 const fmt = (v: string | null | undefined) => formatFecha(v);
 
-const currencyFmt = (v: number | string, moneda = 'ARS') => {
-    // Intl.NumberFormat lanza RangeError con un código de moneda inválido, y el
-    // default del parámetro no cubre un String(undefined) === "undefined".
-    const cur = moneda === 'USD' ? 'USD' : 'ARS';
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(Number(v) || 0);
+const num = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
 };
 
-/* ── status config ── */
-type Variant = 'default' | 'info' | 'success' | 'danger' | 'warning';
-const STATUS: Record<EstadoPresupuesto, { label: string; variant: Variant }> = {
-    borrador: { label: 'Borrador', variant: 'default' },
-    enviado: { label: 'Enviado', variant: 'info' },
-    aceptado: { label: 'Aceptado', variant: 'success' },
-    rechazado: { label: 'Rechazado', variant: 'danger' },
-    vencido: { label: 'Vencido', variant: 'warning' },
-    cancelado: { label: 'Cancelado', variant: 'default' },
+/* ── transiciones de estado (espejo de la máquina de estados del backend) ──
+ * Ninguna tiene vuelta atrás, así que todas piden confirmación. */
+interface Transicion { label: string; next: EstadoPresupuesto; icon: React.ReactNode; danger?: boolean; mensaje: string }
+const TRANSITIONS: Partial<Record<EstadoPresupuesto, Transicion[]>> = {
+    borrador: [
+        { label: 'Marcar como enviado', next: 'enviado', icon: <SendHorizonal size={14} />, mensaje: 'pasa a Enviado: ya se lo mandaste al cliente. No vuelve a borrador.' },
+        { label: 'Anular', next: 'cancelado', icon: <X size={14} />, danger: true, mensaje: 'queda anulado y no se puede reactivar.' },
+    ],
+    enviado: [
+        { label: 'Marcar como aceptado', next: 'aceptado', icon: <CheckCircle size={14} />, mensaje: 'queda Aceptado y se puede convertir en venta. No vuelve a Enviado.' },
+        { label: 'Marcar como rechazado', next: 'rechazado', icon: <X size={14} />, danger: true, mensaje: 'queda Rechazado. Es un estado final: no se puede reabrir.' },
+        { label: 'Marcar como vencido', next: 'vencido', icon: <Clock size={14} />, mensaje: 'queda Vencido. Es un estado final: no se puede reabrir.' },
+        { label: 'Anular', next: 'cancelado', icon: <X size={14} />, danger: true, mensaje: 'queda anulado y no se puede reactivar.' },
+    ],
+    aceptado: [
+        { label: 'Anular', next: 'cancelado', icon: <X size={14} />, danger: true, mensaje: 'queda anulado y ya no se puede convertir en venta.' },
+    ],
 };
+
+/** El paso "de todos los días" de cada estado, el único que entra en la fila. */
+const transicionRapida = (estado: string): Transicion | undefined =>
+    estado === 'borrador' || estado === 'enviado' ? TRANSITIONS[estado as EstadoPresupuesto]?.[0] : undefined;
 
 /* ── blank rows ── */
 const emptyItem = () => ({ vehiculoId: '', precioLista: '', descuento: '0', precioFinal: '' });
 
 const emptyCanje = () => ({ descripcion: '', anio: '', km: '', dominio: '', valorTomado: '', observaciones: '' });
 
+/** Usuario actual como vendedor por defecto, si tiene ese rol. */
+const vendedorPorDefecto = (): string => {
+    const u = useAuthStore.getState().user;
+    return u?.roles?.includes('vendedor') ? String(u.id) : '';
+};
+
 const blankForm = () => ({
     nroPresupuesto: genNro(),
     sucursalId: '',
     clienteId: '',
-    vendedorId: '',
+    vendedorId: vendedorPorDefecto(),
     moneda: 'ARS' as 'ARS' | 'USD',
     fechaCreacion: today(),
     validoHasta: '',
@@ -145,10 +164,36 @@ const blankForm = () => ({
     canje: emptyCanje(),
 });
 
+/* ── total calc ── */
+const calcTotal = (pres: PresupuestoRow) => {
+    const items = (pres.items ?? []).reduce((s: number, i: PresupuestoItem) => s + num(i.precioFinal), 0);
+    const extras = (pres.extras ?? []).reduce((s: number, e: PresupuestoExtra) => s + num(e.monto), 0);
+    const canje = pres.canje ? num(pres.canje.valorTomado) : 0;
+    return items + extras - canje;
+};
+
+/**
+ * Cantidad de presupuestos en un estado, contada por el backend (`totalResults`
+ * con limit=1). "En negociación" y "Cierre del mes" contaban la página visible.
+ */
+const usePresupuestosConteo = (estado: EstadoPresupuesto) => useQuery({
+    queryKey: ['presupuestos', 'conteo', estado],
+    queryFn: async () => {
+        const res = await presupuestosApi.getAll({ estado }, { page: 1, limit: 1 }) as unknown as PaginatedResponse<unknown>;
+        return res?.totalResults ?? 0;
+    },
+});
+
 const PresupuestosPage = () => {
     const { addToast } = useUIStore();
+    const confirm = useConfirm();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const [searchParams, setSearchParams] = useSearchParams();
+
+    // Filtros, búsqueda y página en la URL (sobreviven a entrar a una ficha y volver).
+    const { filtros, q, busqueda, setBusqueda, page, setPage, setFiltro, limpiar, hayFiltros } =
+        useFiltrosUrl(['estado'] as const);
 
     // Descarga el presupuesto en PDF (mismo patrón que el comprobante de venta).
     const handlePdf = async (id: number) => {
@@ -163,14 +208,15 @@ const PresupuestosPage = () => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch {
-            addToast('Error al generar el PDF del presupuesto', 'error');
+            addToast('No se pudo generar el PDF del presupuesto', 'error');
         }
     };
 
     // Abre WhatsApp con un mensaje al cliente sobre su presupuesto. NO envía: el
     // vendedor revisa, adjunta el PDF (botón de al lado) y manda.
-    const handleWhatsapp = (p: Presupuesto) => {
-        const totalTxt = p.total ? ` por un total de ${p.moneda === 'USD' ? 'US$' : '$'}${Number(p.total).toLocaleString('es-AR')}` : '';
+    const handleWhatsapp = (p: PresupuestoRow) => {
+        const total = calcTotal(p);
+        const totalTxt = total ? ` por un total de ${formatMoneda(total, p.moneda)}` : '';
         const msg = `Hola ${p.cliente?.nombre ?? ''}, te comparto el presupuesto N° ${p.nroPresupuesto}${totalTxt}. Te adjunto el PDF con el detalle. Cualquier consulta quedo a disposición. ¡Saludos!`;
         const link = waLink(p.cliente?.telefono, msg);
         if (!link) {
@@ -200,39 +246,61 @@ const PresupuestosPage = () => {
                 moneda: convertirForm.moneda,
                 ...(convertirForm.observaciones && { observaciones: convertirForm.observaciones }),
             });
-            addToast('Venta creada con éxito', 'success');
+            addToast('Venta registrada a partir del presupuesto', 'success');
             setConvertirId(null);
             navigate('/ventas');
         } catch (err: unknown) {
             const e = err as { message?: string; code?: string };
-            addToast(e?.message || 'Error al convertir el presupuesto', 'error');
+            addToast(e?.message || 'No se pudo convertir el presupuesto en venta', 'error');
         } finally {
             setConvertirSaving(false);
         }
     };
 
-    /* ── data ── */
-    const [presupuestos, setPresupuestos] = useState<PresupuestoRow[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
+    const abrirConvertir = (p: PresupuestoRow) => {
+        setConvertirId(Number(p.id));
+        setConvertirForm({
+            formaPago: 'contado',
+            moneda: (p.moneda as 'ARS' | 'USD') || 'ARS',
+            fechaVenta: hoyLocal(),
+            observaciones: '',
+        });
+    };
 
-    /* ── filters ── */
-    const [search, setSearch] = useState('');
-    const [filterEstado, setFilterEstado] = useState('');
+    /* ── listado: búsqueda y filtros resueltos por el backend (contrato 1) ── */
+    const listaQuery = useQuery({
+        queryKey: ['presupuestos', 'list', { q, estado: filtros.estado, page }],
+        queryFn: async () => {
+            const params: Record<string, unknown> = { page, limit: 15 };
+            if (filtros.estado) params.estado = filtros.estado;
+            if (q) params.q = q;
+            return await presupuestosApi.getAll(params) as unknown as PaginatedResponse<PresupuestoRow>;
+        },
+        placeholderData: keepPreviousData,
+    });
+    const presupuestos = listaQuery.data?.results ?? [];
+    const totalPages = listaQuery.data?.totalPages ?? 1;
+    const recargar = () => queryClient.invalidateQueries({ queryKey: ['presupuestos'] });
+
+    /* ── indicadores: contados por el backend (totalResults), no sobre la página visible ── */
+    const enviados = usePresupuestosConteo('enviado');
+    const aceptados = usePresupuestosConteo('aceptado');
+    const borradores = usePresupuestosConteo('borrador');
+    const kpi = (c: { data?: number; isLoading: boolean; isError: boolean }) =>
+        c.isError ? '—' : c.isLoading ? '…' : String(c.data ?? 0);
 
     /* ── catalogs ── */
     const [clientes, setClientes] = useState<ClienteRef[]>([]);
     const [vendedores, setVendedores] = useState<VendedorRef[]>([]);
     const [sucursales, setSucursales] = useState<SucursalRef[]>([]);
     const [vehiculos, setVehiculos] = useState<VehiculoRef[]>([]);
+    const [catalogosOk, setCatalogosOk] = useState(false);
 
     /* ── modals ── */
     const [createOpen, setCreateOpen] = useState(false);
     const [detailId, setDetailId] = useState<number | null>(null);
-    const [detail, setDetail] = useState<PresupuestoRow | null>(null);
-    const [, setDetailLoading] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
+    const [editEstadoActual, setEditEstadoActual] = useState<EstadoPresupuesto>('borrador');
     const [editForm, setEditForm] = useState({ estado: '', observaciones: '' });
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
@@ -248,12 +316,17 @@ const PresupuestosPage = () => {
             sucursalesApi.getAll({}, { limit: 100 }),
             vehiculosApi.getAll({ estado: 'publicado' }, { limit: 1000 }),
         ]).then(([c, u, s, v]) => {
-            setClientes((c.results ?? []) as ClienteRef[]);
-            setVendedores(((u as { results?: VendedorRef[] }).results ?? []));
-            setSucursales(((s as { results?: SucursalRef[] }).results ?? []));
-            setVehiculos((v.results ?? []) as VehiculoRef[]);
+            // getList: no todos los módulos responden con la misma forma.
+            setClientes(getList<ClienteRef>(c));
+            setVendedores(getList<VendedorRef>(u));
+            setSucursales(getList<SucursalRef>(s));
+            setVehiculos(getList<VehiculoRef>(v));
+            setCatalogosOk(true);
+        }).catch((e: unknown) => {
+            // Sin esto el alta quedaba con los selects vacíos y sin explicación.
+            addToast(getErrorMessage(e, 'No se pudieron cargar clientes, vendedores, sucursales y unidades para el alta'), 'error');
         });
-    }, []);
+    }, [addToast]);
 
     /* ── prefill "generar presupuesto desde el interés" ──
      * Se llega con /presupuestos?nuevoClienteId=..&nuevoVehiculoId=.. desde la
@@ -265,7 +338,7 @@ const PresupuestosPage = () => {
         if (prefillDone.current) return;
         const cid = searchParams.get('nuevoClienteId');
         if (!cid) return;
-        if (clientes.length === 0) return; // catálogos aún no cargados
+        if (!catalogosOk) return; // catálogos aún no cargados
         prefillDone.current = true;
         const vid = searchParams.get('nuevoVehiculoId');
         (async () => {
@@ -278,7 +351,9 @@ const PresupuestosPage = () => {
                 try {
                     const full = await clientesApi.getById(Number(cid)) as unknown as ClienteRef;
                     if (full?.id) setClientes(prev => prev.some(c => c.id === full.id) ? prev : [{ id: full.id, nombre: full.nombre }, ...prev]);
-                } catch { /* si no existe/accesible, el select queda sin la opción */ }
+                } catch {
+                    addToast('No se encontró el cliente del interés: elegilo a mano', 'info');
+                }
             }
             if (vid) {
                 let v = vehiculos.find(x => String(x.id) === vid);
@@ -292,73 +367,48 @@ const PresupuestosPage = () => {
                             v = full;
                             setVehiculos(prev => prev.some(x => x.id === full.id) ? prev : [full, ...prev]);
                         }
-                    } catch { /* si no existe/accesible, se deja el ítem vacío */ }
+                    } catch {
+                        addToast('No se encontró la unidad del interés: elegila a mano', 'info');
+                    }
                 }
                 if (v) {
                     const precio = v.precioLista != null ? String(v.precioLista) : '';
                     f.items = [{ vehiculoId: String(v.id), precioLista: precio, descuento: '0', precioFinal: precio }];
                     if (v.moneda === 'ARS' || v.moneda === 'USD') f.moneda = v.moneda;
+                    if (v.sucursalId) f.sucursalId = String(v.sucursalId);
                 }
             }
             setForm(f);
             setCreateOpen(true);
-            // Limpiar los params para que un refresh/re-render no reabra el form.
-            setSearchParams({}, { replace: true });
+            // Sacar sólo los params del prefill (los filtros del listado quedan).
+            setSearchParams(prev => {
+                const next = new URLSearchParams(prev);
+                next.delete('nuevoClienteId');
+                next.delete('nuevoVehiculoId');
+                return next;
+            }, { replace: true });
             addToast('Revisá el presupuesto precargado y guardá', 'info');
         })();
-    }, [searchParams, clientes, vehiculos, setSearchParams, addToast]);
+    }, [searchParams, catalogosOk, clientes, vehiculos, setSearchParams, addToast]);
 
-    /* ── load list ── */
-    const load = useCallback(async (p = 1) => {
-        setLoading(true);
-        try {
-            const params: Record<string, unknown> = { page: p, limit: 15 };
-            if (filterEstado) params.estado = filterEstado;
-            const res = await presupuestosApi.getAll(params);
-            setPresupuestos((res?.results ?? []) as PresupuestoRow[]);
-            setTotalPages(res?.totalPages ?? 1);
-            setPage(p);
-        } catch {
-            addToast('Error al sincronizar la matriz de cotizaciones', 'error');
-        } finally {
-            setLoading(false);
-        }
-    }, [filterEstado, addToast]);
-
-    useEffect(() => { load(1); }, [load]);
-
-    /* ── load detail ── */
-    useEffect(() => {
-        if (detailId === null) { setDetail(null); return; }
-        setDetailLoading(true);
-        presupuestosApi.getById(detailId)
-            // El interceptor de axios ya devuelve el body: el endpoint responde
-            // el presupuesto plano, sin envoltorio. Un `.data.data` acá dejaba
-            // `detail` siempre en null y el modal girando para siempre.
-            .then(r => setDetail((r as unknown as PresupuestoRow) ?? null))
-            .catch(() => addToast('Fallo en la recuperación del expediente comercial', 'error'))
-            .finally(() => setDetailLoading(false));
-    }, [detailId, addToast]);
-
-    /* ── client-side search ── */
-    const filtered = presupuestos.filter(p => {
-        if (!search) return true;
-        const s = search.toLowerCase();
-        return (
-            p.nroPresupuesto?.toLowerCase().includes(s) ||
-            p.cliente?.nombre?.toLowerCase().includes(s) ||
-            p.vendedor?.nombre?.toLowerCase().includes(s)
-        );
+    /* ── detalle ── */
+    const detailQuery = useQuery({
+        queryKey: ['presupuestos', 'detail', detailId],
+        // El interceptor de axios ya devuelve el body: el endpoint responde el
+        // presupuesto plano, sin envoltorio.
+        queryFn: async () => await presupuestosApi.getById(detailId!) as unknown as PresupuestoRow,
+        enabled: detailId !== null,
     });
+    const detail = detailId !== null ? detailQuery.data ?? null : null;
 
     /* ── create ── */
     const handleCreate = async () => {
         if (!form.sucursalId || !form.clienteId || !form.vendedorId) {
-            addToast('Complete la estructura mandatoria: sucursal, cliente y oficial', 'error'); return;
+            addToast('Completá la sucursal, el cliente y el vendedor', 'error'); return;
         }
         const validItems = form.items.filter(i => i.vehiculoId && i.precioFinal);
         if (validItems.length === 0) {
-            addToast('Debe incluir al menos una unidad cotizada', 'error'); return;
+            addToast('Agregá al menos una unidad con su precio final', 'error'); return;
         }
         setSaving(true);
         try {
@@ -392,15 +442,15 @@ const PresupuestosPage = () => {
                 };
             }
             await presupuestosApi.create(body);
-            addToast('Propuesta comercial instrumentada con éxito', 'success');
+            addToast('Presupuesto creado', 'success');
             setCreateOpen(false);
             setForm(blankForm());
-            load(1);
+            setPage(1);
+            recargar();
         } catch (e: unknown) {
             // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
-            // el body YA desempaquetado: leer `err.response.data.message` daba siempre
-            // undefined, y el motivo real del backend nunca llegaba a la pantalla.
-            addToast(getErrorMessage(e, 'Fallo en la validación de la cotización'), 'error');
+            // el body YA desempaquetado.
+            addToast(getErrorMessage(e, 'No se pudo crear el presupuesto'), 'error');
         } finally {
             setSaving(false);
         }
@@ -409,6 +459,7 @@ const PresupuestosPage = () => {
     /* ── edit ── */
     const openEdit = (p: PresupuestoRow) => {
         setEditId(Number(p.id));
+        setEditEstadoActual(p.estado as EstadoPresupuesto);
         setEditForm({ estado: String(p.estado || ''), observaciones: String(p.observaciones || '') });
     };
 
@@ -417,442 +468,443 @@ const PresupuestosPage = () => {
         setSaving(true);
         try {
             await presupuestosApi.update(editId, {
-                estado: editForm.estado || undefined,
+                // Sólo se manda el estado si cambió: reenviar el mismo es una
+                // transición inválida para la máquina de estados del backend.
+                estado: editForm.estado && editForm.estado !== editEstadoActual ? editForm.estado : undefined,
                 observaciones: editForm.observaciones || undefined,
             });
-            addToast('Parámetros de presupuesto actualizados', 'success');
+            addToast('Presupuesto actualizado', 'success');
             setEditId(null);
-            load(page);
+            recargar();
         } catch (e: unknown) {
-            // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
-            // el body YA desempaquetado: leer `err.response.data.message` daba siempre
-            // undefined, y el motivo real del backend nunca llegaba a la pantalla.
-            addToast(getErrorMessage(e, 'Error al actualizar expediente'), 'error');
+            addToast(getErrorMessage(e, 'No se pudo actualizar el presupuesto'), 'error');
         } finally {
             setSaving(false);
         }
     };
 
-    /* ── quick estado transitions ── */
-    const changeEstado = async (id: number, estado: string) => {
-        try {
-            await presupuestosApi.update(id, { estado });
-            addToast(`Expediente actualizado a: ${STATUS[estado as EstadoPresupuesto]?.label.toUpperCase()}`, 'success');
-            load(page);
-        } catch (e: unknown) {
-            // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
-            // el body YA desempaquetado: leer `err.response.data.message` daba siempre
-            // undefined, y el motivo real del backend nunca llegaba a la pantalla.
-            addToast(getErrorMessage(e, 'Fallo en la transición administrativa'), 'error');
-        }
-    };
+    /* ── transiciones rápidas: siempre con confirmación (ninguna tiene vuelta atrás) ── */
+    const changeEstado = (p: PresupuestoRow, t: Transicion) => confirm({
+        title: t.label,
+        message: `El presupuesto N° ${p.nroPresupuesto} ${t.mensaje}`,
+        type: t.danger ? 'danger' : 'question',
+        confirmLabel: t.label,
+        onConfirm: async () => {
+            try {
+                await presupuestosApi.update(p.id, { estado: t.next });
+                addToast(`Presupuesto ${PRESUPUESTO_ESTADO[t.next].label.toLowerCase()}`, 'success');
+                recargar();
+            } catch (e: unknown) {
+                addToast(getErrorMessage(e, 'No se pudo cambiar el estado'), 'error');
+                throw e;
+            }
+        },
+    });
 
     /* ── delete ── */
     const handleDelete = async () => {
         if (!deleteId) return;
         try {
             await presupuestosApi.delete(deleteId);
-            addToast('Cotización revocada del sistema', 'success');
+            addToast('Presupuesto eliminado', 'success');
             setDeleteId(null);
-            load(page);
+            recargar();
         } catch (e: unknown) {
-            // El interceptor de api/client.ts rechaza con `error.response.data`, o sea
-            // el body YA desempaquetado: leer `err.response.data.message` daba siempre
-            // undefined, y el motivo real del backend nunca llegaba a la pantalla.
-            addToast(getErrorMessage(e, 'Error al anular presupuesto'), 'error');
+            addToast(getErrorMessage(e, 'No se pudo eliminar el presupuesto'), 'error');
         }
     };
 
     /* ── dynamic row helpers ── */
     const addItem = () => setForm(f => ({ ...f, items: [...f.items, emptyItem()] }));
     const removeItem = (i: number) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
-    const updItem = (i: number, k: string, v: string) =>
-        setForm(f => ({ ...f, items: f.items.map((it, idx) => idx === i ? { ...it, [k]: v } : it) }));
 
-    /* ── total calc ── */
-    const calcTotal = (pres: PresupuestoRow) => {
-        const items = (pres.items ?? []).reduce((s: number, i: PresupuestoItem) => s + Number(i.precioFinal ?? 0), 0);
-        const extras = (pres.extras ?? []).reduce((s: number, e: PresupuestoExtra) => s + Number(e.monto ?? 0), 0);
-        const canje = pres.canje ? Number(pres.canje.valorTomado ?? 0) : 0;
-        return items + extras - canje;
-    };
+    /**
+     * Precio de lista, descuento y final se mantienen coherentes:
+     * lista o descuento recalculan el final; tocar el final recalcula el descuento.
+     * Al elegir la unidad se precargan su precio de lista y, si todavía no se
+     * eligieron, la moneda y la sucursal.
+     */
+    const updItem = (i: number, k: 'vehiculoId' | 'precioLista' | 'descuento' | 'precioFinal', v: string) =>
+        setForm(f => {
+            let { moneda, sucursalId } = f;
+            const items = f.items.map((it, idx) => {
+                if (idx !== i) return it;
+                const next = { ...it, [k]: v };
+                if (k === 'vehiculoId') {
+                    const veh = vehiculos.find(x => String(x.id) === v);
+                    if (veh?.precioLista != null) {
+                        next.precioLista = String(veh.precioLista);
+                        next.descuento = '0';
+                        next.precioFinal = String(veh.precioLista);
+                    }
+                    if (i === 0 && (veh?.moneda === 'ARS' || veh?.moneda === 'USD')) moneda = veh.moneda;
+                    if (!sucursalId && veh?.sucursalId) sucursalId = String(veh.sucursalId);
+                } else if (k === 'precioLista' || k === 'descuento') {
+                    const final = num(next.precioLista) - num(next.descuento);
+                    next.precioFinal = next.precioLista === '' ? '' : String(Math.max(0, final));
+                } else if (k === 'precioFinal' && next.precioLista !== '') {
+                    next.descuento = String(Math.max(0, num(next.precioLista) - num(v)));
+                }
+                return next;
+            });
+            return { ...f, items, moneda, sucursalId };
+        });
 
     const currentTotal = () => {
-        const items = form.items.reduce((s, i) => s + Number(i.precioFinal || 0), 0);
-        const extras = form.extras.reduce((s, e) => s + Number(e.monto || 0), 0);
-        const canje = form.conCanje ? Number(form.canje.valorTomado || 0) : 0;
+        const items = form.items.reduce((s, i) => s + num(i.precioFinal), 0);
+        const extras = form.extras.reduce((s, e) => s + num(e.monto), 0);
+        const canje = form.conCanje ? num(form.canje.valorTomado) : 0;
         return items + extras - canje;
     };
 
-    /* ── transition map ── */
-    const transitions: Record<string, { label: string; next: string; icon: React.ReactNode; clr: string }[]> = {
-        borrador: [{ label: 'Emitir', next: 'enviado', icon: <SendHorizonal size={14} />, clr: '#3b82f6' }],
-        enviado: [
-            { label: 'Aprobar', next: 'aceptado', icon: <CheckCircle size={14} />, clr: '#22c55e' },
-            { label: 'Rechazar', next: 'rechazado', icon: <XCircle size={14} />, clr: '#ef4444' },
-            { label: 'Vencer', next: 'vencido', icon: <Clock size={14} />, clr: '#f59e0b' },
-        ],
-        aceptado: [{ label: 'Anular', next: 'cancelado', icon: <XCircle size={14} />, clr: '#6b7280' }],
-    };
+    const columns: Column<PresupuestoRow>[] = [
+        {
+            header: 'Número',
+            accessor: (p) => (
+                <div className="flex flex-col">
+                    <span className="font-mono text-xs font-bold">{p.nroPresupuesto}</span>
+                    <span className="text-xs text-muted tabular-nums">{fmt(p.fechaCreacion)}</span>
+                </div>
+            ),
+        },
+        {
+            // Cliente y vendedor juntos: a 1280 px la tabla entra sin scroll horizontal.
+            header: 'Cliente',
+            accessor: (p) => (
+                <div className="flex flex-col" style={{ minWidth: 0 }}>
+                    <span className="font-bold text-sm truncate">{p.cliente?.nombre ?? '-'}</span>
+                    <span className="text-xs text-muted truncate">Vendedor: {p.vendedor?.nombre ?? 'sin asignar'}</span>
+                </div>
+            ),
+        },
+        {
+            header: 'Total',
+            align: 'right',
+            accessor: (p) => <span className="font-bold tabular-nums" style={{ whiteSpace: 'nowrap' }}>{formatMoneda(calcTotal(p), p.moneda)}</span>,
+        },
+        {
+            // La validez va bajo el estado (se leen juntos: un enviado con la
+            // validez vencida está para marcarlo como vencido) y la tabla gana
+            // una columna: a 1280 px las acciones entran sin scroll horizontal.
+            header: 'Estado',
+            accessor: (p) => {
+                const e = rotuloEstado(PRESUPUESTO_ESTADO, p.estado);
+                const vivo = p.estado === 'borrador' || p.estado === 'enviado';
+                const vencido = vivo && !!p.validoHasta && p.validoHasta.slice(0, 10) < hoyLocal();
+                return (
+                    <div className="flex flex-col gap-1" style={{ alignItems: 'flex-start' }}>
+                        <Badge variant={e.variant}>{e.label}</Badge>
+                        {p.validoHasta && (
+                            <span className={`text-xs tabular-nums ${vencido ? 'text-danger font-bold' : 'text-muted'}`} title={vencido ? 'La validez ya pasó' : undefined}>
+                                Válido hasta {fmt(p.validoHasta)}
+                            </span>
+                        )}
+                    </div>
+                );
+            },
+        },
+        {
+            header: 'Acciones',
+            align: 'right',
+            accessor: (p) => {
+                const rapida = transicionRapida(p.estado);
+                return (
+                    <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
+                        {rapida && (
+                            <button type="button" className="icon-btn" title={rapida.label} aria-label={`${rapida.label}: presupuesto ${p.nroPresupuesto}`} onClick={() => changeEstado(p, rapida)}>
+                                {rapida.icon}
+                            </button>
+                        )}
+                        {p.estado === 'aceptado' && (
+                            <button type="button" className="icon-btn" title="Convertir en venta" aria-label={`Convertir en venta el presupuesto ${p.nroPresupuesto}`} onClick={() => abrirConvertir(p)}>
+                                <ArrowRight size={16} />
+                            </button>
+                        )}
+                        <button type="button" className="icon-btn" title="Enviar por WhatsApp" aria-label={`Enviar por WhatsApp el presupuesto ${p.nroPresupuesto}`} onClick={() => handleWhatsapp(p)}><MessageCircle size={16} /></button>
+                        <button type="button" className="icon-btn" title="Descargar PDF" aria-label={`Descargar PDF del presupuesto ${p.nroPresupuesto}`} onClick={() => handlePdf(p.id)}><FileDown size={16} /></button>
+                        <button type="button" className="icon-btn" title="Ver detalle" aria-label={`Ver detalle del presupuesto ${p.nroPresupuesto}`} onClick={() => setDetailId(p.id)}><Eye size={16} /></button>
+                        <button type="button" className="icon-btn danger" title="Eliminar" aria-label={`Eliminar el presupuesto ${p.nroPresupuesto}`} onClick={() => setDeleteId(p.id)}><Trash2 size={16} /></button>
+                    </div>
+                );
+            },
+        },
+    ];
+
+    // Estados a los que se puede pasar desde el actual (para el select de "Cambiar estado").
+    const estadosEditables: EstadoPresupuesto[] = [editEstadoActual, ...(TRANSITIONS[editEstadoActual] ?? []).map(t => t.next)];
 
     return (
         <div className="page-container animate-fade-in">
+            <PageTitle title="Presupuestos" />
             {/* Header */}
             <header className="page-header">
                 <div className="header-title">
                     <div className="flex items-center gap-3 mb-1">
-                        <div className="icon-badge primary shadow-glow">
+                        <div className="icon-badge primary">
                             <FileText size={20} />
                         </div>
-                        <h1>Cotizaciones y Presupuestos</h1>
+                        <h1>Presupuestos</h1>
                     </div>
-                    <p>Administración estratégica de propuestas comerciales, funnel de ventas y auditoría de ofertas.</p>
+                    <p>Presupuestos para clientes: envialos, seguí su respuesta y convertilos en venta.</p>
                 </div>
-                <div className="flex gap-3">
-                    <Button variant="secondary" onClick={() => load(page)}>
-                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                <div className="header-actions">
+                    <Button variant="secondary" onClick={() => recargar()} aria-label="Actualizar listado" title="Actualizar listado">
+                        <RefreshCw size={18} className={listaQuery.isFetching ? 'animate-spin' : ''} />
                     </Button>
                     <Button variant="primary" onClick={() => { setForm(blankForm()); setCreateOpen(true); }}>
-                        <Plus size={18} /> Nueva Cotización Comercial
+                        <Plus size={18} /> Nuevo presupuesto
                     </Button>
                 </div>
             </header>
 
-            {/* Quick Metrics Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {/* Indicadores: cantidades reales del backend, no de la página visible */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="card glass stat-tile">
                     <div>
-                        <span className="text-3xs font-black uppercase text-info tracking-widest mb-2">En Negociación</span>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black">{presupuestos.filter(p => p.estado === 'enviado').length}</span>
-                            <span className="text-xs font-bold text-muted italic">COTIZACIONES</span>
-                        </div>
+                        <span className="stat-tile-label">Enviados</span>
+                        <div className="text-3xl font-black tabular-nums">{kpi(enviados)}</div>
+                        <span className="text-xs text-muted">Esperando respuesta del cliente</span>
                     </div>
                     <SendHorizonal size={64} className="stat-tile-bg" />
                 </div>
                 <div className="card glass stat-tile">
                     <div>
-                        <span className="text-3xs font-black uppercase text-success tracking-widest mb-2">Cierre Mes</span>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black">{presupuestos.filter(p => p.estado === 'aceptado').length}</span>
-                            <span className="text-xs font-bold text-muted italic">CONVERTIDOS</span>
-                        </div>
+                        <span className="stat-tile-label">Aceptados</span>
+                        <div className="text-3xl font-black tabular-nums">{kpi(aceptados)}</div>
+                        <span className="text-xs text-muted">En total, convertidos o no en venta</span>
                     </div>
                     <CheckCircle size={64} className="stat-tile-bg" />
                 </div>
-                <div className="card glass md:col-span-2">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <span className="text-3xs font-black uppercase text-muted tracking-widest mb-2">Volumen de Proyección</span>
-                            <div className="flex items-baseline gap-2">
-                                {/* Un total por moneda: sumar dólares con pesos no es ningún importe real. */}
-                                <span className="text-3xl font-black tabular-nums">
-                                    {formatTotales(totalesPorMoneda(presupuestos, calcTotal, (p) => p.moneda))}
-                                </span>
-                                <Badge variant="info">PRE-VENTA</Badge>
-                            </div>
-                        </div>
-                        <Calculator size={50} className="text-accent" />
+                <div className="card glass stat-tile">
+                    <div>
+                        <span className="stat-tile-label">Borradores</span>
+                        <div className="text-3xl font-black tabular-nums">{kpi(borradores)}</div>
+                        <span className="text-xs text-muted">Todavía sin enviar</span>
                     </div>
+                    <FileText size={64} className="stat-tile-bg" />
                 </div>
             </div>
 
-            {/* Filters */}
-            <div className="card glass filters-bar flex flex-wrap items-center justify-between gap-6 mb-6">
-                <div className="flex-1">
-                    <Search size={18} className="text-muted" />
+            {/* Filtros */}
+            <div className="filters-bar filtros-comerciales">
+                <div className="search-box">
+                    <Search size={18} className="text-muted" aria-hidden="true" />
                     <input
-                        type="text"
-                        placeholder="BUSCAR POR NRO DE EXPEDIENTE, CLIENTE O RESPONSABLE COMERCIAL..."
-                        className="form-input-premium w-full"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
+                        type="search"
+                        placeholder="Buscar por número, cliente, DNI, dominio, marca o modelo"
+                        aria-label="Buscar presupuestos"
+                        value={busqueda}
+                        onChange={e => setBusqueda(e.target.value)}
                     />
                 </div>
-                <div className="flex gap-4 items-center">
-                    <div>
-                        <label className="form-label-xs">Ambiente Legal</label>
-                        <select className="form-input-select w-full" value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }}>
-                            <option value="">TODOS LOS ESTADOS</option>
-                            {Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v.label.toUpperCase()}</option>)}
-                        </select>
-                    </div>
-                    <Button variant="secondary" onClick={() => { setSearch(''); setFilterEstado(''); setPage(1); }}>
-                        <RefreshCw size={18} />
+                <select aria-label="Filtrar por estado" value={filtros.estado} onChange={e => setFiltro('estado', e.target.value)}>
+                    <option value="">Estado: todos</option>
+                    {Object.entries(PRESUPUESTO_ESTADO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+                {hayFiltros && (
+                    <Button variant="ghost" size="sm" onClick={limpiar}>
+                        <X size={16} /> Limpiar filtros
                     </Button>
-                </div>
+                )}
             </div>
 
-            {/* Table */}
-            <div className="table-container card">
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            <th>Identificador</th>
-                            <th>Emisión</th>
-                            <th>Validez</th>
-                            <th>Interesado</th>
-                            <th>Oficial de Cuenta</th>
-                            <th>Estado Comercial</th>
-                            <th style={{ textAlign: 'right' }}>Gestión</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr><td colSpan={7} style={{ padding: '8rem', textAlign: 'center' }}><RefreshCw className="animate-spin text-accent" size={40} /></td></tr>
-                        ) : filtered.length === 0 ? (
-                            <tr>
-                                <td colSpan={7}>
-                                    <div className="flex flex-col items-center text-muted">
-                                        <div className="flex items-center justify-center mb-4">
-                                            <FileText size={40} className="text-secondary" />
-                                        </div>
-                                        <p className="text-xl font-black text-muted italic">No se registran cotizaciones activas</p>
-                                        <p className="text-sm font-medium">Inicie una nueva propuesta con el botón superior.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        ) : (
-                            filtered.map(p => (
-                                <tr key={p.id} onClick={() => setDetailId(p.id)} className="cursor-pointer">
-                                    <td>
-                                        <div className="flex flex-col">
-                                            <span className="font-mono text-xs font-bold text-accent tracking-widest">{p.nroPresupuesto}</span>
-                                            <span className="text-3xs font-black text-muted uppercase">DOC-COM-{p.id}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div className="flex items-center gap-2 text-muted">
-                                            <Calendar size={14} />
-                                            <span className="text-xs font-semibold">{fmt(p.fechaCreacion)}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span className={`text-xs font-black ${p.validoHasta && new Date(p.validoHasta) < new Date() ? 'text-danger' : 'text-muted'}`}>
-                                            {fmt(p.validoHasta)}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex items-center justify-center text-muted">
-                                                <User size={14} />
-                                            </div>
-                                            <span className="font-bold uppercase text-xs truncate">{p.cliente?.nombre ?? '-'}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div className="flex items-center gap-2">
-                                            <Briefcase size={14} className="text-muted" />
-                                            <span className="text-3xs font-black text-muted uppercase">{p.vendedor?.nombre ?? 'NO ASIGN.'}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <Badge variant={STATUS[p.estado as EstadoPresupuesto]?.variant ?? 'default'}>
-                                            {STATUS[p.estado as EstadoPresupuesto]?.label.toUpperCase()}
-                                        </Badge>
-                                    </td>
-                                    <td style={{ textAlign: 'right' }}>
-                                        <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
-                                            {(transitions[p.estado] ?? []).map(t => (
-                                                <button key={t.next} className="icon-btn" title={t.label}
-                                                    style={{ color: t.clr }} onClick={() => changeEstado(p.id, t.next)}>
-                                                    {t.icon}
-                                                </button>
-                                            ))}
-                                            {p.estado === 'aceptado' && (
-                                                <button className="icon-btn" title="Convertir en venta"
-                                                    style={{ color: '#22c55e' }}
-                                                    onClick={() => {
-                                                        setConvertirId(Number(p.id));
-                                                        setConvertirForm({
-                                                            formaPago: 'contado',
-                                                            moneda: (p.moneda as 'ARS' | 'USD') || 'ARS',
-                                                            fechaVenta: hoyLocal(),
-                                                            observaciones: '',
-                                                        });
-                                                    }}>
-                                                    <ArrowRight size={16} />
-                                                </button>
-                                            )}
-                                            <button className="icon-btn" title="Enviar por WhatsApp" onClick={() => handleWhatsapp(p)}><MessageCircle size={16} /></button>
-                                            <button className="icon-btn" title="Descargar PDF" onClick={() => handlePdf(p.id)}><FileDown size={16} /></button>
-                                            <button className="icon-btn" title="Ver Expediente" onClick={() => setDetailId(p.id)}><Eye size={16} /></button>
-                                            <button className="icon-btn" title="Editar Metadatos" onClick={() => openEdit(p)}><Pencil size={16} /></button>
-                                            <button className="icon-btn danger" title="Anular" onClick={() => setDeleteId(p.id)}><Trash2 size={16} /></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+            <div className="listado-compacto">
+            <DataTable
+                columns={columns}
+                data={presupuestos}
+                isLoading={listaQuery.isLoading}
+                isError={listaQuery.isError}
+                errorMessage="No se pudieron cargar los presupuestos"
+                onRetry={() => listaQuery.refetch()}
+                onRowClick={(p) => setDetailId(p.id)}
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                emptyMessage={hayFiltros
+                    ? 'Ningún presupuesto coincide con la búsqueda o los filtros'
+                    : 'Todavía no hay presupuestos. Creá el primero con «Nuevo presupuesto».'}
+                emptyIcon={<FileText size={40} className="dt-empty-icon" />}
+                onClearFilters={hayFiltros ? limpiar : undefined}
+            />
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-6">
-                    <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => load(page - 1)}>
-                        <ChevronLeft size={16} /> Anterior
-                    </Button>
-                    <div className="flex items-center gap-2">
-                        <span className="flex items-center justify-center font-black text-sm">{page}</span>
-                    </div>
-                    <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => load(page + 1)}>
-                        Siguiente <ChevronRight size={16} />
-                    </Button>
-                </div>
-            )}
-
-            {/* CREATE MODAL */}
+            {/* ALTA */}
             <Modal
                 isOpen={createOpen}
                 onClose={() => setCreateOpen(false)}
-                title="Instrumentación de Cotización"
-                subtitle="Defina las condiciones comerciales y activos involucrados en la propuesta."
+                title="Nuevo presupuesto"
+                subtitle="Elegí el cliente y las unidades. Los campos con * son obligatorios."
                 maxWidth="900px"
                 footer={(
-                    <div className="flex justify-between items-center w-full">
+                    <div className="flex justify-between items-center w-full flex-wrap gap-4">
                         <div>
-                            <p className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Impacto Final Neto</p>
-                            <p className="text-3xl font-black">${currentTotal().toLocaleString('es-AR')} <span className="text-sm font-normal text-muted italic">({form.moneda})</span></p>
+                            <p className="stat-tile-label">Total del presupuesto</p>
+                            <p className="text-2xl font-black tabular-nums">{formatMoneda(currentTotal(), form.moneda)}</p>
                         </div>
-                        <div className="flex gap-4">
+                        <div className="flex gap-3">
                             <Button variant="secondary" onClick={() => setCreateOpen(false)}>Cancelar</Button>
-                            <Button variant="primary" onClick={handleCreate} loading={saving}>Instrumentar Propuesta</Button>
+                            <Button variant="primary" onClick={handleCreate} loading={saving}>Crear presupuesto</Button>
                         </div>
                     </div>
                 )}
             >
-                <div>
-                    {/* Primary Info */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="flex flex-col gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Input
                             dense
-                            label="Nro. de Control *"
-                            containerClassName="flex flex-col"
-                            icon={<Hash size={16} className="text-accent" />}
+                            label="Número"
+                            hint="Se genera solo; podés cambiarlo."
+                            icon={<Hash size={16} />}
                             className="font-bold"
                             value={form.nroPresupuesto}
                             onChange={e => setForm(f => ({ ...f, nroPresupuesto: e.target.value }))}
                         />
                         <Select
                             dense
-                            label="Divisa de Negociación *"
-                            className="font-bold"
+                            label="Moneda"
                             value={form.moneda}
                             onChange={e => setForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}
                         >
-                            <option value="ARS">PESO ARGENTINO (ARS)</option>
-                            <option value="USD">DÓLAR ESTADOUNIDENSE (USD)</option>
+                            <option value="ARS">Pesos ($)</option>
+                            <option value="USD">Dólares (US$)</option>
                         </Select>
                         <Select
                             dense
-                            label="Sucursal Radicación *"
-                            placeholder="SELECCIONAR PUNTO DE VENTA..."
-                            options={sucursales.map(s => ({ value: s.id, label: s.nombre.toUpperCase() }))}
+                            label="Sucursal *"
+                            placeholder="Elegí la sucursal"
+                            options={sucursales.map(s => ({ value: s.id, label: s.nombre }))}
                             value={form.sucursalId}
                             onChange={e => setForm(f => ({ ...f, sucursalId: e.target.value }))}
                         />
-                        <Select
+                        <Combobox
                             dense
-                            label="Cliente Potencial *"
-                            placeholder="SELECCIONAR PROSPECTO..."
-                            options={clientes.map(c => ({ value: c.id, label: c.nombre.toUpperCase() }))}
+                            label="Cliente *"
+                            placeholder="Buscá el cliente por nombre"
+                            options={clientes.map(c => ({ value: c.id, label: c.nombre }))}
                             value={form.clienteId}
-                            onChange={e => setForm(f => ({ ...f, clienteId: e.target.value }))}
+                            onChange={v => setForm(f => ({ ...f, clienteId: v == null ? '' : String(v) }))}
                         />
                         <Select
                             dense
-                            label="Vendedor Designado *"
-                            placeholder="ASIGNAR OFICIAL COMERCIAL..."
-                            options={vendedores.map(u => ({ value: u.id, label: u.nombre.toUpperCase() }))}
+                            label="Vendedor *"
+                            placeholder="Elegí el vendedor"
+                            options={vendedores.map(u => ({ value: u.id, label: u.nombre }))}
                             value={form.vendedorId}
                             onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))}
                         />
                         <Input
                             dense
-                            label="Fecha Límite Validez"
+                            label="Válido hasta"
                             type="date"
                             value={form.validoHasta}
                             onChange={e => setForm(f => ({ ...f, validoHasta: e.target.value }))}
                         />
                     </div>
 
-                    {/* Items Section */}
+                    {/* Unidades */}
                     <div>
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-black uppercase text-accent tracking-widest flex items-center gap-2">
-                                <Car size={14} /> Unidades Cotizadas
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-bold flex items-center gap-2">
+                                <Car size={14} aria-hidden="true" /> Unidades
                             </h3>
                             <Button variant="secondary" size="sm" onClick={addItem}>
-                                <Plus size={14} /> Añadir Unidad
+                                <Plus size={14} /> Agregar unidad
                             </Button>
                         </div>
                         {form.items.map((item, i) => (
-                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4">
-                                <Select
+                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end mb-2">
+                                <Combobox
                                     dense
                                     containerClassName="md:col-span-5 mb-0"
-                                    label="Vehículo / Modelo"
-                                    placeholder="SELECCIONE UNIDAD EN STOCK..."
+                                    label="Unidad *"
+                                    placeholder="Buscá por marca, modelo o dominio"
+                                    options={vehiculos.map(v => ({ value: v.id, label: `${v.marca} ${v.modelo}`, sub: v.dominio ?? v.vin ?? `#${v.id}` }))}
                                     value={item.vehiculoId}
-                                    onChange={e => updItem(i, 'vehiculoId', e.target.value)}
-                                >
-                                    {vehiculos.map(v => <option key={v.id} value={v.id}>{v.marca} {v.modelo} — {v.dominio ?? v.vin ?? `#${v.id}`}</option>)}
-                                </Select>
+                                    onChange={v => updItem(i, 'vehiculoId', v == null ? '' : String(v))}
+                                />
                                 <Input
                                     dense
                                     containerClassName="md:col-span-2 mb-0"
-                                    label="P. Lista"
+                                    label="Precio de lista *"
                                     type="number"
+                                    min="0"
+                                    className="tabular-nums"
                                     value={item.precioLista}
                                     onChange={e => updItem(i, 'precioLista', e.target.value)}
                                 />
                                 <Input
                                     dense
                                     containerClassName="md:col-span-2 mb-0"
-                                    label="Desc."
+                                    label="Descuento"
                                     type="number"
+                                    min="0"
+                                    className="tabular-nums"
                                     value={item.descuento}
                                     onChange={e => updItem(i, 'descuento', e.target.value)}
                                 />
                                 <Input
                                     dense
                                     containerClassName="md:col-span-2 mb-0"
-                                    label="Final *"
+                                    label="Precio final *"
                                     type="number"
-                                    className="font-bold text-accent"
+                                    min="0"
+                                    className="font-bold tabular-nums"
                                     value={item.precioFinal}
                                     onChange={e => updItem(i, 'precioFinal', e.target.value)}
+                                    hint={item.precioFinal !== '' ? formatMoneda(item.precioFinal, form.moneda) : undefined}
                                 />
-                                <div className="md:col-span-1">
-                                    <button className="w-full flex items-center justify-center text-danger"
+                                <div className="md:col-span-1 flex justify-end">
+                                    <button type="button" className="icon-btn danger" aria-label={`Quitar la unidad ${i + 1}`} title="Quitar unidad"
                                         onClick={() => removeItem(i)} disabled={form.items.length === 1}>
-                                        <Trash2 size={18} />
+                                        <Trash2 size={16} />
                                     </button>
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    {/* Canje Section */}
+                    {/* Extras */}
                     <div>
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-black uppercase text-accent-2 tracking-widest flex items-center gap-2">
-                                <ArrowRightLeft size={14} /> Toma de Usado (Canje)
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-bold flex items-center gap-2">
+                                <Plus size={14} aria-hidden="true" /> Extras
                             </h3>
-                            <label className="flex items-center gap-3">
-                                <span className="text-3xs font-bold text-muted uppercase">{form.conCanje ? 'Incluido' : 'Sin Canje'}</span>
-                                <div onClick={() => setForm(f => ({ ...f, conCanje: !f.conCanje }))}>
-                                    <div />
-                                </div>
-                            </label>
+                            <Button variant="secondary" size="sm" onClick={() => setForm(f => ({ ...f, extras: [...f.extras, { descripcion: '', monto: '' }] }))}>
+                                <Plus size={14} /> Agregar extra
+                            </Button>
                         </div>
+                        {form.extras.length === 0 && <p className="text-xs text-muted">Gestoría, patentamiento, accesorios: lo que se le cobra aparte del precio de la unidad.</p>}
+                        {form.extras.map((ex, i) => (
+                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end mb-2">
+                                <Input dense containerClassName="md:col-span-8 mb-0" label="Descripción" value={ex.descripcion}
+                                    onChange={e => setForm(f => ({ ...f, extras: f.extras.map((x, j) => j === i ? { ...x, descripcion: e.target.value } : x) }))} />
+                                <Input dense containerClassName="md:col-span-3 mb-0" label="Monto" type="number" min="0" className="tabular-nums" value={ex.monto}
+                                    onChange={e => setForm(f => ({ ...f, extras: f.extras.map((x, j) => j === i ? { ...x, monto: e.target.value } : x) }))} />
+                                <div className="md:col-span-1 flex justify-end">
+                                    <button type="button" className="icon-btn danger" aria-label={`Quitar el extra ${i + 1}`} title="Quitar extra"
+                                        onClick={() => setForm(f => ({ ...f, extras: f.extras.filter((_, j) => j !== i) }))}>
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Canje */}
+                    <div>
+                        <label className="flex items-center gap-2 text-sm font-bold" style={{ cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={form.conCanje}
+                                onChange={e => setForm(f => ({ ...f, conCanje: e.target.checked }))}
+                            />
+                            <ArrowRightLeft size={14} aria-hidden="true" /> El cliente entrega una unidad en canje
+                        </label>
                         {form.conCanje && (
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
                                 <Input
                                     dense
-                                    label="Descripción / Marca / Modelo"
+                                    label="Marca y modelo"
                                     containerClassName="md:col-span-2"
                                     value={form.canje.descripcion}
                                     onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, descripcion: e.target.value } }))}
@@ -866,101 +918,132 @@ const PresupuestosPage = () => {
                                 />
                                 <Input
                                     dense
-                                    label="Valor de Toma *"
+                                    label="Valor de toma *"
                                     type="number"
-                                    icon={<DollarSign size={16} className="text-accent-2" />}
-                                    className="font-bold"
+                                    min="0"
+                                    icon={<DollarSign size={16} />}
+                                    className="font-bold tabular-nums"
                                     value={form.canje.valorTomado}
                                     onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, valorTomado: e.target.value } }))}
+                                    hint="Se descuenta del total."
+                                />
+                                <Input
+                                    dense
+                                    label="Año"
+                                    type="number"
+                                    value={form.canje.anio}
+                                    onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, anio: e.target.value } }))}
+                                />
+                                <Input
+                                    dense
+                                    label="Kilómetros"
+                                    type="number"
+                                    min="0"
+                                    value={form.canje.km}
+                                    onChange={e => setForm(f => ({ ...f, canje: { ...f.canje, km: e.target.value } }))}
                                 />
                             </div>
                         )}
                     </div>
+
+                    <Textarea
+                        dense
+                        label="Observaciones"
+                        rows={2}
+                        value={form.observaciones}
+                        onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))}
+                        placeholder="Condiciones, plazos de entrega, lo que se acordó con el cliente…"
+                    />
                 </div>
             </Modal>
 
-            {/* DETAIL MODAL */}
+            {/* DETALLE */}
             <Modal
                 isOpen={detailId !== null}
                 onClose={() => setDetailId(null)}
-                title={detail?.nroPresupuesto ?? 'Expediente Comercial'}
-                subtitle={detail ? `SUCURSAL: ${detail.sucursal?.nombre ?? 'NO ESPECIFICADA'}` : undefined}
+                title={detail ? `Presupuesto ${detail.nroPresupuesto}` : 'Presupuesto'}
+                subtitle={detail?.sucursal?.nombre ? `Sucursal ${detail.sucursal.nombre}` : undefined}
                 maxWidth="900px"
                 footer={detail ? (
-                    <div className="flex justify-between items-center w-full">
+                    <div className="flex justify-between items-center w-full flex-wrap gap-4">
                         <div>
-                            <p className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Impacto Final de la Operación</p>
-                            <p className="text-2xl font-black text-accent">{currencyFmt(calcTotal(detail), detail.moneda)}</p>
+                            <p className="stat-tile-label">Total</p>
+                            <p className="text-2xl font-black tabular-nums">{formatMoneda(calcTotal(detail), detail.moneda)}</p>
                         </div>
-                        <div className="flex gap-4">
-                            <Button variant="secondary" onClick={() => setDetailId(null)}>Cerrar Expediente</Button>
-                            <Button variant="primary" className="shadow-glow" onClick={() => { setDetailId(null); openEdit(detail); }}>
-                                <Pencil size={16} /> Alterar Parámetros
+                        <div className="flex gap-2 flex-wrap justify-end">
+                            {detail.estado === 'aceptado' && (
+                                <Button variant="primary" onClick={() => { setDetailId(null); abrirConvertir(detail); }}>
+                                    <ArrowRight size={16} /> Convertir en venta
+                                </Button>
+                            )}
+                            {(TRANSITIONS[detail.estado as EstadoPresupuesto] ?? []).map(t => (
+                                <Button key={t.next} variant={t.danger ? 'danger' : 'secondary'} size="sm" onClick={() => changeEstado(detail, t)}>
+                                    {t.icon} {t.label}
+                                </Button>
+                            ))}
+                            <Button variant="secondary" size="sm" onClick={() => { setDetailId(null); openEdit(detail); }}>
+                                <Pencil size={14} /> Editar
                             </Button>
+                            <Button variant="secondary" size="sm" onClick={() => setDetailId(null)}>Cerrar</Button>
                         </div>
                     </div>
                 ) : undefined}
             >
-                {!detail ? (
-                    <div className="text-center"><RefreshCw className="animate-spin text-accent mb-4" size={48} /><p className="text-xs font-black text-muted uppercase tracking-widest">Consolidando expediente comercial...</p></div>
+                {detailQuery.isError ? (
+                    <div className="dt-empty">
+                        <p className="dt-empty-text">No se pudo cargar el presupuesto.</p>
+                        <Button variant="secondary" size="sm" onClick={() => detailQuery.refetch()}>Reintentar</Button>
+                    </div>
+                ) : !detail ? (
+                    <div className="text-center"><RefreshCw className="animate-spin text-accent mb-4" size={40} aria-hidden="true" /><p className="text-sm text-muted">Cargando el presupuesto…</p></div>
                 ) : (
-                    <div>
-                        <div className="flex items-center gap-6">
-                            <div className="flex items-center justify-center text-accent">
-                                <FileText size={32} />
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-3 mb-1">
-                                    <Badge variant={STATUS[detail.estado as EstadoPresupuesto]?.variant ?? 'default'}>
-                                        {STATUS[detail.estado as EstadoPresupuesto]?.label.toUpperCase()}
-                                    </Badge>
-                                </div>
-                                <p className="text-muted font-bold flex items-center gap-2 uppercase text-xs">
-                                    <MapPin size={14} /> SUCURSAL: {detail.sucursal?.nombre ?? 'NO ESPECIFICADA'}
-                                </p>
-                            </div>
+                    <div className="flex flex-col gap-6">
+                        <div>
+                            <Badge variant={rotuloEstado(PRESUPUESTO_ESTADO, detail.estado).variant}>
+                                {rotuloEstado(PRESUPUESTO_ESTADO, detail.estado).label}
+                            </Badge>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                             <div>
-                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Fecha Emisión</span>
-                                <p className="text-lg font-bold">{fmt(detail.fechaCreacion)}</p>
+                                <span className="stat-tile-label">Fecha</span>
+                                <p className="text-lg font-bold tabular-nums">{fmt(detail.fechaCreacion)}</p>
                             </div>
                             <div>
-                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Validez Hasta</span>
-                                <p className="text-lg font-bold">{fmt(detail.validoHasta)}</p>
+                                <span className="stat-tile-label">Válido hasta</span>
+                                <p className="text-lg font-bold tabular-nums">{fmt(detail.validoHasta)}</p>
                             </div>
                             <div>
-                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Interesado</span>
+                                <span className="stat-tile-label">Cliente</span>
                                 <p className="text-lg font-bold truncate">{detail.cliente?.nombre ?? '-'}</p>
                             </div>
                             <div>
-                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Oficial Responsable</span>
+                                <span className="stat-tile-label">Vendedor</span>
                                 <p className="text-lg font-bold truncate">{detail.vendedor?.nombre ?? '-'}</p>
                             </div>
                         </div>
 
                         <div>
-                            <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                                <Car size={16} className="text-accent" /> Matriz de Unidades Cotizadas
+                            <h3 className="text-sm font-bold flex items-center gap-2 mb-2">
+                                <Car size={16} aria-hidden="true" /> Unidades
                             </h3>
                             <div className="table-container">
                                 <table className="data-table">
                                     <thead>
                                         <tr>
-                                            <th>Activo / Unidad</th>
-                                            <th style={{ textAlign: 'right' }}>Precio Lista</th>
-                                            <th style={{ textAlign: 'right' }}>Descuento Aplicado</th>
-                                            <th style={{ textAlign: 'right' }}>Neto Final</th>
+                                            <th>Unidad</th>
+                                            <th style={{ textAlign: 'right' }}>Precio de lista</th>
+                                            <th style={{ textAlign: 'right' }}>Descuento</th>
+                                            <th style={{ textAlign: 'right' }}>Precio final</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {detail.items?.map((it: PresupuestoItem) => (
                                             <tr key={it.id}>
-                                                <td className="font-bold uppercase text-xs">{it.vehiculo ? `${it.vehiculo.marca} ${it.vehiculo.modelo} [${it.vehiculo.dominio || 'S/D'}]` : `#${it.vehiculoId}`}</td>
-                                                <td style={{ textAlign: 'right' }} className="text-muted font-mono italic">{currencyFmt(it.precioLista, String(detail.moneda))}</td>
-                                                <td style={{ textAlign: 'right' }} className="text-danger font-mono font-bold">-{currencyFmt(it.descuento ?? 0, String(detail.moneda))}</td>
-                                                <td style={{ textAlign: 'right' }} className="font-black text-lg">{currencyFmt(it.precioFinal, String(detail.moneda))}</td>
+                                                <td className="font-bold text-sm">{it.vehiculo ? `${it.vehiculo.marca} ${it.vehiculo.modelo} · ${it.vehiculo.dominio || 'sin dominio'}` : `Unidad #${it.vehiculoId}`}</td>
+                                                <td style={{ textAlign: 'right' }} className="text-muted tabular-nums">{formatMoneda(it.precioLista, detail.moneda)}</td>
+                                                <td style={{ textAlign: 'right' }} className="tabular-nums">{num(it.descuento) ? `−${formatMoneda(it.descuento, detail.moneda)}` : '-'}</td>
+                                                <td style={{ textAlign: 'right' }} className="font-black tabular-nums">{formatMoneda(it.precioFinal, detail.moneda)}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -970,21 +1053,21 @@ const PresupuestosPage = () => {
 
                         {detail.canje && (
                             <div>
-                                <h3 className="text-xs font-black uppercase text-accent-2 tracking-widest mb-6 flex items-center gap-2">
-                                    <ArrowRightLeft size={14} /> Gestión de Toma de Usado
+                                <h3 className="text-sm font-bold flex items-center gap-2 mb-2">
+                                    <ArrowRightLeft size={14} aria-hidden="true" /> Canje
                                 </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                     <div className="md:col-span-2">
-                                        <span className="text-3xs font-black text-muted mb-1 uppercase">Descripción del Activo</span>
-                                        <p className="font-bold uppercase">{detail.canje.descripcion}</p>
+                                        <span className="stat-tile-label">Unidad que entrega el cliente</span>
+                                        <p className="font-bold">{detail.canje.descripcion || '-'}{detail.canje.anio ? ` (${detail.canje.anio})` : ''}</p>
                                     </div>
                                     <div>
-                                        <span className="text-3xs font-black text-muted mb-1 uppercase">Dominio</span>
-                                        <p className="font-mono text-lg tracking-widest">{detail.canje.dominio || 'S/D'}</p>
+                                        <span className="stat-tile-label">Dominio</span>
+                                        <p className="font-mono">{detail.canje.dominio || 'sin dominio'}</p>
                                     </div>
                                     <div className="text-right">
-                                        <span className="text-3xs font-black text-accent-2 mb-1 uppercase">Acreditación Canje</span>
-                                        <p className="text-2xl font-black">-{currencyFmt(detail.canje.valorTomado, detail.moneda)}</p>
+                                        <span className="stat-tile-label">Valor de toma</span>
+                                        <p className="text-xl font-black tabular-nums">−{formatMoneda(detail.canje.valorTomado, detail.moneda)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -992,22 +1075,22 @@ const PresupuestosPage = () => {
 
                         {(detail.extras?.length ?? 0) > 0 && (
                             <div>
-                                <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                                    <Plus size={16} className="text-accent" /> Extras
+                                <h3 className="text-sm font-bold flex items-center gap-2 mb-2">
+                                    <Plus size={16} aria-hidden="true" /> Extras
                                 </h3>
                                 <div className="table-container">
                                     <table className="data-table">
                                         <thead>
                                             <tr>
                                                 <th>Concepto</th>
-                                                <th style={{ textAlign: 'right' }}>Importe</th>
+                                                <th style={{ textAlign: 'right' }}>Monto</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {detail.extras!.map((e, i) => (
                                                 <tr key={e.id ?? i}>
                                                     <td className="font-bold">{e.descripcion || 'Extra'}</td>
-                                                    <td style={{ textAlign: 'right' }} className="font-black">{currencyFmt(e.monto, detail.moneda)}</td>
+                                                    <td style={{ textAlign: 'right' }} className="font-black tabular-nums">{formatMoneda(e.monto, detail.moneda)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -1018,7 +1101,7 @@ const PresupuestosPage = () => {
 
                         {detail.observaciones && (
                             <div>
-                                <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Observaciones</span>
+                                <span className="stat-tile-label">Observaciones</span>
                                 <p style={{ whiteSpace: 'pre-line' }}>{detail.observaciones}</p>
                             </div>
                         )}
@@ -1026,101 +1109,101 @@ const PresupuestosPage = () => {
                         {/* La cuenta que lleva al total: sin ella, un presupuesto con extras o
                             canje muestra un total que no coincide con la tabla de unidades. */}
                         <div>
-                            <span className="text-3xs font-black text-muted uppercase tracking-widest mb-1">Cuenta del total</span>
+                            <span className="stat-tile-label">Cuenta del total</span>
                             {[
-                                { label: 'Unidades', valor: (detail.items ?? []).reduce((s, it) => s + Number(it.precioFinal ?? 0), 0), signo: '' },
-                                { label: 'Extras', valor: (detail.extras ?? []).reduce((s, e) => s + Number(e.monto ?? 0), 0), signo: '+' },
-                                { label: 'Canje', valor: detail.canje ? Number(detail.canje.valorTomado ?? 0) : 0, signo: '−' },
+                                { label: 'Unidades', valor: (detail.items ?? []).reduce((s, it) => s + num(it.precioFinal), 0), signo: '' },
+                                { label: 'Extras', valor: (detail.extras ?? []).reduce((s, e) => s + num(e.monto), 0), signo: '+' },
+                                { label: 'Canje', valor: detail.canje ? num(detail.canje.valorTomado) : 0, signo: '−' },
                             ].filter((r) => r.signo === '' || r.valor !== 0).map((r) => (
                                 <div key={r.label} className="flex justify-between text-sm tabular-nums">
                                     <span className="text-secondary">{r.signo} {r.label}</span>
-                                    <span className="font-bold">{currencyFmt(r.valor, detail.moneda)}</span>
+                                    <span className="font-bold">{formatMoneda(r.valor, detail.moneda)}</span>
                                 </div>
                             ))}
                             <div className="flex justify-between text-sm tabular-nums font-black">
                                 <span>Total</span>
-                                <span>{currencyFmt(calcTotal(detail), detail.moneda)}</span>
+                                <span>{formatMoneda(calcTotal(detail), detail.moneda)}</span>
                             </div>
                         </div>
                     </div>
                 )}
             </Modal>
 
-            {/* EDIT MODAL */}
+            {/* CAMBIAR ESTADO / OBSERVACIONES */}
             <Modal
                 isOpen={editId !== null}
                 onClose={() => setEditId(null)}
-                title="Gestión de Auditoría"
-                subtitle="Ajuste el estado legal y administrativo de la cotización."
+                title="Cambiar estado"
+                subtitle="Cambiá el estado del presupuesto o sus observaciones."
                 maxWidth="500px"
                 footer={(
                     <>
-                        <Button variant="secondary" onClick={() => setEditId(null)}>Desistir</Button>
-                        <Button variant="primary" className="flex-1" onClick={handleEdit} loading={saving}>Acreditar Cambios</Button>
+                        <Button variant="secondary" onClick={() => setEditId(null)}>Cancelar</Button>
+                        <Button variant="primary" className="flex-1" onClick={handleEdit} loading={saving}>Guardar</Button>
                     </>
                 )}
             >
-                <div>
+                <div className="flex flex-col gap-4">
                     <Select
                         dense
-                        label="Estado del Expediente"
-                        className="text-lg font-bold"
+                        label="Estado"
                         value={editForm.estado}
                         onChange={e => setEditForm(f => ({ ...f, estado: e.target.value }))}
+                        hint={editForm.estado !== editEstadoActual ? 'Este cambio de estado no tiene vuelta atrás.' : undefined}
                     >
-                        {Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v.label.toUpperCase()}</option>)}
+                        {estadosEditables.map(k => <option key={k} value={k}>{rotuloEstado(PRESUPUESTO_ESTADO, k).label}</option>)}
                     </Select>
                     <Textarea
                         dense
-                        label="Observaciones de Auditoría"
+                        label="Observaciones"
                         rows={4}
                         value={editForm.observaciones}
                         onChange={e => setEditForm(f => ({ ...f, observaciones: e.target.value }))}
                         style={{ resize: 'none' }}
-                        placeholder="JUSTIFICACIÓN DE CAMBIO DE ESTADO O NOTAS PARA VENDEDORES..."
+                        placeholder="Por qué cambia el estado, notas para el vendedor…"
                     />
                 </div>
             </Modal>
 
-            {/* CONVERTIR EN VENTA MODAL */}
+            {/* CONVERTIR EN VENTA */}
             <Modal
                 isOpen={convertirId !== null}
                 onClose={() => setConvertirId(null)}
-                title="Convertir en Venta"
-                subtitle="Definí los datos de cierre. El resto los toma del presupuesto."
+                title="Convertir en venta"
+                subtitle="Completá los datos del cierre. El resto se toma del presupuesto."
                 maxWidth="520px"
                 footer={(
                     <>
                         <Button variant="secondary" onClick={() => setConvertirId(null)}>Cancelar</Button>
                         <Button variant="primary" className="flex-1" onClick={handleConvertirEnVenta} loading={convertirSaving}>
-                            <ArrowRight size={16} /> Crear venta
+                            <ArrowRight size={16} /> Registrar venta
                         </Button>
                     </>
                 )}
             >
-                <div>
+                <div className="flex flex-col gap-4">
                     <div className="grid grid-cols-2 gap-4">
                         <Select
                             dense
-                            label="Forma de pago"
+                            label="Forma de pago *"
                             value={convertirForm.formaPago}
                             onChange={e => setConvertirForm(f => ({ ...f, formaPago: e.target.value as FormaPagoVenta }))}
                         >
-                            {FORMA_PAGO_OPTIONS_CONV.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            {FORMA_PAGO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </Select>
                         <Select
                             dense
-                            label="Moneda"
+                            label="Moneda *"
                             value={convertirForm.moneda}
                             onChange={e => setConvertirForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}
                         >
-                            <option value="ARS">ARS</option>
-                            <option value="USD">USD</option>
+                            <option value="ARS">Pesos ($)</option>
+                            <option value="USD">Dólares (US$)</option>
                         </Select>
                     </div>
                     <Input
                         dense
-                        label="Fecha venta"
+                        label="Fecha de venta *"
                         type="date"
                         value={convertirForm.fechaVenta}
                         onChange={e => setConvertirForm(f => ({ ...f, fechaVenta: e.target.value }))}
@@ -1135,11 +1218,11 @@ const PresupuestosPage = () => {
                 </div>
             </Modal>
 
-            {/* DELETE CONFIRM */}
+            {/* ELIMINAR */}
             <ConfirmDialog
                 isOpen={deleteId !== null}
                 title="Eliminar presupuesto"
-                message="¿Eliminar este presupuesto? Esta acción no se puede deshacer."
+                message="¿Eliminar este presupuesto? No se puede deshacer."
                 confirmLabel="Eliminar"
                 type="danger"
                 onConfirm={handleDelete}

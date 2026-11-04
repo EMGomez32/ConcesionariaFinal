@@ -396,7 +396,7 @@ const BandejaPage = () => {
                         // lead—: decirlo es la diferencia entre un aviso y una
                         // sorpresa cuando alguien mire esa ficha la semana que viene.
                         : res.sobreFichaReal === true
-                            ? 'Ese teléfono ya era de un cliente REAL del CRM. Como la conversación era simulada, sólo se le anotó la consulta (rotulada) en observaciones: no se le cambió el origen ni se le reabrió el lead.'
+                            ? 'Ese teléfono ya era de un cliente real. Como la conversación era simulada, sólo se le anotó la consulta (rotulada) en observaciones: no se le cambió el canal ni la etapa.'
                             : 'Consulta registrada sobre un cliente que ya existía. Ojo: la conversación era simulada, no la hizo nadie.')
                     : !res.creado
                         ? 'Consulta registrada sobre un cliente que ya existía'
@@ -825,7 +825,7 @@ const BandejaPage = () => {
                                             title={faltanDatosDelContacto
                                                 ? 'Este chat no tiene nombre ni teléfono: hay que completarlos para dar de alta al cliente'
                                                 : hiloSimulado
-                                                    ? 'La conversación es simulada: el cliente queda en el CRM rotulado como SIMULACIÓN y NO se borra al apagar la demostración'
+                                                    ? 'La conversación es simulada: el cliente queda en Clientes rotulado como Simulación y no se borra al apagar la demostración'
                                                     : 'Da de alta el contacto como consulta y lo vincula a este chat'}
                                             onClick={() => (altaPideConfirmacion
                                                 ? setAltaAbierta((v) => !v)
@@ -952,7 +952,7 @@ const BandejaPage = () => {
                                     <p className="bandeja-alta-txt">
                                         {faltanDatosDelContacto
                                             ? `Este chat entró por ${metaHilo.plataforma} y no trae nombre ni teléfono. `
-                                                + 'Completalos para que el cliente quede contactable desde el CRM.'
+                                                + 'Completalos para poder contactar al cliente desde su ficha.'
                                             : 'Podés dejar los campos vacíos: se usa el nombre que ya trae el chat. '
                                                 + 'Completalos sólo si querés que la ficha quede con otros datos.'}
                                         {/* El teléfono es la única puerta por la que una consulta
@@ -1279,7 +1279,7 @@ const BandejaPage = () => {
                     justify-content: center;
                     border-radius: var(--radius-pill);
                     background: var(--accent);
-                    color: var(--text-white);
+                    color: var(--text-on-accent);
                     font-size: var(--text-3xs);
                     font-weight: 900;
                     font-variant-numeric: tabular-nums;

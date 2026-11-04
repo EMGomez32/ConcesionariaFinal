@@ -20,7 +20,7 @@ const optionalFk = z.preprocess(
 // "sin email". Réplica: '' => undefined (no valida ni rechaza); email real valida.
 const emailOpcional = z.preprocess(
     (v) => (v === '' ? undefined : v),
-    z.string().email('Email inválido').optional(),
+    z.string().email('El email no es válido').optional(),
 );
 
 export const createProveedorSchema = z.object({

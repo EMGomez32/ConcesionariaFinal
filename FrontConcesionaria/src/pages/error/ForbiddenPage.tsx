@@ -18,22 +18,22 @@ const ForbiddenPage = () => {
                     className="dt-empty-badge is-error"
                     style={{ margin: '0 auto var(--space-8)' }}
                 >
-                    <ShieldAlert size={48} />
+                    <ShieldAlert size={48} aria-hidden="true" />
                 </div>
-                <h1 className="text-3xl tracking-tight mb-4">Acceso Denegado</h1>
+                <h1 className="text-3xl tracking-tight mb-4">No tenés acceso a esta pantalla</h1>
                 <p
                     className="text-secondary leading-relaxed"
                     style={{ marginBottom: 'var(--space-8)' }}
                 >
-                    No posee los privilegios necesarios para acceder a este módulo.
-                    Si cree que esto es un error, contacte al administrador del sistema.
+                    Tu usuario no tiene permiso para entrar acá. Si te parece que es un
+                    error, pedile al administrador de tu concesionaria que revise tu rol.
                 </p>
                 <div className="flex gap-4">
                     <Button variant="secondary" onClick={() => navigate(-1)} style={{ flex: 1 }}>
                         Volver
                     </Button>
                     <Button variant="primary" onClick={() => navigate('/')} style={{ flex: 1 }}>
-                        Ir al Inicio
+                        Ir al inicio
                     </Button>
                 </div>
             </div>

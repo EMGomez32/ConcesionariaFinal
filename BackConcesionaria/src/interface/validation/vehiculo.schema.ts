@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { obligatorio, invalido } from './mensajes';
 
 // Schemas de validación del recurso vehículo. Reemplazan a
 // modules/vehiculos/vehiculo.validation.ts (express-validator). Payload verificado
@@ -29,7 +30,7 @@ const estadoEnum = z.enum(['preparacion', 'publicado', 'reservado', 'vendido', '
 const monedaEnum = z.enum(['ARS', 'USD']);
 
 const idField = (label: string) =>
-    z.coerce.number({ error: `${label} es obligatorio` }).int(`${label} inválido`).positive(`${label} es obligatorio`);
+    z.coerce.number({ error: obligatorio(label) }).int(invalido(label)).positive(obligatorio(label));
 
 // FK opcional: 0 / '' / null -> "sin FK" (undefined). Los selects de proveedor y
 // cliente del form mandan string ('' = "— Ninguno —"). Mismo patrón que

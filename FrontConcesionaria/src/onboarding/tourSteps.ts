@@ -25,7 +25,7 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
             popover: {
                 title: 'Todo empieza por acá',
                 description:
-                    'Tu menú, agrupado por tema: stock, operaciones, finanzas y postventa. ¿Necesitás más espacio? Colapsalo con el botón de abajo.',
+                    'Tu menú, agrupado por tema: stock, clientes, ventas, finanzas y postventa. ¿Necesitás más espacio? Colapsalo con el botón de abajo.',
                 side: 'right',
                 align: 'start',
             },
@@ -65,7 +65,7 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
             popover: {
                 title: 'Tu tablero de un vistazo',
                 description:
-                    'Los números que importan: stock, ventas, reservas y clientes. Más abajo, las finanzas del mes y las alertas del día.',
+                    'Arriba, las acciones del día: consultas sin atender, cuotas en mora y documentación por vencer. Más abajo, los números del negocio y las finanzas del mes.',
                 side: 'bottom',
                 align: 'center',
             },
@@ -110,7 +110,7 @@ export function buildTourSteps(roles: string[]): DriveStep[] {
             popover: {
                 title: '¿Lo querés ver de nuevo?',
                 description:
-                    'Este <strong>?</strong> relanza el tour cuando quieras. Y si ya te lo sabés, apagalo en <strong>Configuración → Preferencias</strong>. ¡A vender! 🚗',
+                    'Este <strong>?</strong> relanza el tour cuando quieras. Y si ya te lo sabés, apagalo en <strong>Ajustes → Preferencias</strong>. ¡A vender! 🚗',
                 side: 'bottom',
                 align: 'end',
             },

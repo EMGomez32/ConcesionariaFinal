@@ -16,20 +16,20 @@ const optionalFk = z.preprocess(
 // objetivo" se deja el campo vacío). Con .positive() el 0 no burla el refine.
 const optionalIntPos = z.preprocess(
     (v) => (v === '' || v === null ? undefined : v),
-    z.coerce.number().int('debe ser un entero').positive('debe ser mayor a 0').optional(),
+    z.coerce.number().int('El objetivo tiene que ser un número entero').positive('El objetivo tiene que ser mayor a 0').optional(),
 );
 const optionalPos = z.preprocess(
     (v) => (v === '' || v === null ? undefined : v),
-    z.coerce.number().positive('debe ser mayor a 0').optional(),
+    z.coerce.number().positive('El objetivo tiene que ser mayor a 0').optional(),
 );
 
 export const upsertObjetivoVendedorSchema = z.object({
-    vendedorId: z.coerce.number({ error: 'vendedorId es obligatorio' }).int('vendedorId inválido').positive('vendedorId inválido'),
-    anio: z.coerce.number({ error: 'anio debe ser un entero válido' }).int('anio debe ser un entero válido').min(2000, 'anio debe ser un entero válido').max(2100, 'anio debe ser un entero válido'),
-    mes: z.coerce.number({ error: 'mes debe estar entre 1 y 12' }).int('mes debe estar entre 1 y 12').min(1, 'mes debe estar entre 1 y 12').max(12, 'mes debe estar entre 1 y 12'),
+    vendedorId: z.coerce.number({ error: 'El vendedor es obligatorio' }).int('El vendedor no es válido').positive('El vendedor no es válido'),
+    anio: z.coerce.number({ error: 'El año no es válido' }).int('El año no es válido').min(2000, 'El año no es válido').max(2100, 'El año no es válido'),
+    mes: z.coerce.number({ error: 'El mes tiene que estar entre 1 y 12' }).int('El mes tiene que estar entre 1 y 12').min(1, 'El mes tiene que estar entre 1 y 12').max(12, 'El mes tiene que estar entre 1 y 12'),
     unidadesObjetivo: optionalIntPos,
     montoObjetivo: optionalPos,
-    moneda: z.enum(['ARS', 'USD'], { error: 'moneda debe ser ARS o USD' }).optional(),
+    moneda: z.enum(['ARS', 'USD'], { error: 'Elegí una moneda válida: ARS o USD' }).optional(),
     concesionariaId: optionalFk,
 }).refine((d) => d.unidadesObjetivo != null || d.montoObjetivo != null, {
     message: 'Fijá al menos un objetivo: unidades y/o monto facturado',

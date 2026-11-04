@@ -1,5 +1,6 @@
 import React, { forwardRef } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { useCampoIds } from './useCampoIds';
 
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
     label?: string;
@@ -19,18 +20,21 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
 }
 
 const Select = forwardRef<HTMLSelectElement, SelectProps>(
-    ({ label, error, hint, options, placeholder, dense, containerClassName = '', className = '', children, ...props }, ref) => {
+    ({ label, error, hint, options, placeholder, dense, containerClassName = '', className = '', children, id, 'aria-describedby': describedBy, ...props }, ref) => {
         const conChildren = children != null;
-        // Modo options: conserva el placeholder por defecto histórico del componente.
-        const placeholderFinal = conChildren ? placeholder : (placeholder ?? 'Seleccione una opción…');
+        // Modo options: hay una opción vacía por defecto (en voseo, como el resto de la UI).
+        const placeholderFinal = conChildren ? placeholder : (placeholder ?? 'Elegí una opción');
+        const { campoId, mensajeId, descripcion } = useCampoIds(id, describedBy, !!(error || hint));
         return (
             <div className={`input-group ${dense ? 'input-group--dense' : ''} ${containerClassName}`}>
-                {label && <label className="input-label" htmlFor={props.id}>{label}</label>}
+                {label && <label className="input-label" htmlFor={campoId}>{label}</label>}
                 <div className={`input-container input-select-wrapper ${error ? 'has-error' : ''}`}>
                     <select
                         ref={ref}
+                        id={campoId}
                         className={`input-control ${dense ? 'input-control--dense' : ''} input-select ${className}`}
-                        aria-invalid={!!error}
+                        aria-invalid={error ? true : undefined}
+                        aria-describedby={descripcion}
                         {...props}
                     >
                         {placeholderFinal != null && <option value="">{placeholderFinal}</option>}
@@ -45,9 +49,9 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
                     <ChevronDown size={16} className="input-select-chevron" aria-hidden="true" />
                 </div>
                 {error
-                    ? <span className="input-feedback input-feedback-error">{error}</span>
+                    ? <span id={mensajeId} className="input-feedback input-feedback-error">{error}</span>
                     : hint
-                        ? <span className="input-feedback">{hint}</span>
+                        ? <span id={mensajeId} className="input-feedback">{hint}</span>
                         : null}
             </div>
         );

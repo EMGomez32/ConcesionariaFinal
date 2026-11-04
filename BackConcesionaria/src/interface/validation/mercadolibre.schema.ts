@@ -96,7 +96,7 @@ export const responderSchema = z.object({
  * que ve un vendedor puro), así que no puede colapsarse a undefined.
  */
 export const asignarSchema = z.object({
-    usuarioId: nullableFk('usuarioId inválido'),
+    usuarioId: nullableFk('El usuario no es válido'),
 });
 
 /**
@@ -109,7 +109,7 @@ export const leadSchema = z.object({
     telefono: textoOpcional(30, 'El teléfono no puede superar los 30 caracteres'),
     // '' => undefined (el form lo manda vacío cuando no se cargó): un lead sin
     // email es lo normal. Un email real sigue exigiendo formato válido.
-    email: z.preprocess((v) => (v === '' ? undefined : v), z.string().trim().toLowerCase().email('Email inválido').optional()),
+    email: z.preprocess((v) => (v === '' ? undefined : v), z.string().trim().toLowerCase().email('El email no es válido').optional()),
     // null / ausente => el service asigna por round-robin.
-    vendedorId: nullableFk('vendedorId inválido').optional(),
+    vendedorId: nullableFk('El vendedor no es válido').optional(),
 });

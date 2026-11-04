@@ -39,6 +39,7 @@ import Modal from '../../components/ui/Modal';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import PageTitle from '../../components/ui/PageTitle';
 import { useConfirm } from '../../hooks/useConfirm';
+import { etiquetaDocumento, AYUDA_DOCUMENTO } from '../../components/clientes/documento';
 import type { PaginatedResponse, ApiError } from '../../types/api.types';
 
 const ClientesPage: React.FC = () => {
@@ -56,6 +57,9 @@ const ClientesPage: React.FC = () => {
     const puedeExportar = puedeVerFunnel;
     // Importación masiva desde planilla: endpoint sólo admin → mismo gate acá.
     const isAdmin = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin');
+    // La columna "Concesionaria" sólo le sirve al super_admin, que ve varias: para
+    // el resto es siempre la propia y ocupaba lugar.
+    const esSuperAdmin = !!user?.roles?.includes('super_admin');
 
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebounce(searchTerm, 500);
@@ -126,7 +130,7 @@ const ClientesPage: React.FC = () => {
     };
 
     // Queries
-    const { data: response, isLoading, refetch } = useQuery<PaginatedResponse<Cliente>, ApiError>({
+    const { data: response, isLoading, isError, isFetching, refetch } = useQuery<PaginatedResponse<Cliente>, ApiError>({
         queryKey: ['clientes', page, debouncedSearch, filterEstado, filterCanal, filterVendedor],
         queryFn: async () => {
             const filters: ClienteFilter = {};
@@ -154,6 +158,14 @@ const ClientesPage: React.FC = () => {
 
     const clientes = response?.results || [];
     const totalPages = response?.totalPages || 1;
+    const hayFiltros = !!debouncedSearch.trim() || !!filterEstado || !!filterCanal || !!filterVendedor;
+    const limpiarFiltros = () => {
+        setSearchTerm('');
+        setFilterEstado('');
+        setFilterCanal('');
+        setFilterVendedor('');
+        setPage(1);
+    };
 
     // Mutations
     const createMutation = useMutation<Cliente, ApiError, Partial<Cliente>>({
@@ -167,7 +179,7 @@ const ClientesPage: React.FC = () => {
             handleCloseModal();
         },
         onError: (err: ApiError) => {
-            addToast(err?.message || 'Error al registrar cliente', 'error');
+            addToast(err?.message || 'No se pudo registrar el cliente', 'error');
         }
     });
 
@@ -182,7 +194,7 @@ const ClientesPage: React.FC = () => {
             handleCloseModal();
         },
         onError: (err: ApiError) => {
-            addToast(err?.message || 'Error al actualizar cliente', 'error');
+            addToast(err?.message || 'No se pudo actualizar el cliente', 'error');
         }
     });
 
@@ -195,7 +207,7 @@ const ClientesPage: React.FC = () => {
             addToast('Cliente eliminado correctamente', 'success');
         },
         onError: (err: ApiError) => {
-            addToast(err?.message || 'Error al eliminar cliente', 'error');
+            addToast(err?.message || 'No se pudo eliminar el cliente', 'error');
         }
     });
 
@@ -209,7 +221,7 @@ const ClientesPage: React.FC = () => {
             handleCloseConsulta();
         },
         onError: (err: ApiError) => {
-            addToast(err?.message || 'Error al registrar la consulta', 'error');
+            addToast(err?.message || 'No se pudo registrar la consulta', 'error');
         }
     });
 
@@ -259,17 +271,17 @@ const ClientesPage: React.FC = () => {
 
     const handleDelete = (cliente: Cliente) => {
         confirm({
-            title: 'Eliminar Cliente',
-            message: `¿Estás seguro de que deseas eliminar a "${cliente.nombre}"? Esta acción no se puede deshacer si existen registros vinculados.`,
+            title: 'Eliminar cliente',
+            message: `¿Eliminar a "${cliente.nombre}"? No se puede deshacer.`,
             type: 'danger',
-            confirmLabel: 'Eliminar Permanente',
+            confirmLabel: 'Eliminar',
             onConfirm: async () => {
                 await deleteMutation.mutateAsync(cliente.id);
             }
         });
     };
 
-    const columns: Column<Cliente>[] = [
+    const columnas: (Column<Cliente> | false)[] = [
         {
             header: 'Cliente',
             accessor: (c) => (
@@ -279,17 +291,20 @@ const ClientesPage: React.FC = () => {
                     </div>
                     <div>
                         <h3 className="font-bold uppercase text-xs">{c.nombre}</h3>
-                        <div className="flex items-center text-muted text-3xs font-black uppercase tracking-wider">
-                            <FileText size={10} />
-                            <span>CUIT/CUIL: {c.dni || 'No registrado'}</span>
+                        <div className="flex items-center gap-1 text-muted text-xs">
+                            <FileText size={10} aria-hidden="true" />
+                            {c.dni ? (() => {
+                                const tipo = etiquetaDocumento(c.dni, c.tipoDoc);
+                                return <span><abbr title={AYUDA_DOCUMENTO[tipo]}>{tipo}</abbr> {c.dni}</span>;
+                            })() : <span>Sin documento</span>}
                         </div>
                     </div>
                 </div>
             )
         },
-        {
+        esSuperAdmin && {
             header: 'Concesionaria',
-            accessor: (c) => (
+            accessor: (c: Cliente) => (
                 c.concesionaria ? (
                     <div className="flex items-center gap-2 text-muted text-xs">
                         <Building2 size={12} className="text-accent" />
@@ -316,7 +331,7 @@ const ClientesPage: React.FC = () => {
             )
         },
         {
-            header: 'Localización',
+            header: 'Dirección',
             accessor: (c) => (
                 c.direccion ? (
                     <div className="flex items-center gap-2 text-muted text-3xs font-black uppercase italic">
@@ -338,7 +353,7 @@ const ClientesPage: React.FC = () => {
                         {/* La consulta la fabricó el modo demostración: la ficha
                             queda en el CRM y sin este rótulo es indistinguible
                             de un interesado real (el nombre lo edita el usuario). */}
-                        {c.origenSimulado && <Badge variant="warning">SIMULACIÓN</Badge>}
+                        {c.origenSimulado && <Badge variant="warning" title="La consulta la generó el modo demostración de Mercado Libre: no la hizo un cliente real">Simulación</Badge>}
                     </div>
                 );
             }
@@ -359,19 +374,20 @@ const ClientesPage: React.FC = () => {
             align: 'right',
             accessor: (c) => (
                 <div className="flex justify-end gap-1">
-                    <button className="icon-btn" onClick={(e) => { e.stopPropagation(); handleOpenModal(c); }}>
+                    <button type="button" className="icon-btn" title="Editar" aria-label={`Editar a ${c.nombre}`} onClick={(e) => { e.stopPropagation(); handleOpenModal(c); }}>
                         <Edit size={14} />
                     </button>
-                    <button className="icon-btn danger" onClick={(e) => { e.stopPropagation(); handleDelete(c); }}>
+                    <button type="button" className="icon-btn danger" title="Eliminar" aria-label={`Eliminar a ${c.nombre}`} onClick={(e) => { e.stopPropagation(); handleDelete(c); }}>
                         <Trash2 size={14} />
                     </button>
-                    <button className="icon-btn" onClick={(e) => { e.stopPropagation(); navigate(`/clientes/${c.id}`); }}>
+                    <button type="button" className="icon-btn" title="Ver ficha" aria-label={`Ver la ficha de ${c.nombre}`} onClick={(e) => { e.stopPropagation(); navigate(`/clientes/${c.id}`); }}>
                         <ChevronRight size={14} />
                     </button>
                 </div>
             )
         }
     ];
+    const columns = columnas.filter((c): c is Column<Cliente> => !!c);
 
     return (
         <div className="page-container animate-fade-in">
@@ -382,20 +398,20 @@ const ClientesPage: React.FC = () => {
                         <div className="icon-badge primary shadow-glow">
                             <Users size={22} />
                         </div>
-                        <h1>Directorio de Clientes</h1>
+                        <h1>Clientes</h1>
                     </div>
-                    <p>Gestiona la base de datos de contactos y prospectos de la concesionaria.</p>
+                    <p>Clientes y consultas de la concesionaria, con su etapa y su vendedor.</p>
                 </div>
 
                 <div className="flex gap-3">
-                    <Button variant="secondary" onClick={() => refetch()}>
-                        <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+                    <Button variant="secondary" onClick={() => refetch()} aria-label="Actualizar listado" title="Actualizar listado">
+                        <RefreshCw size={18} className={isFetching ? 'animate-spin' : ''} />
                     </Button>
                     {/* Export CSV del filtro actual (para Excel/planilla). admin/vendedor. */}
                     {puedeExportar && (
                         <Button variant="secondary" onClick={handleExportCsv} loading={exportando} title="Exportar la cartera filtrada a CSV (Excel)">
                             <FileDown size={18} />
-                            CSV
+                            Exportar
                         </Button>
                     )}
                     {/* Importación masiva desde Excel/CSV. Endpoint sólo admin. */}
@@ -405,13 +421,13 @@ const ClientesPage: React.FC = () => {
                             Importar
                         </Button>
                     )}
-                    <Button variant="secondary" onClick={() => setIsConsultaOpen(true)} title="Registrar una consulta entrante (lead) por cualquier canal">
+                    <Button variant="secondary" onClick={() => setIsConsultaOpen(true)} title="Registrar una consulta que entró por cualquier canal">
                         <MessageSquarePlus size={18} />
                         Nueva consulta
                     </Button>
                     <Button data-tour="cli-nuevo" variant="primary" onClick={() => handleOpenModal()}>
                         <Plus size={18} />
-                        Nuevo Cliente
+                        Nuevo cliente
                     </Button>
                 </div>
             </header>
@@ -443,10 +459,11 @@ const ClientesPage: React.FC = () => {
 
             <div className="card glass filters-bar mb-6" data-tour="cli-filtros" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
                 <div className="search-box" style={{ flex: '1 1 240px' }}>
-                    <Search size={18} className="text-muted" />
+                    <Search size={18} className="text-muted" aria-hidden="true" />
                     <input
-                        type="text"
-                        placeholder="Buscar por nombre, CUIT/CUIL o email..."
+                        type="search"
+                        aria-label="Buscar clientes"
+                        placeholder="Buscar por nombre, DNI, CUIT, email o teléfono"
                         value={searchTerm}
                         onChange={(e) => {
                             setSearchTerm(e.target.value);
@@ -486,6 +503,9 @@ const ClientesPage: React.FC = () => {
                     <option value="mios">Mis clientes</option>
                     {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
                 </select>
+                {hayFiltros && (
+                    <Button variant="ghost" onClick={limpiarFiltros}>Limpiar filtros</Button>
+                )}
             </div>
 
             <style>{`
@@ -503,20 +523,26 @@ const ClientesPage: React.FC = () => {
                 columns={columns}
                 data={clientes}
                 isLoading={isLoading}
+                isError={isError}
+                errorMessage="No se pudieron cargar los clientes"
+                onRetry={() => refetch()}
                 onRowClick={(c) => navigate(`/clientes/${c.id}`)}
                 currentPage={page}
                 totalPages={totalPages}
                 onPageChange={setPage}
-                emptyMessage="No se encontraron registros de clientes"
-                emptyIcon={<Users size={40} className="text-secondary" />}
+                emptyMessage={hayFiltros
+                    ? 'Ningún cliente coincide con la búsqueda o los filtros'
+                    : 'Todavía no hay clientes. Cargá el primero con «Nuevo cliente».'}
+                emptyIcon={<Users size={40} className="dt-empty-icon" />}
+                onClearFilters={hayFiltros ? limpiarFiltros : undefined}
             />
             </div>
 
             <Modal
                 isOpen={isModalOpen}
                 onClose={handleCloseModal}
-                title={editingCliente ? 'Editar Cliente' : 'Nuevo Cliente'}
-                subtitle={editingCliente ? 'Actualiza la información del cliente.' : 'Completa los datos para registrar un nuevo cliente.'}
+                title={editingCliente ? 'Editar cliente' : 'Nuevo cliente'}
+                subtitle={editingCliente ? 'Actualizá los datos del cliente.' : 'Completá los datos del cliente nuevo.'}
                 maxWidth="700px"
             >
                 <ClienteForm
@@ -533,8 +559,8 @@ const ClientesPage: React.FC = () => {
             <Modal
                 isOpen={isConsultaOpen}
                 onClose={handleCloseConsulta}
-                title="Nueva Consulta"
-                subtitle="Registra una consulta entrante y asignala a un vendedor."
+                title="Nueva consulta"
+                subtitle="Registrá una consulta que entró por cualquier canal y asignala a un vendedor."
                 maxWidth="600px"
             >
                 <div>
@@ -550,7 +576,7 @@ const ClientesPage: React.FC = () => {
                         <Input
                             dense
                             label="Nombre *"
-                            placeholder="Nombre del interesado"
+                            placeholder="Nombre de quien consulta"
                             value={consultaForm.nombre}
                             onChange={(e) => setConsultaForm((f) => ({ ...f, nombre: e.target.value }))}
                         />
@@ -583,7 +609,7 @@ const ClientesPage: React.FC = () => {
                         <Select
                             dense
                             label="Vendedor"
-                            placeholder="Asignación automática (round-robin)"
+                            placeholder="Asignación automática (por turno)"
                             value={consultaForm.vendedorId}
                             onChange={(e) => setConsultaForm((f) => ({ ...f, vendedorId: e.target.value }))}
                         >
@@ -607,7 +633,7 @@ const ClientesPage: React.FC = () => {
                             onClick={handleSubmitConsulta}
                             loading={consultaMutation.isPending}
                         >
-                            Registrar Consulta
+                            Registrar consulta
                         </Button>
                     </div>
                 </div>

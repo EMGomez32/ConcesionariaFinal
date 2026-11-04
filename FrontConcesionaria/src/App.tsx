@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import PageLoader from './components/ui/PageLoader';
+import ErrorBoundary from './components/ErrorBoundary';
 import { PLATAFORMA_NAV } from './config/plataformaNav';
 
 /*
@@ -65,6 +66,10 @@ const ForbiddenPage = lazy(() => import('./pages/error/ForbiddenPage'));
 function App() {
   return (
     <BrowserRouter>
+      {/* Barrera de afuera: si falla el render de cualquier ruta (o la carga de su
+          chunk después de un deploy), se ve un mensaje con "Recargar" y no la
+          pantalla en blanco. Dentro del shell hay otra por página (AppLayout). */}
+      <ErrorBoundary>
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -188,6 +193,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }
