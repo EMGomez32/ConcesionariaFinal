@@ -168,7 +168,9 @@ export class ClienteController {
                 entidad: 'Cliente',
                 accion: 'create',
                 entidadId: (result as any)?.id,
-                detalle: `Cliente ${(result as any)?.nombre ?? (result as any)?.id} creado`,
+                // Por id, no por nombre (PRIV-19): el rastro no se purga con la ficha y no
+                // tiene que ser otra copia de los datos del titular.
+                detalle: `Cliente #${(result as any)?.id} creado`,
             });
             res.status(201).json(result);
         } catch (error) {
@@ -186,7 +188,7 @@ export class ClienteController {
                 entidad: 'Cliente',
                 accion: 'update',
                 entidadId: id,
-                detalle: `Cliente ${(result as any)?.nombre ?? id} actualizado`,
+                detalle: `Cliente #${id} actualizado`,
             });
             res.json(result);
         } catch (error) {
