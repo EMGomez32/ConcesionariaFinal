@@ -50,4 +50,10 @@ export interface CreateUsuarioDto {
     roleIds: number[];
 }
 
-export type UpdateUsuarioDto = Partial<CreateUsuarioDto>;
+export type UpdateUsuarioDto = Partial<CreateUsuarioDto> & {
+    /**
+     * Contraseña de QUIEN edita (step-up). El backend la exige sólo si el email cambia:
+     * cambiarle el email a otro y pedir el reset a la casilla nueva es tomar su cuenta.
+     */
+    currentPassword?: string;
+};

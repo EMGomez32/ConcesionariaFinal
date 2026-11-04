@@ -1,37 +1,30 @@
-import express, { RequestHandler, Router } from 'express';
+import express, { RequestHandler, Response, Router } from 'express';
 import path from 'path';
 import { verificarRutaFirmada } from '../../infrastructure/security/urlFirmada';
+import { esRutaPrivada, rutaNormalizada } from '../../infrastructure/storage/zonaPrivada';
 
 /**
  * Servido de /uploads con dos zonas:
  *  - PÚBLICA (fotos de vehículos, logo): las consumen la SPA, los PDF y Mercado Libre (que
  *    baja las fotos de una URL pública), así que siguen abiertas y cacheables.
- *  - PRIVADA (`/solicitudes/…`: DNI, recibos de sueldo): sólo con URL FIRMADA y vigente, que
- *    el backend entrega a un usuario autenticado al listar los adjuntos. Sin cache.
+ *  - PRIVADA (adjuntos de solicitudes `solicitudes-<id>/…` y documentos de vehículos
+ *    `vehiculos-docs-<id>/…`: DNI, recibos, títulos, cédulas): sólo con URL FIRMADA y
+ *    vigente, que el backend entrega a un usuario autenticado y autorizado. Sin cache.
+ * Qué cae en cada zona lo decide `esRutaPrivada` (storage/zonaPrivada.ts).
  */
 
-// Prefijos de la zona privada (relativos a /uploads).
-const PREFIJOS_PRIVADOS = ['/solicitudes'];
+// Re-export: los tests y otros módulos ya importaban estas funciones desde acá.
+export { esRutaPrivada, rutaNormalizada };
 
 /**
- * Ruta normalizada como la resolvería el filesystem. `express.static` DECODIFICA el path
- * (%73olicitudes → solicitudes) y resuelve `..` y `//`; si el guarda mirara el path CRUDO,
- * `/uploads/%73olicitudes/…` esquivaría el chequeo de prefijo y se serviría sin firma.
- * Devuelve null si el path no se puede decodificar.
+ * Cabeceras de toda respuesta de la zona privada (el 403 incluido):
+ *  - `private, no-store`: ni Cloudflare, ni un proxy, ni el disco del navegador guardan
+ *    un DNI. Con `public, max-age=604800` el borde podía servirlo una semana sin firma.
+ *  - `no-referrer`: la URL firmada no se filtra por el Referer si el PDF tiene enlaces.
  */
-export function rutaNormalizada(rawPath: string): string | null {
-    try {
-        const decodificada = decodeURIComponent(rawPath).replace(/\\/g, '/');
-        const n = path.posix.normalize(`/${decodificada}`);
-        return n.replace(/\/{2,}/g, '/');
-    } catch {
-        return null;
-    }
-}
-
-export function esRutaPrivada(rutaNormalizadaRelativa: string): boolean {
-    const r = rutaNormalizadaRelativa.toLowerCase();
-    return PREFIJOS_PRIVADOS.some((p) => r === p || r.startsWith(`${p}/`));
+function cabecerasPrivadas(res: Response): void {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Referrer-Policy', 'no-referrer');
 }
 
 /** Guarda: la zona privada exige firma válida; la pública pasa. */
@@ -43,9 +36,9 @@ export const guardaZonaPrivada: RequestHandler = (req, res, next) => {
     }
     if (!esRutaPrivada(ruta)) return next();
 
+    cabecerasPrivadas(res);
     if (!verificarRutaFirmada(`/uploads${ruta}`, req.query.exp, req.query.sig)) {
-        res.setHeader('Cache-Control', 'no-store');
-        res.status(403).json({ error: 'FORBIDDEN', message: 'El enlace del archivo no es válido o venció. Volvé a abrirlo desde la solicitud.' });
+        res.status(403).json({ error: 'FORBIDDEN', message: 'El enlace del archivo no es válido o venció. Volvé a abrirlo desde la pantalla donde lo encontraste.' });
         return;
     }
     next();
@@ -71,7 +64,7 @@ export function crearRouterUploads(uploadsDir: string): Router {
             const rel = path.relative(uploadsDir, filePath).replace(/\\/g, '/');
             if (esRutaPrivada(`/${rel}`)) {
                 // Documentos personales: nada de caches compartidos (Cloudflare, proxies, navegador).
-                res.setHeader('Cache-Control', 'private, no-store');
+                cabecerasPrivadas(res);
             } else {
                 res.setHeader('Cache-Control', 'public, max-age=604800');
             }

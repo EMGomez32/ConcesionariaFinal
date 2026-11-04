@@ -7,6 +7,7 @@ import { withAuthBypass } from '../../infrastructure/database/unitOfWork';
 import { rawPrisma } from '../../infrastructure/database/prisma';
 import { logger } from '../../infrastructure/logging/logger';
 import { getClientIp } from '../../utils/clientIp';
+import { notificarAlertaSeguridad } from '../../infrastructure/security/alertasSeguridad';
 
 /**
  * Rastro de los flujos de autenticación SIN sesión: login fallido, recuperación de
@@ -96,6 +97,14 @@ async function loginFallido(email: string, status: number, o: Origen): Promise<v
             email: que === 'cuenta' ? email : null,
             detalle: que === 'cuenta' ? 'Racha de logins fallidos contra una misma cuenta' : 'Racha de logins fallidos desde una misma IP',
             ...o,
+        });
+        // El detector ya dispara UNA vez por umbral cruzado: no hace falta deduplicar acá.
+        notificarAlertaSeguridad({
+            tipo: 'brute_force_alert',
+            usuarioId: usuario?.id ?? null,
+            concesionariaId: usuario?.concesionariaId ?? null,
+            email: que === 'cuenta' ? email : null,
+            detalle: que === 'cuenta' ? 'Racha de logins fallidos contra una misma cuenta' : 'Racha de logins fallidos desde una misma IP',
         });
     }
 }

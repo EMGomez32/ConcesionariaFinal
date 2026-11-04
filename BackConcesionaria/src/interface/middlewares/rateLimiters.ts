@@ -3,7 +3,7 @@ import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { env } from '../../config/env';
 import { getClientIp } from '../../utils/clientIp';
 import { context } from '../../infrastructure/security/context';
-import { usuarioDeMfaTokenSinVerificar } from '../../infrastructure/security/mfaToken';
+import { verificarMfaToken } from '../../infrastructure/security/mfaToken';
 
 const isTest = env.NODE_ENV === 'test';
 
@@ -184,6 +184,11 @@ export const costosoLimiter = perUser(40);
 // ── 2FA ─────────────────────────────────────────────────────────────────────
 // Un código TOTP son 10⁶ posibilidades: sin freno se adivina. Se cuentan los FALLOS por CUENTA (el
 // id sale del token de "contraseña correcta", sin importar la IP): 5 cada 15 min. Un acierto no cuenta.
+//
+// El id se toma del token VERIFICADO (firma y vencimiento). Antes se leía sin verificar la firma:
+// cualquiera armaba un JWT con `{"sub":"<id>"}` (los ids son secuenciales) y con 5 requests dejaba
+// 15 minutos sin poder entrar a esa cuenta —la del super_admin incluida— sin saber su contraseña.
+// Un token que no verifica no es de nadie: cuenta contra la IP que lo manda.
 export const mfaLoginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 5,
@@ -192,7 +197,7 @@ export const mfaLoginLimiter = rateLimit({
     skipSuccessfulRequests: true,
     skip: () => isTest,
     keyGenerator: (req) => {
-        const uid = usuarioDeMfaTokenSinVerificar(req.body?.mfaToken);
+        const uid = verificarMfaToken(req.body?.mfaToken);
         return uid ? `mfa:u${uid}` : `mfa:ip:${ipKey(req)}`;
     },
     message: {

@@ -2,6 +2,7 @@ import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioReposit
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 import { assertRolesAsignables } from '../../../infrastructure/security/usuarioPolicy';
+import { assertObjetivoGestionable } from '../../../infrastructure/security/objetivoGestionable';
 import { RevokeUserSessions } from '../auth/RevokeUserSessions';
 import bcrypt from 'bcryptjs';
 
@@ -20,6 +21,9 @@ export class UpdateUsuario {
         if (!exists) {
             throw new NotFoundException('Usuario');
         }
+        // La cuenta de un super_admin sólo la toca otro super_admin (email, roles, estado,
+        // contraseña): ver assertObjetivoGestionable.
+        assertObjetivoGestionable(exists);
 
         const { password, ...updateData } = data;
 

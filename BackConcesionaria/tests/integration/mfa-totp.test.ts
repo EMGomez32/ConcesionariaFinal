@@ -214,7 +214,7 @@ describe('2FA (TOTP)', () => {
         const u = await nuevoUsuario();
         const { sesion } = await activar(u);
 
-        const r = await api.post(`/api/usuarios/${u.id}/2fa/reset`, {}, authHeaders(adminToken));
+        const r = await api.post(`/api/usuarios/${u.id}/2fa/reset`, { currentPassword: 'admin123' }, authHeaders(adminToken));
         expect(r.status).toBe(204);
 
         expect((await api.post('/api/auth/refresh', { refreshToken: sesion.tokens.refresh })).status).toBe(401);

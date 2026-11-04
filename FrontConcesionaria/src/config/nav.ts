@@ -118,7 +118,9 @@ export const NAV_SECTIONS: NavSection[] = [
         title: 'Finanzas y postventa',
         items: [
             { label: 'Financiación', path: '/financiaciones', icon: Wallet, keywords: ['cuotas', 'préstamos', 'planes', 'cobros'] },
-            { label: 'Financiación externa', path: '/solicitudes', icon: CreditCard, keywords: ['fin. externa', 'banco', 'solicitudes', 'financiera'] },
+            // Las solicitudes llevan el cliente entero y su situación crediticia: el servidor las
+            // abre a admin, vendedor y consulta (cobrador, postventa y tasador no las usan).
+            { label: 'Financiación externa', path: '/solicitudes', icon: CreditCard, keywords: ['fin. externa', 'banco', 'solicitudes', 'financiera'], roles: ['admin', 'super_admin', 'vendedor', 'lectura'] },
             // Estructura de costos operativos del tenant: `GET /gastos-fijos` es admin.
             { label: 'Gastos fijos', path: '/gastos-fijos', icon: FileText, keywords: ['operativos'], roles: ['admin', 'super_admin'] },
             // "El vendedor NO VE: … proveedor". El PADRÓN sigue disponible por API para el

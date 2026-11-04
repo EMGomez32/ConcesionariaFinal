@@ -48,6 +48,8 @@ const UsuariosPage: React.FC = () => {
     const [submitting, setSubmitting] = useState(false);
     const [resetPasswordUserId, setResetPasswordUserId] = useState<number | null>(null);
     const [newPassword, setNewPassword] = useState('');
+    // Step-up: resetear la contraseña o el 2FA de otro pide la contraseña de quien lo hace.
+    const [miPassword, setMiPassword] = useState('');
     const [resettingPassword, setResettingPassword] = useState(false);
     const [deletingUsuario, setDeletingUsuario] = useState<Usuario | null>(null);
     // Reset del 2FA de un usuario que perdió el dispositivo (admin).
@@ -118,6 +120,30 @@ const UsuariosPage: React.FC = () => {
     const closeResetPasswordModal = () => {
         setResetPasswordUserId(null);
         setNewPassword('');
+        setMiPassword('');
+    };
+
+    const cerrarReset2fa = () => {
+        setReseteando2fa(null);
+        setMiPassword('');
+    };
+
+    const handleReset2fa = async () => {
+        if (!reseteando2fa) return;
+        if (!miPassword) {
+            addToast('Ingresá tu contraseña para confirmar', 'error');
+            return;
+        }
+        setEnviando2fa(true);
+        try {
+            await mfaApi.resetDeUsuario(reseteando2fa.id, miPassword);
+            addToast('2FA reseteado. El usuario deberá volver a iniciar sesión.', 'success');
+            cerrarReset2fa();
+        } catch (err) {
+            addToast(getApiErrorMessage(err, 'No se pudo resetear el 2FA'), 'error');
+        } finally {
+            setEnviando2fa(false);
+        }
     };
 
     const handleResetPassword = async () => {
@@ -125,10 +151,14 @@ const UsuariosPage: React.FC = () => {
             addToast('Escribí la nueva contraseña', 'error');
             return;
         }
+        if (!miPassword) {
+            addToast('Ingresá tu contraseña para confirmar', 'error');
+            return;
+        }
         setResettingPassword(true);
         try {
-            await usuariosApi.resetPassword(resetPasswordUserId, newPassword);
-            addToast('Contraseña actualizada', 'success');
+            await usuariosApi.resetPassword(resetPasswordUserId, newPassword, miPassword);
+            addToast('Contraseña actualizada. Le avisamos por mail al usuario.', 'success');
             closeResetPasswordModal();
         } catch (error) {
             addToast(getApiErrorMessage(error, 'No se pudo cambiar la contraseña'), 'error');
@@ -193,7 +223,7 @@ const UsuariosPage: React.FC = () => {
                 <div className="listado-acciones-fila">
                     <button
                         type="button"
-                        onClick={() => { setResetPasswordUserId(usuario.id); setNewPassword(''); }}
+                        onClick={() => { setResetPasswordUserId(usuario.id); setNewPassword(''); setMiPassword(''); }}
                         className="icon-btn"
                         title="Cambiar contraseña"
                         aria-label={`Cambiar la contraseña de ${usuario.nombre}`}
@@ -202,7 +232,7 @@ const UsuariosPage: React.FC = () => {
                     </button>
                     <button
                         type="button"
-                        onClick={() => setReseteando2fa(usuario)}
+                        onClick={() => { setReseteando2fa(usuario); setMiPassword(''); }}
                         className="icon-btn"
                         title="Resetear la verificación en dos pasos (2FA)"
                         aria-label={`Resetear la verificación en dos pasos de ${usuario.nombre}`}
@@ -318,41 +348,55 @@ const UsuariosPage: React.FC = () => {
                     </div>
                 }
             >
-                <Input
-                    label="Nueva contraseña"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Mínimo 10 caracteres"
-                    icon={<Lock size={16} />}
-                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <Input
+                        label="Nueva contraseña"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Mínimo 10 caracteres"
+                        icon={<Lock size={16} />}
+                        autoComplete="new-password"
+                    />
+                    <Input
+                        label="Tu contraseña"
+                        type="password"
+                        value={miPassword}
+                        onChange={(e) => setMiPassword(e.target.value)}
+                        placeholder="Para confirmar que sos vos"
+                        icon={<Key size={16} />}
+                        autoComplete="current-password"
+                    />
+                </div>
             </Modal>
 
-            <ConfirmDialog
+            <Modal
                 isOpen={!!reseteando2fa}
+                onClose={cerrarReset2fa}
                 title="Resetear verificación en dos pasos"
-                message={reseteando2fa
-                    ? `¿Resetear el 2FA de "${reseteando2fa.nombre}"? Se le apaga el segundo factor, se borran sus códigos de recuperación y se cierran todas sus sesiones. Usalo cuando perdió el teléfono.`
-                    : ''}
-                confirmLabel="Resetear 2FA"
-                cancelLabel="Cancelar"
-                type="danger"
-                onConfirm={async () => {
-                    if (!reseteando2fa) return;
-                    setEnviando2fa(true);
-                    try {
-                        await mfaApi.resetDeUsuario(reseteando2fa.id);
-                        addToast('2FA reseteado. El usuario deberá volver a iniciar sesión.', 'success');
-                        setReseteando2fa(null);
-                    } catch (err) {
-                        addToast(getApiErrorMessage(err, 'No se pudo resetear el 2FA'), 'error');
-                    } finally {
-                        setEnviando2fa(false);
-                    }
-                }}
-                onCancel={() => setReseteando2fa(null)}
-                loading={enviando2fa}
-            />
+                subtitle={reseteando2fa
+                    ? `Se le apaga el segundo factor a "${reseteando2fa.nombre}", se borran sus códigos de recuperación y se cierran todas sus sesiones. Usalo cuando perdió el teléfono.`
+                    : undefined}
+                maxWidth="450px"
+                footer={
+                    <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', width: '100%' }}>
+                        <Button variant="secondary" onClick={cerrarReset2fa}>Cancelar</Button>
+                        <Button variant="danger" onClick={handleReset2fa} loading={enviando2fa}>
+                            Resetear 2FA
+                        </Button>
+                    </div>
+                }
+            >
+                <Input
+                    label="Tu contraseña"
+                    type="password"
+                    value={miPassword}
+                    onChange={(e) => setMiPassword(e.target.value)}
+                    placeholder="Para confirmar que sos vos"
+                    icon={<Key size={16} />}
+                    autoComplete="current-password"
+                />
+            </Modal>
 
             <ConfirmDialog
                 isOpen={!!deletingUsuario}

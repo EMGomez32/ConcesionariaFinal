@@ -3,14 +3,19 @@ import { logger } from '../../infrastructure/logging/logger';
 import { context } from '../../infrastructure/security/context';
 
 /**
- * Query params que son CREDENCIALES y no pueden quedar escritos en el log.
- * El caso concreto es el callback de OAuth de Mercado Libre, que llega como
- * `GET /api/webhooks/mercadolibre/callback?code=...&state=...`: el `code` canjea
- * los tokens del vendedor y el `state` ata una cuenta de ML a una concesionaria.
- * En producción el log sale a stdout y Docker lo persiste, así que cualquiera
- * con acceso a los logs los tendría en claro.
+ * Query params que no pueden quedar escritos en el log. En producción el log sale a
+ * stdout y Docker lo persiste: cualquiera con acceso a los logs (o a un volcado) los
+ * tendría en claro, y fuera del alcance de una supresión de datos del titular.
+ *
+ *  - CREDENCIALES: el callback de OAuth de Mercado Libre llega como
+ *    `?code=...&state=...` (el `code` canjea los tokens del vendedor y el `state` ata una
+ *    cuenta de ML a una concesionaria); `sig` es la firma de una URL de adjunto privado.
+ *  - DATOS PERSONALES: las búsquedas viajan por query string (`/search?q=`,
+ *    `/clientes?search=&dni=&telefono=&email=`): un DNI o un teléfono tipeado en el
+ *    buscador terminaba en el log de cada request.
  */
 const PARAMS_SENSIBLES = new Set([
+    // credenciales
     'code',
     'state',
     'token',
@@ -21,6 +26,23 @@ const PARAMS_SENSIBLES = new Set([
     'secret',
     'apikey',
     'api_key',
+    'sig',
+    // datos personales / búsquedas
+    'q',
+    'search',
+    'buscar',
+    'busqueda',
+    'dni',
+    'documento',
+    'cuit',
+    'cuil',
+    'telefono',
+    'celular',
+    'whatsapp',
+    'email',
+    'nombre',
+    'apellido',
+    'direccion',
 ]);
 
 /**
@@ -38,7 +60,8 @@ export const urlParaLog = (originalUrl: string): string => {
         params.set(clave, '[redactado]');
         hayQue = true;
     }
-    return hayQue ? `${path}?${params.toString()}` : originalUrl;
+    // URLSearchParams codifica los corchetes: se devuelven legibles para el que lee el log.
+    return hayQue ? `${path}?${params.toString().replace(/%5Bredactado%5D/g, '[redactado]')}` : originalUrl;
 };
 
 export const requestLogger = (req: Request, res: Response, next: NextFunction) => {

@@ -17,6 +17,8 @@ import { context } from '../../infrastructure/security/context';
 import { BaseException } from '../../domain/exceptions/BaseException';
 import { actorEsAdmin } from '../../infrastructure/security/roles';
 import { detalleUpdate, nombresDeRoles } from './usuarioAuditoria';
+import { exigirContrasenaDelActor } from '../../application/services/reautenticacion';
+import { avisarCambioDeCuenta } from '../../infrastructure/email/mailer';
 
 /**
  * Lo que un no-admin puede ver de un colega: el nombre para el combo de "vendedor
@@ -146,9 +148,23 @@ export class UsuarioController {
                 delete data.roles;
                 delete data.activo;
             }
+            // La contraseña del actor (step-up) nunca llega al repositorio.
+            const { currentPassword } = data;
+            delete data.currentPassword;
             // Estado previo para dejar en la auditoría QUÉ cambió (roles, estado, email).
             const antes: any = await getUsuarioByIdUC.execute(id);
+            // STEP-UP: cambiarle el email a una cuenta (y pedir después el reset a la casilla
+            // nueva) o fijarle una contraseña es tomarla. Se pide la contraseña del actor.
+            // Sin distinguir mayúsculas: el schema pasa el email a minúscula y una ficha vieja con
+            // "Juan@X.com" no puede pedir contraseña sólo porque el form la reenvió igual.
+            const cambiaEmail = !!data.email && String(data.email).toLowerCase() !== String(antes?.email ?? '').toLowerCase();
+            const fijaPassword = !!data.password;
+            if (cambiaEmail || fijaPassword) await exigirContrasenaDelActor(currentPassword);
             const result = await updateUsuarioUC.execute(id, data);
+            // Aviso al dueño de la cuenta: el del email cambia a la dirección VIEJA, que es la
+            // que conoce el titular si el cambio no fue pedido.
+            if (cambiaEmail) avisarCambioDeCuenta(antes?.email, 'email_cambiado');
+            if (fijaPassword) avisarCambioDeCuenta((result as any)?.email ?? antes?.email, 'password_reseteada');
             await audit({
                 entidad: 'Usuario',
                 accion: 'update',
@@ -185,14 +201,17 @@ export class UsuarioController {
     static async resetPassword(req: Request, res: Response, next: NextFunction) {
         try {
             const id = parseInt(req.params.id as string, 10);
-            const { password } = req.body ?? {};
-            await resetPasswordUC.execute(id, password);
+            const { password, currentPassword } = req.body ?? {};
+            // STEP-UP: resetearle la contraseña a otro es tomar su cuenta; no alcanza con la sesión.
+            await exigirContrasenaDelActor(currentPassword);
+            const afectado: any = await resetPasswordUC.execute(id, password);
             await audit({
                 entidad: 'Usuario',
                 accion: 'update',
                 entidadId: id,
                 detalle: `Reset de contraseña para usuario ${id}`,
             });
+            avisarCambioDeCuenta(afectado?.email, 'password_reseteada');
             res.status(204).send();
         } catch (error) {
             next(error);

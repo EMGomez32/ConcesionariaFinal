@@ -66,6 +66,14 @@ export async function audit(params: AuditParams): Promise<void> {
             } as any,
         }));
     } catch (err) {
-        logger.error('[audit] failed to write audit log', { err, params });
+        // Sin `params` entero ni el mensaje del error: el `detalle` puede llevar nombres o
+        // emails, y un error de validación de Prisma repite los valores del INSERT.
+        logger.error('[audit] failed to write audit log', {
+            error: (err as any)?.name ?? 'Error',
+            code: (err as any)?.code ?? null,
+            entidad: params.entidad,
+            accion: params.accion,
+            entidadId: params.entidadId ?? null,
+        });
     }
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { urlComprobanteOpcional } from './urlComprobante';
 import { obligatorio, invalido } from './mensajes';
 
 // Schemas de validación de gastos vehiculares. Payloads verificados contra los
@@ -55,8 +56,8 @@ export const createGastoSchema = z.object({
     proveedorId: optionalFk,
     tipo: tipoGastoEnum.optional(),
     fecha: z.string().min(1, 'La fecha del gasto no puede estar vacía').optional(),
-    comprobanteUrl: z.string().optional(),
-    urlComprobante: z.string().optional(),
+    comprobanteUrl: urlComprobanteOpcional(),
+    urlComprobante: urlComprobanteOpcional(),
     // Lo resuelve el controller; declarado para que el super_admin pueda elegir
     // tenant por body sin que el strip de Zod lo borre (ver cabecera).
     concesionariaId: optionalFk,

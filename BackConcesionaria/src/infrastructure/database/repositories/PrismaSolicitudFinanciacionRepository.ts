@@ -4,7 +4,8 @@ import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
 import { whereDeBusqueda, clienteCoincide, vehiculoCoincide } from '../busqueda';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
-import { firmarRuta } from '../../security/urlFirmada';
+import { conUrlParaCliente } from '../../storage/zonaPrivada';
+import { filtroCartera } from '../../../application/services/carteraCliente';
 import { parsePagination, parseOrderBy } from '../queryOptions';
 
 // Lo que el cliente puede escribir al crear. `estado` queda afuera a propósito:
@@ -74,7 +75,15 @@ export class PrismaSolicitudFinanciacionRepository implements ISolicitudFinancia
             { vehiculo: vehiculoCoincide(t) },
             { financiera: { nombre: { contains: t, mode: 'insensitive' as const } } },
         ]);
-        if (busqueda) where.AND = busqueda;
+        // Vendedor "puro": el listado es una superficie de barrido (trae el cliente entero y su
+        // situación crediticia), así que se recorta a las solicitudes de clientes de SU cartera,
+        // igual que el listado de clientes. Va en el `where` para que entre también en el count.
+        const cartera = await filtroCartera();
+        const condiciones = [
+            ...(busqueda ? (Array.isArray(busqueda) ? busqueda : [busqueda]) : []),
+            ...(cartera ? [{ cliente: cartera }] : []),
+        ];
+        if (condiciones.length > 0) where.AND = condiciones;
 
         const results = await prisma.solicitudFinanciacion.findMany({
             where,
@@ -161,8 +170,9 @@ export class PrismaSolicitudFinanciacionRepository implements ISolicitudFinancia
             s.sucursal,
             s.venta,
             s.presupuesto,
-            // Adjuntos privados (DNI, recibos): la url que sale es firmada y vence; ver urlFirmada.ts.
-            s.archivos?.map((a: any) => ({ ...a, url: firmarRuta(a.url) })),
+            // Adjuntos privados (DNI, recibos): la url que sale es firmada y vence; ver zonaPrivada.ts.
+            // Quién puede recibirlos lo decide el controller (getById los saca si el actor no puede).
+            s.archivos?.map((a: any) => conUrlParaCliente(a)),
             s.vehiculo
         );
     }

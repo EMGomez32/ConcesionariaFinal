@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { urlComprobanteOpcional } from './urlComprobante';
 import { obligatorio, invalido } from './mensajes';
 
 // Schemas de validación de ventas. Payloads verificados contra los DTOs reales
@@ -50,7 +51,7 @@ const pagoItem = z.object({
 const externoItem = z.object({
     descripcion: z.string().min(1, 'La descripción del extra es obligatoria'),
     monto: montoField('El monto del extra'),
-    comprobanteUrl: z.string().optional(),
+    comprobanteUrl: urlComprobanteOpcional(),
 });
 
 const canjeItem = z.object({

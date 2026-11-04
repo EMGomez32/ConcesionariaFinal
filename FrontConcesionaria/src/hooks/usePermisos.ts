@@ -58,6 +58,16 @@ export interface Permisos {
     financiacionOperar: boolean;
     /** DELETE /financiaciones/:id — "Anular Contrato". */
     financiacionAnular: boolean;
+
+    // ── Financiación externa (solicitudes a bancos) ──────────────────────────
+    /** GET /financiacion-solicitudes y /:id — admin, vendedor y consulta. */
+    solicitudesVer: boolean;
+    /**
+     * GET /financiacion-solicitudes/:id/archivos y la subida/baja de adjuntos: los papeles
+     * (DNI, recibos de sueldo) son de admin y vendedor. Al vendedor el servidor además se los
+     * recorta a los clientes de su cartera.
+     */
+    solicitudesAdjuntos: boolean;
     /** PATCH /financiaciones/cuotas/:cuotaId/pagar */
     financiacionCobrarCuota: boolean;
 
@@ -150,6 +160,9 @@ export function usePermisos(): Permisos {
 
         financiacionOperar: esAdmin || esVendedor || esCobrador,
         financiacionAnular: esAdmin,
+
+        solicitudesVer: esAdmin || esVendedor || tiene('lectura'),
+        solicitudesAdjuntos: esAdmin || esVendedor,
         financiacionCobrarCuota: esAdmin || esVendedor || esCobrador,
 
         ingresosCrear: esAdmin || esVendedor,

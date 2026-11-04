@@ -8,7 +8,7 @@ jest.mock('../../src/infrastructure/logging/logger', () => ({ logger: { warn: je
 
 import jwt from 'jsonwebtoken';
 import { exigeMfa, mfaPendiente, rolesQueExigenMfa } from '../../src/infrastructure/security/mfaPolicy';
-import { emitirMfaToken, usuarioDeMfaTokenSinVerificar, verificarMfaToken } from '../../src/infrastructure/security/mfaToken';
+import { emitirMfaToken, verificarMfaToken } from '../../src/infrastructure/security/mfaToken';
 import { emitirSesion } from '../../src/application/use-cases/auth/emitirSesion';
 import { authenticate } from '../../src/interface/middlewares/authenticate.middleware';
 import { context } from '../../src/infrastructure/security/context';
@@ -24,14 +24,21 @@ afterEach(() => {
 });
 
 describe('rolesQueExigenMfa', () => {
-    test('sin variable: en test y desarrollo nadie; en producción, super_admin', () => {
+    test('sin variable: en test y desarrollo nadie; en producción, super_admin y admin', () => {
         delete process.env.MFA_REQUIRED_ROLES;
         envMock.NODE_ENV = 'test';
         expect(rolesQueExigenMfa()).toEqual([]);
         envMock.NODE_ENV = 'development';
         expect(rolesQueExigenMfa()).toEqual([]);
         envMock.NODE_ENV = 'production';
-        expect(rolesQueExigenMfa()).toEqual(['super_admin']);
+        expect(rolesQueExigenMfa()).toEqual(['super_admin', 'admin']);
+    });
+
+    test('la variable sigue mandando: MFA_REQUIRED_ROLES=super_admin vuelve a exigirlo sólo a la plataforma', () => {
+        envMock.NODE_ENV = 'production';
+        process.env.MFA_REQUIRED_ROLES = 'super_admin';
+        expect(exigeMfa(['admin'])).toBe(false);
+        expect(exigeMfa(['super_admin'])).toBe(true);
     });
 
     test('la variable manda sobre el default, con espacios y vacíos', () => {
@@ -52,14 +59,15 @@ describe('rolesQueExigenMfa', () => {
     test('variable VACÍA (así la pasa docker compose si no está definida) = el default, NO apaga la política', () => {
         envMock.NODE_ENV = 'production';
         process.env.MFA_REQUIRED_ROLES = '';
-        expect(rolesQueExigenMfa()).toEqual(['super_admin']);
+        expect(rolesQueExigenMfa()).toEqual(['super_admin', 'admin']);
     });
 
     test('exigeMfa / mfaPendiente', () => {
         envMock.NODE_ENV = 'production';
         delete process.env.MFA_REQUIRED_ROLES;
         expect(exigeMfa(['super_admin'])).toBe(true);
-        expect(exigeMfa(['admin'])).toBe(false);
+        expect(exigeMfa(['admin'])).toBe(true);
+        expect(exigeMfa(['vendedor', 'cobrador'])).toBe(false);
         expect(exigeMfa(undefined)).toBe(false);
         expect(mfaPendiente(['super_admin'], false)).toBe(true);
         expect(mfaPendiente(['super_admin'], true)).toBe(false); // ya lo activó
@@ -91,12 +99,6 @@ describe('mfaToken (contraseña correcta, falta el segundo factor)', () => {
     test.each([[undefined], [null], [''], [123], ['no.es.jwt'], ['a.b']])('entrada inválida %p → null', (x) => {
         expect(verificarMfaToken(x)).toBeNull();
     });
-
-    test('usuarioDeMfaTokenSinVerificar sólo agrupa el rate limit', () => {
-        expect(usuarioDeMfaTokenSinVerificar(emitirMfaToken(9))).toBe(9);
-        expect(usuarioDeMfaTokenSinVerificar('basura')).toBeNull();
-        expect(usuarioDeMfaTokenSinVerificar(undefined)).toBeNull();
-    });
 });
 
 describe('emitirSesion (mfaPending lo decide la base, no el cliente)', () => {
@@ -117,6 +119,15 @@ describe('emitirSesion (mfaPending lo decide la base, no el cliente)', () => {
         const s = await emitirSesion(usuario(['super_admin'], false), tokenService, repo);
         expect(s.user.mfaPendiente).toBe(true);
         expect(tokenService.generateAccessToken).toHaveBeenLastCalledWith(expect.objectContaining({ mfaPending: true }));
+    });
+
+    test('admin sin 2FA en producción (sin MFA_REQUIRED_ROLES) → también queda en mfaPending', async () => {
+        envMock.NODE_ENV = 'production';
+        delete process.env.MFA_REQUIRED_ROLES;
+        const s = await emitirSesion(usuario(['admin'], false), tokenService, repo);
+        expect(s.user.mfaPendiente).toBe(true);
+        // El vendedor no: el default no se extiende a todo el equipo.
+        expect((await emitirSesion(usuario(['vendedor'], false), tokenService, repo)).user.mfaPendiente).toBeUndefined();
     });
 
     test('super_admin CON 2FA → sin mfaPending', async () => {
@@ -201,12 +212,17 @@ describe('política de contraseñas nuevas', () => {
     test('se aplica en los cuatro flujos de contraseña nueva', () => {
         const mala = 'corta';
         expect(createUsuarioSchema.safeParse({ nombre: 'A', email: 'a@x.com', password: mala, roleIds: [] }).success).toBe(false);
-        expect(resetUsuarioPasswordSchema.safeParse({ password: mala }).success).toBe(false);
+        expect(resetUsuarioPasswordSchema.safeParse({ password: mala, currentPassword: 'mia' }).success).toBe(false);
         expect(changeMyPasswordSchema.safeParse({ currentPassword: 'x', newPassword: mala }).success).toBe(false);
         expect(resetPasswordSchema.safeParse({ token: 't', password: mala }).success).toBe(false);
         const buena = 'correcto-caballo-9';
-        expect(resetUsuarioPasswordSchema.safeParse({ password: buena }).success).toBe(true);
+        expect(resetUsuarioPasswordSchema.safeParse({ password: buena, currentPassword: 'mia' }).success).toBe(true);
         expect(changeMyPasswordSchema.safeParse({ currentPassword: 'x', newPassword: buena }).success).toBe(true);
+    });
+
+    test('el reset de la contraseña de OTRO exige la contraseña del actor (step-up)', () => {
+        expect(resetUsuarioPasswordSchema.safeParse({ password: 'correcto-caballo-9' }).success).toBe(false);
+        expect(resetUsuarioPasswordSchema.safeParse({ password: 'correcto-caballo-9', currentPassword: '' }).success).toBe(false);
     });
 });
 

@@ -4,6 +4,10 @@ import ApiError from '../../utils/ApiError';
 import { logger } from '../../infrastructure/logging/logger';
 import { env } from '../../config/env';
 import { context } from '../../infrastructure/security/context';
+import { urlParaLog } from './requestLogger.middleware';
+
+const esErrorDePrisma = (err: any): boolean =>
+    typeof err?.name === 'string' && err.name.startsWith('PrismaClient');
 
 interface RespuestaDeError {
     error: string;
@@ -16,12 +20,23 @@ interface RespuestaDeError {
 export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
     const correlationId = context.get()?.correlationId;
 
-    // 1. Log the error
-    logger.error(`${correlationId ? `[${correlationId}] ` : ''}${err.message}`, {
-        stack: err.stack,
-        url: req.url,
-        method: req.method,
-    });
+    // 1. Log del error. La URL va REDACTADA (urlParaLog): las búsquedas llevan DNI, teléfonos
+    // y emails en el query string, y `req.url` los escribía tal cual. En producción, de un
+    // error de Prisma se loguea el código y el modelo, no el mensaje: el de validación
+    // (PrismaClientValidationError) reproduce los argumentos de la consulta, con sus valores.
+    const prefijo = correlationId ? `[${correlationId}] ` : '';
+    if (env.NODE_ENV === 'production' && esErrorDePrisma(err)) {
+        logger.error(`${prefijo}${err.name}${err.code ? ` ${err.code}` : ''}${err.meta?.modelName ? ` (${err.meta.modelName})` : ''}`, {
+            url: urlParaLog(req.originalUrl ?? req.url),
+            method: req.method,
+        });
+    } else {
+        logger.error(`${prefijo}${err.message}`, {
+            stack: err.stack,
+            url: urlParaLog(req.originalUrl ?? req.url),
+            method: req.method,
+        });
+    }
 
     // 2. Determine response status and message
     // El tipo es explícito (y no inferido del literal) porque la rama de

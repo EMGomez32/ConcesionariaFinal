@@ -5,16 +5,19 @@ import request from 'supertest';
 // integración), así que el CI nunca los ejercita. Acá se monta un Express real con
 // env de "desarrollo" y se prueba el comportamiento de cada uno. Sin DB ni server.
 jest.setTimeout(30000);
-jest.mock('../../src/config/env', () => ({ env: { NODE_ENV: 'development' } }));
+jest.mock('../../src/config/env', () => ({ env: { NODE_ENV: 'development', JWT_SECRET: 'secreto-de-prueba-largo-1234567890' } }));
 
+import jwt from 'jsonwebtoken';
 import {
     forgotPasswordEmailLimiter,
     forgotPasswordIpLimiter,
     loginAccountLimiter,
     loginLimiter,
+    mfaLoginLimiter,
     resetPasswordLimiter,
     uploadLimiter,
 } from '../../src/interface/middlewares/rateLimiters';
+import { emitirMfaToken } from '../../src/infrastructure/security/mfaToken';
 import { minResponseTime } from '../../src/interface/middlewares/minResponseTime.middleware';
 import { context } from '../../src/infrastructure/security/context';
 
@@ -36,6 +39,8 @@ function crearApp() {
         context.run({ user: { userId: uid } } as any, () => next());
     }, uploadLimiter, (_req, res) => res.json({ ok: true }));
     app.get('/lento', minResponseTime(300), (_req, res) => res.json({ ok: true }));
+    // Segundo paso del login simulado: el código siempre es incorrecto (401 cuenta como fallo).
+    app.post('/login2fa', mfaLoginLimiter, (_req, res) => res.status(401).json({}));
     return app;
 }
 
@@ -139,6 +144,29 @@ describe('limiters por usuario (uploads, envíos, PDFs)', () => {
         const app = crearApp();
         for (let i = 0; i < 100; i++) await post(app, '/upload', {}, `41.0.0.${(i % 200) + 1}`, { 'x-user': '601' });
         expect((await post(app, '/upload', {}, '41.9.9.9', { 'x-user': '601' })).status).toBe(429);
+    });
+});
+
+describe('mfaLoginLimiter (segundo paso del login)', () => {
+    // Un token "de contraseña correcta" FORJADO: el sub es el id de la víctima, la firma es basura.
+    const forjado = (uid: number) => jwt.sign({ sub: String(uid), purpose: 'mfa' }, 'no-es-la-clave-del-servidor');
+
+    test('5 fallos con un token VERIFICADO bloquean esa cuenta aunque cambie la IP', async () => {
+        const app = crearApp();
+        for (let i = 1; i <= 5; i++) {
+            expect((await post(app, '/login2fa', { mfaToken: emitirMfaToken(701), code: '000000' }, `50.0.0.${i}`)).status).toBe(401);
+        }
+        expect((await post(app, '/login2fa', { mfaToken: emitirMfaToken(701), code: '000000' }, '50.0.0.99')).status).toBe(429);
+    });
+
+    test('tokens FORJADOS con el id de la víctima NO le bloquean el login: cuentan contra la IP del atacante', async () => {
+        const app = crearApp();
+        // El atacante manda 10 tokens inventados con sub=702 desde su IP.
+        for (let i = 0; i < 10; i++) await post(app, '/login2fa', { mfaToken: forjado(702), code: '000000' }, '51.0.0.1');
+        // Su IP quedó bloqueada…
+        expect((await post(app, '/login2fa', { mfaToken: forjado(702), code: '000000' }, '51.0.0.1')).status).toBe(429);
+        // …pero la víctima, con SU token real y desde su IP, sigue pudiendo intentar.
+        expect((await post(app, '/login2fa', { mfaToken: emitirMfaToken(702), code: '000000' }, '51.0.0.2')).status).toBe(401);
     });
 });
 

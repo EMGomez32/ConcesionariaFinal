@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import client from '../../api/client';
 import { getApiErrorMessage } from '../../utils/error';
@@ -6,8 +6,19 @@ import AuthShell from '../../components/auth/AuthShell';
 
 const ResetPasswordPage = () => {
     const [params] = useSearchParams();
-    const token = params.get('token') || '';
+    // El token se lee UNA vez y se guarda en el estado: enseguida se borra de la barra de
+    // direcciones para que no quede en el historial del navegador ni viaje como Referer
+    // (es una llave de la cuenta durante una hora).
+    const [token] = useState(() => params.get('token') || '');
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has('token')) return;
+        url.searchParams.delete('token');
+        // replaceState conservando el `state` del router: no agrega una entrada ni lo desincroniza.
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    }, []);
 
     const [password, setPassword] = useState('');
     const [confirm, setConfirm] = useState('');

@@ -15,6 +15,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { normalizarTelefono } from '../src/domain/services/telefono';
+import { resolverPasswordDemo } from './passwordDemo';
 
 if (process.env.NODE_ENV === 'production' && process.env.SEED_DEMO_FORCE !== 'true') {
     console.error('Rechazado: NODE_ENV=production. Usá SEED_DEMO_FORCE=true si es una instancia de demo.');
@@ -31,10 +32,19 @@ const TENANT_OBJETIVO = process.env.SEED_DEMO_TENANT_ID ? Number(process.env.SEE
 // Dominio de los emails demo. Se pasa para respetar la convencion de un tenant
 // que ya existe (p.ej. demo.com -> admin@demo.com, vendedor@demo.com, ...).
 const EMAIL_DOMAIN = (process.env.SEED_DEMO_EMAIL_DOMAIN || 'autosdelvalle.test').trim();
-// Contrasena de TODAS las cuentas demo. Es conocida y compartida a proposito:
-// son cuentas de demostracion. Configurable para no dejar la del repo en una
+// Contrasena de TODAS las cuentas demo (el admin incluido). En desarrollo es la
+// conocida del repo; en produccion se exige SEED_DEMO_PASSWORD y que no sea debil
+// (ver passwordDemo.ts): el repo es publico y la del default no puede quedar en una
 // instancia accesible desde afuera.
-const PASSWORD_DEMO = process.env.SEED_DEMO_PASSWORD || 'demo1234';
+let PASSWORD_DEMO: string;
+try {
+    PASSWORD_DEMO = resolverPasswordDemo(process.env.NODE_ENV, process.env.SEED_DEMO_PASSWORD);
+} catch (err) {
+    console.error(`Rechazado: ${err instanceof Error ? err.message : err}`);
+    process.exit(1);
+}
+// En produccion la contrasena no se imprime en el resumen (queda en los logs del contenedor).
+const MOSTRAR_PASSWORD = process.env.NODE_ENV !== 'production';
 // Pisar la contrasena de un usuario que YA existe es destructivo, asi que no
 // pasa por default: hay que pedirlo explicito.
 const RESET_PASS = process.env.SEED_DEMO_RESET_PASS === 'true';
@@ -222,7 +232,8 @@ async function main() {
         admin = await prisma.usuario.create({
             data: {
                 nombre: 'Admin Demo', email: 'admin@autosdelvalle.test',
-                passwordHash: await bcrypt.hash('demo1234', 10),
+                // Antes estaba fija en la contraseña por defecto aunque se definiera SEED_DEMO_PASSWORD.
+                passwordHash: await bcrypt.hash(PASSWORD_DEMO, 10),
                 concesionariaId: cid, sucursalId: sid,
                 roles: { create: { rolId: adminRol!.id } },
             },
@@ -541,8 +552,9 @@ async function main() {
 
     console.log('✅ Datos demo cargados:');
     console.log(`   Concesionaria: ${nombreCargado}${TENANT_OBJETIVO ? ` (id ${TENANT_OBJETIVO})` : ''}`);
-    if (!TENANT_OBJETIVO) console.log('   Login admin:    admin@autosdelvalle.test / demo1234');
-    console.log(`   Cuentas (contraseña ${PASSWORD_DEMO}):`);
+    const passwordVisible = MOSTRAR_PASSWORD ? PASSWORD_DEMO : 'la de SEED_DEMO_PASSWORD';
+    if (!TENANT_OBJETIVO) console.log(`   Login admin:    admin@autosdelvalle.test / ${passwordVisible}`);
+    console.log(`   Cuentas (contraseña ${passwordVisible}):`);
     for (const r of ['admin', 'vendedor', 'vendedor2', 'cobrador', 'postventa', 'lectura']) {
         console.log(`     ${r.padEnd(10)} ${r}@${EMAIL_DOMAIN}`);
     }

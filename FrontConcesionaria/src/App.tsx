@@ -177,7 +177,7 @@ function App() {
 
               {/* Otros */}
               <Route path="/financiaciones" element={<FinanciacionesPage />} />
-              <Route path="/solicitudes" element={<FinanciacionExternaPage />} />
+              <Route path="/solicitudes" element={<RequireRole allowedRoles={['admin', 'super_admin', 'vendedor', 'lectura']}><FinanciacionExternaPage /></RequireRole>} />
               <Route path="/postventa" element={<PostventaPage />} />
               <Route path="/reportes" element={<ReportesPage />} />
               <Route path="/auditoria" element={<RequireRole allowedRoles={['admin', 'super_admin']}><AuditoriaPage /></RequireRole>} />

@@ -30,6 +30,15 @@ import DosFactores from '../../components/seguridad/DosFactores';
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
+/** Textos de la vuelta del OAuth de Mercado Libre, por el código que manda el backend. */
+const MENSAJES_ERROR_ML: Record<string, string> = {
+    state_invalido: 'El link de vinculación venció, ya se usó o se abrió en otro navegador. Volvé a intentarlo desde Configuración.',
+    sin_codigo: 'Mercado Libre no devolvió el código de autorización (¿se canceló la vinculación?).',
+    cuenta_ajena: 'Esa cuenta de Mercado Libre ya está vinculada a otra concesionaria. Desvinculala de allá antes de conectarla acá.',
+    fallo_vinculacion: 'No se pudo vincular la cuenta de Mercado Libre. Probá de nuevo en unos minutos.',
+};
+const MENSAJE_ERROR_ML_GENERICO = 'No se pudo vincular la cuenta de Mercado Libre.';
+
 type Tab = 'concesionaria' | 'perfil' | 'password' | 'seguridad' | 'preferencias';
 
 // Selector de color de marca: swatch nativo + hex editable + botón para volver
@@ -1340,7 +1349,10 @@ function CuentasMercadoLibre() {
 
     useEffect(() => { cargar(); }, [cargar]);
 
-    // Vuelta del OAuth: el backend redirige acá con ?ml=ok o ?ml=error&detalle=...
+    // Vuelta del OAuth: el backend redirige acá con ?ml=ok o ?ml=error&codigo=...
+    // El texto lo pone ESTA pantalla según el código: mostrar un texto que viene en la URL
+    // dejaba que cualquiera armara un link a /configuracion con el mensaje que quisiera
+    // (un "llamá a este número" con la voz de la app). Un código desconocido cae al genérico.
     // El query se limpia enseguida para que un refresh no repita el toast.
     useEffect(() => {
         const resultado = searchParams.get('ml');
@@ -1348,10 +1360,12 @@ function CuentasMercadoLibre() {
         if (resultado === 'ok') {
             addToast('Cuenta de Mercado Libre vinculada con éxito', 'success');
         } else {
-            addToast(searchParams.get('detalle') || 'No se pudo vincular la cuenta de Mercado Libre', 'error');
+            const codigo = searchParams.get('codigo') ?? '';
+            addToast(MENSAJES_ERROR_ML[codigo] ?? MENSAJE_ERROR_ML_GENERICO, 'error');
         }
         const limpios = new URLSearchParams(searchParams);
         limpios.delete('ml');
+        limpios.delete('codigo');
         limpios.delete('detalle');
         setSearchParams(limpios, { replace: true });
         cargar();

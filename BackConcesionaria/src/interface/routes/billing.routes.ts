@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { BillingController } from '../controllers/BillingController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
-import { registrarPagoInvoiceSchema } from '../validation/billing.schema';
+import { createInvoiceSchema, createPlanSchema, registrarPagoInvoiceSchema, updatePlanSchema, updateSubscriptionSchema } from '../validation/billing.schema';
 
 // NOTA: comentario de línea y no bloque JSDoc a propósito — swagger-jsdoc
 // parsea TODO bloque /** */ de este directorio como YAML, y una lista con dos
@@ -74,7 +74,7 @@ router.get('/planes', authorize('admin'), BillingController.getPlanes);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
-router.post('/planes', authorize('super_admin'), BillingController.createPlan);
+router.post('/planes', authorize('super_admin'), validateBody(createPlanSchema), BillingController.createPlan);
 
 /**
  * @openapi
@@ -105,7 +105,7 @@ router.post('/planes', authorize('super_admin'), BillingController.createPlan);
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/planes/:id', authorize('super_admin'), BillingController.updatePlan);
+router.patch('/planes/:id', authorize('super_admin'), validateBody(updatePlanSchema), BillingController.updatePlan);
 
 // Suscripciones
 /**
@@ -168,7 +168,7 @@ router.get('/concesionarias/:id/subscription', authorize('super_admin'), Billing
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.patch('/concesionarias/:id/subscription', authorize('super_admin'), BillingController.updateSubscription);
+router.patch('/concesionarias/:id/subscription', authorize('super_admin'), validateBody(updateSubscriptionSchema), BillingController.updateSubscription);
 
 // Invoices
 /**
@@ -230,7 +230,7 @@ router.get('/invoices', authorize('admin'), BillingController.getInvoices);
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/invoices', authorize('super_admin'), BillingController.createInvoice);
+router.post('/invoices', authorize('super_admin'), validateBody(createInvoiceSchema), BillingController.createInvoice);
 
 /**
  * @openapi
