@@ -7,7 +7,7 @@ import { withAuthBypass } from '../../infrastructure/database/unitOfWork';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
 import { exigeMfa } from '../../infrastructure/security/mfaPolicy';
-import { assertObjetivoGestionable } from '../../infrastructure/security/usuarioPolicy';
+import { assertObjetivoGestionable } from '../../infrastructure/security/objetivoGestionable';
 import {
     confirmarSetupMfa, desactivarMfa, estadoMfa, iniciarSetupMfa, regenerarCodigosMfa, verificarSegundoFactor,
 } from '../../application/services/mfaService';

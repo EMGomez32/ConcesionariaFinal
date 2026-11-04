@@ -1,7 +1,8 @@
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
-import { assertObjetivoGestionable, assertRolesAsignables } from '../../../infrastructure/security/usuarioPolicy';
+import { assertRolesAsignables } from '../../../infrastructure/security/usuarioPolicy';
+import { assertObjetivoGestionable } from '../../../infrastructure/security/objetivoGestionable';
 import { RevokeUserSessions } from '../auth/RevokeUserSessions';
 import bcrypt from 'bcryptjs';
 

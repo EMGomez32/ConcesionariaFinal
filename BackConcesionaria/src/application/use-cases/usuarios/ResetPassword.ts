@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { RevokeUserSessions } from '../auth/RevokeUserSessions';
-import { assertObjetivoGestionable } from '../../../infrastructure/security/usuarioPolicy';
+import { assertObjetivoGestionable } from '../../../infrastructure/security/objetivoGestionable';
 
 /** Reset de contraseña de OTRO usuario por un admin. Cierra todas sus sesiones. */
 export class ResetPassword {

@@ -1,7 +1,7 @@
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { RevokeUserSessions } from '../auth/RevokeUserSessions';
-import { assertObjetivoGestionable } from '../../../infrastructure/security/usuarioPolicy';
+import { assertObjetivoGestionable } from '../../../infrastructure/security/objetivoGestionable';
 
 export class DeleteUsuario {
     constructor(
