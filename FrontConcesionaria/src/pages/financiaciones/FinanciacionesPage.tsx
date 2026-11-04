@@ -20,7 +20,8 @@ import {
 import { getErrorMessage } from '../../utils/getErrorMessage';
 import { usePermisos } from '../../hooks/usePermisos';
 import { waShareLink } from '../../utils/whatsapp';
-import { formatFecha } from '../../utils/fecha';
+import { formatFecha, hoyLocal } from '../../utils/fecha';
+import { formatMoneda } from '../../utils/moneda';
 import { getApiErrorMessage } from '../../utils/error';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -140,7 +141,7 @@ const metodoLabels: Record<string, string> = {
     tarjeta: 'Tarjeta', cheque: 'Cheque', otro: 'Otro',
 };
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = hoyLocal;
 const emptyForm = (): FinForm => ({
     ventaId: 0, clienteId: 0, cobradorId: 0,
     fechaInicio: today(), montoFinanciado: 0, moneda: 'ARS',
@@ -280,7 +281,7 @@ const FinanciacionesPage = () => {
         cuotas: '6',
         tasaMensual: '',
         diaVencimiento: '',
-        fechaInicio: new Date().toISOString().slice(0, 10),
+        fechaInicio: hoyLocal(),
     });
 
     // El saldo se calcula acá sólo para mostrarlo: el backend lo recalcula de las
@@ -295,7 +296,7 @@ const FinanciacionesPage = () => {
             cuotas: '6',
             tasaMensual: detail.tasaMensual != null ? String(detail.tasaMensual) : '',
             diaVencimiento: String(detail.diaVencimiento ?? ''),
-            fechaInicio: new Date().toISOString().slice(0, 10),
+            fechaInicio: hoyLocal(),
         });
         setRefiOpen(true);
     };
@@ -1240,14 +1241,14 @@ const FinanciacionesPage = () => {
                             </div>
                             <div className="text-right">
                                 <span className="text-3xs font-black text-muted mb-1">EXIGIBILIDAD</span>
-                                <p className="text-2xl font-black">${Number(pagarCuota.saldoCuota).toLocaleString('es-AR')}</p>
+                                <p className="text-2xl font-black">{formatMoneda(pagarCuota.saldoCuota, detail?.moneda)}</p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 gap-6">
                             <Input
                                 dense
-                                label="Recaudación Efectiva (ARS) *"
+                                label={`Recaudación Efectiva (${detail?.moneda || 'ARS'}) *`}
                                 containerClassName="col-span-2"
                                 icon={<DollarSign size={16} className="text-accent" />}
                                 type="number"

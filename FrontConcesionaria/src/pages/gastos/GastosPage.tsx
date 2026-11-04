@@ -6,7 +6,7 @@ import { useSucursales } from '../../hooks/useSucursales';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useUIStore } from '../../store/uiStore';
 import { useDebounce } from '../../hooks/useDebounce';
-import { formatFecha } from '../../utils/fecha';
+import { formatFecha, hoyLocal } from '../../utils/fecha';
 import { proveedoresApi } from '../../api/proveedores.api';
 import type { GastoVehiculo } from '../../api/gastos.api';
 import type { ApiError } from '../../types/api.types';
@@ -30,7 +30,7 @@ const EMPTY_GASTO_FORM = {
     proveedorId: '',
     monto: '',
     moneda: 'ARS' as 'ARS' | 'USD',
-    fechaGasto: new Date().toISOString().split('T')[0],
+    fechaGasto: hoyLocal(),
     descripcion: '',
 };
 

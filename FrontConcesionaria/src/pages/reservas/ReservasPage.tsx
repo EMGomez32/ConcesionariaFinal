@@ -21,6 +21,7 @@ import {
     Eye, XCircle, X
 } from 'lucide-react';
 import { usePermisos } from '../../hooks/usePermisos';
+import { formatFecha } from '../../utils/fecha';
 
 const ESTADO_OPTS: { value: EstadoReserva; label: string }[] = [
     { value: 'activa', label: 'Activa' },
@@ -272,7 +273,7 @@ const ReservasPage = () => {
                                         </td>
                                         <td>
                                             <span style={{ color: proximo ? 'var(--warning)' : 'inherit', fontWeight: proximo ? 700 : undefined }}>
-                                                {r.fechaVencimiento ? new Date(r.fechaVencimiento).toLocaleDateString('es-AR') : '-'}
+                                                {formatFecha(r.fechaVencimiento)}
                                                 {proximo && ' ⚠️'}
                                             </span>
                                         </td>

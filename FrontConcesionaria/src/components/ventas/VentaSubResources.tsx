@@ -6,6 +6,7 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 import { usePermisos } from '../../hooks/usePermisos';
 import { useUIStore } from '../../store/uiStore';
+import { hoyLocal } from '../../utils/fecha';
 
 type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' | 'otro';
 
@@ -43,7 +44,7 @@ interface VentaSubResourcesProps {
     ventaId: number;
 }
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = hoyLocal;
 
 const VentaSubResources = ({ ventaId }: VentaSubResourcesProps) => {
     const { addToast } = useUIStore();
