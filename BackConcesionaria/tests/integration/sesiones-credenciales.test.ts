@@ -47,7 +47,7 @@ describe('Sesiones y credenciales', () => {
         const u = await nuevoUsuario();
         const s = await loginUser(u.email);
 
-        const r = await api.post(`/api/usuarios/${u.id}/reset-password`, { password: 'nueva12345' }, authHeaders(adminToken));
+        const r = await api.post(`/api/usuarios/${u.id}/reset-password`, { password: 'nueva12345', currentPassword: 'admin123' }, authHeaders(adminToken));
         expect(r.status).toBe(204);
 
         expect((await refresh(s.refresh)).status).toBe(401);
@@ -57,7 +57,7 @@ describe('Sesiones y credenciales', () => {
         const u = await nuevoUsuario();
         const vieja = await loginUser(u.email);
 
-        await api.post(`/api/usuarios/${u.id}/reset-password`, { password: 'nueva12345' }, authHeaders(adminToken));
+        await api.post(`/api/usuarios/${u.id}/reset-password`, { password: 'nueva12345', currentPassword: 'admin123' }, authHeaders(adminToken));
         const nueva = await loginUser(u.email, 'nueva12345');
 
         // Un atacante reintenta con el token robado: 401 a secas...

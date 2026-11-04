@@ -66,6 +66,76 @@ export function enmascararEmail(email: string): string {
     return `${local.slice(0, 2)}***@${dominio}`;
 }
 
+/**
+ * Avisos de seguridad al DUEÑO de una cuenta cuando otro (un administrador) le cambió algo
+ * que da control sobre ella. Si no fue algo pedido, es la única forma en que se entera a
+ * tiempo. No llevan enlaces ni datos de la cuenta más allá de lo imprescindible.
+ */
+export type AvisoDeCuenta = 'password_reseteada' | '2fa_reseteado' | 'email_cambiado';
+
+const AVISOS: Record<AvisoDeCuenta, { asunto: string; titulo: string; texto: string }> = {
+    password_reseteada: {
+        asunto: 'Se cambió la contraseña de tu cuenta · AUTENZA',
+        titulo: 'Cambiaron tu contraseña',
+        texto: 'Un administrador de tu concesionaria le puso una contraseña nueva a tu cuenta y se cerraron tus sesiones abiertas. Pedile la contraseña nueva y cambiala por una tuya desde Configuración.',
+    },
+    '2fa_reseteado': {
+        asunto: 'Se reseteó la verificación en dos pasos de tu cuenta · AUTENZA',
+        titulo: 'Resetearon tu verificación en dos pasos',
+        texto: 'Un administrador de tu concesionaria apagó la verificación en dos pasos (2FA) de tu cuenta y se cerraron tus sesiones abiertas. En tu próximo ingreso vas a poder configurarla de nuevo.',
+    },
+    email_cambiado: {
+        asunto: 'Se cambió el email de tu cuenta · AUTENZA',
+        titulo: 'Cambiaron el email de tu cuenta',
+        texto: 'Un administrador de tu concesionaria cambió el email con el que entrás a AUTENZA. Desde ahora los avisos y la recuperación de contraseña van a la dirección nueva.',
+    },
+};
+
+function renderAvisoHtml(titulo: string, texto: string): string {
+    const gradient = 'linear-gradient(135deg,#10b981 0%,#06b6d4 50%,#8b5cf6 100%)';
+    return `<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head>
+<body style="margin:0;padding:0;background:#eef1f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f6;padding:32px 12px;"><tr><td align="center">
+<table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;">
+<tr><td style="background:#10b981;background-image:${gradient};padding:24px 32px;text-align:center;"><div style="font-size:22px;font-weight:700;letter-spacing:6px;color:#ffffff;">AUTENZA</div></td></tr>
+<tr><td style="padding:32px;">
+<h1 style="margin:0 0 12px;font-size:19px;color:#0f172a;">${titulo}</h1>
+<p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;">${texto}</p>
+<p style="margin:0;font-size:13px;line-height:1.6;color:#475569;"><strong>Si no lo esperabas</strong>, avisale al administrador de tu concesionaria cuanto antes.</p>
+</td></tr>
+<tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #eef1f6;text-align:center;"><div style="font-size:11px;color:#94a3b8;">Correo automático, no respondas a esta dirección.</div></td></tr>
+</table></td></tr></table></body></html>`;
+}
+
+export async function sendAvisoDeCuenta(to: string, aviso: AvisoDeCuenta): Promise<void> {
+    if (!transporter) {
+        // Sin SMTP no hay a quién avisarle: queda el rastro (sin la dirección completa).
+        logger.info(`[mailer] SMTP no configurado: no se envió el aviso "${aviso}" a ${enmascararEmail(to)}.`);
+        return;
+    }
+    const a = AVISOS[aviso];
+    await transporter.sendMail({
+        from: FROM,
+        to,
+        subject: a.asunto,
+        text: `AUTENZA — ${a.titulo}\n\n${a.texto}\n\nSi no lo esperabas, avisale al administrador de tu concesionaria cuanto antes.`,
+        html: renderAvisoHtml(a.titulo, a.texto),
+    });
+    logger.info(`[mailer] aviso "${aviso}" enviado a ${enmascararEmail(to)}`);
+}
+
+/**
+ * Lo mismo, sin bloquear la respuesta ni romperla: el cambio ya se hizo y un SMTP caído o
+ * lento no puede convertirlo en un error para el admin.
+ */
+export function avisarCambioDeCuenta(to: string | null | undefined, aviso: AvisoDeCuenta): void {
+    if (!to) return;
+    void sendAvisoDeCuenta(to, aviso).catch((err) =>
+        logger.warn(`[mailer] no se pudo enviar el aviso "${aviso}" a ${enmascararEmail(to)}: ${err instanceof Error ? err.message : 'error'}`),
+    );
+}
+
 export async function sendPasswordResetEmail(to: string, link: string): Promise<void> {
     if (!transporter) {
         // El link lleva el token de reset: quien lea los logs (docker logs, un volcado, un

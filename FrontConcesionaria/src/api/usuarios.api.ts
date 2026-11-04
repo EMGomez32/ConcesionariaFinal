@@ -25,8 +25,10 @@ export const usuariosApi = {
         return client.delete(`/usuarios/${id}`);
     },
 
-    resetPassword: (id: number, password: string) => {
-        return client.post(`/usuarios/${id}/reset-password`, { password });
+    // `currentPassword` es la contraseña de QUIEN hace el reset (step-up): el backend no
+    // deja tomar la cuenta de otro con una sesión abierta sola.
+    resetPassword: (id: number, password: string, currentPassword: string) => {
+        return client.post(`/usuarios/${id}/reset-password`, { password, currentPassword });
     },
 
     // Autogestión: el usuario logueado sobre su propia cuenta (Configuración).

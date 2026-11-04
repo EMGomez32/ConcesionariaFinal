@@ -56,6 +56,14 @@ export const createUsuarioSchema = z.object({
     roleIds: z.array(roleId).default([]),
 });
 
+// STEP-UP: la contraseña del ACTOR (no la del usuario editado). La piden las acciones que
+// dan control sobre la cuenta de otro: reset de contraseña, reset del 2FA y cambio de email
+// (ver application/services/reautenticacion.ts). Sin trim: es una contraseña.
+const contrasenaDelActor = z
+    .string({ error: 'Para confirmar este cambio, ingresá tu contraseña.' })
+    .min(1, 'Para confirmar este cambio, ingresá tu contraseña.')
+    .max(200, 'La contraseña es demasiado larga');
+
 // El controller.update strippea roleIds/roles/activo cuando editás TU PROPIA cuenta
 // (anti auto-lockout); el schema igual valida su forma, el strip ocurre después.
 export const updateUsuarioSchema = z.object({
@@ -78,12 +86,21 @@ export const updateUsuarioSchema = z.object({
     // es truthy y BORRARÍA todos los roles del usuario. Debe quedar undefined si no
     // viene, para que el repo no toque los roles.
     roleIds: z.array(roleId).optional(),
+    // Obligatoria SÓLO si cambia el email o se fija una contraseña (lo exige el controller,
+    // que es el que sabe si el email cambió). Nunca llega al repositorio.
+    currentPassword: contrasenaDelActor.optional(),
 });
 
 // POST /usuarios/:id/reset-password — un admin setea la clave de OTRO usuario.
 // Nombre distinto de resetPasswordSchema (auth.schema.ts) para no colisionar.
 export const resetUsuarioPasswordSchema = z.object({
     password: passwordNueva(),
+    currentPassword: contrasenaDelActor,
+});
+
+// POST /usuarios/:id/2fa/reset — apagar el 2FA de otro (perdió el teléfono). Step-up.
+export const resetMfaDeOtroSchema = z.object({
+    currentPassword: contrasenaDelActor,
 });
 
 // PATCH /usuarios/me — autogestión. El controller sólo lee nombre y email.

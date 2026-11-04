@@ -14,6 +14,8 @@ import {
 import { emitirSesion } from '../../application/use-cases/auth/emitirSesion';
 import { ponerCookieRefresh } from './refreshCookie';
 import { RevokeUserSessions } from '../../application/use-cases/auth/RevokeUserSessions';
+import { exigirContrasenaDelActor } from '../../application/services/reautenticacion';
+import { avisarCambioDeCuenta } from '../../infrastructure/email/mailer';
 
 const tokenService = new JwtTokenService();
 const refreshRepo = new PrismaRefreshTokenRepository();
@@ -140,6 +142,8 @@ export class MfaController {
             if (!esSuper && objetivo.concesionariaId !== actor.concesionariaId) throw new NotFoundException('Usuario');
             // Y nunca sobre un super_admin: quitarle el 2FA a la cuenta de plataforma es de otro super_admin.
             assertObjetivoGestionable(objetivo);
+            // STEP-UP: apagarle el segundo factor a otro abre su cuenta a quien tenga su contraseña.
+            await exigirContrasenaDelActor(req.body?.currentPassword);
 
             await desactivarMfa(id);
             await revokeSessions.execute(id);
@@ -148,6 +152,7 @@ export class MfaController {
                 detalle: `2FA reseteado por un administrador (usuario ${id}); sesiones cerradas`,
                 concesionariaId: objetivo.concesionariaId,
             });
+            avisarCambioDeCuenta(objetivo.email, '2fa_reseteado');
             res.status(204).send();
         } catch (error) { next(error); }
     }

@@ -4,7 +4,7 @@ import { authenticate } from '../middlewares/authenticate.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
 import { MfaController } from '../controllers/MfaController';
-import { createUsuarioSchema, updateUsuarioSchema, resetUsuarioPasswordSchema, updateMeSchema, changeMyPasswordSchema } from '../validation/usuario.schema';
+import { createUsuarioSchema, updateUsuarioSchema, resetUsuarioPasswordSchema, resetMfaDeOtroSchema, updateMeSchema, changeMyPasswordSchema } from '../validation/usuario.schema';
 
 const router = Router();
 
@@ -167,7 +167,7 @@ router.patch('/:id', authenticate, authorize('admin', 'super_admin'), validateBo
  *   post:
  *     tags: [Usuarios]
  *     summary: Resetear contraseña de un usuario
- *     description: Requiere rol admin o super_admin.
+ *     description: Requiere rol admin o super_admin y la contraseña del actor (step-up). Un admin no puede resetear a un super_admin.
  *     parameters:
  *       - { name: id, in: path, required: true, schema: { type: integer } }
  *     requestBody:
@@ -176,9 +176,10 @@ router.patch('/:id', authenticate, authorize('admin', 'super_admin'), validateBo
  *         application/json:
  *           schema:
  *             type: object
- *             required: [password]
+ *             required: [password, currentPassword]
  *             properties:
- *               password: { type: string, minLength: 6 }
+ *               password: { type: string, minLength: 10 }
+ *               currentPassword: { type: string, description: Contraseña del usuario que hace el reset }
  *     responses:
  *       204: { description: Password reseteada }
  *       400: { $ref: '#/components/responses/ValidationError' }
@@ -194,9 +195,18 @@ router.post('/:id/reset-password', authenticate, authorize('admin', 'super_admin
  *   post:
  *     tags: [Usuarios]
  *     summary: Resetear el 2FA de un usuario (perdió el dispositivo)
- *     description: Admin de la concesionaria (sobre sus usuarios) o super_admin. Apaga el 2FA, borra los códigos de recuperación y cierra las sesiones del usuario. Un admin no puede resetear a un super_admin.
+ *     description: Admin de la concesionaria (sobre sus usuarios) o super_admin. Apaga el 2FA, borra los códigos de recuperación y cierra las sesiones del usuario. Un admin no puede resetear a un super_admin. Pide la contraseña del actor (step-up).
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [currentPassword]
+ *             properties:
+ *               currentPassword: { type: string, description: Contraseña del usuario que hace el reset }
  */
-router.post('/:id/2fa/reset', authenticate, authorize('admin', 'super_admin'), MfaController.resetDeOtro);
+router.post('/:id/2fa/reset', authenticate, authorize('admin', 'super_admin'), validateBody(resetMfaDeOtroSchema), MfaController.resetDeOtro);
 
 /**
  * @openapi
