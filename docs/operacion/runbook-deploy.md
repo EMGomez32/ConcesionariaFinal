@@ -142,7 +142,9 @@ Todo rollback se registra en el log de deploys y, si hubo impacto, como incident
    `TENANT_TABLES` en `prisma/init-rls.ts`. Workers, webhooks y cron no tienen
    request: bajo `app_rw` ven cero filas sin error si no usan `withAuthBypass` o
    `withTenantTransaction`. Un camino probado solo como superusuario no está probado.
-10. **2FA del super_admin:** es obligatorio en producción. Si se pierde el
+10. **2FA de super_admin y admin:** es obligatorio en producción para los dos
+    roles (`MFA_REQUIRED_ROLES` vacía). Para exigírselo sólo al super_admin:
+    `MFA_REQUIRED_ROLES=super_admin` y `docker compose up -d backend`. Si se pierde el
     segundo factor y no quedan códigos de recuperación:
     `docker compose exec -T backend npx ts-node scripts/reset-2fa.ts <email> </dev/null`
     (queda en `security_events`). Es un incidente: registralo.
@@ -158,3 +160,40 @@ Todo rollback se registra en el log de deploys y, si hubo impacto, como incident
 14. **El `.env` de la raíz** va con permisos `600`. Después de cambiarlo,
     actualizá la copia en el gestor de contraseñas y borrá los `.env.bak.*`
     que hayan quedado una vez verificado el cambio.
+15. **`INTEGRACIONES_SECRET_KEY`** es obligatoria en producción: sin ella el
+    backend no arranca. Si ya está en el `.env`, no se toca nunca: con otra clave
+    los secretos ya cifrados (integraciones y 2FA) quedan ilegibles. Si falta, se
+    genera en el host con `openssl rand -hex 32` y se guarda una copia en el gestor
+    de contraseñas; los secretos que estaban en claro se siguen leyendo.
+
+## 7. Una sola vez: primer deploy del hardening (PR #114)
+
+Antes:
+
+- [ ] `INTEGRACIONES_SECRET_KEY` definida (gotcha 15). Para comprobarla sin
+      imprimirla: `grep -c '^INTEGRACIONES_SECRET_KEY=.\+' .env` tiene que dar `1`.
+- [ ] `CORS_ALLOWED_ORIGINS` con el dominio de producción y nada más (o sin
+      definir: compose usa `APP_URL`).
+- [ ] Los administradores saben que en su próximo login activan el 2FA (gotcha 10).
+- [ ] (Opcional) `SECURITY_ALERT_WEBHOOK_URL` con una URL `https`.
+- [ ] El primer deploy recrea `db` (la imagen pasó a ir por digest): unos segundos
+      sin base. `scripts/deploy.sh` hace el backup antes.
+
+Después:
+
+1. Documentos de vehículos a la zona privada: primero la simulación y, si la
+   lista es la esperada, `--aplicar`; al final otra simulación tiene que dar cero.
+   ```bash
+   docker compose exec -T backend npx ts-node scripts/migrar-documentos-vehiculos.ts </dev/null
+   docker compose exec -T backend npx ts-node scripts/migrar-documentos-vehiculos.ts --aplicar </dev/null
+   ```
+2. Purgar en Cloudflare la caché de las URLs que listó el script y de
+   `/uploads/solicitudes-*` (antes se servían como públicas).
+3. Retención de datos: correr la simulación y revisar qué tocaría.
+   `docker compose exec -T backend npm run retencion </dev/null`. Recién con el
+   resultado revisado, programarla en el cron del host (por ejemplo, semanal con
+   `-- --apply`) y anotarlo en el log de deploys.
+4. Endurecer el host con `scripts/hardening/pi-host-hardening.sh` en este orden:
+   simulación, `--apply --only ssh` (probá una sesión nueva antes de cerrar la
+   actual), `--apply --only firewall` y al final el resto. Guardá la salida de
+   `scripts/hardening/verify-host.sh` como evidencia.
