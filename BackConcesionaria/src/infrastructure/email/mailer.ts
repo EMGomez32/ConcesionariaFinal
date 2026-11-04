@@ -59,9 +59,23 @@ function renderPasswordResetHtml(link: string): string {
 </body></html>`;
 }
 
+/** ab***@dominio.com: en los logs no va la dirección completa (dato personal). */
+export function enmascararEmail(email: string): string {
+    const [local, dominio] = email.split('@');
+    if (!dominio) return '***';
+    return `${local.slice(0, 2)}***@${dominio}`;
+}
+
 export async function sendPasswordResetEmail(to: string, link: string): Promise<void> {
     if (!transporter) {
-        logger.warn(`[mailer] SMTP no configurado — link de recuperación para ${to}: ${link}`);
+        // El link lleva el token de reset: quien lea los logs (docker logs, un volcado, un
+        // agregador) podría tomar la cuenta. Sólo se imprime FUERA de producción, donde es
+        // útil para probar el flujo sin SMTP. En producción se avisa sin el token.
+        if (env.NODE_ENV === 'production') {
+            logger.warn(`[mailer] SMTP no configurado: no se envió el mail de recuperación a ${enmascararEmail(to)}. Definí SMTP_HOST/SMTP_PORT.`);
+        } else {
+            logger.warn(`[mailer] SMTP no configurado — link de recuperación para ${enmascararEmail(to)}: ${link}`);
+        }
         return;
     }
 
@@ -76,5 +90,5 @@ export async function sendPasswordResetEmail(to: string, link: string): Promise<
             `Si no lo solicitaste, ignorá este correo — tu contraseña actual sigue siendo válida.`,
         html: renderPasswordResetHtml(link),
     });
-    logger.info(`[mailer] email de recuperación enviado a ${to}`);
+    logger.info(`[mailer] email de recuperación enviado a ${enmascararEmail(to)}`);
 }

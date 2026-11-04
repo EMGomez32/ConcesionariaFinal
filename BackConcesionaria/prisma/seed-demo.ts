@@ -129,6 +129,7 @@ async function seedUsuariosPorRol(cid: number, sid?: number) {
         { rol: 'cobrador', nombre: 'Nadia Bustos' },
         { rol: 'postventa', nombre: 'Hernán Villalba' },
         { rol: 'lectura', nombre: 'Consulta Demo' },
+        { rol: 'tasador', nombre: 'Diego Peralta' },
     ];
     const creados: Record<string, any> = {};
     for (const d of def) {
@@ -150,7 +151,7 @@ async function main() {
 
     // Roles y plan (idempotente). Van primero porque los necesitan los DOS
     // caminos de abajo, no sólo el que crea la concesionaria.
-    for (const nombre of ['admin', 'vendedor', 'cobrador', 'postventa', 'lectura', 'super_admin']) {
+    for (const nombre of ['admin', 'vendedor', 'cobrador', 'postventa', 'lectura', 'super_admin', 'tasador']) {
         await prisma.rol.upsert({ where: { nombre: nombre as any }, update: {}, create: { nombre: nombre as any } });
     }
     const plan = await prisma.plan.upsert({
@@ -362,7 +363,10 @@ async function main() {
 
     // Financiación propia sobre la venta 2 (ARS), con 12 cuotas: 2 vencidas en mora.
     const montoFin = 11200000;
-    const cuotaMonto = Math.round(montoFin / 12);
+    // Misma regla que planDeCuotas: cuota pareja al centavo y la última absorbe el
+    // redondeo. Con Math.round(montoFin / 12) en las 12, el plan sumaba $11.199.996.
+    const cuotaMonto = Math.round((montoFin / 12) * 100) / 100;
+    const ultimaCuota = Math.round((montoFin - cuotaMonto * 11) * 100) / 100;
     const fin = await prisma.financiacion.create({
         data: {
             concesionariaId: cid, sucursalId: sid, ventaId: ventas[1].id,
@@ -376,9 +380,10 @@ async function main() {
         // Cuotas 1 y 2 ya vencidas y sin pagar (mora); el resto a futuro.
         const vencimiento = i <= 2 ? diasAtras((3 - i) * 30 + 5) : enDias((i - 2) * 30);
         const enMora = i <= 2;
+        const monto = i === 12 ? ultimaCuota : cuotaMonto;
         cuotas.push({
             concesionariaId: cid, financiacionId: fin.id, nroCuota: i,
-            montoCuota: cuotaMonto, saldoCuota: cuotaMonto,
+            montoCuota: monto, saldoCuota: monto,
             vencimiento, estado: (enMora ? 'vencida' : 'pendiente') as any,
         });
     }

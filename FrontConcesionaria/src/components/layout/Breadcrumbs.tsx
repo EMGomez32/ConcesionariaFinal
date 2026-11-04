@@ -9,9 +9,9 @@ const Breadcrumbs = () => {
     if (segments.length === 0) {
         return (
             <nav className="crumbs" aria-label="Ruta">
-                <span className="crumb crumb-current">
-                    <Home size={14} />
-                    <span>Dashboard</span>
+                <span className="crumb crumb-current" aria-current="page">
+                    <Home size={14} aria-hidden="true" />
+                    <span>Inicio</span>
                 </span>
             </nav>
         );
@@ -33,8 +33,8 @@ const Breadcrumbs = () => {
 
     return (
         <nav className="crumbs" aria-label="Ruta">
-            <Link to="/" className="crumb crumb-link" aria-label="Ir a Dashboard">
-                <Home size={14} />
+            <Link to="/" className="crumb crumb-link" aria-label="Ir al inicio">
+                <Home size={14} aria-hidden="true" />
             </Link>
             {trail.map((c) => (
                 <span key={c.href} className="crumb-row">
@@ -80,7 +80,7 @@ const Breadcrumbs = () => {
                                 background var(--duration-base) var(--easing-soft);
                 }
                 .crumb-link:hover {
-                    color: var(--accent);
+                    color: var(--accent-text);
                     background: var(--accent-light);
                 }
                 .crumb-current {

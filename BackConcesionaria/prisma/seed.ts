@@ -50,6 +50,7 @@ async function main() {
         { nombre: 'postventa' },
         { nombre: 'lectura' },
         { nombre: 'super_admin' },
+        { nombre: 'tasador' },
     ];
 
     for (const rol of roles) {

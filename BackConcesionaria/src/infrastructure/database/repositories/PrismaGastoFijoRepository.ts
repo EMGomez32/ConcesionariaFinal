@@ -4,6 +4,7 @@ import prisma from '../prisma';
 import { PROVEEDOR_PUBLICO } from '../proyecciones';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { parsePagination } from '../queryOptions';
 
 // `anio` y `mes` son columnas Int cuyo nombre no termina en `Id`: sin esto
 // llegan como string desde la query y Prisma responde 500.
@@ -31,9 +32,8 @@ function pickEditable(data: any = {}): Record<string, any> {
 
 export class PrismaGastoFijoRepository implements IGastoFijoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<GastoFijo>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
 
         const where = coerceFilter(filter, { numericKeys: NUMERIC_KEYS });
         const orderKey = SORTABLE.includes(String(sortBy)) ? String(sortBy) : 'createdAt';

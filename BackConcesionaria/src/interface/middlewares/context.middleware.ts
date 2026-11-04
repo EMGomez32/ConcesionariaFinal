@@ -28,6 +28,7 @@ export const contextMiddleware = (req: Request, res: Response, next: NextFunctio
                 concesionariaId: decoded.concesionariaId || null,
                 sucursalId: decoded.sucursalId || null,
                 roles: decoded.roles || [],
+                ...(decoded.mfaPending === true ? { mfaPending: true } : {}),
             };
         } catch (error) {
             // Token invalid or expired - we don't set user but keep going for public routes

@@ -2,12 +2,12 @@ import { IConcesionariaRepository } from '../../../domain/repositories/IConcesio
 import { Concesionaria } from '../../../domain/entities/Concesionaria';
 import prisma from '../prisma';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 export class PrismaConcesionariaRepository implements IConcesionariaRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Concesionaria>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
 
         const where: any = {};
 
@@ -29,7 +29,7 @@ export class PrismaConcesionariaRepository implements IConcesionariaRepository {
             where: { ...where },
             take: limitNum,
             skip: (pageNum - 1) * limitNum,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('Concesionaria', sortBy, sortOrder, 'createdAt'),
         });
 
         const total = await prisma.concesionaria.count({ where: where });

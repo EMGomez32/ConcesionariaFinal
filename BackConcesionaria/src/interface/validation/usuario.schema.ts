@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { passwordNueva } from './password';
 
 // Schemas de validación del recurso usuario (RBAC — SENSIBLE). Payloads verificados
 // contra los DTOs reales del front (usuarios.api.ts, types/usuario.types.ts) y el
@@ -39,9 +40,9 @@ export const createUsuarioSchema = z.object({
     nombre: z.string({ error: 'El nombre es obligatorio' }).min(1, 'El nombre es obligatorio'),
     // `.toLowerCase()`: email = identidad GLOBAL (@unique). Canonizar en minúscula acá
     // hace la unicidad case-insensitive y mantiene login/alta/reset consistentes.
-    email: z.string({ error: 'El email es obligatorio' }).trim().toLowerCase().min(1, 'El email es obligatorio').email('Email inválido'),
+    email: z.string({ error: 'El email es obligatorio' }).trim().toLowerCase().min(1, 'El email es obligatorio').email('El email no es válido'),
     // El use-case exige y hashea password (min 6). Se centraliza la regla acá.
-    password: z.string({ error: 'La contraseña es obligatoria' }).min(6, 'La contraseña debe tener al menos 6 caracteres'),
+    password: passwordNueva(),
     // Opcional a propósito: lo inyecta el controller desde el token para un admin;
     // super_admin lo manda por body y tiene que SOBREVIVIR al strip (ver cabecera).
     concesionariaId: optionalFk,
@@ -59,13 +60,13 @@ export const createUsuarioSchema = z.object({
 // (anti auto-lockout); el schema igual valida su forma, el strip ocurre después.
 export const updateUsuarioSchema = z.object({
     nombre: z.string().min(1, 'El nombre no puede estar vacío').optional(),
-    email: z.string().trim().toLowerCase().min(1, 'El email no puede estar vacío').email('Email inválido').optional(),
+    email: z.string().trim().toLowerCase().min(1, 'El email no puede estar vacío').email('El email no es válido').optional(),
     // El form de edición NO renderiza el campo password, pero igual manda
     // password:'' (queda del estado inicial y el padre no lo strippea). '' => undefined
-    // para no rechazar el request ni re-hashear; un password real sigue exigiendo min 6.
+    // para no rechazar el request ni re-hashear; un password real sigue exigiendo la política (10+ caracteres, ver password.ts).
     password: z.preprocess(
         (v) => (v === '' ? undefined : v),
-        z.string().min(6, 'La contraseña debe tener al menos 6 caracteres').optional(),
+        passwordNueva().optional(),
     ),
     // Opcional para que super_admin pueda REASIGNAR tenant. Un admin común no puede:
     // UsuarioController.update lo strippea salvo super_admin (ver cabecera).
@@ -82,17 +83,23 @@ export const updateUsuarioSchema = z.object({
 // POST /usuarios/:id/reset-password — un admin setea la clave de OTRO usuario.
 // Nombre distinto de resetPasswordSchema (auth.schema.ts) para no colisionar.
 export const resetUsuarioPasswordSchema = z.object({
-    password: z.string({ error: 'La contraseña es obligatoria' }).min(6, 'La contraseña debe tener al menos 6 caracteres'),
+    password: passwordNueva(),
 });
 
 // PATCH /usuarios/me — autogestión. El controller sólo lee nombre y email.
 export const updateMeSchema = z.object({
     nombre: z.string().min(1, 'El nombre no puede estar vacío').optional(),
-    email: z.string().trim().toLowerCase().min(1, 'El email no puede estar vacío').email('Email inválido').optional(),
+    email: z.string().trim().toLowerCase().min(1, 'El email no puede estar vacío').email('El email no es válido').optional(),
+    // Obligatoria SÓLO si el email cambia (la verifica UpdateMyProfile).
+    currentPassword: z.string().optional(),
+    // Refresh de la sesión actual: se conserva al cerrar las demás sesiones.
+    refreshToken: z.string().optional(),
 });
 
 // POST /usuarios/me/password — cambio de la propia clave (verifica la actual).
 export const changeMyPasswordSchema = z.object({
     currentPassword: z.string({ error: 'La contraseña actual es obligatoria' }).min(1, 'La contraseña actual es obligatoria'),
-    newPassword: z.string({ error: 'La nueva contraseña es obligatoria' }).min(6, 'La nueva contraseña debe tener al menos 6 caracteres'),
+    newPassword: passwordNueva('La nueva contraseña es obligatoria'),
+    // Refresh de la sesión actual: se conserva al cerrar las demás sesiones.
+    refreshToken: z.string().optional(),
 });

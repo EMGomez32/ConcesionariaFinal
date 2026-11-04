@@ -5,12 +5,12 @@ import { withTenantTransaction } from '../unitOfWork';
 import { context } from '../../security/context';
 import { BaseException } from '../../../domain/exceptions/BaseException';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 export class PrismaUsuarioRepository implements IUsuarioRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Usuario>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
 
         // Build where clause with contains for text fields
         const whereClause: any = {};
@@ -35,7 +35,7 @@ export class PrismaUsuarioRepository implements IUsuarioRepository {
             where: whereClause,
             take: limitNum,
             skip: (pageNum - 1) * limitNum,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('Usuario', sortBy, sortOrder, 'createdAt'),
             include: {
                 roles: {
                     include: { rol: true }

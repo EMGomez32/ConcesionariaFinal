@@ -15,7 +15,7 @@ export interface VehiculoMovimiento {
     fechaRetorno?: string | null;
     concesionariaId?: number;
     createdAt?: string;
-    vehiculo?: { id: number; marca: string; modelo: string; dominio?: string };
+    vehiculo?: { id: number; marca: string; modelo: string; version?: string; dominio?: string };
     desdeSucursal?: { id: number; nombre: string };
     hastaSucursal?: { id: number; nombre: string };
     proveedorDestino?: { id: number; nombre: string; tipo?: string };

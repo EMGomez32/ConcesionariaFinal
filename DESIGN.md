@@ -13,7 +13,8 @@ colors:
   bg-card: "#ffffff"
   text-primary: "#0f172a"
   text-secondary: "#475569"
-  text-muted: "#8a93a6"
+  text-muted: "#646c80"
+  text-on-accent: "#04060d"
   border: "#e2e6ef"
   border-strong: "#cdd3e0"
   success: "#10b981"
@@ -70,7 +71,7 @@ spacing:
 components:
   button-primary:
     backgroundColor: "{colors.accent-emerald}"
-    textColor: "#ffffff"
+    textColor: "{colors.text-on-accent}"
     rounded: "{rounded.pill}"
     padding: "0.75rem 1.5rem"
   button-secondary:
@@ -99,7 +100,7 @@ components:
     rounded: "{rounded.lg}"
     padding: "1.5rem"
   badge:
-    textColor: "{colors.accent-emerald}"
+    textColor: "#047052"
     rounded: "{rounded.pill}"
     padding: "0.25rem 0.625rem"
 ---
@@ -114,7 +115,13 @@ AUTENZA es la cabina de mando de una concesionaria: una herramienta de trabajo d
 
 Sobre esa base corre un acento futurista —emerald como color de acción, con violet y cyan para categorizar— y un vocabulario de *glows* de color y un gradiente aurora (emerald→cyan→violet). Ese neón es **señal, no papel tapiz**: aparece cuando algo significa algo (una acción primaria, un estado, un foco, una métrica destacada), no como decoración de fondo. El sistema tiene destellos disponibles (fondo aurora, tilt 3D en las stat-cards, barrido de brillo en el botón primario, texto con gradiente), pero la dirección es utilitaria: se usan con cuentagotas y nunca compiten con los datos.
 
-Tema claro por defecto, con un tema oscuro completo (`[data-theme="dark"]`) que reencuadra los mismos roles. Todo respeta `prefers-reduced-motion` y tiene anillos de foco visibles.
+Dos temas completos —claro (`:root`) y oscuro (`[data-theme="dark"]`)— que reencuadran los mismos roles (ver **Tema** abajo: sigue al sistema hasta que el usuario elige). Todo respeta `prefers-reduced-motion` y todo interactivo tiene anillo de foco visible.
+
+### Tema
+- **Sin elección del usuario, la app sigue al sistema:** `prefers-color-scheme` decide claro u oscuro, y si el sistema cambia con la app abierta (modo oscuro automático de noche), la app cambia en vivo.
+- **El toggle del TopBar guarda una elección explícita** en localStorage (`autenza-theme`, v1: `{ elegido: "light" | "dark" }`). Desde ahí el sistema ya no la pisa. `seguirSistema()` del store la olvida (para una preferencia "Automático").
+- **Sin flash:** el script inline de `index.html` aplica la misma regla antes del primer pintado (lee `elegido`, o el `theme` del formato viejo v0, y si no hay, `matchMedia`). `src/store/themeStore.ts` la mantiene en sync después.
+- Las pantallas de auth (login, recupero) son siempre oscuras: escenario navy fijo.
 
 **Key Characteristics:**
 - Base fintech sobria (grises fríos + navy) con acentos neón funcionales.
@@ -141,7 +148,7 @@ Una base neutra fría iluminada por un trío de acentos neón de rol fijo; el co
 - **Navy Cabina** (`#0a0f1f`): barra lateral y superficies oscuras de anclaje; el mismo valor es el fondo del tema oscuro. **Navy Claro** (`#1e293b`) para sus escalones.
 - **Lienzo** (`#f6f7fb`) y **Lienzo Hundido** (`#eef0f6`): fondo de página y zonas rebajadas (headers de tabla, footers de modal).
 - **Tarjeta** (`#ffffff`): toda superficie elevada.
-- **Tinta** (`#0f172a`) texto principal · **Tinta Media** (`#475569`) secundario · **Tinta Tenue** (`#8a93a6`) muted/placeholder/etiquetas.
+- **Tinta** (`#0f172a`) texto principal · **Tinta Media** (`#475569`) secundario · **Tinta Tenue** (`#646c80` en claro, `#8590ab` en oscuro) muted/placeholder/etiquetas. Es texto, así que cumple 4.5:1 en los dos temas (ver tabla de contraste abajo).
 - **Borde** (`#e2e6ef`) hairline por defecto · **Borde Fuerte** (`#cdd3e0`) en hover/énfasis.
 
 ### Status
@@ -153,9 +160,30 @@ Una base neutra fría iluminada por un trío de acentos neón de rol fijo; el co
 ### Tinta sobre acento
 El acento de AUTENZA es un emerald/cyan muy luminoso en los dos temas, así que **el texto blanco encima no llega al piso de contraste**: daba 1.85:1 en oscuro y 2.54:1 en claro, contra el 4.5:1 que exige WCAG AA para los tamaños que usa la UI (botones 15px/600, tabs 13px/700 — ninguno califica como texto grande).
 
-Todo texto que vaya **sobre `--accent` o sobre `--accent-gradient`** usa `--text-on-accent` (`#04060d`), que lo lleva a entre 5.37:1 y 10.97:1 según el punto del gradiente. El gradiente de marca **no se toca**: es binding. Aplica a `.btn-primary`, `.segmented-btn.is-active`, `.icon-btn:hover` y `.skip-link`.
+Todo texto que vaya **sobre `--accent` o sobre `--accent-gradient`** usa `--text-on-accent` (`#04060d`), que lo lleva a entre 5.37:1 y 10.97:1 según el punto del gradiente. El gradiente de marca **no se toca**: es binding. Aplica a `.btn-primary` (texto y spinner de carga), `.segmented-btn.is-active`, `.icon-btn:hover`, `.skip-link`, el botón "Siguiente/Listo" del tour (`tour.css`), el ícono del avatar del TopBar, el contador de filtros activos y el contador de notificaciones (sobre violet). El isotipo blanco sobre el gradiente neón es la marca (gráfico, no texto) y no cambia.
 
-`--text-white` queda para superficies oscuras que no son el acento (hoy: los botones destructivos, sobre el par danger-hover/danger-strong).
+`--text-white` queda para superficies oscuras que no son el acento (hoy: los botones destructivos, sobre el par danger-hover/danger-strong, y el navy del sidebar y del login).
+
+### Texto de estado (`--*-text`)
+Los colores de acento y de estado son luminosos: sirven para fondos, bordes, íconos y glows, pero **como color de texto sobre superficies claras no contrastan** (warning daba 1.99:1, cyan 2.22, emerald 2.31, danger 3.29). Para texto existen sus variantes: `--accent-text` / `--success-text` (`#047052`), `--warning-text` (`#9a4a07`), `--danger-text` (`#b91c1c`), `--info-text` (`#0b6a84`), `--accent-2-text` (`#6d28d9`). En oscuro son los tonos luminosos (que ya contrastan), salvo danger, que sube a `#f87171`. Las usan los badges, las utilidades `.text-accent/-success/-warning/-danger/-info/-accent-2`, el mensaje de error de los campos y los hover de texto (outline, paginación, breadcrumb). Regla: **texto → `--*-text`; fondo, borde o ícono → el token base**.
+
+### Contraste medido (WCAG 2.x, AA = 4.5:1 para texto)
+| Par | Antes | Ahora |
+|---|---|---|
+| Tinta Tenue claro sobre card / lienzo / lienzo hundido | 3.09 / 2.88 / 2.71 | 5.25 / 4.91 / 4.61 |
+| Tinta Tenue oscuro sobre card / lienzo / hundido / elevado | 3.93 / 4.42 / 4.05 / 3.64 | 5.57 / 6.27 / 5.74 / 5.16 |
+| Título de sección del sidebar (blanco 0.55) sobre navy claro / oscuro | 2.85 / 2.78 (blanco 0.32) | 6.22 / 6.27 |
+| Bajada del logo del sidebar (blanco 0.55) | 4.51 / 4.47 (blanco 0.45) | 6.22 / 6.27 |
+| Badge warning claro (sobre su tinte en card / lienzo hundido) | 1.99 / 1.77 | 5.79 / 5.15 |
+| Badge emerald claro | 2.31 / 2.05 | 5.55 / 4.93 |
+| Badge cyan claro | 2.22 / 1.96 | 5.63 / 4.97 |
+| Badge danger claro | 3.29 / 2.92 | 5.66 / 5.03 |
+| Badge violet claro | 3.75 / 3.31 | 6.29 / 5.55 |
+| Badge danger oscuro (card / elevado) | 4.33 / 4.01 | 5.88 / 5.46 |
+| Contador de notificaciones (tinta sobre violet claro / oscuro) | 4.23 / 2.72 (blanco) | 4.78 / 7.44 |
+| Botón "Siguiente" del tour (tinta sobre #10b981 / #059669) | 2.54 / 3.77 (blanco) | 7.98 / 5.37 |
+
+Los ratios se calculan con la fórmula de luminancia relativa de WCAG, componiendo los translúcidos sobre su superficie real (el badge es el acento al 10% sobre la card).
 
 ### Named Rules
 **The Signal-Not-Wallpaper Rule.** El neón (acentos, glows, gradiente aurora) marca significado —acción, estado, foco, una métrica que importa— y nunca decora un fondo denso de datos. Si un glow no comunica estado, sobra.
@@ -184,7 +212,11 @@ Todo texto que vaya **sobre `--accent` o sobre `--accent-gradient`** usa `--text
 
 ## Layout
 
-Modelo de columna centrada: `.page-container` a `max-width: 1440px`, padding `2.5rem` (baja a 1.75 / 1.1 / 0.85rem en 1024 / 768 / 480px), con `gap` vertical de `2rem` entre bloques. El encabezado de página (`.page-header`) es un `space-between` que colapsa a columna en ≤768px.
+Modelo de columna centrada: `.page-container` a `max-width: 1440px`, padding `2.5rem` (baja a 1.75 / 1.1 / 0.85rem en 1024 / 768 / 480px), con `gap` vertical de `2rem` entre bloques.
+
+**Encabezado de página (`.page-header`):** `space-between` con `flex-wrap`. **El título (`.header-title h1`) no se parte en dos renglones:** va en una línea y, si título + acciones no entran (p.ej. "Financiación externa" con tres botones a 1280px), son las acciones las que bajan a un segundo renglón. El subtítulo ajusta dentro del ancho del título. En ≤768px colapsa a columna y el título sí puede cortar.
+
+**Filtros plegables (`.filtros-plegables` o `<FiltrosPlegables>`):** en escritorio (≥1024px) la barra de filtros se ve siempre; en tablet y teléfono arranca plegada detrás de un botón "Filtros (n)" con la cantidad de filtros activos y un "Limpiar filtros". La estructura a mano está documentada en `index.css`; el componente (`src/components/ui/FiltrosPlegables.tsx`) recibe `activos`, `onLimpiar` y los controles como hijos, y pasa `data-tour` a la barra.
 
 Existe una capa de utilidades tipo Tailwind **reimplementada a mano** (Tailwind nunca se instaló): grillas de 1/2/12 columnas, `col-span-*`, y variantes `md:` / `lg:` en 640 / 768 / 1024px. Las grillas de datos usan auto-fit: `.stats-grid` es `repeat(auto-fit, minmax(240px, 1fr))`. Ritmo espacial sobre base 4px (`--space-1`…`--space-12`).
 
@@ -215,14 +247,15 @@ Lenguaje de dos radios: **píldora** (`999px`) para todo lo accionable —botone
 ## Components
 
 ### Buttons
-- **Shape:** píldora (`--radius-pill`, 999px). Inter 600, `--text-base`, gap 0.5rem para el ícono. Hover `translateY(-1px)`, active `scale(0.98)`, foco `box-shadow: 0 0 0 3px var(--ring)`.
-- **Primary:** gradiente emerald (`--accent-gradient`, `#10b981`→`#059669`), texto blanco, sombra emerald tenue; en hover pasa a `--glow-accent` y dispara un barrido de brillo (`::after`). Padding `0.75rem 1.5rem`.
+- **Shape:** píldora (`--radius-pill`, 999px). Inter 600, `--text-base`, gap 0.5rem para el ícono. Hover `translateY(-1px)`, active `scale(0.98)`, foco `box-shadow: var(--focus-ring)` (= `0 0 0 3px var(--ring)`).
+- **Primary:** gradiente emerald (`--accent-gradient`, `#10b981`→`#059669`), texto en tinta `--text-on-accent` (nunca blanco), sombra emerald tenue; en hover pasa a `--glow-accent` y dispara un barrido de brillo (`::after`). Padding `0.75rem 1.5rem`.
 - **Secondary:** fondo card, texto tinta, borde hairline, sombra xs → en hover sube a bg-elevated + borde fuerte.
 - **Danger:** gradiente rojo (`#ef4444`→`#dc2626`). **Outline:** transparente con borde fuerte que vira a emerald en hover. **Ghost:** transparente, texto secundario, hover con fondo rebajado.
-- **Tamaños:** `sm` (0.5/1rem, text-sm), base, `lg` (0.95/2rem, text-lg). Estado `is-loading` con spinner.
+- **Tamaños:** `sm` (0.5/1rem, text-sm), base, `lg` (0.95/2rem, text-lg).
+- **Cargando (`<Button loading>`):** spinner en la tinta del botón (`currentColor`) + **el mismo texto** del botón ("Guardar" sigue diciendo "Guardar"; nunca "Cargando..."), o `loadingText` si se pasa ("Guardando…"). Queda deshabilitado y con `aria-busy`.
 
 ### Chips / Badges
-- **Style:** píldora, UPPERCASE, `--text-xs`, 600, ls 0.06em, fondo translúcido al 10% del acento con borde al 20%.
+- **Style:** píldora, UPPERCASE, `--text-xs`, 600, ls 0.06em, fondo translúcido al 10% del acento con borde al 20%; el TEXTO va en la variante `--*-text` del color (ver "Texto de estado").
 - **Variantes:** emerald / violet / cyan / navy (neutro) / warning / danger. `.icon-badge` es la versión cuadrada 44px (radio 12px) para íconos.
 
 ### Cards / Containers
@@ -235,12 +268,26 @@ Lenguaje de dos radios: **píldora** (`999px`) para todo lo accionable —botone
 ### Inputs / Fields
 - **Style:** `--radius-md` (12px), fondo card, borde hairline, Inter `--text-base`. Etiqueta en micro-mayúsculas (`.input-label`). Soporta ícono a la izquierda y botón "revelar" a la derecha; selects con chevron SVG propio.
 - **Focus:** borde emerald + `box-shadow: 0 0 0 3px var(--ring)`; el ícono vira a emerald.
+- **Accesibilidad (automática en `<Input>`, `<Select>`, `<Textarea>`, `<Combobox>`):** si la página no pasa `id`, el componente genera uno (`useId`), así la etiqueta queda asociada (clic en la etiqueta enfoca el campo; el lector de pantalla lo nombra). El error y la ayuda se conectan con `aria-describedby`, y el error marca `aria-invalid`. El `<Select>` con `options` trae la opción vacía "Elegí una opción".
+- **Select con búsqueda (`<Combobox>`):** para listas largas (clientes, unidades, proveedores). Patrón ARIA combobox (input + listbox): ↓/↑ recorren, Enter elige, Escape cierra la lista, opción con texto secundario (`sub`, también se busca), búsqueda local sin tildes o remota con `onSearch` (250 ms de debounce). La lista va en un portal con posición fija: no la recorta el cuerpo de un modal.
 - **Error / Disabled:** borde danger + halo rojo (`.has-error`); disabled con fondo rebajado y cursor `not-allowed`.
 - **Las dos familias (canon y legacy):** `.input-*` es el CANON y lo que usa código nuevo — idealmente vía los componentes `<Input>`, `<Select>` y `<Textarea>` (`src/components/ui`), que ya lo envuelven: control a `--text-base` (15px), etiqueta micro-caps `.input-label`. `.form-*` (`.form-label` sentence-case + `.form-input`/`.form-input-select` a `--text-sm`, 13px) es la capa LEGACY de los formularios densos operativos (~20 páginas): sus valores están anclados a la rampa para que no vuelva a derivar, se mantiene pero no se extiende. Regla al convivir: en una misma vista no mezclar los dos estilos de etiqueta — si un form legacy necesita etiqueta nueva, va `.input-label` (micro-caps, el canon). Las copias locales de `.form-*` en bloques `<style>` de páginas son redundantes con la capa global: eliminarlas al tocar esas páginas. Migración de fondo: gradual, página por página, hacia los componentes de `ui/`.
 
 ### Data Table
 - **Header:** fondo `--bg-secondary`, texto muted UPPERCASE `0.7rem` ls 0.12em.
-- **Body:** celdas `--text-sm` 500 en `tabular-nums`; fila en hover con `--accent-light`. Contenedor con `overflow-x:auto` y esquinas redondeadas. Estados de vacío (`.dt-empty`) y de error (`.dt-empty-badge.is-error`, en danger) diferenciados.
+- **Body:** celdas `--text-sm` 500 en `tabular-nums`, padding `0.625rem 1rem` (header `0.7rem 1rem`, sin cortes); fila en hover con `--accent-light`. Contenedor con `overflow-x:auto` y esquinas redondeadas.
+- **Densidad (`<DataTable>`, clase `dt-compacta`):** cada celda en un renglón → filas de ~52–56px (medido: 55px con las columnas de Ventas a 1280px; eran 120px). Si la tabla no entra, scrollea de costado. Columnas de texto libre: `wrap: true` en la columna (corta con ancho mínimo de 14rem); `.line-clamp-*` sigue cortando y `.truncate` recorta a 16rem. Los botones de ícono de la fila bajan a 32px.
+- **Filas clicables (`onRowClick`):** entran al orden de tabulación, se abren con Enter o Espacio, muestran la manito y el anillo de foco (outline `--ring`). Conservan el rol de fila; `rowLabel` les da un nombre corto.
+- **Estados:** cargando (skeleton), error (`error={query.error}` + `onRetry` → mensaje en español y "Reintentar"; se distingue del vacío con `.dt-empty-badge.is-error`) y vacío (`emptyMessage`, `emptyHint`, `emptyAction` para el CTA y `onClearFilters` → "Limpiar filtros").
+
+### Modal
+- `role="dialog"` + `aria-modal`, nombrado por su título (`aria-labelledby`) y descripto por el subtítulo.
+- Al abrir enfoca el primer campo del cuerpo (o el pie: en una confirmación, "Cancelar"), salvo que el contenido ya tenga `autoFocus`. Retiene el foco con Tab / Shift+Tab, Escape cierra sólo el modal de arriba (con uno encima de otro) y al cerrar el foco vuelve al botón que lo abrió.
+
+### Accesibilidad global
+- **Foco visible en todo interactivo:** `:focus-visible` pinta `var(--focus-ring)` en botones, links, campos, `[tabindex]` y filas clicables, más un outline transparente que el modo de alto contraste de Windows sí dibuja. No hay ningún `outline: none` global. Los `[tabindex="-1"]` (destinos de foco programático: el `<main>`, el panel de un modal) quedan sin anillo.
+- **Menú lateral en móvil:** se cierra al navegar, al tocar un ítem y con Escape; cerrado es `inert` (no recibe foco ni lo lee el lector de pantalla); al abrirlo el foco entra al panel y al cerrarlo vuelve al botón "Abrir menú".
+- **Avisos (toasts):** los de error duran 7 s (warning 6 s, info 4 s, éxito 3 s) y no se apilan repetidos.
 
 ### Signature: Stat Card + Segmented Tabs
 - **Stat Card:** tarjeta de métrica con valor en Space Grotesk display, etiqueta en micro-mayúsculas 900, ícono marca-de-agua en la esquina (opacity 0.06) y —opcional— *tilt 3D* en hover (`rotateX/rotateY` + glow emerald). Usar el tilt con criterio (dirección utilitaria).

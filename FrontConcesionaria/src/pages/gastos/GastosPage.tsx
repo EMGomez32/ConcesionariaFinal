@@ -6,31 +6,28 @@ import { useSucursales } from '../../hooks/useSucursales';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useUIStore } from '../../store/uiStore';
 import { useDebounce } from '../../hooks/useDebounce';
-import { formatFecha } from '../../utils/fecha';
+import { formatFecha, hoyLocal } from '../../utils/fecha';
 import { proveedoresApi } from '../../api/proveedores.api';
 import type { GastoVehiculo } from '../../api/gastos.api';
 import type { ApiError } from '../../types/api.types';
 
-import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
 import Modal from '../../components/ui/Modal';
-import DataTable, { type Column } from '../../components/ui/DataTable';
+import PageTitle from '../../components/ui/PageTitle';
+import { Listado, ListadoTabla, CampoFiltro, BusquedaListado, type ColumnaListado } from '../../components/listado';
+import { formatMoneda, formatTotales, totalesPorMoneda } from '../../utils/moneda';
 
-import {
-    Wrench, Plus, Trash2, Edit, RefreshCw,
-    DollarSign, Calendar, Building2,
-    TrendingDown, Search
-} from 'lucide-react';
+import { Wrench, Plus, Trash2, Edit, RefreshCw, DollarSign } from 'lucide-react';
 
 const EMPTY_GASTO_FORM = {
     vehiculoId: '',
     proveedorId: '',
     monto: '',
     moneda: 'ARS' as 'ARS' | 'USD',
-    fechaGasto: new Date().toISOString().split('T')[0],
+    fechaGasto: hoyLocal(),
     descripcion: '',
 };
 
@@ -58,7 +55,7 @@ const GastosPage: React.FC = () => {
     });
     const proveedores = useMemo(() => provPayload?.results || [], [provPayload?.results]);
 
-    const { data: payload, isLoading: loadingGastos, refetch: refetchGastos } = useGastos({
+    const { data: payload, isLoading: loadingGastos, isFetching: fetchingGastos, isError: gastosError, refetch: refetchGastos } = useGastos({
         tipo: 'VEHICULO',
         page,
         limit: 15,
@@ -86,7 +83,7 @@ const GastosPage: React.FC = () => {
     // Handlers
     const handleCreateGasto = async () => {
         if (!gastoForm.vehiculoId || !gastoForm.proveedorId || !gastoForm.monto) {
-            addToast('Complete vehículo, proveedor e importe', 'error');
+            addToast('Completá unidad, proveedor e importe', 'error');
             return;
         }
         try {
@@ -105,7 +102,7 @@ const GastosPage: React.FC = () => {
             setGastoForm({ ...EMPTY_GASTO_FORM });
         } catch (err: unknown) {
             const apiError = err as ApiError;
-            addToast(apiError?.message || 'Error al registrar gasto', 'error');
+            addToast(apiError?.message || 'No se pudo registrar el gasto', 'error');
         }
     };
 
@@ -124,14 +121,14 @@ const GastosPage: React.FC = () => {
             setEditGasto(null);
         } catch (err: unknown) {
             const apiError = err as ApiError;
-            addToast(apiError?.message || 'Error al actualizar', 'error');
+            addToast(apiError?.message || 'No se pudo guardar el gasto', 'error');
         }
     };
 
     const handleDeleteGasto = async (g: GastoVehiculo) => {
         await confirm({
-            title: 'Anular Gasto',
-            message: `¿Desea eliminar el registro de gasto por $${Number(g.monto).toLocaleString()}? Esta acción no se puede deshacer.`,
+            title: 'Eliminar el gasto',
+            message: `¿Eliminar el gasto de ${formatMoneda(g.monto, g.moneda)}${g.vehiculo ? ` de ${g.vehiculo.marca} ${g.vehiculo.modelo}` : ''}? No se puede deshacer.`,
             type: 'danger',
             confirmLabel: 'Eliminar',
             onConfirm: async () => {
@@ -142,195 +139,177 @@ const GastosPage: React.FC = () => {
     };
 
     // Los totales se acumulan por moneda: sumar ARS y USD en un solo número no
-    // representa ningún importe real.
-    const totalsInView = useMemo(() => {
-        return gastos.reduce((acc: Record<string, number>, g: GastoVehiculo) => {
-            const moneda = g.moneda || 'ARS';
-            acc[moneda] = (acc[moneda] || 0) + Number(g.monto);
-            return acc;
-        }, {} as Record<string, number>);
-    }, [gastos]);
+    // representa ningún importe real. Es el total de la PÁGINA visible y así se rotula.
+    const totalesPagina = useMemo(
+        () => totalesPorMoneda(gastos, (g: GastoVehiculo) => g.monto, (g: GastoVehiculo) => g.moneda),
+        [gastos],
+    );
 
-    const gastoColumns: Column<GastoVehiculo>[] = [
+    const filtrosActivos = [filterVehiculo, filterProveedor, filterSucursal].filter(Boolean).length;
+    const hayFiltros = filtrosActivos > 0 || !!debouncedSearch;
+    const limpiarFiltros = () => {
+        setSearchTerm('');
+        setFilterVehiculo('');
+        setFilterProveedor('');
+        setFilterSucursal('');
+        setPage(1);
+    };
+
+    const nombreUnidad = (g: GastoVehiculo) =>
+        g.vehiculo ? `${g.vehiculo.marca} ${g.vehiculo.modelo}` : 'Unidad sin datos';
+
+    const abrirEdicion = (g: GastoVehiculo) => {
+        setEditGasto(g);
+        setEditGastoForm({
+            monto: String(g.monto),
+            descripcion: g.descripcion || '',
+            fechaGasto: g.fechaGasto.split('T')[0]
+        });
+    };
+
+    const gastoColumns: ColumnaListado<GastoVehiculo>[] = [
         {
-            header: 'Activo Vehicular',
-            accessor: (g) => (
-                <div className="flex flex-col">
-                    <span className="font-bold uppercase text-xs">
-                        {g.vehiculo?.marca} {g.vehiculo?.modelo}
-                    </span>
-                    <span className="text-3xs font-black text-accent tracking-widest">{g.vehiculo?.dominio || 'S/DOMINIO'}</span>
-                </div>
+            clave: 'unidad',
+            titulo: 'Unidad',
+            flexible: true,
+            tarjeta: 'titulo',
+            celda: (g) => (
+                <>
+                    <span className="listado-principal">{nombreUnidad(g)}</span>
+                    <span className="listado-secundario">{g.descripcion || g.vehiculo?.dominio || 'Sin descripción'}</span>
+                </>
             )
         },
         {
-            header: 'Proveedor',
+            clave: 'proveedor',
+            titulo: 'Proveedor',
             // Nuevo criterio: se clasifica por proveedor. Los gastos viejos no
             // tienen proveedor pero sí rubro → se muestra como fallback.
-            accessor: (g) => (
-                g.proveedor?.nombre
-                    ? <Badge variant="info">{g.proveedor.nombre}</Badge>
-                    : g.categoria?.nombre
-                        ? <Badge variant="default">{g.categoria.nombre}</Badge>
-                        : <span className="text-secondary text-xs">—</span>
+            celda: (g) => (
+                <span className="listado-nowrap">
+                    {g.proveedor?.nombre ?? g.categoria?.nombre ?? <span className="text-muted">Sin proveedor</span>}
+                </span>
             )
         },
         {
-            header: 'Fecha',
-            accessor: (g) => (
-                <div className="flex items-center gap-2 text-muted text-xs font-bold">
-                    <Calendar size={14} />
-                    {formatFecha(g.fechaGasto)}
-                </div>
-            )
+            clave: 'fecha',
+            titulo: 'Fecha',
+            celda: (g) => <span className="listado-nowrap">{formatFecha(g.fechaGasto)}</span>
         },
         {
-            header: 'Sede',
-            accessor: (g) => (
-                <div className="flex items-center gap-2 text-muted text-3xs font-black uppercase">
-                    <Building2 size={12} />
-                    {g.sucursal?.nombre || 'Matriz'}
-                </div>
-            )
+            clave: 'sucursal',
+            titulo: 'Sucursal',
+            celda: (g) => <span className="listado-nowrap">{g.sucursal?.nombre ?? 'Sin sucursal'}</span>
         },
         {
-            header: 'Monto',
-            accessor: (g) => (
-                <div className="flex flex-col">
-                    <span className="font-black text-base">${Number(g.monto).toLocaleString()}</span>
-                    <span className="text-3xs font-bold text-secondary uppercase">{g.moneda}</span>
-                </div>
-            )
+            clave: 'monto',
+            titulo: 'Importe',
+            alinear: 'right',
+            celda: (g) => <span className="listado-nowrap" style={{ fontWeight: 700 }}>{formatMoneda(g.monto, g.moneda)}</span>
         },
         {
-            header: 'Acciones',
-            align: 'right',
-            accessor: (g) => (
-                <div className="flex justify-end gap-1">
-                    <button className="icon-btn small" onClick={(e) => {
-                        e.stopPropagation();
-                        setEditGasto(g);
-                        setEditGastoForm({
-                            monto: String(g.monto),
-                            descripcion: g.descripcion || '',
-                            fechaGasto: g.fechaGasto.split('T')[0]
-                        });
-                    }}>
-                        <Edit size={14} />
+            clave: 'acciones',
+            titulo: 'Acciones',
+            alinear: 'right',
+            ancho: '1%',
+            tarjeta: 'acciones',
+            celda: (g) => (
+                <div className="listado-acciones-fila">
+                    <button type="button" className="icon-btn" onClick={() => abrirEdicion(g)} aria-label={`Editar el gasto de ${nombreUnidad(g)}`} title="Editar">
+                        <Edit size={14} aria-hidden="true" />
                     </button>
-                    <button className="icon-btn small danger" onClick={(e) => { e.stopPropagation(); handleDeleteGasto(g); }}>
-                        <Trash2 size={14} />
+                    <button type="button" className="icon-btn danger" onClick={() => handleDeleteGasto(g)} aria-label={`Eliminar el gasto de ${nombreUnidad(g)}`} title="Eliminar">
+                        <Trash2 size={14} aria-hidden="true" />
                     </button>
                 </div>
             )
         }
     ];
 
+    const registrarGasto = (
+        <Button variant="primary" onClick={() => setShowCreateGasto(true)}>
+            <Plus size={18} aria-hidden="true" /> Registrar gasto
+        </Button>
+    );
+
     return (
         <div className="page-container animate-fade-in">
-            <header className="page-header">
-                <div className="header-title">
-                    <div className="flex items-center gap-3 mb-1">
-                        <div className="icon-badge primary shadow-glow">
-                            <Wrench size={22} />
-                        </div>
-                        <h1>Mantenimiento y Costos</h1>
-                    </div>
-                    <p>Auditoría técnica de erogaciones y puesta a punto de unidades.</p>
-                </div>
-                <div className="flex gap-3">
-                    <Button variant="secondary" onClick={() => refetchGastos()}>
-                        <RefreshCw size={18} className={loadingGastos ? 'animate-spin' : ''} />
+            <PageTitle title="Gastos de unidades" />
+            <Listado
+                titulo="Gastos de unidades"
+                subtitulo="Lo que gastás en cada unidad: taller, papeles, puesta a punto"
+                icono={<Wrench size={22} />}
+                clave="gastos"
+                acciones={(
+                    <Button variant="secondary" className="btn-icono" onClick={() => refetchGastos()} disabled={fetchingGastos} aria-label="Actualizar la lista" title="Actualizar">
+                        <RefreshCw size={18} className={fetchingGastos ? 'animate-spin' : ''} aria-hidden="true" />
                     </Button>
-                    <Button variant="primary" onClick={() => setShowCreateGasto(true)}>
-                        <Plus size={18} /> Registrar Gasto
-                    </Button>
-                </div>
-            </header>
-
-            <div className="grid grid-cols-1 gap-6">
-                <div className="card glass">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <span className="text-3xs font-black uppercase text-accent tracking-widest mb-1">Inversión en Stock (Vista)</span>
-                            <div className="text-3xl font-black italic">
-                                ${(totalsInView.ARS || 0).toLocaleString('es-AR')}
-                                <span className="text-xs font-bold text-muted" style={{ marginLeft: '0.35rem' }}>ARS</span>
-                            </div>
-                            {totalsInView.USD ? (
-                                <div className="text-xl font-black italic">
-                                    ${totalsInView.USD.toLocaleString('es-AR')}
-                                    <span className="text-xs font-bold text-muted" style={{ marginLeft: '0.35rem' }}>USD</span>
-                                </div>
-                            ) : null}
-                        </div>
-                        <div className="text-accent">
-                            <TrendingDown size={24} />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="card glass filters-bar mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div>
-                    <Search size={16} className="text-muted" />
-                    <input
-                        type="text"
-                        placeholder="Buscar descripción..."
-                        className="form-input w-full text-xs"
-                        value={searchTerm}
-                        onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
+                )}
+                accionPrincipal={registrarGasto}
+                busqueda={(
+                    <BusquedaListado
+                        valor={searchTerm}
+                        onChange={(v) => { setSearchTerm(v); setPage(1); }}
+                        placeholder="Buscar en la descripción"
                     />
-                </div>
-                <select
-                    className="text-muted text-xs font-bold"
-                    value={filterVehiculo}
-                    onChange={e => { setFilterVehiculo(e.target.value); setPage(1); }}
-                >
-                    <option value="">Todas las Unidades</option>
-                    {vehiculoData?.results?.map(v => (
-                        <option key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.dominio || 'S/D'})</option>
-                    ))}
-                </select>
-
-                <select
-                    className="text-muted text-xs font-bold"
-                    value={filterProveedor}
-                    onChange={e => { setFilterProveedor(e.target.value); setPage(1); }}
-                >
-                    <option value="">Todos los Proveedores</option>
-                    {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                </select>
-
-                <select
-                    className="text-muted text-xs font-bold"
-                    value={filterSucursal}
-                    onChange={e => { setFilterSucursal(e.target.value); setPage(1); }}
-                >
-                    <option value="">Todas las Sedes</option>
-                    {sucursalData.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                </select>
-
-                <Button variant="secondary" onClick={() => { setSearchTerm(''); setFilterVehiculo(''); setFilterProveedor(''); setFilterSucursal(''); setPage(1); }}>
-                    Limpiar Filtros
-                </Button>
-            </div>
-
-            <DataTable
-                columns={gastoColumns}
-                data={gastos}
-                isLoading={loadingGastos}
-                currentPage={page}
-                totalPages={totalPages}
-                onPageChange={setPage}
-                emptyMessage="No se detectaron egresos operativos"
-            />
+                )}
+                filtrosActivos={filtrosActivos}
+                onLimpiarFiltros={limpiarFiltros}
+                resumen={!loadingGastos && !gastosError && gastos.length > 0
+                    ? <span title="Suma de los gastos que se ven en esta página, separada por moneda">En esta página: {formatTotales(totalesPagina)}</span>
+                    : undefined}
+                filtros={(
+                    <>
+                        <CampoFiltro etiqueta="Unidad">
+                            <select className="form-input" value={filterVehiculo} onChange={e => { setFilterVehiculo(e.target.value); setPage(1); }}>
+                                <option value="">Todas las unidades</option>
+                                {vehiculoData?.results?.map(v => (
+                                    <option key={v.id} value={v.id}>{v.marca} {v.modelo}{v.dominio ? ` (${v.dominio})` : ''}</option>
+                                ))}
+                            </select>
+                        </CampoFiltro>
+                        <CampoFiltro etiqueta="Proveedor">
+                            <select className="form-input" value={filterProveedor} onChange={e => { setFilterProveedor(e.target.value); setPage(1); }}>
+                                <option value="">Todos los proveedores</option>
+                                {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                            </select>
+                        </CampoFiltro>
+                        <CampoFiltro etiqueta="Sucursal">
+                            <select className="form-input" value={filterSucursal} onChange={e => { setFilterSucursal(e.target.value); setPage(1); }}>
+                                <option value="">Todas las sucursales</option>
+                                {sucursalData.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                            </select>
+                        </CampoFiltro>
+                    </>
+                )}
+            >
+                <ListadoTabla
+                    etiqueta="Gastos de unidades"
+                    columnas={gastoColumns}
+                    filas={gastos}
+                    cargando={loadingGastos}
+                    error={gastosError}
+                    mensajeError="No se pudieron cargar los gastos"
+                    onReintentar={() => refetchGastos()}
+                    hayFiltros={hayFiltros}
+                    onLimpiarFiltros={limpiarFiltros}
+                    vacio={{
+                        titulo: 'Todavía no registraste gastos',
+                        descripcion: 'Anotá lo que gastás en cada unidad para saber cuánto te costó ponerla a la venta.',
+                        icono: <Wrench size={32} aria-hidden="true" />,
+                        accion: registrarGasto,
+                    }}
+                    pagina={page}
+                    totalPaginas={totalPages}
+                    onPaginaChange={setPage}
+                />
+            </Listado>
 
             {/* Modal Gasto */}
             <Modal
                 isOpen={showCreateGasto || !!editGasto}
                 onClose={() => { setShowCreateGasto(false); setEditGasto(null); }}
-                title={editGasto ? 'Editar Registro de Gasto' : 'Nuevo Egreso Vehicular'}
+                title={editGasto ? 'Editar gasto' : 'Nuevo gasto'}
                 maxWidth="600px"
             >
                 <div>
@@ -338,20 +317,20 @@ const GastosPage: React.FC = () => {
                         <>
                             <Select
                                 dense
-                                label="Unidad de Stock *"
-                                placeholder="Seleccionar vehículo..."
+                                label="Unidad *"
+                                placeholder="Elegí la unidad"
                                 value={gastoForm.vehiculoId}
                                 onChange={e => setGastoForm(f => ({ ...f, vehiculoId: e.target.value }))}
                             >
                                 {vehiculoData?.results?.map(v => (
-                                    <option key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.dominio || 'S/D'})</option>
+                                    <option key={v.id} value={v.id}>{v.marca} {v.modelo}{v.dominio ? ` (${v.dominio})` : ''}</option>
                                 ))}
                             </Select>
 
                             <Select
                                 dense
                                 label="Proveedor *"
-                                placeholder="Seleccionar proveedor..."
+                                placeholder="Elegí el proveedor"
                                 hint={proveedores.length === 0 ? 'No hay proveedores cargados. Agregalos en la sección Proveedores.' : undefined}
                                 value={gastoForm.proveedorId}
                                 onChange={e => setGastoForm(f => ({ ...f, proveedorId: e.target.value }))}
@@ -365,8 +344,9 @@ const GastosPage: React.FC = () => {
                         <Input
                             dense
                             label="Importe *"
-                            icon={<DollarSign size={16} />}
+                            icon={<DollarSign size={16} aria-hidden="true" />}
                             type="number"
+                            inputMode="decimal"
                             value={editGasto ? editGastoForm.monto : gastoForm.monto}
                             onChange={e => editGasto ? setEditGastoForm(f => ({ ...f, monto: e.target.value })) : setGastoForm(f => ({ ...f, monto: e.target.value }))}
                         />
@@ -377,13 +357,13 @@ const GastosPage: React.FC = () => {
                                 value={gastoForm.moneda}
                                 onChange={e => setGastoForm(f => ({ ...f, moneda: e.target.value as 'ARS' | 'USD' }))}
                             >
-                                <option value="ARS">ARS - Pesos</option>
-                                <option value="USD">USD - Dólares</option>
+                                <option value="ARS">Pesos (ARS)</option>
+                                <option value="USD">Dólares (USD)</option>
                             </Select>
                         )}
                         <Input
                             dense
-                            label="Fecha de Ejecución *"
+                            label="Fecha *"
                             type="date"
                             value={editGasto ? editGastoForm.fechaGasto : gastoForm.fechaGasto}
                             onChange={e => editGasto ? setEditGastoForm(f => ({ ...f, fechaGasto: e.target.value })) : setGastoForm(f => ({ ...f, fechaGasto: e.target.value }))}
@@ -392,8 +372,8 @@ const GastosPage: React.FC = () => {
 
                     <Textarea
                         dense
-                        label="Descripción / Justificación"
-                        placeholder="Detalles sobre el mantenimiento, repuestos, etc..."
+                        label="Descripción"
+                        placeholder="Ej: cambio de aceite y filtros"
                         value={editGasto ? editGastoForm.descripcion : gastoForm.descripcion}
                         onChange={e => editGasto ? setEditGastoForm(f => ({ ...f, descripcion: e.target.value })) : setGastoForm(f => ({ ...f, descripcion: e.target.value }))}
                     />
@@ -405,7 +385,7 @@ const GastosPage: React.FC = () => {
                             onClick={editGasto ? handleUpdateGasto : handleCreateGasto}
                             loading={createGastoMutation.isPending || updateGastoMutation.isPending}
                         >
-                            {editGasto ? 'Guardar Cambios' : 'Registrar Gasto'}
+                            {editGasto ? 'Guardar' : 'Registrar gasto'}
                         </Button>
                     </div>
                 </div>

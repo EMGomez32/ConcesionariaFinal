@@ -66,6 +66,16 @@ if echo "$OWN" | grep -q 'INSERT 0 1'; then echo "  ✓ app_rw inserta en su pro
 CROSS=$(q app_rw "$APP_PWD" "SELECT set_config('app.tenant_id','1',false); SELECT set_config('app.is_super_admin','false',false); INSERT INTO sucursales (concesionaria_id,nombre,activo,created_at,updated_at) VALUES (2,'SucB2',true,now(),now());" || true)
 if echo "$CROSS" | grep -qi 'row-level security'; then echo "  ✓ INSERT cross-tenant rechazado por RLS"; else echo "  ✗ INSERT cross-tenant NO fue rechazado: $CROSS"; FAILED=1; fi
 
+echo "== 7. app_rw: el rastro es APPEND-ONLY (audit_log y security_events) =="
+AUD_INS=$(q app_rw "$APP_PWD" "SELECT set_config('app.tenant_id','1',false); SELECT set_config('app.is_super_admin','false',false); INSERT INTO audit_log (concesionaria_id,entidad,accion) VALUES (1,'Test','create');")
+if echo "$AUD_INS" | grep -q 'INSERT 0 1'; then echo "  ✓ app_rw inserta en audit_log"; else echo "  ✗ app_rw NO pudo insertar en audit_log: $AUD_INS"; FAILED=1; fi
+SEC_INS=$(q app_rw "$APP_PWD" "INSERT INTO security_events (accion) VALUES ('test');")
+if echo "$SEC_INS" | grep -q 'INSERT 0 1'; then echo "  ✓ app_rw inserta en security_events"; else echo "  ✗ app_rw NO pudo insertar en security_events: $SEC_INS"; FAILED=1; fi
+for OP in "UPDATE audit_log SET detalle='x'" "DELETE FROM audit_log" "UPDATE security_events SET detalle='x'" "DELETE FROM security_events" "TRUNCATE audit_log"; do
+  R=$(q app_rw "$APP_PWD" "SELECT set_config('app.tenant_id','1',false); SELECT set_config('app.is_super_admin','false',false); $OP;" || true)
+  if echo "$R" | grep -qi 'permission denied'; then echo "  ✓ rechazado: $OP"; else echo "  ✗ app_rw PUDO ejecutar: $OP -> $R"; FAILED=1; fi
+done
+
 echo ""
 if [ "$FAILED" = "0" ]; then echo "✅ VERIFY-RLS-ROLE: OK — la RLS filtra con app_rw."; else echo "❌ VERIFY-RLS-ROLE: FALLARON aserciones."; fi
 exit $FAILED

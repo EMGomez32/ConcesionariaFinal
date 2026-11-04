@@ -35,6 +35,11 @@ services:
       dockerfile: Dockerfile
     restart: always
     logging: *default-logging
+    # Sin privilegios extra: ni escalada por setuid ni capabilities de Linux (la app no usa ninguna).
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     # Sin ports: el frontend (nginx) le llega por la red interna de docker
     # en backend:3000. No hace falta exponerlo al host, y evita choques con
     # otros servicios que usen el 3000.
@@ -48,6 +53,8 @@ services:
       #   APP_DATABASE_URL=postgresql://app_rw:<password>@db:5432/${POSTGRES_DB:-concesionaria}?sslmode=disable
       - APP_DATABASE_URL=${APP_DATABASE_URL:-}
       - APP_DB_PASSWORD=${APP_DB_PASSWORD:-}
+      # Sólo emergencia: permite arrancar en producción SIN el rol app_rw (RLS inactiva). Ver env.ts.
+      - ALLOW_SUPERUSER_DB=${ALLOW_SUPERUSER_DB:-}
       - PORT=3000
       - NODE_ENV=production
       # Secretos SIN default: el arranque falla si no están definidos en el .env.
@@ -55,6 +62,9 @@ services:
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET requerido en .env}
       - JWT_EXPIRES_IN=15m
       - JWT_REFRESH_EXPIRES_IN=7d
+      # Roles que DEBEN tener 2FA (separados por coma). Vacío = el default (super_admin en producción);
+      # `none` = nadie (escape de emergencia). Ver BackConcesionaria/src/infrastructure/security/mfaPolicy.ts.
+      - MFA_REQUIRED_ROLES=${MFA_REQUIRED_ROLES:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       # 1 = hay un proxy (nginx) delante; deja que la app lea el X-Forwarded-For real.
       - TRUST_PROXY=1
@@ -113,7 +123,20 @@ services:
     # Idempotente: sin pendientes es no-op. El cutover desde 'db push' requirió baselinear
     # prod UNA vez con `migrate resolve --applied 0_init` (crea _prisma_migrations sin DDL).
     # El seed ya NO corre en cada arranque (ver README: se corre una sola vez).
-    command: sh -c "npx prisma migrate deploy && npm run init-rls && npm run setup-app-role && npm start"
+    #
+    # Las tres primeras tareas necesitan la conexión ADMIN (DATABASE_URL, superusuario). El SERVIDOR
+    # no: se lo arranca con `exec env DATABASE_URL=<la de app_rw>`, así el proceso que atiende
+    # requests NO tiene las credenciales de superusuario en su entorno (ni en /proc/<pid>/environ:
+    # exec reemplaza al shell, que era quien las guardaba). Un RCE en la app ya no las hereda.
+    # Si APP_DATABASE_URL está vacía (sólo posible con ALLOW_SUPERUSER_DB=1) se mantiene la admin.
+    command:
+      - sh
+      - -c
+      - >-
+        npx prisma migrate deploy &&
+        npm run init-rls &&
+        npm run setup-app-role &&
+        exec env DATABASE_URL="$${APP_DATABASE_URL:-$$DATABASE_URL}" npm start
     volumes:
       - uploads:/app/uploads
       # Sesiones de WhatsApp: sin este volumen, las credenciales de Baileys se
@@ -132,8 +155,13 @@ services:
 
   # Backup diario de la base. Genera un dump comprimido en el volumen de backups
   # y borra los de más de RETENTION_DAYS. Ver scripts/restore.sh para restaurar.
+  # Respalda la base Y los volúmenes uploads (DNI, recibos) y wa-auth (credenciales
+  # de WhatsApp), cifrado con age si BACKUP_AGE_RECIPIENT está definida. La imagen
+  # trae rclone/age/tar preinstalados (scripts/backup-image).
   db-backup:
-    image: postgres:16-alpine
+    build:
+      context: ./scripts/backup-image
+    image: autenza-db-backup:local
     restart: always
     environment:
       - PGUSER=${POSTGRES_USER:-postgres}
@@ -141,6 +169,15 @@ services:
       - PGDATABASE=${POSTGRES_DB:-concesionaria}
       - PGHOST=db
       - RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
+      # Clave PÚBLICA de age (age-keygen). Con ella los backups salen cifrados; la
+      # privada NO va en la Pi. Sin ella quedan en claro y no se sube nada offsite.
+      - BACKUP_AGE_RECIPIENT=${BACKUP_AGE_RECIPIENT:-}
+      - BACKUP_OFFSITE_ALLOW_PLAINTEXT=${BACKUP_OFFSITE_ALLOW_PLAINTEXT:-0}
+      # Alertas: comando que se ejecuta ante un fallo (recibe tipo y motivo como
+      # $1 y $2). Antes estas dos vars NO llegaban al contenedor y las alertas
+      # estaban inactivas aunque se definieran en el .env.
+      - BACKUP_ALERT_CMD=${BACKUP_ALERT_CMD:-}
+      - BACKUP_MIN_BYTES=${BACKUP_MIN_BYTES:-1000}
       # Backup OFFSITE (opcional) a un remote S3-compatible (Cloudflare R2) vía
       # rclone. Se activa SOLO si BACKUP_OFFSITE_REMOTE está en el .env (master
       # switch). El remote se configura por env vars (sin archivo rclone.conf):
@@ -156,16 +193,38 @@ services:
       - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
       - ./scripts/restore.sh:/usr/local/bin/restore.sh:ro
       - backups:/backups
+      # Sólo lectura: el backup nunca puede alterar los archivos que respalda.
+      - uploads:/data/uploads:ro
+      - wa-auth:/data/wa-auth:ro
     entrypoint: ["sh", "-c", "while true; do sh /usr/local/bin/backup.sh; sleep 86400; done"]
+    # "unhealthy" si el último backup COMPLETO (base + archivos) tiene más de 26 h
+    # o nunca se hizo: se ve en `docker compose ps` sin depender de leer logs.
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f /backups/.last_success ] && [ $$(( $$(date +%s) - $$(cat /backups/.last_success) )) -lt 93600 ]"]
+      interval: 15m
+      timeout: 10s
+      retries: 1
+      start_period: 30m
     depends_on:
       db:
         condition: service_healthy
 
+  # Prisma Studio: acceso directo a la base como SUPERUSUARIO y sin autenticación. Antes corría
+  # siempre (restart: always); ahora sólo bajo el perfil `debug`, o sea que NO arranca con un
+  # `docker compose up` común. Para usarlo un rato:
+  #     docker compose --profile debug up -d prisma-studio
+  #     (SSH tunnel a la Pi al puerto 5555)
+  #     docker compose --profile debug stop prisma-studio    # al terminar
   prisma-studio:
+    profiles: ["debug"]
     build:
       context: ./BackConcesionaria
       dockerfile: Dockerfile
-    restart: always
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     # Solo localhost: para acceder, SSH tunnel a la Pi. Nunca exponer al tunnel
     # de Cloudflare (es acceso directo a la base sin autenticación).
     ports:
@@ -183,12 +242,17 @@ services:
       dockerfile: Dockerfile
     restart: always
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     # Sólo loopback: el acceso externo entra por el Cloudflare Tunnel, que en la Pi
     # apunta a http://localhost:80 (cloudflared corre en el host). Bindear a
     # 0.0.0.0 exponía el front directo en la LAN / la red Tailscale de la Pi,
     # salteando Cloudflare. Con 127.0.0.1 el tunnel sigue llegando y nadie más.
     ports:
-      - "127.0.0.1:80:80"
+      # 8080 adentro: la imagen nginx-unprivileged corre sin root y no puede bindear puertos <1024.
+      - "127.0.0.1:80:8080"
     depends_on:
       - backend
 

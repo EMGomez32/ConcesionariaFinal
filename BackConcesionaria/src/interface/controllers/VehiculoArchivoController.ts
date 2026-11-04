@@ -6,6 +6,7 @@ import { DeleteVehiculoArchivo } from '../../application/use-cases/vehiculo-arch
 import { SetPrincipalVehiculoArchivo } from '../../application/use-cases/vehiculo-archivos/SetPrincipalVehiculoArchivo';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
+import { assertMismoTenant } from '../../infrastructure/security/tenantGuard';
 import { storage } from '../../infrastructure/storage/LocalStorageAdapter';
 import { BaseException } from '../../domain/exceptions/BaseException';
 
@@ -29,7 +30,12 @@ export class VehiculoArchivoController {
     /** Legacy: JSON body con `url` ya conocida (link externo). */
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
-            const result = await createUC.execute(req.body);
+            // req.body ya pasó por validateBody (whitelist: vehiculoId, url, tipo,
+            // descripcion). El autor lo fija el servidor, nunca el cliente.
+            const result = await createUC.execute({
+                ...req.body,
+                uploadedById: context.getUser()?.userId ?? null,
+            });
             await audit({
                 entidad: 'VehiculoArchivo',
                 accion: 'create',
@@ -54,6 +60,10 @@ export class VehiculoArchivoController {
             if (!vehiculoId) {
                 throw new BaseException(400, 'vehiculoId es obligatorio', 'VALIDATION_ERROR');
             }
+
+            // El vehículo tiene que existir y ser de mi tenant ANTES de escribir el
+            // binario: si no, un id ajeno o inexistente deja archivos huérfanos.
+            await assertMismoTenant('vehiculo', vehiculoId);
 
             const saved = await storage.save(file, `vehiculos/${vehiculoId}`);
             const user = context.getUser();

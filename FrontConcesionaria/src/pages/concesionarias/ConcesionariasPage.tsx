@@ -75,11 +75,11 @@ const ConcesionariasPage = () => {
             <header className="page-header">
                 <div className="header-info">
                     <h1>Concesionarias</h1>
-                    <p>Administración global de los tenants de la plataforma.</p>
+                    <p>Las concesionarias que usan la plataforma.</p>
                 </div>
                 <Button variant="primary" onClick={() => handleOpenModal()}>
                     <Plus size={18} />
-                    Nueva Concesionaria
+                    Nueva concesionaria
                 </Button>
             </header>
 
@@ -88,7 +88,9 @@ const ConcesionariasPage = () => {
                     <Search size={18} />
                     <input
                         type="text"
-                        placeholder="Buscar por nombre o CUIT..."
+                        placeholder="Buscar por nombre o CUIT"
+                        title="CUIT: Clave Única de Identificación Tributaria"
+                        aria-label="Buscar concesionarias por nombre o CUIT"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -223,7 +225,7 @@ const ConcesionariasPage = () => {
                     width: 40px; height: 40px;
                     border-radius: var(--radius-md);
                     background: var(--accent-gradient);
-                    color: var(--text-white);
+                    color: var(--text-on-accent);
                     display: flex; align-items: center; justify-content: center;
                     box-shadow: 0 4px 12px -4px rgba(var(--accent-rgb), 0.4);
                 }

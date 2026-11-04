@@ -1,8 +1,13 @@
 import Isotipo from '../brand/Isotipo';
 
-const PageLoader = () => {
+interface PageLoaderProps {
+    /** Qué se está esperando (p.ej. "Recuperando tu sesión…"). */
+    mensaje?: string;
+}
+
+const PageLoader = ({ mensaje = 'Cargando…' }: PageLoaderProps) => {
     return (
-        <div className="page-loader">
+        <div className="page-loader" role="status" aria-live="polite">
             <div className="page-loader-logo">
                 <div className="page-loader-orb"></div>
                 <div className="page-loader-icon">
@@ -17,7 +22,7 @@ const PageLoader = () => {
                     <span></span>
                     <span></span>
                 </div>
-                <p className="page-loader-msg">Inicializando módulos…</p>
+                <p className="page-loader-msg">{mensaje}</p>
             </div>
 
             <style>{`

@@ -1,7 +1,7 @@
 {
   "name": "AUTENZA · Concesionaria",
   "short_name": "AUTENZA",
-  "description": "Sistema de gestión de concesionaria",
+  "description": "Sistema de gestión para concesionarias",
   "lang": "es-AR",
   "start_url": "/",
   "display": "standalone",

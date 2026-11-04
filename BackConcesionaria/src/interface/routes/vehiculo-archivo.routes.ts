@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { VehiculoArchivoController } from '../controllers/VehiculoArchivoController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { uploadSingle } from '../middlewares/upload.middleware';
+import { uploadLimiter } from '../middlewares/rateLimiters';
+import { validateBody } from '../middlewares/validate.middleware';
+import { createVehiculoArchivoSchema } from '../validation/vehiculo-archivo.schema';
 
 /**
  * CRITERIO DE PERMISOS: quien HACE el trabajo lo REGISTRA; ANULAR es del admin,
@@ -51,7 +54,7 @@ const router = Router();
  */
 // Variante JSON legacy del upload: hoy no la llama nadie desde el front, pero se
 // gatea igual con la misma lista que /upload — es la misma operación por otra vía.
-router.post('/', authorize('admin', 'vendedor', 'postventa'), VehiculoArchivoController.create);
+router.post('/', authorize('admin', 'vendedor', 'postventa'), validateBody(createVehiculoArchivoSchema), VehiculoArchivoController.create);
 
 /**
  * @openapi
@@ -85,7 +88,7 @@ router.post('/', authorize('admin', 'vendedor', 'postventa'), VehiculoArchivoCon
 // por el taller es parte de su trabajo, y hoy llega a esta ruta. `authorize` va
 // ANTES de uploadSingle a propósito: así el 403 corta antes de que multer se
 // ponga a recibir el binario de alguien que no tiene permiso para subirlo.
-router.post('/upload', authorize('admin', 'vendedor', 'postventa'), uploadSingle, VehiculoArchivoController.upload);
+router.post('/upload', uploadLimiter, authorize('admin', 'vendedor', 'postventa'), uploadSingle, VehiculoArchivoController.upload);
 
 /**
  * @openapi

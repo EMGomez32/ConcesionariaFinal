@@ -1,8 +1,24 @@
 import { Router } from 'express';
 import { AuthController } from '../controllers/AuthController';
-import { loginLimiter } from '../middlewares/rateLimiters';
+import {
+    loginLimiter,
+    loginAccountLimiter,
+    forgotPasswordEmailLimiter,
+    forgotPasswordIpLimiter,
+    refreshLimiter,
+    resetPasswordLimiter,
+    mfaLoginLimiter,
+    mfaLoginIpLimiter,
+    mfaAccionLimiter,
+} from '../middlewares/rateLimiters';
+import { authenticate } from '../middlewares/authenticate.middleware';
+import { MfaController } from '../controllers/MfaController';
 import { validateBody } from '../middlewares/validate.middleware';
-import { loginSchema, refreshSchema, resetPasswordSchema, logoutSchema } from '../validation/auth.schema';
+import { minResponseTime } from '../middlewares/minResponseTime.middleware';
+import {
+    loginSchema, refreshSchema, resetPasswordSchema, logoutSchema,
+    login2faSchema, mfaSetupSchema, mfaEnableSchema, mfaDisableSchema, mfaRegenerarSchema,
+} from '../validation/auth.schema';
 
 const router = Router();
 
@@ -12,7 +28,7 @@ const router = Router();
  *   post:
  *     tags: [Auth]
  *     summary: Iniciar sesión
- *     description: Devuelve el perfil del usuario y un par de tokens (access + refresh). La auditoría registra `accion=login` con IP y userAgent.
+ *     description: Devuelve el perfil del usuario y un par de tokens (access + refresh). El refresh también va en la cookie httpOnly `autenza_rt` (Path=/api/auth, SameSite=Strict) para la web. La auditoría registra `accion=login` con IP y userAgent.
  *     security: []
  *     requestBody:
  *       required: true
@@ -32,7 +48,7 @@ const router = Router();
  *         description: Usuario inactivo
  *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
  */
-router.post('/login', loginLimiter, validateBody(loginSchema), AuthController.login);
+router.post('/login', loginLimiter, loginAccountLimiter, validateBody(loginSchema), AuthController.login);
 
 /**
  * @openapi
@@ -40,15 +56,14 @@ router.post('/login', loginLimiter, validateBody(loginSchema), AuthController.lo
  *   post:
  *     tags: [Auth]
  *     summary: Renovar access token
- *     description: Intercambia un refresh token válido por un nuevo access token.
+ *     description: Intercambia un refresh token válido por un par nuevo (rotación). El token sale de `body.refreshToken` si viene (app móvil) y si no de la cookie httpOnly `autenza_rt` (web); la respuesta rota esa cookie.
  *     security: []
  *     requestBody:
- *       required: true
+ *       required: false
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [refreshToken]
  *             properties:
  *               refreshToken: { type: string }
  *     responses:
@@ -63,7 +78,7 @@ router.post('/login', loginLimiter, validateBody(loginSchema), AuthController.lo
  *                 refresh: { type: string }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.post('/refresh', validateBody(refreshSchema), AuthController.refresh);
+router.post('/refresh', refreshLimiter, validateBody(refreshSchema), AuthController.refresh);
 
 /**
  * @openapi
@@ -71,7 +86,7 @@ router.post('/refresh', validateBody(refreshSchema), AuthController.refresh);
  *   post:
  *     tags: [Auth]
  *     summary: Cerrar sesión
- *     description: Revoca el refresh token de la sesión (si se envía) y registra `accion=logout` en auditoría.
+ *     description: Revoca el refresh token de la sesión (el de `body.refreshToken` o, si no viene, el de la cookie `autenza_rt`), borra la cookie y registra `accion=logout` en auditoría.
  *     requestBody:
  *       required: false
  *       content:
@@ -100,7 +115,8 @@ router.post('/logout', validateBody(logoutSchema), AuthController.logout);
  *     responses:
  *       200: { description: Respuesta genérica }
  */
-router.post('/forgot-password', loginLimiter, AuthController.forgotPassword);
+// minResponseTime: mismo tiempo de respuesta exista o no el email (no enumerar cuentas).
+router.post('/forgot-password', forgotPasswordIpLimiter, forgotPasswordEmailLimiter, minResponseTime(400), AuthController.forgotPassword);
 
 /**
  * @openapi
@@ -116,6 +132,26 @@ router.post('/forgot-password', loginLimiter, AuthController.forgotPassword);
  *       200: { description: Contraseña actualizada }
  *       400: { description: Token inválido o expirado }
  */
-router.post('/reset-password', validateBody(resetPasswordSchema), AuthController.resetPassword);
+router.post('/reset-password', resetPasswordLimiter, validateBody(resetPasswordSchema), AuthController.resetPassword);
+
+// ── 2FA (TOTP) ────────────────────────────────────────────────────────────────
+
+/**
+ * @openapi
+ * /auth/login/2fa:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Segundo paso del login con 2FA
+ *     description: Con el mfaToken que devolvió /auth/login (5 min) y un código de la app o de recuperación. Devuelve la sesión y pone la cookie httpOnly `autenza_rt` con el refresh (igual que el login).
+ *     security: []
+ */
+router.post('/login/2fa', mfaLoginIpLimiter, mfaLoginLimiter, validateBody(login2faSchema), AuthController.login2fa);
+
+// Las rutas de abajo son de la cuenta YA autenticada (el router /auth se monta antes del authenticate global).
+router.get('/2fa/status', authenticate, MfaController.status);
+router.post('/2fa/setup', authenticate, mfaAccionLimiter, validateBody(mfaSetupSchema), MfaController.setup);
+router.post('/2fa/enable', authenticate, mfaAccionLimiter, validateBody(mfaEnableSchema), MfaController.enable);
+router.post('/2fa/disable', authenticate, mfaAccionLimiter, validateBody(mfaDisableSchema), MfaController.disable);
+router.post('/2fa/recovery-codes', authenticate, mfaAccionLimiter, validateBody(mfaRegenerarSchema), MfaController.regenerarCodigos);
 
 export default router;

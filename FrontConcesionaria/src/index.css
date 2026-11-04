@@ -35,8 +35,23 @@
   /* Text */
   --text-primary: #0f172a;
   --text-secondary: #475569;
-  --text-muted: #8a93a6;
+  /* Muted = etiquetas, placeholders, metadatos. Era #8a93a6 (2.71–3.09:1) y no
+     llegaba al piso AA de 4.5:1 para texto. Con #646c80: 5.25 sobre --bg-card,
+     4.91 sobre --bg-primary y 4.61 sobre --bg-secondary (headers de tabla). */
+  --text-muted: #646c80;
   --text-white: #ffffff;
+  /* Variantes "para texto" de los colores de estado/acento. El acento y los
+     estados son luminosos (sirven para fondos, bordes, íconos y glows), pero como
+     COLOR DE TEXTO sobre superficies claras no contrastan: warning daba 1.99:1,
+     cyan 2.22, emerald 2.31, danger 3.29. Badges y utilidades .text-* usan estas.
+     Peor caso (sobre el tinte 10% del badge encima de --bg-secondary):
+     accent/success 4.93 · info 4.97 · warning 5.15 · danger 5.03 · violet 5.55. */
+  --accent-text: #047052;
+  --success-text: #047052;
+  --warning-text: #9a4a07;
+  --danger-text: #b91c1c;
+  --info-text: #0b6a84;
+  --accent-2-text: #6d28d9;
   /* Tinta para texto SOBRE un fondo de acento (el gradiente de marca y --accent).
      El acento es un emerald/cyan muy luminoso en los dos temas, así que el blanco
      encima daba 1.85:1 en oscuro y 2.54:1 en claro — el piso de WCAG AA para este
@@ -68,7 +83,9 @@
   /* Border */
   --border: #e2e6ef;
   --border-strong: #cdd3e0;
-  --ring: rgba(16, 185, 129, 0.35);
+  --ring: #059669; /* emerald profundo: 3,8:1 sobre blanco (el 35% no llegaba a 3:1 como indicador de foco) */
+  /* Anillo de foco del sistema: TODO interactivo lo muestra con :focus-visible. */
+  --focus-ring: 0 0 0 3px var(--ring);
 
   /* Radius */
   --radius-xs: 0.375rem;
@@ -177,11 +194,23 @@
 
   --text-primary: #f5f7fb;
   --text-secondary: #b6bdce;
-  --text-muted: #6b7693;
+  /* Era #6b7693 (3.64–4.42:1). Con #8590ab: 5.57 sobre --bg-card, 6.27 sobre
+     --bg-primary, 5.74 sobre --bg-secondary y 5.16 sobre --bg-elevated. */
+  --text-muted: #8590ab;
+
+  /* En oscuro el acento y los estados ya contrastan como texto (emerald 8.08,
+     cyan 8.14, warning 7.06, violet 5.62 sobre el badge en --bg-card); sólo
+     danger no llegaba (4.33) y sube a red-400 (5.88). */
+  --accent-text: #14d8a3;
+  --success-text: #10b981;
+  --warning-text: #f59e0b;
+  --danger-text: #f87171;
+  --info-text: #22d3ee;
+  --accent-2-text: #a78bfa;
 
   --border: rgba(255, 255, 255, 0.07);
   --border-strong: rgba(255, 255, 255, 0.14);
-  --ring: rgba(20, 216, 163, 0.45);
+  --ring: rgba(20, 216, 163, 0.7); /* 5,6:1 sobre el fondo oscuro */
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
@@ -235,7 +264,6 @@ h6 {
 
 button {
   cursor: pointer;
-  outline: none;
   font-family: inherit;
 }
 
@@ -251,9 +279,20 @@ button {
 
 .page-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-end;
+  gap: var(--space-4) var(--space-6);
   margin-bottom: 0.5rem;
+}
+
+/* El título no se parte en dos renglones: si título + acciones no entran en una
+   línea, son las ACCIONES las que bajan (flex-wrap). Con base 0, el bloque del
+   título pesa lo que mide su h1 sin cortes (su min-content) a la hora de decidir
+   el corte de línea, y después crece hasta ocupar el resto. El subtítulo sí
+   ajusta dentro de ese ancho. */
+.page-header > .header-title {
+  flex: 1 1 0;
 }
 
 .header-title h1 {
@@ -265,6 +304,7 @@ button {
   line-height: 1;
   letter-spacing: -0.03em;
   margin: 0;
+  white-space: nowrap;
   background: linear-gradient(180deg, var(--text-primary) 0%, color-mix(in srgb, var(--text-primary) 70%, transparent) 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -282,6 +322,7 @@ button {
    de uno. */
 .header-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
   flex-shrink: 0;
@@ -458,8 +499,7 @@ button {
 }
 
 .btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--ring);
+  box-shadow: var(--focus-ring);
 }
 
 .btn:hover:not(:disabled) {
@@ -547,7 +587,7 @@ button {
 
 .btn-outline:hover:not(:disabled) {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-light);
 }
 
@@ -657,8 +697,7 @@ button {
 }
 
 .segmented-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--ring);
+  box-shadow: var(--focus-ring);
 }
 
 .segmented-btn.is-active {
@@ -699,7 +738,11 @@ button {
 
 .data-table th {
   background: var(--bg-secondary);
-  padding: 0.875rem 1.5rem;
+  /* Densidad: 1rem de lado (antes 1.5rem) y sin cortes en el header. Con 7
+     columnas a 1280px el padding viejo se comía ~340px y obligaba a partir el
+     contenido de las celdas en 2–3 renglones (filas de ~106px). */
+  padding: 0.7rem 1rem;
+  white-space: nowrap;
   text-align: left;
   font-family: var(--font-sans);
   font-size: var(--text-2xs);
@@ -711,14 +754,64 @@ button {
 }
 
 .data-table td {
-  padding: 1rem 1.5rem;
+  /* Fila objetivo: 48–56px (una línea ≈ 44px; dos líneas o un icon-btn ≈ 52px). */
+  padding: 0.625rem 1rem;
   border-bottom: 1px solid var(--border);
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: 500;
+  line-height: 1.35;
+  vertical-align: middle;
   font-variant-numeric: tabular-nums;
   transition: background var(--duration-base) var(--easing-soft);
+}
+
+/* DataTable (clase dt-compacta): cada celda en UN renglón. Medido a 1280px con
+   las columnas de Ventas: con el corte libre "Toyota Corolla XEI 2.0 CVT" se
+   apilaba en 4 renglones y la fila medía 99px (120px con el padding viejo); en
+   un renglón mide 55px. Si la tabla no entra, scrollea de costado (el
+   .table-container ya tiene overflow-x). Las columnas de texto libre se marcan
+   `wrap` (td.dt-wrap) y cortan con un ancho mínimo legible; los textos con
+   line-clamp siguen cortando, y .truncate recorta con "…" a 16rem. Las tablas
+   "a mano" con .data-table (sin DataTable) conservan el corte libre. */
+.data-table.dt-compacta td {
+  white-space: nowrap;
+}
+
+.data-table.dt-compacta td.dt-wrap {
+  white-space: normal;
+  min-width: 14rem;
+}
+
+.data-table.dt-compacta td .line-clamp-1,
+.data-table.dt-compacta td .line-clamp-2 {
+  white-space: normal;
+  min-width: 12rem;
+}
+
+.data-table.dt-compacta td .truncate {
+  max-width: 16rem;
+}
+
+/* Los botones de ícono de la columna de acciones, un escalón más chicos que
+   los sueltos (32px en vez de 38px): son los que fijaban el alto de la fila. */
+.data-table td .icon-btn {
+  padding: 0.45rem;
+}
+
+/* Fila clicable (DataTable con onRowClick): se navega con Tab y se abre con
+   Enter/Espacio. El anillo va por outline con offset negativo porque el
+   box-shadow sobre <tr> no se pinta de forma confiable con border-collapse. */
+.data-table tbody tr.dt-row-clickable {
+  cursor: pointer;
+}
+
+.data-table tbody tr.dt-row-clickable:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: -3px;
+  box-shadow: none;
+  background: var(--accent-light);
 }
 
 .data-table tbody tr {
@@ -729,6 +822,7 @@ button {
   background: var(--accent-light);
 }
 
+.data-table tbody tr.dt-row-clickable:hover td,
 .data-table tbody tr.cursor-pointer:hover td {
   color: var(--text-primary);
 }
@@ -871,7 +965,7 @@ button {
 }
 
 .input-feedback-error {
-  color: var(--danger);
+  color: var(--danger-text);
   font-weight: 600;
 }
 
@@ -1195,7 +1289,7 @@ button {
 
 .timeline-user {
   font-size: var(--text-xs);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -1270,19 +1364,19 @@ button {
 
 .badge-emerald {
   background: rgba(var(--accent-rgb), 0.10);
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: rgba(var(--accent-rgb), 0.20);
 }
 
 .badge-violet {
   background: rgba(var(--accent-2-rgb), 0.10);
-  color: var(--accent-2);
+  color: var(--accent-2-text);
   border-color: rgba(var(--accent-2-rgb), 0.20);
 }
 
 .badge-cyan {
   background: rgba(var(--accent-3-rgb), 0.10);
-  color: var(--accent-3);
+  color: var(--info-text);
   border-color: rgba(var(--accent-3-rgb), 0.20);
 }
 
@@ -1294,13 +1388,13 @@ button {
 
 .badge-warning {
   background: rgba(var(--warning-rgb), 0.10);
-  color: var(--warning);
+  color: var(--warning-text);
   border-color: rgba(var(--warning-rgb), 0.20);
 }
 
 .badge-danger {
   background: rgba(var(--danger-rgb), 0.10);
-  color: var(--danger);
+  color: var(--danger-text);
   border-color: rgba(var(--danger-rgb), 0.20);
 }
 
@@ -1413,7 +1507,7 @@ button {
 }
 
 .text-accent {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .text-center {
@@ -1543,23 +1637,42 @@ button {
 
 /* Color de texto por rol de estado (se usan sólo por su significado). */
 .text-success {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .text-warning {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .text-danger {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .text-info {
-  color: var(--info);
+  color: var(--info-text);
 }
 
 .text-accent-2 {
-  color: var(--accent-2);
+  color: var(--accent-2-text);
+}
+
+/* Utilidades que el JSX ya usaba sin que existieran (la capa tipo Tailwind se
+   reimplementó a mano): sin esto las filas "clicables" no mostraban la manito. */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Texto sólo para lectores de pantalla. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .font-bold {
@@ -1715,13 +1828,27 @@ html {
 
 .skip-link:focus {
   top: 1rem;
-  outline: 2px solid var(--text-white);
+  /* Sobre el lienzo claro el contorno blanco no se veía: va en tinta. */
+  outline: 2px solid var(--text-primary);
   outline-offset: 2px;
 }
 
-/* Focus visible global — interactivos sin focus explícito */
+/* Foco visible GLOBAL. Antes `:focus-visible { outline: none }` (y `button
+   { outline: none }`) apagaban el indicador y sólo una lista de clases lo
+   reponía: 67 de 203 botones quedaban sin foco visible. Ahora todo interactivo
+   (botones, links, campos, [tabindex], filas clicables) muestra el anillo.
+   El outline transparente no se ve, pero en el modo de alto contraste de
+   Windows (forced-colors) el sistema lo pinta, y ahí el box-shadow no existe.
+   Quedan afuera los [tabindex="-1"]: son destinos de foco programático (el
+   <main> del skip link, el panel de un modal), no controles. */
 :focus-visible {
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+[tabindex="-1"]:focus-visible {
+  box-shadow: none;
 }
 
 a:focus-visible,
@@ -1735,14 +1862,21 @@ a:focus-visible,
 .toast-close:focus-visible,
 .sidebar-collapse-btn:focus-visible,
 .sidebar-close-btn:focus-visible {
-  box-shadow: 0 0 0 3px var(--ring);
+  box-shadow: var(--focus-ring);
   border-radius: var(--radius-sm);
 }
 
-/* nav-item del sidebar (tema oscuro): ring blanco translúcido */
+/* Un input metido en una "caja" que ya marca el foco (search-box: borde
+   emerald + halo con :focus-within) no suma un segundo anillo adentro. */
+.search-box input:focus-visible {
+  box-shadow: none;
+}
+
+/* nav-item del sidebar (siempre sobre navy): anillo blanco translúcido +
+   el del sistema, que sobre el navy solo quedaba muy tenue. */
 .nav-item:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6),
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), /* impeccable-disable-line design-system-color: anillo sobre navy fijo */
+              0 0 0 4px var(--ring),
               inset 0 0 0 1px rgba(var(--accent-rgb), 0.45);
 }
 
@@ -1780,10 +1914,14 @@ a:focus-visible,
 .loader {
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  /* El spinner hereda la tinta del botón (currentColor): sobre el primario es
+     --text-on-accent, sobre el destructivo blanco. Antes era blanco fijo, que
+     sobre el emerald no contrasta. */
+  border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
   border-radius: 50%;
-  border-top-color: white;
+  border-top-color: currentColor;
   animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
 }
 
 .btn-secondary .loader {
@@ -1937,6 +2075,7 @@ a:focus-visible,
 
 .form-input-select:focus {
   border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
 
 .shadow-glow {
@@ -2020,6 +2159,9 @@ select.form-input {
 
 /* --- Breakpoints de las clases compartidas del layout --- */
 .app-main { padding: 2rem; }
+/* .app-main ya da el margen: el contenedor de la página no suma otro de 2,5rem
+   (eran 72 px arriba y a los costados que le quitaban filas y columnas a los listados). */
+.app-main .page-container { padding: 0 0 2rem; }
 
 @media (max-width: 1024px) {
   .page-container { padding: 1.75rem; }
@@ -2034,9 +2176,10 @@ select.form-input {
     gap: 1rem;
     margin-bottom: 0;
   }
-  .header-title h1 { font-size: var(--text-2xl); }
+  .page-header > .header-title { flex: none; }
+  .header-title h1 { font-size: var(--text-2xl); white-space: normal; }
   .data-table th,
-  .data-table td { padding: 0.7rem 0.85rem; }
+  .data-table td { padding: 0.6rem 0.75rem; }
   .search-box { padding: 0.6rem 1rem; }
   .app-main { padding: 1rem; }
 }
@@ -2045,4 +2188,179 @@ select.form-input {
   .page-container { padding: 0.85rem; }
   /* En teléfonos, los pares de columnas se apilan para no apretar. */
   .grid-cols-2 { grid-template-columns: 1fr; }
+}
+
+/* ───────────────────────────────────────
+ * Filtros plegables — convención para las barras de filtros
+ * ───────────────────────────────────────
+ * En escritorio (≥1024px) los filtros se ven siempre y la barra del botón no
+ * aparece. En tablet/teléfono los filtros arrancan plegados detrás de un botón
+ * "Filtros" que muestra cuántos hay activos. Lo más simple es usar el
+ * componente <FiltrosPlegables> (components/ui); a mano, la estructura es:
+ *
+ *   <div className="filtros-plegables [is-abierto]">
+ *     <div className="filtros-plegables-barra">
+ *       <button type="button" className="filtros-plegables-toggle"
+ *               aria-expanded={abierto} aria-controls="filtros-x">
+ *         Filtros <span className="filtros-plegables-cuenta">2</span>
+ *       </button>
+ *       <button type="button" className="filtros-plegables-limpiar">Limpiar filtros</button>
+ *     </div>
+ *     <div id="filtros-x" className="filtros-plegables-cuerpo filters-bar">…</div>
+ *   </div>
+ */
+.filtros-plegables {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.filtros-plegables-barra {
+  display: none;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.filtros-plegables-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.filtros-plegables-toggle:hover {
+  border-color: var(--accent);
+}
+
+.filtros-plegables-cuenta {
+  min-width: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  line-height: 1.25rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.filtros-plegables-limpiar {
+  background: none;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 1023px) {
+  .filtros-plegables-barra { display: flex; }
+  .filtros-plegables:not(.is-abierto) > .filtros-plegables-cuerpo { display: none; }
+}
+
+/* ───────────────────────────────────────
+ * Combobox — select con búsqueda (components/ui/Combobox.tsx)
+ * Reusa .input-group / .input-control; acá sólo el popup y las opciones.
+ * ─────────────────────────────────────── */
+.cbx {
+  position: relative;
+}
+
+.cbx .input-control {
+  padding-right: 4.25rem;
+}
+
+.cbx-acciones {
+  position: absolute;
+  right: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.cbx-boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.cbx-boton:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.cbx-popup {
+  /* Portal a <body> con posición fija (la calcula el componente): así no lo
+     recorta el overflow del cuerpo de un modal. Por encima del modal (1000) y
+     del buscador (2000), por debajo de los toasts (9999). */
+  position: fixed;
+  z-index: 2100;
+  max-height: 18rem;
+  overflow-y: auto;
+  padding: var(--space-1);
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.cbx-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cbx-opcion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.cbx-opcion.is-activa {
+  background: var(--accent-light);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.35);
+}
+
+.cbx-opcion[aria-selected="true"] {
+  font-weight: 700;
+}
+
+.cbx-opcion[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.cbx-opcion-sub {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.cbx-msg {
+  padding: 0.6rem 0.75rem;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }

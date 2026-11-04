@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { passwordNueva } from './password';
 
 // Schemas de validación de los endpoints de auth. Conservadores a propósito:
 // en login sólo se valida presencia y forma (nunca reglas de complejidad, que
@@ -13,23 +14,58 @@ export const loginSchema = z.object({
     // `.toLowerCase()`: el email es identidad GLOBAL (schema: @unique). Normalizarlo
     // en el borde hace la unicidad case-insensitive de hecho y evita que 'Admin@x' y
     // 'admin@x' sean cuentas distintas o que el login no matchee por diferencia de case.
-    email: z.string({ error: 'El email es obligatorio' }).trim().toLowerCase().min(1, 'El email es obligatorio').email('Email inválido'),
+    email: z.string({ error: 'El email es obligatorio' }).trim().toLowerCase().min(1, 'El email es obligatorio').email('El email no es válido'),
     password: z.string({ error: 'La contraseña es obligatoria' }).min(1, 'La contraseña es obligatoria'),
 });
 
-export const refreshSchema = z.object({
-    refreshToken: z.string({ error: 'El refresh token es obligatorio' }).min(1, 'El refresh token es obligatorio'),
-});
+// Refresh y logout: el token viene en el body (app móvil) o en la cookie httpOnly
+// `autenza_rt` (web, ver refreshCookie.ts), así que en el body es opcional. La web
+// los llama SIN cuerpo: con Express 5 `req.body` llega undefined, que se toma como {}.
+const sinCuerpoEsVacio = (v: unknown) => v ?? {};
 
-// Logout: el refresh token es opcional a propósito. Cerrar sesión debe ser
-// siempre graceful (incluso sin token o con el body vacío); si viene, se revoca.
-export const logoutSchema = z.object({
+export const refreshSchema = z.preprocess(sinCuerpoEsVacio, z.object({
+    refreshToken: z.string({ error: 'El refresh token tiene que ser un texto' }).optional(),
+}));
+
+// Logout: cerrar sesión debe ser siempre graceful (incluso sin token o con el body
+// vacío); si viene un token (body o cookie), se revoca.
+export const logoutSchema = z.preprocess(sinCuerpoEsVacio, z.object({
     refreshToken: z.string().optional(),
-});
+}));
 
 // La política de longitud mínima (10) vive acá, como única fuente de verdad
 // (antes estaba hardcodeada en el controller).
 export const resetPasswordSchema = z.object({
     token: z.string({ error: 'El token es obligatorio' }).min(1, 'El token es obligatorio'),
-    password: z.string({ error: 'La contraseña es obligatoria' }).min(10, 'La contraseña debe tener al menos 10 caracteres'),
+    password: passwordNueva(),
+});
+
+// ── 2FA (TOTP) ──────────────────────────────────────────────────────────────
+
+const codigoTotp = z.string({ error: 'El código es obligatorio' }).trim().min(1, 'El código es obligatorio').max(12);
+const codigoRecuperacion = z.string().trim().min(1).max(20);
+
+// Segundo paso del login: el token de "contraseña correcta" + UN código (TOTP o de recuperación).
+export const login2faSchema = z.object({
+    mfaToken: z.string({ error: 'Falta el token de verificación' }).min(1, 'Falta el token de verificación'),
+    code: codigoTotp.optional(),
+    recoveryCode: codigoRecuperacion.optional(),
+}).refine((d) => !!d.code !== !!d.recoveryCode, { message: 'Ingresá el código de tu app o un código de recuperación (no ambos)' });
+
+export const mfaSetupSchema = z.object({
+    password: z.string({ error: 'La contraseña actual es obligatoria' }).min(1, 'La contraseña actual es obligatoria'),
+});
+
+export const mfaEnableSchema = z.object({ code: codigoTotp });
+
+// Desactivar: contraseña + (código de la app O código de recuperación).
+export const mfaDisableSchema = z.object({
+    password: z.string({ error: 'La contraseña actual es obligatoria' }).min(1, 'La contraseña actual es obligatoria'),
+    code: codigoTotp.optional(),
+    recoveryCode: codigoRecuperacion.optional(),
+}).refine((d) => !!d.code !== !!d.recoveryCode, { message: 'Ingresá el código de tu app o un código de recuperación (no ambos)' });
+
+export const mfaRegenerarSchema = z.object({
+    password: z.string({ error: 'La contraseña actual es obligatoria' }).min(1, 'La contraseña actual es obligatoria'),
+    code: codigoTotp,
 });

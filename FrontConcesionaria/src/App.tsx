@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import PageLoader from './components/ui/PageLoader';
+import ErrorBoundary from './components/ErrorBoundary';
 import { PLATAFORMA_NAV } from './config/plataformaNav';
 
 /*
@@ -16,10 +17,12 @@ const AppLayout = lazy(() => import('./components/layout/AppLayout'));
 const ProtectedRoute = lazy(() => import('./components/layout/ProtectedRoute'));
 const RequireRole = lazy(() => import('./components/auth/RequireRole'));
 const RedirectSuperAdmin = lazy(() => import('./components/auth/RedirectSuperAdmin'));
+const RedirectTasador = lazy(() => import('./components/auth/RedirectTasador'));
 
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
+const Activar2faPage = lazy(() => import('./pages/auth/Activar2faPage'));
 
 // Resto de pages: lazy — un chunk por feature
 const CapacitacionPage = lazy(() => import('./pages/capacitacion/CapacitacionPage'));
@@ -63,6 +66,10 @@ const ForbiddenPage = lazy(() => import('./pages/error/ForbiddenPage'));
 function App() {
   return (
     <BrowserRouter>
+      {/* Barrera de afuera: si falla el render de cualquier ruta (o la carga de su
+          chunk después de un deploy), se ve un mensaje con "Recargar" y no la
+          pantalla en blanco. Dentro del shell hay otra por página (AppLayout). */}
+      <ErrorBoundary>
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -77,6 +84,9 @@ function App() {
           <Route path="/capacitacion" element={<CapacitacionPage />} />
 
           <Route element={<ProtectedRoute />}>
+            {/* Activación obligatoria del 2FA (roles que lo exigen). ProtectedRoute confina acá a esa sesión. */}
+            <Route path="/activar-2fa" element={<Activar2faPage />} />
+
             {/* Panel de PLATAFORMA (super_admin): front separado con su propio
                 layout y navegación. Sólo administración global de tenants; no
                 muestra las pantallas operativas de la concesionaria. */}
@@ -96,6 +106,8 @@ function App() {
             {/* Shell operativo del tenant. RedirectSuperAdmin manda al super_admin
                 a /plataforma: nunca ve estas pantallas. */}
             <Route element={<RedirectSuperAdmin />}>
+            {/* El tasador puro queda confinado a /tasaciones (ver RedirectTasador). */}
+            <Route element={<RedirectTasador />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<DashboardPage />} />
 
@@ -175,11 +187,13 @@ function App() {
               <Route path="/403" element={<ForbiddenPage />} />
             </Route>
             </Route>
+            </Route>
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

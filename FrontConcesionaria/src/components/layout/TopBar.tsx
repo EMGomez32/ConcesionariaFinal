@@ -8,12 +8,20 @@ import { useThemeStore } from '../../store/themeStore';
 import { useTour } from '../../onboarding/useTour';
 import { MODULE_TOURS } from '../../onboarding/moduleTours';
 import { performLogout } from '../../api/auth.api';
+import { ID_MENU_LATERAL } from './Sidebar';
 
-// La app es dark-first (default en index.html), pero el usuario puede conmutar a
-// claro con el toggle de acá; la elección se persiste (store `autenza-theme`) y se
-// aplica a <html data-theme>. Las pantallas de auth/login quedan siempre dark
-// (colores fijos, ver AuthShell/LoginPage).
-const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () => void; showNotifications?: boolean }) => {
+// Tema: mientras el usuario no elija, la app sigue el tema del sistema
+// (prefers-color-scheme, ver themeStore e index.html). El toggle de acá fija una
+// elección, que se persiste (store `autenza-theme`) y se aplica a <html data-theme>.
+// Las pantallas de auth/login quedan siempre dark (colores fijos, ver AuthShell/LoginPage).
+interface TopBarProps {
+  onMenuClick?: () => void;
+  /** Estado del menú lateral en móvil, para el aria-expanded del botón que lo abre. */
+  menuAbierto?: boolean;
+  showNotifications?: boolean;
+}
+
+const TopBar = ({ onMenuClick, menuAbierto = false, showNotifications = true }: TopBarProps) => {
   const { user } = useAuthStore();
   const openPalette = useCommandPaletteStore((s) => s.open);
   const theme = useThemeStore((s) => s.theme);
@@ -37,7 +45,14 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
   return (
     <header className="top-bar">
       <div className="top-bar-left">
-        <button className="mobile-menu-btn" onClick={onMenuClick} aria-label="Abrir menú">
+        <button
+          type="button"
+          className="mobile-menu-btn"
+          onClick={onMenuClick}
+          aria-label="Abrir menú"
+          aria-expanded={menuAbierto}
+          aria-controls={ID_MENU_LATERAL}
+        >
           <Menu size={22} />
         </button>
         <Breadcrumbs />
@@ -95,7 +110,13 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
             </div>
             <div className="status-indicator"></div>
           </div>
-          <button className="logout-button" onClick={() => { void performLogout(); }} title="Cerrar Sesión">
+          <button
+            type="button"
+            className="logout-button"
+            onClick={() => { void performLogout(); }}
+            title="Cerrar sesión"
+            aria-label="Cerrar sesión"
+          >
             <LogOut size={18} />
           </button>
         </div>
@@ -241,7 +262,8 @@ const TopBar = ({ onMenuClick, showNotifications = true }: { onMenuClick?: () =>
           display: flex;
           align-items: center;
           justify-content: center;
-          color: var(--text-white);
+          /* Ícono sobre el gradiente del acento: tinta oscura, no blanco. */
+          color: var(--text-on-accent);
           box-shadow: var(--glow-accent);
         }
 

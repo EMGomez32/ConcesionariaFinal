@@ -15,8 +15,8 @@ una concesionaria. Leé esto completo antes de subir a la Raspberry.
 | **Rate limit** | Anulado (saltea IPs internas de Docker) | `trust proxy` + límite real por IP; login limitado a 5 intentos fallidos/15 min por cuenta |
 | **Base de datos** | `db push --accept-data-loss` en cada arranque | `db push` sin `--accept-data-loss` (aborta en vez de borrar datos); baseline de migración corregido |
 | **Backups** | Ninguno | Servicio `db-backup`: dump diario comprimido + retención + restauración |
-| **Debug** | `/api/debug/*` expuesto en prod | Solo se monta con `NODE_ENV=development` |
-| **Puertos** | Postgres (5432) y Prisma Studio (5555) abiertos a la LAN | Ligados a `127.0.0.1` (solo la propia máquina) |
+| **Debug** | `/api/debug/*` expuesto en prod | Eliminado; `NODE_ENV` sin definir ahora asume producción (default seguro) |
+| **Puertos** | Postgres (5432) y Prisma Studio (5555) abiertos a la LAN | Ligados a `127.0.0.1`; Prisma Studio solo bajo `docker compose --profile debug` |
 | **Logs** | Consola, nivel `warn`, ANSI en archivos | JSON estructurado nivel `info`, con correlationId; rotación en Docker |
 
 ---

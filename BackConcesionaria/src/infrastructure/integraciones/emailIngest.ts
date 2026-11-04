@@ -7,6 +7,7 @@ import { logger } from '../logging/logger';
 import { env } from '../../config/env';
 import { conContextoSistema, ingestarConsulta } from '../../application/services/consultaIngest';
 import { descifrarSecreto } from '../security/secretBox';
+import { resolverDestinoPublico, validarPuertoImap } from '../security/destinoSeguro';
 
 /**
  * Worker de ingesta de consultas por email (avisos de DeRuedas y similares):
@@ -120,10 +121,18 @@ async function procesarIntegracion(integracion: IntegracionCanal): Promise<void>
 
 /** Conecta a la casilla, procesa los UNSEEN y devuelve el balance de la corrida. */
 async function revisarCasilla(config: ConfigEmail): Promise<{ ingeridas: number; error: string | null }> {
+    // SSRF: el host lo cargó un admin de concesionaria. Se valida ACÁ, al conectar (no sólo al
+    // guardar: el DNS puede haber cambiado a una IP interna desde entonces, 'DNS rebinding'),
+    // y se conecta a la IP ya validada, no al nombre: así lo que se validó es lo que se usa.
+    const puerto = config.port ?? 993;
+    validarPuertoImap(puerto);
+    const destino = await resolverDestinoPublico(config.host ?? '');
     const client = new ImapFlow({
-        host: config.host ?? '',
-        port: config.port ?? 993,
+        host: destino.ip,
+        port: puerto,
         secure: config.secure ?? true,
+        // SNI y verificación del certificado TLS contra el NOMBRE del servidor, no contra la IP.
+        servername: destino.host,
         auth: { user: config.user ?? '', pass: config.pass ? descifrarSecreto(config.pass) : '' },
         logger: false,
     });

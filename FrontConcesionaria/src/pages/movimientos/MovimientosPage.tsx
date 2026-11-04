@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useMemo, type ChangeEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { vehiculoMovimientosApi, type VehiculoMovimiento } from '../../api/vehiculo-movimientos.api';
-import { vehiculosApi } from '../../api/vehiculos.api';
-import { sucursalesApi } from '../../api/sucursales.api';
 import { proveedoresApi } from '../../api/proveedores.api';
+import { useVehiculos } from '../../hooks/useVehiculos';
+import { useSucursales } from '../../hooks/useSucursales';
 import { TIPOS_PROVEEDOR } from '../../constants/proveedorTipos';
 import { useUIStore } from '../../store/uiStore';
 import Badge, { type BadgeVariant } from '../../components/ui/Badge';
@@ -12,31 +13,32 @@ import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
-import {
-    Plus, RefreshCw,
-    ArrowLeftRight, ChevronLeft, ChevronRight,
-    Car, Calendar, FileText,
-    ArrowRight, AlertCircle, User, MapPin, CheckCircle2
-} from 'lucide-react';
+import PageTitle from '../../components/ui/PageTitle';
+import { Listado, ListadoTabla, CampoFiltro, type ColumnaListado } from '../../components/listado';
+import { Plus, RefreshCw, ArrowLeftRight, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { usePermisos } from '../../hooks/usePermisos';
+import { hoyLocal } from '../../utils/fecha';
+import { getList } from '../../utils/lista';
+import { extractPaginatedData } from '../../utils/apiHelpers';
+import { getErrorMessage } from '../../utils/getErrorMessage';
+import { descripcionVehiculo } from '../vehiculos/vehiculoTextos';
 
-const TIPO_BADGE: Record<string, string> = {
-    traslado: 'info',
-    preparacion: 'violet',
-    ingreso: 'success',
-    egreso: 'danger',
-    asignacion_reserva: 'warning',
-    liberacion_reserva: 'default',
+const TIPO_MOVIMIENTO: Record<string, { label: string; variant: BadgeVariant }> = {
+    traslado: { label: 'Traslado', variant: 'info' },
+    preparacion: { label: 'Preparación', variant: 'violet' },
+    ingreso: { label: 'Ingreso al stock', variant: 'success' },
+    egreso: { label: 'Salida del stock', variant: 'danger' },
+    asignacion_reserva: { label: 'Reserva asignada', variant: 'warning' },
+    liberacion_reserva: { label: 'Reserva liberada', variant: 'default' },
 };
 
-const TIPO_LABEL: Record<string, string> = {
-    traslado: 'Traslado Inter-Sucursal',
-    preparacion: 'Preparación',
-    ingreso: 'Ingreso al Stock',
-    egreso: 'Egreso del Stock',
-    asignacion_reserva: 'Asignación de Reserva',
-    liberacion_reserva: 'Liberación de Reserva',
+// Un tipo nuevo del backend nunca se muestra crudo ("algo_nuevo" → "Algo nuevo").
+const tipoMovimiento = (tipo: string) => TIPO_MOVIMIENTO[tipo] ?? {
+    label: tipo ? tipo.charAt(0).toUpperCase() + tipo.slice(1).replace(/_/g, ' ') : 'Movimiento',
+    variant: 'default' as BadgeVariant,
 };
+
+const fechaCorta = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('es-AR') : 'Sin fecha');
 
 const EMPTY_FORM = {
     vehiculoId: '',
@@ -44,11 +46,15 @@ const EMPTY_FORM = {
     hastaSucursalId: '',
     proveedorDestinoId: '',       // a qué proveedor externo va la unidad
     motivo: '',
-    fechaMovimiento: new Date().toISOString().slice(0, 10),
+    fechaMovimiento: hoyLocal(),
 };
+
+const LIMIT = 15;
 
 const MovimientosPage = () => {
     const { addToast } = useUIStore();
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
     // El circuito está partido a propósito: despachar la unidad a un proveedor es
     // acondicionamiento de stock (admin/vendedor), recibirla de vuelta es taller
     // (además, postventa). Ver hooks/usePermisos.ts. Antes la pantalla mostraba los
@@ -56,85 +62,52 @@ const MovimientosPage = () => {
     // después de completar el formulario entero.
     const permisos = usePermisos();
 
-    // List state
-    const [movimientos, setMovimientos] = useState<VehiculoMovimiento[]>([]);
-    const [loading, setLoading] = useState(false);
     const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-
-    // Filters
     const [filterVehiculo, setFilterVehiculo] = useState('');
     const [filterDesde, setFilterDesde] = useState('');
     const [filterHasta, setFilterHasta] = useState('');
 
-    // Catalog data
-    const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([]);
-    const [vehiculos, setVehiculos] = useState<{ id: number; marca: string; modelo: string; version?: string; dominio?: string }[]>([]);
-    const [proveedores, setProveedores] = useState<{ id: number; nombre: string; tipo?: string; activo?: boolean }[]>([]);
+    // Catálogos. Los hooks/`getList` cubren las distintas formas de respuesta
+    // (antes un catch vacío tragaba cualquier error y los selects quedaban vacíos).
+    const { data: sucursales = [] } = useSucursales();
+    const { data: vehiculosPayload } = useVehiculos({}, { limit: 1000 });
+    const vehiculos = getList<{ id: number; marca: string; modelo: string; version?: string; dominio?: string }>(vehiculosPayload);
+    // Sólo proveedores activos: a un proveedor dado de baja no se le puede mandar una unidad.
+    const { data: provPayload } = useQuery({
+        queryKey: ['proveedores', 'activos'],
+        queryFn: () => proveedoresApi.getAll({ activo: true }, { limit: 500 }),
+    });
+    const proveedores = useMemo(
+        () => getList<{ id: number; nombre: string; tipo?: string; activo?: boolean }>(provPayload),
+        [provPayload],
+    );
 
-    // Modal
-    const [showModal, setShowModal] = useState(false);
-    const [form, setForm] = useState({ ...EMPTY_FORM });
-    const [saving, setSaving] = useState(false);
-    const [formError, setFormError] = useState('');
+    const params = {
+        page,
+        limit: LIMIT,
+        vehiculoId: filterVehiculo ? Number(filterVehiculo) : undefined,
+        desdeSucursalId: filterDesde ? Number(filterDesde) : undefined,
+        hastaSucursalId: filterHasta ? Number(filterHasta) : undefined,
+    };
+    const { data, isLoading, isFetching, isError, refetch } = useQuery({
+        queryKey: ['vehiculo-movimientos', 'list', params],
+        queryFn: async () => extractPaginatedData<VehiculoMovimiento>(await vehiculoMovimientosApi.getAll(params)),
+        placeholderData: keepPreviousData,
+    });
+    const movimientos = data?.results ?? [];
+    const totalPages = data?.totalPages ?? 1;
+    const totalResults = data?.totalResults ?? 0;
+    const recargar = () => queryClient.invalidateQueries({ queryKey: ['vehiculo-movimientos'] });
 
-    // Load catalogs once
-    useEffect(() => {
-        const loadInitial = async () => {
-            try {
-                const [sucRes, vehRes, provRes] = await Promise.all([
-                    sucursalesApi.getAll(),
-                    vehiculosApi.getAll({}, { limit: 1000 }),
-                    // Sólo proveedores activos: a un proveedor dado de baja no se
-                    // le puede mandar una unidad.
-                    proveedoresApi.getAll({ activo: true }, { limit: 500 })
-                ]);
-                // Distintos módulos devuelven formas distintas: vehículos → {results},
-                // sucursales → {success, data:[...]}. Este helper cubre todas.
-                const getList = <T,>(r: unknown): T[] => {
-                    if (Array.isArray(r)) return r as T[];
-                    const o = (r ?? {}) as { results?: T[]; data?: T[] | { results?: T[] } };
-                    if (Array.isArray(o.results)) return o.results;
-                    if (Array.isArray(o.data)) return o.data;
-                    const dr = (o.data as { results?: T[] })?.results;
-                    return Array.isArray(dr) ? dr : [];
-                };
-                setSucursales(getList(sucRes));
-                setVehiculos(getList(vehRes));
-                setProveedores(getList(provRes));
-            } catch {
-                // silencio
-            }
-        };
-        loadInitial();
-    }, []);
-
-    const loadMovimientos = useCallback(async (pg = page) => {
-        setLoading(true);
-        try {
-            const params: Record<string, string | number> = { page: pg, limit: 15 };
-            if (filterVehiculo) params.vehiculoId = Number(filterVehiculo);
-            if (filterDesde) params.desdeSucursalId = Number(filterDesde);
-            if (filterHasta) params.hastaSucursalId = Number(filterHasta);
-
-            const res = await vehiculoMovimientosApi.getAll(params) as unknown as { results?: VehiculoMovimiento[]; totalPages?: number };
-            setMovimientos(res?.results ?? []);
-            setTotalPages(res?.totalPages ?? 1);
-        } catch {
-            addToast('Error al cargar la trazabilidad de stock', 'error');
-        } finally {
-            setLoading(false);
-        }
-    }, [page, filterVehiculo, filterDesde, filterHasta, addToast]);
-
-    useEffect(() => {
-        loadMovimientos(page);
-    }, [page, loadMovimientos]);
-
-    const handleClear = () => {
+    const filtrosActivos = [filterVehiculo, filterDesde, filterHasta].filter(Boolean).length;
+    const limpiarFiltros = () => {
         setFilterVehiculo('');
         setFilterDesde('');
         setFilterHasta('');
+        setPage(1);
+    };
+    const cambiarFiltro = (set: (v: string) => void) => (e: ChangeEvent<HTMLSelectElement>) => {
+        set(e.target.value);
         setPage(1);
     };
 
@@ -144,13 +117,19 @@ const MovimientosPage = () => {
         try {
             await vehiculoMovimientosApi.marcarRetorno(id);
             addToast('Retorno de preparación registrado', 'success');
-            loadMovimientos(page);
-        } catch {
-            addToast('Error al registrar el retorno', 'error');
+            recargar();
+        } catch (err) {
+            addToast(getErrorMessage(err, 'No se pudo registrar el retorno'), 'error');
         } finally {
             setRetornandoId(null);
         }
     };
+
+    // Modal
+    const [showModal, setShowModal] = useState(false);
+    const [form, setForm] = useState({ ...EMPTY_FORM });
+    const [saving, setSaving] = useState(false);
+    const [formError, setFormError] = useState('');
 
     // A un auto se lo manda a un taller, lavadero, etc.: no a una importadora
     // ni a una financiera. Se agrupan por tipo para encontrarlos rápido.
@@ -166,7 +145,7 @@ const MovimientosPage = () => {
     }, [proveedores]);
 
     const openModal = () => {
-        setForm({ ...EMPTY_FORM });
+        setForm({ ...EMPTY_FORM, fechaMovimiento: hoyLocal() });
         setFormError('');
         setShowModal(true);
     };
@@ -174,9 +153,9 @@ const MovimientosPage = () => {
     const handleSubmit = async () => {
         const esTraslado = form.modalidad === 'traslado';
 
-        if (!form.vehiculoId) { setFormError('Seleccioná la unidad.'); return; }
-        if (esTraslado && !form.hastaSucursalId) { setFormError('Seleccioná la sucursal de destino.'); return; }
-        if (!esTraslado && !form.proveedorDestinoId) { setFormError('Seleccioná el proveedor de destino.'); return; }
+        if (!form.vehiculoId) { setFormError('Elegí la unidad.'); return; }
+        if (esTraslado && !form.hastaSucursalId) { setFormError('Elegí la sucursal de destino.'); return; }
+        if (!esTraslado && !form.proveedorDestinoId) { setFormError('Elegí el proveedor de destino.'); return; }
 
         setSaving(true);
         setFormError('');
@@ -192,217 +171,179 @@ const MovimientosPage = () => {
             if (form.fechaMovimiento) payload.fechaMovimiento = new Date(form.fechaMovimiento).toISOString();
 
             await vehiculoMovimientosApi.create(payload);
-            addToast(esTraslado ? 'Traslado registrado correctamente' : 'Envío a preparación registrado', 'success');
+            addToast(esTraslado ? 'Traslado registrado' : 'Envío a preparación registrado', 'success');
             setShowModal(false);
             setPage(1);
-            loadMovimientos(1);
+            recargar();
         } catch (e: unknown) {
-            const msg = (e as { message?: string })?.message ?? 'Error al registrar el movimiento';
-            setFormError(msg);
+            setFormError(getErrorMessage(e, 'No se pudo registrar el movimiento'));
         } finally {
             setSaving(false);
         }
     };
 
+    const nombreUnidad = (m: VehiculoMovimiento) =>
+        m.vehiculo ? `${m.vehiculo.marca} ${m.vehiculo.modelo}` : `Unidad #${m.vehiculoId}`;
+
+    const columnas: ColumnaListado<VehiculoMovimiento>[] = [
+        {
+            clave: 'unidad',
+            titulo: 'Unidad',
+            flexible: true,
+            tarjeta: 'titulo',
+            celda: (m) => (
+                <>
+                    <span className="listado-principal">{nombreUnidad(m)}</span>
+                    <span className="listado-secundario">{m.vehiculo ? descripcionVehiculo(m.vehiculo) : 'Sin datos de la unidad'}</span>
+                </>
+            ),
+        },
+        {
+            clave: 'tipo',
+            titulo: 'Movimiento',
+            celda: (m) => {
+                const t = tipoMovimiento(m.tipo);
+                return <Badge variant={t.variant}>{t.label}</Badge>;
+            },
+        },
+        {
+            clave: 'recorrido',
+            titulo: 'Desde → hacia',
+            celda: (m) => (
+                <span className="listado-nowrap" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <span className="text-muted">{m.desdeSucursal?.nombre ?? 'Sin origen'}</span>
+                    <ArrowRight size={12} aria-label="hacia" />
+                    {/* `destino` es texto libre de movimientos viejos, previos a que
+                        el destino pasara a ser un proveedor. */}
+                    <span>{m.hastaSucursal?.nombre ?? m.proveedorDestino?.nombre ?? m.destino ?? 'Venta'}</span>
+                </span>
+            ),
+        },
+        {
+            clave: 'fecha',
+            titulo: 'Fecha',
+            celda: (m) => <span className="listado-nowrap">{fechaCorta(m.fecha ?? m.createdAt)}</span>,
+        },
+        {
+            clave: 'motivo',
+            titulo: 'Motivo',
+            celda: (m) => (
+                m.motivo
+                    ? <span className="listado-secundario" style={{ fontSize: 'var(--text-sm)', maxWidth: '24ch' }} title={m.motivo}>{m.motivo}</span>
+                    : <span className="text-muted">Sin motivo</span>
+            ),
+        },
+        {
+            clave: 'registro',
+            titulo: 'Registró',
+            celda: (m) => <span className="listado-nowrap">{m.registradoPor?.nombre ?? 'Automático'}</span>,
+        },
+        {
+            clave: 'estado',
+            titulo: 'Estado',
+            alinear: 'right',
+            tarjeta: 'acciones',
+            celda: (m) => {
+                if (m.tipo !== 'preparacion') return <span className="text-muted">—</span>;
+                if (m.fechaRetorno) {
+                    return <Badge variant="success" title={`Volvió el ${fechaCorta(m.fechaRetorno)}`}>Volvió el {fechaCorta(m.fechaRetorno)}</Badge>;
+                }
+                return (
+                    <div className="listado-acciones-fila">
+                        <Badge variant="warning">En preparación</Badge>
+                        {permisos.movimientosMarcarRetorno && (
+                            <Button variant="secondary" size="sm" loading={retornandoId === m.id} onClick={() => handleRetorno(m.id)}>
+                                <CheckCircle2 size={14} aria-hidden="true" /> Marcar retorno
+                            </Button>
+                        )}
+                    </div>
+                );
+            },
+        },
+    ];
+
+    const nuevoMovimiento = permisos.movimientosCrear ? (
+        <Button variant="primary" onClick={openModal}>
+            <Plus size={18} aria-hidden="true" /> Nuevo movimiento
+        </Button>
+    ) : undefined;
+
     return (
         <div className="page-container animate-fade-in">
-            {/* Header */}
-            <header className="page-header">
-                <div className="header-title">
-                    <div className="flex items-center gap-3 mb-1">
-                        <div className="icon-badge primary shadow-glow-indigo">
-                            <ArrowLeftRight size={20} />
-                        </div>
-                        <h1>Movimientos de Stock</h1>
-                    </div>
-                    <p>Trazabilidad de traslados entre sucursales, asignaciones y cambios de ubicación de las unidades.</p>
-                </div>
-                <div className="flex gap-3">
-                    <Button variant="secondary" onClick={() => loadMovimientos(page)}>
-                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+            <PageTitle title="Movimientos" />
+            <Listado
+                titulo="Movimientos"
+                subtitulo="Traslados entre sucursales y envíos a preparación"
+                icono={<ArrowLeftRight size={22} />}
+                clave="movimientos"
+                acciones={(
+                    <Button variant="secondary" className="btn-icono" onClick={() => refetch()} disabled={isFetching} aria-label="Actualizar la lista" title="Actualizar">
+                        <RefreshCw size={18} className={isFetching ? 'animate-spin' : ''} aria-hidden="true" />
                     </Button>
-                    {permisos.movimientosCrear && (
-                        <Button variant="primary" onClick={openModal}>
-                            <Plus size={18} /> Nuevo Movimiento
-                        </Button>
-                    )}
-                </div>
-            </header>
-
-            {/* Filters Bar */}
-            <div className="card glass filters-bar flex flex-wrap items-end gap-6">
-                <div className="flex-1">
-                    <label className="form-label-xs text-accent-2">Filtrar por Unidad</label>
-                    <select className="form-input-select w-full" value={filterVehiculo} onChange={e => { setFilterVehiculo(e.target.value); setPage(1); }}>
-                        <option value="">TODOS LOS VEHÍCULOS</option>
-                        {vehiculos.map(v => <option key={v.id} value={v.id}>{`${v.marca} ${v.modelo} ${v.dominio || ''}`.toUpperCase()}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className="form-label-xs">Origen de Stock</label>
-                    <select className="form-input-select w-full" value={filterDesde} onChange={e => { setFilterDesde(e.target.value); setPage(1); }}>
-                        <option value="">CUALQUIER PLAZA</option>
-                        {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className="form-label-xs">Destino de Stock</label>
-                    <select className="form-input-select w-full" value={filterHasta} onChange={e => { setFilterHasta(e.target.value); setPage(1); }}>
-                        <option value="">CUALQUIER DESTINO</option>
-                        {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre.toUpperCase()}</option>)}
-                    </select>
-                </div>
-                <div className="flex items-end">
-                    <Button variant="secondary" onClick={handleClear} title="Limpiar filtros">
-                        <RefreshCw size={18} />
-                    </Button>
-                </div>
-            </div>
-
-            {/* List Table */}
-            <div className="table-container card">
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            <th>Unidad Vehicular</th>
-                            <th>Evento de Stock</th>
-                            <th>Flujo de Distribución</th>
-                            <th>Fecha Evento</th>
-                            <th>Certificación / Motivo</th>
-                            <th>Responsable Central</th>
-                            <th style={{ textAlign: 'right' }}>Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr><td colSpan={6} style={{ padding: '8rem', textAlign: 'center' }}><RefreshCw className="animate-spin text-accent" size={40} /></td></tr>
-                        ) : movimientos.length === 0 ? (
-                            <tr>
-                                <td colSpan={7}>
-                                    <div className="flex flex-col items-center text-muted">
-                                        <div className="flex items-center justify-center mb-4">
-                                            <ArrowLeftRight size={40} className="text-secondary" />
-                                        </div>
-                                        <p className="text-xl font-black text-muted italic">No se registran trazabilidades</p>
-                                        <p className="text-sm font-medium">El historial de movimientos está vacío para los filtros seleccionados.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        ) : (
-                            movimientos.map(m => (
-                                <tr key={m.id}>
-                                    <td>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex items-center justify-center text-accent-2">
-                                                <Car size={18} />
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="font-bold leading-tight">
-                                                    {m.vehiculo ? `${m.vehiculo.marca} ${m.vehiculo.modelo}` : `Vehículo #${m.vehiculoId}`}
-                                                </span>
-                                                <span className="text-3xs font-black text-accent-2 uppercase tracking-widest">{m.vehiculo?.dominio || 'S/PATENTE'}</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <Badge variant={(TIPO_BADGE[m.tipo] ?? 'default') as BadgeVariant}>
-                                            {TIPO_LABEL[m.tipo] ?? m.tipo.toUpperCase()}
-                                        </Badge>
-                                    </td>
-                                    <td>
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex flex-col">
-                                                <span className="text-3xs text-muted uppercase font-black tracking-tight">DESDE</span>
-                                                <span className="text-xs font-bold text-muted">{m.desdeSucursal?.nombre ?? '-'}</span>
-                                            </div>
-                                            <ArrowRight size={14} className="text-secondary" />
-                                            <div className="flex flex-col text-right">
-                                                <span className="text-3xs text-accent-2 uppercase font-black tracking-tight">
-                                                    {m.tipo === 'preparacion' ? 'PREPARACIÓN' : 'HASTA'}
-                                                </span>
-                                                <span className="text-xs font-bold">
-                                                    {/* `destino` es texto libre de movimientos viejos, previos a que
-                                                        el destino pasara a ser un proveedor. */}
-                                                    {m.hastaSucursal?.nombre ?? m.proveedorDestino?.nombre ?? m.destino ?? 'VENTA'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div className="flex items-center gap-2 text-muted">
-                                            <Calendar size={14} />
-                                            <span className="text-sm font-bold tabular-nums">
-                                                {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR') : (m.createdAt ? new Date(m.createdAt).toLocaleDateString('es-AR') : '-')}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td style={{ maxWidth: '200px' }}>
-                                        <div className="flex items-center gap-2">
-                                            <FileText size={14} className="text-secondary" />
-                                            <span className="text-xs text-muted italic line-clamp-1">{m.motivo || 'Sin detalles registrados'}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex items-center justify-center text-muted">
-                                                <User size={14} />
-                                            </div>
-                                            <span className="text-xs font-black text-muted uppercase">{m.registradoPor?.nombre ?? 'SYSTEM'}</span>
-                                        </div>
-                                    </td>
-                                    <td style={{ textAlign: 'right' }}>
-                                        {m.tipo !== 'preparacion' ? (
-                                            <span className="text-xs font-bold text-muted">—</span>
-                                        ) : m.fechaRetorno ? (
-                                            <div className="flex flex-col items-end">
-                                                <Badge variant="success">Volvió</Badge>
-                                                <span className="text-3xs text-muted">{new Date(m.fechaRetorno).toLocaleDateString('es-AR')}</span>
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-col items-end gap-1">
-                                                <Badge variant="warning">En preparación</Badge>
-                                                {permisos.movimientosMarcarRetorno && (
-                                                    <Button variant="secondary" size="sm" loading={retornandoId === m.id} onClick={() => handleRetorno(m.id)}>
-                                                        <CheckCircle2 size={14} /> Marcar retorno
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Pagination */}
-            <div className="flex justify-center items-center gap-6">
-                <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
-                    <ChevronLeft size={16} /> Anterior
-                </Button>
-                <div className="flex items-center gap-2">
-                    <span className="text-3xs text-muted font-black uppercase tracking-tight">Página</span>
-                    <span className="flex items-center justify-center font-black text-sm">{page}</span>
-                    <span className="text-3xs text-muted font-black uppercase tracking-tight">de {totalPages}</span>
-                </div>
-                <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
-                    Siguiente <ChevronRight size={16} />
-                </Button>
-            </div>
+                )}
+                accionPrincipal={nuevoMovimiento}
+                filtrosActivos={filtrosActivos}
+                onLimpiarFiltros={limpiarFiltros}
+                resumen={!isLoading && !isError ? `${totalResults} ${totalResults === 1 ? 'movimiento' : 'movimientos'}` : undefined}
+                filtros={(
+                    <>
+                        <CampoFiltro etiqueta="Unidad">
+                            <select className="form-input" value={filterVehiculo} onChange={cambiarFiltro(setFilterVehiculo)}>
+                                <option value="">Todas las unidades</option>
+                                {vehiculos.map(v => <option key={v.id} value={v.id}>{`${v.marca} ${v.modelo}${v.dominio ? ` (${v.dominio})` : ''}`}</option>)}
+                            </select>
+                        </CampoFiltro>
+                        <CampoFiltro etiqueta="Desde">
+                            <select className="form-input" value={filterDesde} onChange={cambiarFiltro(setFilterDesde)}>
+                                <option value="">Cualquier sucursal</option>
+                                {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                            </select>
+                        </CampoFiltro>
+                        <CampoFiltro etiqueta="Hacia">
+                            <select className="form-input" value={filterHasta} onChange={cambiarFiltro(setFilterHasta)}>
+                                <option value="">Cualquier sucursal</option>
+                                {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                            </select>
+                        </CampoFiltro>
+                    </>
+                )}
+            >
+                <ListadoTabla
+                    etiqueta="Movimientos"
+                    columnas={columnas}
+                    filas={movimientos}
+                    cargando={isLoading}
+                    error={isError}
+                    mensajeError="No se pudieron cargar los movimientos"
+                    onReintentar={() => refetch()}
+                    hayFiltros={filtrosActivos > 0}
+                    onLimpiarFiltros={limpiarFiltros}
+                    vacio={{
+                        titulo: 'Todavía no hay movimientos',
+                        descripcion: 'Cuando trasladás una unidad a otra sucursal o la mandás a preparación, queda registrado acá.',
+                        icono: <ArrowLeftRight size={32} aria-hidden="true" />,
+                        accion: nuevoMovimiento,
+                    }}
+                    onFilaClick={(m) => navigate(`/vehiculos/${m.vehiculoId}`)}
+                    etiquetaFila={(m) => `Abrir la ficha de ${nombreUnidad(m)}`}
+                    pagina={page}
+                    totalPaginas={totalPages}
+                    onPaginaChange={setPage}
+                />
+            </Listado>
 
             <Modal
                 isOpen={showModal}
                 onClose={() => setShowModal(false)}
-                title="Nuevo Movimiento de Unidad"
+                title="Nuevo movimiento"
                 subtitle="Trasladá la unidad a otra sucursal o enviala a preparación (mecánico, lavadero, chapa y pintura, etc.)."
                 maxWidth="680px"
                 footer={
                     <>
                         <Button variant="secondary" onClick={() => setShowModal(false)}>Cancelar</Button>
                         <Button variant="primary" onClick={handleSubmit} loading={saving}>
-                            <ArrowLeftRight size={16} />
-                            Registrar Movimiento
+                            <ArrowLeftRight size={16} aria-hidden="true" />
+                            Registrar movimiento
                         </Button>
                     </>
                 }
@@ -410,12 +351,11 @@ const MovimientosPage = () => {
                 <div>
                     <Select
                         dense
-                        label="Unidad Vehicular a Movilizar *"
-                        className="text-lg font-bold"
-                        placeholder="Selección de unidad por Dominio o Modelo..."
+                        label="Unidad *"
+                        placeholder="Elegí la unidad"
                         options={vehiculos.map(v => ({
                             value: v.id,
-                            label: `${v.marca} ${v.modelo} ${v.version ? v.version : ''} (${v.dominio || 'SIN PATENTE'})`.toUpperCase(),
+                            label: `${v.marca} ${v.modelo}${v.version ? ` ${v.version}` : ''} (${v.dominio || 'sin dominio'})`,
                         }))}
                         value={form.vehiculoId}
                         onChange={e => setForm(f => ({ ...f, vehiculoId: e.target.value }))}
@@ -430,31 +370,27 @@ const MovimientosPage = () => {
                     </div>
 
                     {form.modalidad === 'traslado' ? (
-                        <div>
-                            <MapPin size={16} className="text-accent" />
-                            <Select
-                                dense
-                                label="Sucursal de destino *"
-                                placeholder="Seleccionar sucursal..."
-                                options={sucursales.map(s => ({ value: s.id, label: s.nombre.toUpperCase() }))}
-                                value={form.hastaSucursalId}
-                                onChange={e => setForm(f => ({ ...f, hastaSucursalId: e.target.value }))}
-                            />
-                        </div>
+                        <Select
+                            dense
+                            label="Sucursal de destino *"
+                            placeholder="Elegí la sucursal"
+                            options={sucursales.map(s => ({ value: s.id, label: s.nombre }))}
+                            value={form.hastaSucursalId}
+                            onChange={e => setForm(f => ({ ...f, hastaSucursalId: e.target.value }))}
+                        />
                     ) : (
                         <div>
-                            <MapPin size={16} className="text-accent" />
                             <Select
                                 dense
                                 label="Proveedor de destino *"
-                                placeholder="Seleccionar proveedor..."
+                                placeholder="Elegí el proveedor"
                                 value={form.proveedorDestinoId}
                                 onChange={e => setForm(f => ({ ...f, proveedorDestinoId: e.target.value }))}
                             >
                                 {destinosPorTipo.map(grupo => (
                                     <optgroup key={grupo.tipo} label={grupo.label}>
                                         {grupo.proveedores.map(p => (
-                                            <option key={p.id} value={p.id}>{p.nombre.toUpperCase()}</option>
+                                            <option key={p.id} value={p.id}>{p.nombre}</option>
                                         ))}
                                     </optgroup>
                                 ))}
@@ -468,53 +404,16 @@ const MovimientosPage = () => {
                         </div>
                     )}
 
-                    <Textarea dense label="Justificación Operacional / Notas" rows={3} placeholder="Ej: Cumplimiento de reserva en sucursal Norte, rotación de showroom..." value={form.motivo} onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))} style={{ resize: 'none' }} />
+                    <Textarea dense label="Motivo o notas" rows={3} placeholder="Ej: la pide la sucursal Norte para una reserva" value={form.motivo} onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))} style={{ resize: 'none' }} />
 
                     {formError && (
-                        <div className="uploader-alert uploader-alert-error">
-                            <AlertCircle size={14} />
+                        <div className="uploader-alert uploader-alert-error" role="alert">
+                            <AlertCircle size={14} aria-hidden="true" />
                             <span>{formError}</span>
                         </div>
                     )}
                 </div>
             </Modal>
-
-            <style>{`
-                .icon-badge {
-                    width: 44px;
-                    height: 44px;
-                    border-radius: var(--radius-md);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    background: rgba(var(--accent-2-rgb), 0.1);
-                    color: var(--accent-2);
-                }
-                .shadow-glow-indigo { box-shadow: 0 0 20px rgba(var(--accent-2-rgb), 0.2); }
-                
-                /* .form-label-xs: la define index.css (capa global). El
-                   .form-input-select local es la variante protagónica de estos
-                   filtros y gana la cascada a propósito. */
-                .form-input-select {
-                    padding: 0.75rem 2.5rem 0.75rem 1rem;
-                    border-radius: var(--radius-lg);
-                    border: 1px solid var(--border);
-                    background: var(--bg-primary);
-                    font-size: var(--text-sm);
-                    font-weight: 700;
-                    color: var(--text-primary);
-                    appearance: none;
-                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-                    background-repeat: no-repeat;
-                    background-position: right 1rem center;
-                    text-transform: uppercase;
-                }
-                .filters-bar {
-                    padding: 1.5rem !important;
-                    background: var(--bg-card) !important;
-                    border: 1px solid var(--border) !important;
-                }
-            `}</style>
         </div>
     );
 };

@@ -2,6 +2,7 @@ import { IVehiculoRepository } from '../../../domain/repositories/IVehiculoRepos
 import { Vehiculo } from '../../../domain/entities/Vehiculo';
 import prisma from '../prisma';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { parsePagination } from '../queryOptions';
 
 // Sólo se puede ordenar por columnas reales: `sortBy` viene de la query y hasta
 // ahora se pasaba crudo a Prisma (un valor inventado → 500). El orden por
@@ -10,9 +11,8 @@ const SORTABLE = ['createdAt', 'updatedAt', 'fechaIngreso', 'fechaCompra', 'prec
 
 export class PrismaVehiculoRepository implements IVehiculoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Vehiculo>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
         const orderKey = SORTABLE.includes(String(sortBy)) ? String(sortBy) : 'createdAt';
         const orderDir = sortOrder === 'asc' ? 'asc' : 'desc';
 
@@ -121,7 +121,9 @@ export class PrismaVehiculoRepository implements IVehiculoRepository {
             v.fechaCompra ?? null,
             v.proveedorCompra ?? null,
             v.precioMinimo ? Number(v.precioMinimo) : null,
-            v.segmento ?? null
+            v.segmento ?? null,
+            v.tipo ?? null,
+            v.origen ?? null
         );
     }
 }

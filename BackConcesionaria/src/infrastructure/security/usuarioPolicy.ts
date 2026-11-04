@@ -24,7 +24,7 @@ import { BaseException } from '../../domain/exceptions/BaseException';
 // Roles que un actor NO super_admin puede asignar. `super_admin` queda FUERA a
 // propósito: sólo un super_admin puede otorgarlo. Un rolId que no resuelva a
 // ninguno de estos (incluido un id inexistente o el de super_admin) se rechaza.
-const ROLES_ASIGNABLES_NO_SUPER = ['admin', 'vendedor', 'cobrador', 'postventa', 'lectura'];
+const ROLES_ASIGNABLES_NO_SUPER = ['admin', 'vendedor', 'cobrador', 'postventa', 'lectura', 'tasador'];
 
 const actorEsSuperAdmin = (): boolean =>
     context.getUser()?.roles?.includes('super_admin') ?? false;

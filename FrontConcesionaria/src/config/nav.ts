@@ -55,66 +55,76 @@ export interface NavSection {
     items: NavItem[];
 }
 
+/*
+ * Nombres y grupos del menú (WEB-06). El título de cada página es EXACTAMENTE el
+ * label de su ítem. Las rutas no cambian: el tour se ancla con
+ * data-tour={`nav:${path}`}, así que mover un ítem de sección no lo rompe. Los
+ * nombres viejos quedan en `keywords` para que el buscador (Ctrl+K) los siga
+ * encontrando por como los conocía la gente.
+ */
 export const NAV_SECTIONS: NavSection[] = [
     {
         title: 'General',
         items: [
-            { label: 'Dashboard', path: '/', icon: LayoutDashboard, keywords: ['inicio', 'home', 'panel', 'resumen'] },
+            { label: 'Inicio', path: '/', icon: LayoutDashboard, keywords: ['dashboard', 'home', 'panel', 'resumen', 'tablero'] },
             // La gestión de Concesionarias (super_admin) vive en el panel de
             // plataforma separado (/plataforma), no en el shell del tenant.
         ],
     },
     {
-        title: 'Gestión de Stock',
+        title: 'Stock',
         items: [
             { label: 'Vehículos', path: '/vehiculos', icon: Car, keywords: ['autos', 'unidades', 'stock'] },
             { label: 'Comparador', path: '/comparador', icon: GitCompare, keywords: ['comparar', 'versus', 'vs', 'comparativa', 'vehículos'] },
             { label: 'Ingresos', path: '/ingresos', icon: LogIn, keywords: ['compras', 'recepcion'] },
             { label: 'Movimientos', path: '/movimientos', icon: ArrowLeftRight, keywords: ['traslados'] },
-            { label: 'Reservas', path: '/reservas', icon: Bookmark, keywords: ['señas', 'reservar'] },
             // Criterio de aceptación 7: `gasto.monto` es el costo de preparación de la
             // unidad. El backend cerró `GET /gastos` a admin; el nav lo espeja para que
             // el vendedor no vea un ítem que sólo lo lleva a un 403.
-            { label: 'Gastos Unidades', path: '/gastos', icon: DollarSign, keywords: ['gastos vehículos'], roles: ['admin', 'super_admin'] },
+            { label: 'Gastos de unidades', path: '/gastos', icon: DollarSign, keywords: ['gastos unidades', 'gastos vehículos', 'preparación'], roles: ['admin', 'super_admin'] },
+            { label: 'Tasaciones', path: '/tasaciones', icon: Gauge, keywords: ['tasación', 'valuación', 'usado', 'permuta', 'cotizar auto'], roles: ['admin', 'super_admin', 'vendedor', 'tasador'] },
         ],
     },
     {
-        title: 'Operaciones',
+        title: 'Clientes',
         items: [
-            // Primero de la sección a propósito: es la puerta de entrada del
-            // vendedor. Cuando entra alguien al salón, la visita se abre acá, y
-            // todo lo demás (cliente, presupuesto, reserva) cuelga de esa visita.
-            // SIN super_admin, a diferencia de sus vecinos: la atención presencial la
-            // abre un usuario DEL salón (el vendedorId es una FK a un usuario del
-            // tenant), y el backend le contesta 400 SIN_CONCESIONARIA a la cuenta de
-            // plataforma. Ofrecerle el ítem era mandarlo a una pantalla que no puede usar.
+            { label: 'Clientes', path: '/clientes', icon: Users, keywords: ['compradores', 'leads'] },
+            // Puerta de entrada del vendedor: cuando entra alguien al salón, la
+            // visita se abre acá, y todo lo demás (cliente, presupuesto, reserva)
+            // cuelga de esa visita. SIN super_admin, a diferencia de sus vecinos: la
+            // atención presencial la abre un usuario DEL salón (el vendedorId es una
+            // FK a un usuario del tenant), y el backend le contesta 400
+            // SIN_CONCESIONARIA a la cuenta de plataforma.
             { label: 'Atenciones', path: '/atenciones', icon: UserRoundCheck, keywords: ['atencion', 'atención', 'visita', 'mostrador', 'salón', 'salon', 'presencial', 'recepción', 'recepcion', 'cliente en el salón', 'test drive', 'permuta'], roles: ['admin', 'vendedor'] },
             { label: 'Consultas', path: '/consultas', icon: Inbox, keywords: ['leads', 'consultas', 'deruedas', 'instagram'], roles: ['admin', 'super_admin', 'vendedor'] },
-            // "WhatsApp" quedó corto: la bandeja ahora es multi-canal (WhatsApp,
-            // DM de Instagram y Messenger, comentarios de IG y de Facebook). Se
-            // MANTIENE 'whatsapp' en keywords para que quien lo busque por el
-            // nombre viejo lo siga encontrando en el buscador de comandos.
+            // "WhatsApp" quedó corto: la bandeja es multi-canal (WhatsApp, DM de
+            // Instagram y Messenger, comentarios de IG y de Facebook). Se MANTIENE
+            // 'whatsapp' en keywords para que la encuentren por el nombre viejo.
             { label: 'Bandeja', path: '/conversaciones', icon: MessageCircle, keywords: ['whatsapp', 'instagram', 'messenger', 'facebook', 'dm', 'mensajes directos', 'comentarios', 'chat', 'bandeja', 'mensajes', 'meta'], roles: ['admin', 'super_admin', 'vendedor'] },
-            // Pegado a WhatsApp: las dos son bandejas de atención y el vendedor las lee juntas.
-            { label: 'Mercado Libre', path: '/mercadolibre/preguntas', icon: ShoppingBag, crumb: 'Preguntas', keywords: ['mercadolibre', 'meli', 'ml', 'preguntas', 'publicaciones', 'publicar'], roles: ['admin', 'super_admin', 'vendedor'] },
-            { label: 'Clientes', path: '/clientes', icon: Users, keywords: ['compradores', 'leads'] },
             { label: 'Seguimientos', path: '/seguimientos', icon: CalendarClock, keywords: ['crm', 'contactos', 'agenda', 'próximo contacto', 'llamar'], roles: ['admin', 'super_admin', 'vendedor'] },
-            { label: 'Tasaciones', path: '/tasaciones', icon: Gauge, keywords: ['tasación', 'valuación', 'usado', 'permuta', 'cotizar auto'], roles: ['admin', 'super_admin', 'vendedor'] },
+            // Pegado a la Bandeja: las dos son bandejas de atención y el vendedor las lee juntas.
+            { label: 'Mercado Libre', path: '/mercadolibre/preguntas', icon: ShoppingBag, crumb: 'Preguntas', keywords: ['mercadolibre', 'meli', 'ml', 'preguntas', 'publicaciones', 'publicar'], roles: ['admin', 'super_admin', 'vendedor'] },
+        ],
+    },
+    {
+        title: 'Ventas',
+        items: [
+            { label: 'Presupuestos', path: '/presupuestos', icon: FileText, keywords: ['cotización', 'cotizaciones', 'quote'] },
+            { label: 'Reservas', path: '/reservas', icon: Bookmark, keywords: ['señas', 'reservar'] },
+            { label: 'Ventas', path: '/ventas', icon: BadgeDollarSign, keywords: ['vender', 'entregas'] },
+        ],
+    },
+    {
+        title: 'Finanzas y postventa',
+        items: [
+            { label: 'Financiación', path: '/financiaciones', icon: Wallet, keywords: ['cuotas', 'préstamos', 'planes', 'cobros'] },
+            { label: 'Financiación externa', path: '/solicitudes', icon: CreditCard, keywords: ['fin. externa', 'banco', 'solicitudes', 'financiera'] },
+            // Estructura de costos operativos del tenant: `GET /gastos-fijos` es admin.
+            { label: 'Gastos fijos', path: '/gastos-fijos', icon: FileText, keywords: ['operativos'], roles: ['admin', 'super_admin'] },
             // "El vendedor NO VE: … proveedor". El PADRÓN sigue disponible por API para el
             // formulario de movimientos (mandar una unidad al taller), pero la pantalla —que
             // entra a la ficha, con vehículos comprados y montos pagados— es admin+postventa.
-            { label: 'Proveedores', path: '/proveedores', icon: Truck, keywords: ['suppliers'], roles: ['admin', 'super_admin', 'postventa'] },
-            { label: 'Presupuestos', path: '/presupuestos', icon: FileText, keywords: ['cotización', 'quote'] },
-            { label: 'Ventas', path: '/ventas', icon: BadgeDollarSign, keywords: ['vender'] },
-        ],
-    },
-    {
-        title: 'Finanzas & Postventa',
-        items: [
-            { label: 'Financiación', path: '/financiaciones', icon: Wallet, keywords: ['cuotas', 'préstamos'] },
-            { label: 'Fin. Externa', path: '/solicitudes', icon: CreditCard, keywords: ['banco', 'solicitudes'] },
-            // Estructura de costos operativos del tenant: `GET /gastos-fijos` es admin.
-            { label: 'Gastos Fijos', path: '/gastos-fijos', icon: FileText, keywords: ['operativos'], roles: ['admin', 'super_admin'] },
+            { label: 'Proveedores', path: '/proveedores', icon: Truck, keywords: ['suppliers', 'talleres'], roles: ['admin', 'super_admin', 'postventa'] },
             { label: 'Postventa', path: '/postventa', icon: Wrench, keywords: ['reclamos', 'service'] },
             { label: 'Reportes', path: '/reportes', icon: BarChart3, keywords: ['informes', 'analytics', 'ventas', 'caja', 'mora', 'rentabilidad'] },
         ],
@@ -129,7 +139,7 @@ export const NAV_SECTIONS: NavSection[] = [
             // hooks y backend) queda intacto para reactivarla en el futuro; basta
             // con descomentar esta línea, el ícono BadgeCheck arriba y la ruta en App.tsx.
             // { label: 'Billing', path: '/billing', icon: BadgeCheck, keywords: ['planes', 'facturación', 'suscripción'], adminOnly: true },
-            { label: 'Ajustes', path: '/configuracion', icon: Settings, keywords: ['settings', 'preferencias'] },
+            { label: 'Ajustes', path: '/configuracion', icon: Settings, keywords: ['configuración', 'settings', 'preferencias', 'mi cuenta', 'contraseña'] },
         ],
     },
 ];

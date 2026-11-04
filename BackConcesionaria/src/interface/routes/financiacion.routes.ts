@@ -4,6 +4,7 @@ import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
 import { createFinanciacionSchema, simularFinanciacionSchema, refinanciarFinanciacionSchema, updateFinanciacionSchema, pagarCuotaSchema } from '../validation/financiacion.schema';
+import { costosoLimiter } from '../middlewares/rateLimiters';
 
 /**
  * CRITERIO DE PERMISOS: quien HACE el trabajo lo REGISTRA; ANULAR es del admin,
@@ -286,6 +287,6 @@ router.patch('/cuotas/:cuotaId/pagar', authorize('admin', 'cobrador', 'vendedor'
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/cuotas/:cuotaId/recibo', ComprobanteController.cuotaReciboPdf);
+router.get('/cuotas/:cuotaId/recibo', costosoLimiter, ComprobanteController.cuotaReciboPdf);
 
 export default router;

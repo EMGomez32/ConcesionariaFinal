@@ -3,3 +3,8 @@ dist
 .git
 .gitignore
 Dockerfile
+# Secretos: ni el .env ni sus variantes entran a la imagen (el front no usa .env en runtime).
+.env
+.env.*
+!.env.production
+!.env.development

@@ -1,11 +1,37 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import client from '../../api/client';
 import { queryClient } from '../../api/queryClient';
+import { limpiarSalidaVoluntaria } from '../../api/auth.api';
 import { getApiErrorMessage } from '../../utils/error';
-import { Key, Mail, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import {
+  leerAvisoLogin,
+  limpiarAvisoLogin,
+  leerRegreso,
+  limpiarRegreso,
+  rutaSegura,
+  TEXTO_AVISO,
+} from '../../store/sesion';
+import { Key, Mail, AlertCircle, Eye, EyeOff, Clock } from 'lucide-react';
 import Isotipo from '../../components/brand/Isotipo';
+import { mfaApi, esSegundoPaso, type LoginResponse, type SesionResponse } from '../../api/mfa.api';
+
+const RUTA_2FA = '/activar-2fa';
+
+/**
+ * Adónde ir después de entrar: la pantalla en la que estaba (si la sesión venció
+ * en medio del trabajo o entró por un link directo) o el inicio de su rol. El
+ * super_admin vive en /plataforma y el resto no entra ahí.
+ */
+function destinoTrasEntrar(roles: string[], pedido: string | null): string {
+  const esSuper = roles.includes('super_admin');
+  const inicio = esSuper ? '/plataforma' : '/';
+  if (!pedido || pedido === RUTA_2FA) return inicio;
+  const enPlataforma = pedido.startsWith('/plataforma');
+  if (esSuper !== enPlataforma) return inicio;
+  return pedido;
+}
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -13,9 +39,43 @@ const LoginPage = () => {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Segundo paso (2FA): token de "contraseña correcta" que devolvió el backend (vale 5 min).
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [codigo, setCodigo] = useState('');
+  const [usarRecuperacion, setUsarRecuperacion] = useState(false);
 
   const setAuth = useAuthStore((state) => state.setAuth);
   const navigate = useNavigate();
+  const location = useLocation();
+  // Ruta a la que volver: la que trae ProtectedRoute en el state (link directo) o la
+  // que guardó el cliente HTTP al vencer la sesión (recarga la página, por eso va en
+  // sessionStorage). Se leen una vez al montar.
+  const [pedido] = useState<string | null>(
+    () => rutaSegura((location.state as { from?: unknown } | null)?.from) ?? leerRegreso(),
+  );
+  const [aviso] = useState(() => leerAvisoLogin());
+  // El aviso se muestra una vez: si recarga el login, ya no aparece.
+  useEffect(() => { limpiarAvisoLogin(); }, []);
+
+  const entrar = (sesion: SesionResponse) => {
+    const { user, tokens } = sesion;
+    // Frontera de sesión: si quedó caché de una sesión anterior (p.ej. alguien
+    // abrió /login estando autenticado y entra con otra cuenta, camino que no
+    // pasa por performLogout), acá se descarta. En /login no hay queries de
+    // datos montadas, así que el clear() no dispara ningún refetch.
+    queryClient.clear();
+    // El refresh llega también en el cuerpo (lo usa la app móvil); el navegador lo
+    // tiene en la cookie httpOnly y acá sólo queda en memoria (ver authStore).
+    setAuth(user, tokens.access, tokens.refresh);
+    limpiarSalidaVoluntaria();
+    limpiarRegreso();
+    // Un rol que exige 2FA y todavía no lo activó va primero a activarlo.
+    if (user.mfaPendiente) {
+      navigate(RUTA_2FA, { replace: true });
+      return;
+    }
+    navigate(destinoTrasEntrar(user.roles, pedido), { replace: true });
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,37 +83,46 @@ const LoginPage = () => {
     setError('');
 
     try {
-      interface LoginResponse {
-        user: {
-          id: number;
-          nombre: string;
-          email: string;
-          roles: string[];
-          concesionariaId: number | null;
-          sucursalId: number | null;
-        };
-        tokens: { access: string; refresh: string };
-      }
       const result = await client.post<LoginResponse>('/auth/login', {
         email,
         password,
       });
 
-      const { user, tokens } = result;
-      // Frontera de sesión: si quedó caché de una sesión anterior (p.ej. alguien
-      // abrió /login estando autenticado y entra con otra cuenta, camino que no
-      // pasa por performLogout), acá se descarta. En /login no hay queries de
-      // datos montadas, así que el clear() no dispara ningún refetch.
-      queryClient.clear();
-      setAuth(user, tokens.access, tokens.refresh);
-      // El super_admin vive en su panel de plataforma, no en el shell del tenant.
-      navigate(user.roles.includes('super_admin') ? '/plataforma' : '/');
+      // Cuenta con 2FA: todavía no hay sesión, falta el segundo factor.
+      if (esSegundoPaso(result)) {
+        setMfaToken(result.mfaToken);
+        setPassword('');
+        return;
+      }
+      entrar(result);
     } catch (err) {
       console.error('Login error:', err);
       setError(getApiErrorMessage(err, 'Error al iniciar sesión'));
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSegundoPaso = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaToken) return;
+    setLoading(true);
+    setError('');
+    try {
+      const sesion = await mfaApi.login2fa(mfaToken, usarRecuperacion ? { recoveryCode: codigo } : { code: codigo });
+      entrar(sesion);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Código inválido o vencido'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const volverAlLogin = () => {
+    setMfaToken(null);
+    setCodigo('');
+    setUsarRecuperacion(false);
+    setError('');
   };
 
   return (
@@ -69,14 +138,84 @@ const LoginPage = () => {
             <Isotipo size={26} color="#ffffff" />
           </div>
           <h1 className="login-brand">AUTENZA</h1>
-          <p className="login-tag">Dealer Operating System</p>
+          <p className="login-tag">Sistema de gestión para concesionarias</p>
         </header>
 
+        {mfaToken ? (
+          <form onSubmit={handleSegundoPaso} className="login-form" aria-labelledby="login-title">
+            <div className="login-welcome">
+              <h2 id="login-title">Verificación en dos pasos</h2>
+              <p>
+                {usarRecuperacion
+                  ? 'Ingresá uno de tus códigos de recuperación (cada uno sirve una sola vez).'
+                  : 'Ingresá el código de 6 dígitos de tu app de autenticación.'}
+              </p>
+            </div>
+
+            {error && (
+              <div className="login-error animate-fade-in" role="alert">
+                <AlertCircle size={16} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="input-group">
+              <label htmlFor="login-codigo" className="input-label">
+                {usarRecuperacion ? 'Código de recuperación' : 'Código de verificación'}
+              </label>
+              <div className="input-container has-icon">
+                <span className="input-icon" aria-hidden="true"><Key size={16} /></span>
+                <input
+                  id="login-codigo"
+                  type="text"
+                  className="input-control"
+                  inputMode={usarRecuperacion ? 'text' : 'numeric'}
+                  autoComplete="one-time-code"
+                  placeholder={usarRecuperacion ? 'ABCDE-FGHJK' : '123456'}
+                  value={codigo}
+                  onChange={(e) => setCodigo(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="btn btn-primary btn-lg login-submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="loader" aria-hidden="true"></span>
+                  Verificando…
+                </>
+              ) : 'Verificar'}
+            </button>
+
+            <div style={{ textAlign: 'center', marginTop: '0.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ color: 'rgba(255,255,255,0.65)' }}
+                onClick={() => { setUsarRecuperacion((u) => !u); setCodigo(''); setError(''); }}
+              >
+                {usarRecuperacion ? 'Usar el código de mi app' : 'Usar un código de recuperación'}
+              </button>
+              <button type="button" className="btn btn-ghost" style={{ color: 'rgba(255,255,255,0.45)' }} onClick={volverAlLogin}>
+                Volver
+              </button>
+            </div>
+          </form>
+        ) : (
         <form onSubmit={handleLogin} className="login-form" aria-labelledby="login-title">
           <div className="login-welcome">
             <h2 id="login-title">Bienvenido de vuelta</h2>
             <p>Iniciá sesión para acceder a tu panel.</p>
           </div>
+
+          {aviso && !error && (
+            <div className="login-aviso animate-fade-in" role="status">
+              <Clock size={16} aria-hidden="true" />
+              <span>{TEXTO_AVISO[aviso]}</span>
+            </div>
+          )}
 
           {error && (
             <div className="login-error animate-fade-in" role="alert">
@@ -147,6 +286,7 @@ const LoginPage = () => {
             <span>&copy; {new Date().getFullYear()} AUTENZA · Concesionaria</span>
           </footer>
         </form>
+        )}
       </main>
 
       <style>{`
@@ -372,11 +512,24 @@ const LoginPage = () => {
           justify-content: center;
         }
 
+        .login-aviso {
+          display: flex;
+          align-items: center;
+          gap: 0.625rem;
+          padding: 0.75rem 1rem;
+          background: rgba(var(--accent-3-rgb), 0.10);
+          color: #a5f3fc; /* impeccable-disable-line design-system-color: tinte info legible sobre navy fijo; --info pleno no contrasta */
+          border-radius: var(--radius-md);
+          border: 1px solid rgba(var(--accent-3-rgb), 0.25);
+          font-size: var(--text-sm);
+        }
+
         .login-submit .loader {
           width: 16px;
           height: 16px;
-          border: 2px solid rgba(255, 255, 255, 0.3); /* impeccable-disable-line design-system-color: pista del spinner sobre el botón emerald, relativa al contexto */
-          border-top-color: var(--text-white);
+          /* Sobre el botón emerald: tinta oscura (--text-on-accent), no blanco. */
+          border: 2px solid rgba(4, 6, 13, 0.25); /* impeccable-disable-line design-system-color: pista del spinner en la tinta sobre acento */
+          border-top-color: var(--text-on-accent);
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
           margin-right: 0.5rem;

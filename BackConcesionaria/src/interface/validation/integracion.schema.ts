@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DestinoNoPermitidoError, PUERTOS_IMAP_PERMITIDOS, validarHostSintaxis } from '../../infrastructure/security/destinoSeguro';
 
 // Schemas de validación de las integraciones de canal: webhook de Meta
 // (formularios de campaña, mensajes y comentarios de Instagram/Facebook) o
@@ -47,7 +48,7 @@ const idMetaOpcional = (etiqueta: string) =>
 // domain/services/canalesMeta.ts (fuente de verdad del contrato del config).
 const metaConfigBase = z.object({
     origen: z.enum(['instagram', 'facebook'], {
-        error: 'Origen inválido. Válidos: instagram, facebook',
+        error: 'Elegí un origen válido: Instagram o Facebook',
     }),
     verifyToken: z.string().min(1, 'El verify token es obligatorio'),
     appSecret: z.string().min(1, 'El app secret es obligatorio'),
@@ -68,13 +69,29 @@ const metaConfigBase = z.object({
 
 export const metaConfigSchema = metaConfigBase;
 
+// SSRF: el host IMAP lo carga un admin y el backend se conecta a él solo. Acá el chequeo SIN
+// red (forma, IPs y nombres internos); la resolución de DNS va en el controller y, otra vez,
+// al conectar (destinoSeguro.ts). Los puertos se limitan a los de IMAP.
+const hostImap = (mensajeVacio: string) =>
+    z.string().min(1, mensajeVacio).superRefine((valor, ctx) => {
+        try {
+            validarHostSintaxis(valor);
+        } catch (e) {
+            ctx.addIssue({ code: 'custom', message: e instanceof DestinoNoPermitidoError ? e.message : 'Host inválido' });
+        }
+    });
+const puertoImap = z.coerce.number().int().positive().refine(
+    (p) => PUERTOS_IMAP_PERMITIDOS.includes(p),
+    { message: `Puerto no permitido. Usá ${PUERTOS_IMAP_PERMITIDOS.join(' o ')}` },
+);
+
 // Email (IMAP): credenciales de la casilla donde caen los avisos de consultas.
 export const emailConfigSchema = z.object({
     origen: z.enum(ORIGENES_LEAD, {
-        error: 'Origen inválido. Válidos: deruedas, instagram, facebook, whatsapp, web, mostrador, referido, otro',
+        error: 'Elegí un origen válido: DeRuedas, Instagram, Facebook, WhatsApp, web, mostrador, referido u otro',
     }).default('deruedas'),
-    host: z.string().min(1, 'El host IMAP es obligatorio'),
-    port: z.coerce.number().int().positive().default(993),
+    host: hostImap('El host IMAP es obligatorio'),
+    port: puertoImap.default(993),
     secure: z.boolean().default(true),
     user: z.string().min(1, 'El usuario es obligatorio'),
     pass: z.string().min(1, 'La contraseña es obligatoria'),
@@ -169,10 +186,10 @@ export const updateMetaConfigSchema = metaConfigBase.partial().extend({
 // opcional y SIN defaults: sólo lo que vino pisa lo guardado.
 export const updateEmailConfigSchema = z.object({
     origen: z.enum(ORIGENES_LEAD, {
-        error: 'Origen inválido. Válidos: deruedas, instagram, facebook, whatsapp, web, mostrador, referido, otro',
+        error: 'Elegí un origen válido: DeRuedas, Instagram, Facebook, WhatsApp, web, mostrador, referido u otro',
     }).optional(),
-    host: z.string().min(1, 'El host IMAP no puede estar vacío').optional(),
-    port: z.coerce.number().int().positive().optional(),
+    host: hostImap('El host IMAP no puede estar vacío').optional(),
+    port: puertoImap.optional(),
     secure: z.boolean().optional(),
     user: z.string().min(1, 'El usuario no puede estar vacío').optional(),
     pass: z.string().optional(),

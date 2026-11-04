@@ -7,6 +7,9 @@ import {
 } from 'lucide-react';
 import { waLink } from '../../utils/whatsapp';
 import Button from '../../components/ui/Button';
+import Badge, { type BadgeVariant } from '../../components/ui/Badge';
+import PageTitle from '../../components/ui/PageTitle';
+import { EstadoListado } from '../../components/listado';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
@@ -19,14 +22,14 @@ import { ventasApi } from '../../api/ventas.api';
 import { sucursalesApi } from '../../api/sucursales.api';
 import { proveedoresApi } from '../../api/proveedores.api';
 import { useUIStore } from '../../store/uiStore';
-import { formatFecha } from '../../utils/fecha';
+import { formatFecha, hoyLocal } from '../../utils/fecha';
 import { getList } from '../../utils/lista';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 
 // ─── Estado mappings ──────────────────────────────────────────────────────────
 const ESTADO_LABELS: Record<EstadoPostventa, string> = {
     pendiente: 'Pendiente',
-    en_curso: 'En Curso',
+    en_curso: 'En curso',
     resuelto: 'Resuelto',
 };
 
@@ -34,6 +37,14 @@ const ESTADO_COLORS: Record<EstadoPostventa, string> = {
     pendiente: 'var(--warning)',
     en_curso: 'var(--info)',
     resuelto: 'var(--success)',
+};
+
+// Para el Badge del sistema. Antes se armaba el fondo como `${color}22` sobre un
+// var(--…): CSS inválido, el fondo se descartaba y el chip quedaba sin relleno.
+const ESTADO_VARIANT: Record<EstadoPostventa, BadgeVariant> = {
+    pendiente: 'warning',
+    en_curso: 'info',
+    resuelto: 'success',
 };
 
 // Espejo de la máquina de estados del backend (domain/services/stateMachine.ts).
@@ -55,7 +66,7 @@ const fmt = (v?: string | number | null) =>
 // las bajaba un día en UTC-3. formatFecha parsea el ISO como texto.
 const fmtDate = formatFecha;
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = hoyLocal;
 
 // Fecha local YYYY-MM-DD (no toISOString, que pasa a UTC y de noche en UTC-3 ya
 // es "mañana"): se usa para clasificar los turnos en Hoy / Mañana / Vencido.
@@ -69,6 +80,9 @@ export default function PostventaPage() {
     // ─ List state ─
     const [casos, setCasos] = useState<PostventaCaso[]>([]);
     const [loading, setLoading] = useState(false);
+    const [casosError, setCasosError] = useState(false);
+    const [agendaError, setAgendaError] = useState(false);
+    const [tiposError, setTiposError] = useState(false);
     const [stats, setStats] = useState({ pendiente: 0, en_curso: 0, resuelto: 0 });
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -162,12 +176,14 @@ export default function PostventaPage() {
             const raw = res?.results ?? [];
             setCasos(Array.isArray(raw) ? raw : []);
             setTotalPages(res?.totalPages ?? 1);
+            setCasosError(false);
         } catch {
-            addToast('Error al cargar casos', 'error');
+            // Un error no es "no hay casos": la tabla lo muestra con Reintentar.
+            setCasosError(true);
         } finally {
             setLoading(false);
         }
-    }, [page, filterEstado, filterSucursal, addToast]);
+    }, [page, filterEstado, filterSucursal]);
 
     // Export CSV de la cartera de casos con el MISMO filtro actual.
     const handleExportCsv = async () => {
@@ -237,12 +253,13 @@ export default function PostventaPage() {
                 .filter(c => c.fechaTurno)
                 .sort((a, b) => String(a.fechaTurno).localeCompare(String(b.fechaTurno)));
             setAgenda(merged);
+            setAgendaError(false);
         } catch {
-            addToast('Error al cargar la agenda', 'error');
+            setAgendaError(true);
         } finally {
             setLoadingAgenda(false);
         }
-    }, [addToast]);
+    }, []);
 
     useEffect(() => { if (tab === 'agenda') loadAgenda(); }, [tab, loadAgenda]);
 
@@ -253,12 +270,13 @@ export default function PostventaPage() {
         setLoadingTipos(true);
         try {
             setTipos(getList<TipoPostventa>(await postventaApi.getTipos()));
+            setTiposError(false);
         } catch {
-            addToast('Error al cargar los tipos de caso', 'error');
+            setTiposError(true);
         } finally {
             setLoadingTipos(false);
         }
-    }, [addToast]);
+    }, []);
 
     useEffect(() => {
         loadTipos();
@@ -325,22 +343,20 @@ export default function PostventaPage() {
                     sucursalesApi.getAll({}, { limit: 200 }),
                     proveedoresApi.getAll({ activo: true } as Record<string, unknown>),
                 ]);
-                const raw = (r: unknown): unknown[] => {
-                    const d = r as { results?: unknown[] } | unknown[];
-                    if (Array.isArray(d)) return d;
-                    return Array.isArray(d?.results) ? d.results : [];
-                };
-                setClientes(raw(clRes) as { id: number; nombre: string }[]);
-                setVehiculos(raw(vhRes) as { id: number; marca: string; modelo: string; dominio?: string }[]);
-                setVentas(raw(vtRes) as { id: number; montoTotal?: number; cliente?: { nombre: string }; vehiculo?: { marca: string; modelo: string } }[]);
-                setSucursales(raw(suRes) as { id: number; nombre: string }[]);
-                setProveedores(raw(prRes) as { id: number; nombre: string }[]);
+                // getList cubre todas las formas de respuesta: el helper local no
+                // entendía { success, data } de /sucursales y ese select quedaba vacío.
+                setClientes(getList<{ id: number; nombre: string }>(clRes));
+                setVehiculos(getList<{ id: number; marca: string; modelo: string; dominio?: string }>(vhRes));
+                setVentas(getList<{ id: number; montoTotal?: number; cliente?: { nombre: string }; vehiculo?: { marca: string; modelo: string } }>(vtRes));
+                setSucursales(getList<{ id: number; nombre: string }>(suRes));
+                setProveedores(getList<{ id: number; nombre: string }>(prRes));
             } catch {
-                // silent
+                // Antes era un catch mudo: los selects del alta quedaban vacíos sin explicación.
+                addToast('No se pudieron cargar clientes, unidades o sucursales para los formularios. Recargá la página.', 'error');
             }
         };
         loadCatalogs();
-    }, []);
+    }, [addToast]);
 
     useEffect(() => { loadCasos(); }, [loadCasos]);
 
@@ -610,10 +626,10 @@ export default function PostventaPage() {
         const hoy = localISO(new Date());
         const man = new Date(); man.setDate(man.getDate() + 1);
         const f = String(fechaISO).slice(0, 10);
-        if (f < hoy) return { label: 'Vencido', color: 'var(--danger)' };
-        if (f === hoy) return { label: 'Hoy', color: 'var(--warning)' };
-        if (f === localISO(man)) return { label: 'Mañana', color: 'var(--info)' };
-        return { label: fmtDate(f), color: 'var(--success)' };
+        if (f < hoy) return { label: 'Vencido', variant: 'danger' as BadgeVariant };
+        if (f === hoy) return { label: 'Hoy', variant: 'warning' as BadgeVariant };
+        if (f === localISO(man)) return { label: 'Mañana', variant: 'info' as BadgeVariant };
+        return { label: fmtDate(f), variant: 'success' as BadgeVariant };
     };
 
     // Borrador de recordatorio de turno por WhatsApp (el usuario revisa y manda).
@@ -649,6 +665,7 @@ export default function PostventaPage() {
     // ─────────────────────────────────────────────────────────────────────────
     return (
         <div className="page-container animate-fade-in">
+            <PageTitle title="Postventa" />
             {/* Header */}
             <header className="page-header">
                 <div className="header-title">
@@ -661,8 +678,8 @@ export default function PostventaPage() {
                     <p>Reclamos y garantías sobre unidades ya entregadas, y el costo de resolverlos.</p>
                 </div>
                 <div className="flex gap-3">
-                    <Button variant="secondary" onClick={() => tab === 'casos' ? loadCasos() : tab === 'agenda' ? loadAgenda() : loadTipos()}>
-                        <RefreshCw size={18} className={(tab === 'casos' ? loading : tab === 'agenda' ? loadingAgenda : loadingTipos) ? 'animate-spin' : ''} />
+                    <Button variant="secondary" onClick={() => tab === 'casos' ? loadCasos() : tab === 'agenda' ? loadAgenda() : loadTipos()} aria-label="Actualizar" title="Actualizar">
+                        <RefreshCw size={18} className={(tab === 'casos' ? loading : tab === 'agenda' ? loadingAgenda : loadingTipos) ? 'animate-spin' : ''} aria-hidden="true" />
                     </Button>
                     {tab === 'casos' && puedeExportar && (
                         <Button variant="secondary" onClick={handleExportCsv} loading={exportando} title="Exportar la cartera de casos filtrada a CSV (Excel)">
@@ -670,7 +687,7 @@ export default function PostventaPage() {
                         </Button>
                     )}
                     <Button data-tour="pv-nuevo" variant="primary" onClick={tab === 'tipos' ? openCreateTipo : () => setShowCreateModal(true)}>
-                        <Plus size={18} /> {tab === 'tipos' ? 'Nuevo Tipo' : 'Nuevo Caso'}
+                        <Plus size={18} aria-hidden="true" /> {tab === 'tipos' ? 'Nuevo tipo' : 'Nuevo caso'}
                     </Button>
                 </div>
             </header>
@@ -681,7 +698,7 @@ export default function PostventaPage() {
                     <span className="stat-tile-label" style={{ color: 'var(--warning)' }}>Pendientes</span>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black">{stats.pendiente}</span>
-                        <span className="text-xs text-muted font-bold">CASOS</span>
+                        <span className="text-xs text-muted font-bold">{stats.pendiente === 1 ? 'caso' : 'casos'}</span>
                     </div>
                     <Clock size={60} className="stat-tile-bg" />
                 </div>
@@ -689,7 +706,7 @@ export default function PostventaPage() {
                     <span className="stat-tile-label" style={{ color: 'var(--info)' }}>En curso</span>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black">{stats.en_curso}</span>
-                        <span className="text-xs text-muted font-bold">CASOS</span>
+                        <span className="text-xs text-muted font-bold">{stats.en_curso === 1 ? 'caso' : 'casos'}</span>
                     </div>
                     <Wrench size={60} className="stat-tile-bg" />
                 </div>
@@ -697,7 +714,7 @@ export default function PostventaPage() {
                     <span className="stat-tile-label" style={{ color: 'var(--success)' }}>Resueltos</span>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-black">{stats.resuelto}</span>
-                        <span className="text-xs text-muted font-bold">CASOS</span>
+                        <span className="text-xs text-muted font-bold">{stats.resuelto === 1 ? 'caso' : 'casos'}</span>
                     </div>
                     <CheckCircle size={60} className="stat-tile-bg" />
                 </div>
@@ -720,7 +737,7 @@ export default function PostventaPage() {
                         onClick={() => setTab('agenda')}
                         className={`segmented-btn ${tab === 'agenda' ? 'is-active' : ''}`}
                     >
-                        <Calendar size={14} /> Agenda de Taller
+                        <Calendar size={14} aria-hidden="true" /> Agenda de taller
                     </button>
                     <button
                         role="tab"
@@ -728,7 +745,7 @@ export default function PostventaPage() {
                         onClick={() => setTab('tipos')}
                         className={`segmented-btn ${tab === 'tipos' ? 'is-active' : ''}`}
                     >
-                        <Tags size={14} /> Tipos de Caso
+                        <Tags size={14} aria-hidden="true" /> Tipos de caso
                     </button>
                 </div>
             </div>
@@ -737,6 +754,9 @@ export default function PostventaPage() {
                 <TiposPanel
                     tipos={tipos}
                     loading={loadingTipos}
+                    error={tiposError}
+                    onReintentar={loadTipos}
+                    onNuevo={openCreateTipo}
                     onEdit={openEditTipo}
                     onDelete={setDeletingTipo}
                 />
@@ -754,10 +774,19 @@ export default function PostventaPage() {
                             </thead>
                             <tbody>
                                 {loadingAgenda ? (
-                                    <tr><td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Cargando...</td></tr>
+                                    <tr><td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }} role="status">Cargando la agenda…</td></tr>
+                                ) : agendaError ? (
+                                    <tr><td colSpan={7}>
+                                        <EstadoListado tipo="error" mensaje="No se pudo cargar la agenda de taller" onReintentar={loadAgenda} />
+                                    </td></tr>
                                 ) : agenda.length === 0 ? (
-                                    <tr><td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                                        No hay turnos agendados. Agendá uno desde el detalle de un caso (o al crearlo).
+                                    <tr><td colSpan={7}>
+                                        <EstadoListado
+                                            tipo="vacio"
+                                            titulo="No hay turnos agendados"
+                                            descripcion="Agendá uno desde el detalle de un caso o al crearlo."
+                                            icono={<Calendar size={32} aria-hidden="true" />}
+                                        />
                                     </td></tr>
                                 ) : agenda.map(caso => {
                                     const badge = turnoBadge(caso.fechaTurno!);
@@ -768,12 +797,7 @@ export default function PostventaPage() {
                                             onMouseLeave={e => (e.currentTarget.style.background = '')}
                                         >
                                             <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
-                                                <span style={{
-                                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: 'var(--text-sm)', fontWeight: 700,
-                                                    background: `${badge.color}22`, color: badge.color,
-                                                }}>
-                                                    {badge.label}
-                                                </span>
+                                                <Badge variant={badge.variant}>{badge.label}</Badge>
                                                 {(badge.label === 'Hoy' || badge.label === 'Mañana' || badge.label === 'Vencido') && (
                                                     <span style={{ marginLeft: '0.5rem', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(caso.fechaTurno)}</span>
                                                 )}
@@ -785,26 +809,21 @@ export default function PostventaPage() {
                                             </td>
                                             <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)' }}>{caso.tipo || '-'}</td>
                                             <td style={{ padding: '0.75rem 1rem' }}>
-                                                <span style={{
-                                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: 'var(--text-xs)', fontWeight: 600,
-                                                    background: `${ESTADO_COLORS[caso.estado]}22`, color: ESTADO_COLORS[caso.estado],
-                                                }}>
-                                                    {ESTADO_LABELS[caso.estado]}
-                                                </span>
+                                                <Badge variant={ESTADO_VARIANT[caso.estado]}>{ESTADO_LABELS[caso.estado]}</Badge>
                                             </td>
                                             <td style={{ padding: '0.75rem 1rem' }}>
                                                 <div style={{ display: 'flex', gap: '0.35rem' }}>
                                                     {wa ? (
-                                                        <a href={wa} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar turno por WhatsApp (revisá antes de enviar)">
-                                                            <MessageCircle size={15} />
+                                                        <a href={wa} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar turno por WhatsApp (revisá antes de enviar)" aria-label={`Recordar el turno a ${caso.cliente?.nombre ?? 'el cliente'} por WhatsApp`}>
+                                                            <MessageCircle size={15} aria-hidden="true" />
                                                         </a>
                                                     ) : (
-                                                        <span className="icon-btn" title="El cliente no tiene teléfono válido" style={{ opacity: 0.35, cursor: 'default' }}>
-                                                            <MessageCircle size={15} />
+                                                        <span className="icon-btn" title="El cliente no tiene un teléfono válido" role="img" aria-label="Sin teléfono válido para WhatsApp" style={{ opacity: 0.35, cursor: 'default' }}>
+                                                            <MessageCircle size={15} aria-hidden="true" />
                                                         </span>
                                                     )}
-                                                    <button className="icon-btn" title="Ver detalle" onClick={() => handleViewDetail(caso)}>
-                                                        <Eye size={15} />
+                                                    <button type="button" className="icon-btn" title="Ver detalle" aria-label={`Ver el caso #${caso.id}`} onClick={() => handleViewDetail(caso)}>
+                                                        <Eye size={15} aria-hidden="true" />
                                                     </button>
                                                 </div>
                                             </td>
@@ -820,32 +839,33 @@ export default function PostventaPage() {
             {/* Filters */}
             <div className="card glass filters-bar mb-6" data-tour="pv-filtros">
                 <div className="search-box">
-                    <Search size={18} className="text-muted" />
+                    <Search size={18} className="text-muted" aria-hidden="true" />
                     <input
-                        type="text"
-                        placeholder="Buscar cliente, vehículo, descripción..."
+                        type="search"
+                        aria-label="Buscar casos en esta página"
+                        placeholder="Buscar cliente, vehículo o descripción"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         className="w-full text-sm font-medium"
                     />
                 </div>
-                <select value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }}>
+                <select aria-label="Estado" value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }}>
                     <option value="">Todos los estados</option>
                     <option value="pendiente">Pendiente</option>
-                    <option value="en_curso">En Curso</option>
+                    <option value="en_curso">En curso</option>
                     <option value="resuelto">Resuelto</option>
                 </select>
-                <select value={filterSucursal} onChange={e => { setFilterSucursal(e.target.value); setPage(1); }}>
+                <select aria-label="Sucursal" value={filterSucursal} onChange={e => { setFilterSucursal(e.target.value); setPage(1); }}>
                     <option value="">Todas las sucursales</option>
                     {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
-                <select value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
+                <select aria-label="Tipo de caso" value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
                     <option value="">Todos los tipos</option>
                     {tipos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                 </select>
                 {(filterEstado || filterSucursal || filterTipo || search) && (
                     <Button variant="secondary" onClick={() => { setFilterEstado(''); setFilterSucursal(''); setFilterTipo(''); setSearch(''); setPage(1); }}>
-                        <X size={14} /> Limpiar
+                        <X size={14} aria-hidden="true" /> Limpiar filtros
                     </Button>
                 )}
             </div>
@@ -863,9 +883,27 @@ export default function PostventaPage() {
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Cargando...</td></tr>
+                                <tr><td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }} role="status">Cargando los casos…</td></tr>
+                            ) : casosError ? (
+                                <tr><td colSpan={9}>
+                                    <EstadoListado tipo="error" mensaje="No se pudieron cargar los casos de postventa" onReintentar={loadCasos} />
+                                </td></tr>
                             ) : filteredCasos.length === 0 ? (
-                                <tr><td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No hay casos de postventa</td></tr>
+                                <tr><td colSpan={9}>
+                                    {(filterEstado || filterSucursal || filterTipo || search)
+                                        ? <EstadoListado tipo="sin-resultados" onLimpiarFiltros={() => { setFilterEstado(''); setFilterSucursal(''); setFilterTipo(''); setSearch(''); setPage(1); }} />
+                                        : <EstadoListado
+                                            tipo="vacio"
+                                            titulo="Todavía no hay casos de postventa"
+                                            descripcion="Cuando un cliente reclama por una unidad que ya se entregó, cargalo acá para seguirlo hasta resolverlo."
+                                            icono={<Wrench size={32} aria-hidden="true" />}
+                                            accion={(
+                                                <Button variant="primary" size="sm" onClick={() => setShowCreateModal(true)}>
+                                                    <Plus size={16} aria-hidden="true" /> Nuevo caso
+                                                </Button>
+                                            )}
+                                        />}
+                                </td></tr>
                             ) : filteredCasos.map(caso => (
                                 <tr key={caso.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
                                     onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--text-primary) 5%, transparent)')}
@@ -881,28 +919,22 @@ export default function PostventaPage() {
                                         {caso.descripcion}
                                     </td>
                                     <td style={{ padding: '0.75rem 1rem' }}>
-                                        <span style={{
-                                            padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: 'var(--text-xs)', fontWeight: 600,
-                                            background: `${ESTADO_COLORS[caso.estado]}22`,
-                                            color: ESTADO_COLORS[caso.estado],
-                                        }}>
-                                            {ESTADO_LABELS[caso.estado]}
-                                        </span>
+                                        <Badge variant={ESTADO_VARIANT[caso.estado]}>{ESTADO_LABELS[caso.estado]}</Badge>
                                     </td>
                                     <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(caso.fechaReclamo)}</td>
                                     <td style={{ padding: '0.75rem 1rem', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(caso.fechaCierre)}</td>
                                     <td style={{ padding: '0.75rem 1rem' }}>
                                         <div style={{ display: 'flex', gap: '0.35rem' }}>
-                                            <button className="icon-btn" title="Ver detalle" onClick={() => handleViewDetail(caso)}>
-                                                <Eye size={15} />
+                                            <button type="button" className="icon-btn" title="Ver detalle" aria-label={`Ver el caso #${caso.id}`} onClick={() => handleViewDetail(caso)}>
+                                                <Eye size={15} aria-hidden="true" />
                                             </button>
                                             {ESTADO_TRANSITIONS[caso.estado].length > 0 && (
-                                                <button className="icon-btn" title="Avanzar estado" onClick={() => { setTransicionCaso(caso); setTransicionEstado(ESTADO_TRANSITIONS[caso.estado][0]); setFechaCierre(today()); }}>
-                                                    <ArrowRight size={15} />
+                                                <button type="button" className="icon-btn" title={`Pasar a "${ESTADO_LABELS[ESTADO_TRANSITIONS[caso.estado][0]]}"`} aria-label={`Pasar el caso #${caso.id} a ${ESTADO_LABELS[ESTADO_TRANSITIONS[caso.estado][0]].toLowerCase()}`} onClick={() => { setTransicionCaso(caso); setTransicionEstado(ESTADO_TRANSITIONS[caso.estado][0]); setFechaCierre(today()); }}>
+                                                    <ArrowRight size={15} aria-hidden="true" />
                                                 </button>
                                             )}
-                                            <button className="icon-btn danger" title="Eliminar" onClick={() => setDeletingCaso(caso)}>
-                                                <Trash2 size={15} />
+                                            <button type="button" className="icon-btn danger" title="Eliminar" aria-label={`Eliminar el caso #${caso.id}`} onClick={() => setDeletingCaso(caso)}>
+                                                <Trash2 size={15} aria-hidden="true" />
                                             </button>
                                         </div>
                                     </td>
@@ -958,7 +990,7 @@ export default function PostventaPage() {
                             </Select>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <Input dense label="Fecha de Reclamo *" type="date" value={casoForm.fechaReclamo} onChange={e => setCasoForm(p => ({ ...p, fechaReclamo: e.target.value }))} />
+                            <Input dense label="Fecha del reclamo *" type="date" value={casoForm.fechaReclamo} onChange={e => setCasoForm(p => ({ ...p, fechaReclamo: e.target.value }))} />
                             <Select
                                 dense
                                 label="Tipo"
@@ -973,7 +1005,7 @@ export default function PostventaPage() {
                             <Input dense label="Turno de taller (opcional)" type="date" value={casoForm.fechaTurno ?? ''} onChange={e => setCasoForm(p => ({ ...p, fechaTurno: e.target.value, horaTurno: e.target.value ? p.horaTurno : '' }))} />
                             <Input dense label="Hora del turno" type="time" value={casoForm.horaTurno ?? ''} onChange={e => setCasoForm(p => ({ ...p, horaTurno: e.target.value }))} disabled={!casoForm.fechaTurno} />
                         </div>
-                        <Textarea dense label="Descripción *" rows={3} placeholder="Describa el problema o reclamo..." value={casoForm.descripcion} onChange={e => setCasoForm(p => ({ ...p, descripcion: e.target.value }))} style={{ resize: 'vertical' }} />
+                        <Textarea dense label="Descripción *" rows={3} placeholder="Contá el problema o el reclamo del cliente" value={casoForm.descripcion} onChange={e => setCasoForm(p => ({ ...p, descripcion: e.target.value }))} style={{ resize: 'vertical' }} />
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                         <Button variant="secondary" onClick={() => setShowCreateModal(false)}>Cancelar</Button>
@@ -993,13 +1025,7 @@ export default function PostventaPage() {
                                 Caso #{detailCaso.id}
                             </h2>
                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.4rem' }}>
-                                <span style={{
-                                    padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: 'var(--text-sm)', fontWeight: 600,
-                                    background: `${ESTADO_COLORS[detailCaso.estado]}22`,
-                                    color: ESTADO_COLORS[detailCaso.estado],
-                                }}>
-                                    {ESTADO_LABELS[detailCaso.estado]}
-                                </span>
+                                <Badge variant={ESTADO_VARIANT[detailCaso.estado]}>{ESTADO_LABELS[detailCaso.estado]}</Badge>
                                 {detailCaso.tipo && (
                                     <span style={{ padding: '0.2rem 0.65rem', borderRadius: '9999px', fontSize: 'var(--text-sm)', background: 'color-mix(in srgb, var(--text-primary) 8%, transparent)', color: 'var(--text-secondary)' }}>
                                         {detailCaso.tipo}
@@ -1050,7 +1076,7 @@ export default function PostventaPage() {
                                     {detailCaso.fechaTurno ? (turnoForm.fechaTurno ? 'Reprogramar' : 'Desagendar') : 'Agendar'}
                                 </Button>
                                 {detailCaso.fechaTurno && turnoWaHref(detailCaso) && (
-                                    <a href={turnoWaHref(detailCaso)!} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar turno por WhatsApp (revisá antes de enviar)">
+                                    <a href={turnoWaHref(detailCaso)!} target="_blank" rel="noreferrer" className="icon-btn" title="Recordar turno por WhatsApp (revisá antes de enviar)" aria-label="Recordar el turno por WhatsApp">
                                         <MessageCircle size={16} />
                                     </a>
                                 )}
@@ -1104,7 +1130,7 @@ export default function PostventaPage() {
                                                 <td style={{ padding: '0.5rem 0.75rem', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{item.proveedor?.nombre ?? '-'}</td>
                                                 <td style={{ padding: '0.5rem 0.75rem', fontSize: 'var(--text-sm)', fontWeight: 600, textAlign: 'right', whiteSpace: 'nowrap' }}>${fmt(item.monto)}</td>
                                                 <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
-                                                    <button className="icon-btn danger" title="Eliminar ítem" onClick={() => setDeletingItem(item)}>
+                                                    <button type="button" className="icon-btn danger" title="Eliminar ítem" aria-label="Eliminar el ítem" onClick={() => setDeletingItem(item)}>
                                                         <Trash2 size={13} />
                                                     </button>
                                                 </td>
@@ -1192,16 +1218,16 @@ export default function PostventaPage() {
                             <Input dense label="Fecha *" type="date" value={itemForm.fecha} onChange={e => setItemForm(p => ({ ...p, fecha: e.target.value }))} />
                             <Input dense label="Monto *" type="number" min="0" step="0.01" placeholder="0.00" value={itemForm.monto || ''} onChange={e => setItemForm(p => ({ ...p, monto: Number(e.target.value) }))} />
                         </div>
-                        <Input dense label="Descripción *" placeholder="Descripción del trabajo o gasto..." value={itemForm.descripcion} onChange={e => setItemForm(p => ({ ...p, descripcion: e.target.value }))} />
+                        <Input dense label="Descripción *" placeholder="Ej: cambio de embrague" value={itemForm.descripcion} onChange={e => setItemForm(p => ({ ...p, descripcion: e.target.value }))} />
                         <Select
                             dense
                             label="Proveedor"
-                            placeholder="Sin proveedor..."
+                            placeholder="Sin proveedor"
                             options={proveedores.map(p => ({ value: p.id, label: p.nombre }))}
                             value={itemForm.proveedorId ?? ''}
                             onChange={e => setItemForm(p => ({ ...p, proveedorId: e.target.value ? Number(e.target.value) : undefined }))}
                         />
-                        <Input dense label="URL Comprobante" placeholder="https://..." value={itemForm.comprobanteUrl} onChange={e => setItemForm(p => ({ ...p, comprobanteUrl: e.target.value }))} />
+                        <Input dense label="Link del comprobante" placeholder="https://…" value={itemForm.comprobanteUrl} onChange={e => setItemForm(p => ({ ...p, comprobanteUrl: e.target.value }))} />
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                         <Button variant="secondary" onClick={() => setShowAddItem(false)}>Cancelar</Button>
@@ -1226,7 +1252,7 @@ export default function PostventaPage() {
                         </strong>
                     </p>
                     {transicionEstado === 'resuelto' && (
-                        <Input dense label="Fecha de Cierre *" type="date" value={fechaCierre} onChange={e => setFechaCierre(e.target.value)} />
+                        <Input dense label="Fecha de cierre *" type="date" value={fechaCierre} onChange={e => setFechaCierre(e.target.value)} />
                     )}
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                         <Button variant="secondary" onClick={() => setTransicionCaso(null)}>Cancelar</Button>
@@ -1277,7 +1303,7 @@ export default function PostventaPage() {
                             label="Nombre *"
                             value={tipoForm.nombre}
                             maxLength={60}
-                            placeholder="Ej: Mecánica, Climatización, Chapa y pintura..."
+                            placeholder="Ej: mecánica, climatización, chapa y pintura"
                             onChange={e => setTipoForm(p => ({ ...p, nombre: e.target.value }))}
                         />
                         {editingTipo && (editingTipo.casosCount ?? 0) > 0 && (
@@ -1327,23 +1353,39 @@ export default function PostventaPage() {
 }
 
 /** ABM de tipos de caso. El conteo de casos es lo que decide si se puede borrar. */
-function TiposPanel({ tipos, loading, onEdit, onDelete }: {
+function TiposPanel({ tipos, loading, error, onReintentar, onNuevo, onEdit, onDelete }: {
     tipos: TipoPostventa[];
     loading: boolean;
+    error: boolean;
+    onReintentar: () => void;
+    onNuevo: () => void;
     onEdit: (t: TipoPostventa) => void;
     onDelete: (t: TipoPostventa) => void;
 }) {
     if (loading) {
-        return <div className="card glass" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>Cargando...</div>;
+        return <div className="card glass" role="status" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>Cargando los tipos…</div>;
+    }
+    if (error) {
+        return (
+            <div className="card glass">
+                <EstadoListado tipo="error" mensaje="No se pudieron cargar los tipos de caso" onReintentar={onReintentar} />
+            </div>
+        );
     }
     if (tipos.length === 0) {
         return (
-            <div className="card glass" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-                <Tags size={40} style={{ opacity: 0.4, marginBottom: '0.75rem' }} />
-                <p style={{ margin: 0 }}>No hay tipos cargados todavía.</p>
-                <p className="text-xs text-muted" style={{ margin: '0.25rem 0 0' }}>
-                    Creá los que uses (Mecánica, Climatización...) para poder clasificar los reclamos.
-                </p>
+            <div className="card glass">
+                <EstadoListado
+                    tipo="vacio"
+                    titulo="Todavía no hay tipos de caso"
+                    descripcion="Creá los que uses (mecánica, climatización…) para poder clasificar los reclamos."
+                    icono={<Tags size={32} aria-hidden="true" />}
+                    accion={(
+                        <Button variant="primary" size="sm" onClick={onNuevo}>
+                            <Plus size={16} aria-hidden="true" /> Nuevo tipo
+                        </Button>
+                    )}
+                />
             </div>
         );
     }
@@ -1372,15 +1414,17 @@ function TiposPanel({ tipos, loading, onEdit, onDelete }: {
                                 </td>
                                 <td style={{ padding: '0.75rem 1rem' }}>
                                     <div className="flex gap-2">
-                                        <button className="icon-btn" title="Editar" onClick={() => onEdit(t)}>
-                                            <Edit size={15} />
+                                        <button type="button" className="icon-btn" title="Editar" aria-label={`Editar el tipo ${t.nombre}`} onClick={() => onEdit(t)}>
+                                            <Edit size={15} aria-hidden="true" />
                                         </button>
                                         <button
+                                            type="button"
                                             className="icon-btn danger"
                                             title={(t.casosCount ?? 0) > 0 ? 'En uso: archivalo en vez de borrarlo' : 'Eliminar'}
+                                            aria-label={`Eliminar el tipo ${t.nombre}`}
                                             onClick={() => onDelete(t)}
                                         >
-                                            <Trash2 size={15} />
+                                            <Trash2 size={15} aria-hidden="true" />
                                         </button>
                                     </div>
                                 </td>

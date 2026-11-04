@@ -3,11 +3,11 @@ import { Gasto } from '../../../domain/entities/Gasto';
 import prisma from '../prisma';
 import { PROVEEDOR_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 export class PrismaGastoRepository implements IGastoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Gasto>> {
-        const limit = Number(options.limit) || 20;
-        const page = Number(options.page) || 1;
+        const { limit, page } = parsePagination(options);
         const sortBy = options.sortBy || 'createdAt';
         const sortOrder = options.sortOrder || 'desc';
 
@@ -27,7 +27,7 @@ export class PrismaGastoRepository implements IGastoRepository {
             where,
             take: limit,
             skip: (page - 1) * limit,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('GastoVehiculo', sortBy, sortOrder),
             include: {
                 categoria: true,
                 vehiculo: { select: { ...VEHICULO_PUBLICO, sucursal: { select: { id: true, nombre: true } } } },

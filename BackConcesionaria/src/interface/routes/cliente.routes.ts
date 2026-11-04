@@ -6,6 +6,7 @@ import { authorize } from '../middlewares/authorize.middleware';
 
 import { validateBody } from '../middlewares/validate.middleware';
 import { createClienteSchema, updateClienteSchema, consultaIngresoSchema, importClientesSchema } from '../validation/cliente.schema';
+import { costosoLimiter } from '../middlewares/rateLimiters';
 const router = Router();
 
 /**
@@ -52,7 +53,7 @@ router.get('/', authenticate, ClienteController.getAll);
  *       200: { description: CSV de clientes, content: { text/csv: {} } }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/export/csv', authenticate, authorize('admin', 'vendedor'), ClienteController.exportCsv);
+router.get('/export/csv', costosoLimiter, authenticate, authorize('admin', 'vendedor'), ClienteController.exportCsv);
 
 /**
  * @openapi
@@ -188,7 +189,7 @@ router.get('/:id', authenticate, ClienteController.getById);
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id/estado-cuenta/pdf', authenticate, authorize('admin', 'vendedor'), ComprobanteController.estadoCuentaPdf);
+router.get('/:id/estado-cuenta/pdf', costosoLimiter, authenticate, authorize('admin', 'vendedor'), ComprobanteController.estadoCuentaPdf);
 
 /**
  * @openapi

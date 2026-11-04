@@ -5,6 +5,7 @@ import { BaseException, NotFoundException } from '../../../domain/exceptions/Bas
 import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { context } from '../../../infrastructure/security/context';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
+import { resolverReservasParaVenta } from '../../../domain/services/reservaVenta';
 import { sincronizarEnSegundoPlano } from '../../services/meliPublicacion';
 
 export class CreateVenta {
@@ -64,6 +65,28 @@ export class CreateVenta {
                 throw new BaseException(400, 'El vehículo ya está vendido', 'VEHICULO_VENDIDO');
             }
 
+            // Reservas del auto, decididas BAJO EL LOCK del vehículo (ver resolverReservasParaVenta):
+            // la reserva indicada tiene que ser de ESTE auto y estar activa; un auto reservado para
+            // OTRO cliente no se vende pisándole la seña; la reserva del mismo cliente se consume sola.
+            const reservaSolicitada = reservaId
+                ? await tx.reserva.findFirst({
+                    where: { id: reservaId, ...tenantWhere, deletedAt: null },
+                    select: { id: true, vehiculoId: true, estado: true },
+                })
+                : null;
+            const reservasActivas = await tx.reserva.findMany({
+                where: { vehiculoId: ventaData.vehiculoId, estado: 'activa', deletedAt: null, ...tenantWhere },
+                select: { id: true, clienteId: true },
+            });
+            const planReservas = resolverReservasParaVenta({
+                estadoVehiculo: locked.estado,
+                vehiculoId: ventaData.vehiculoId,
+                clienteId: ventaData.clienteId,
+                reservaId,
+                reservaSolicitada,
+                reservasActivas,
+            });
+
             // 1. Crear la venta. El tenant top-level va explícito (no hay trigger);
             //    los subrecursos (extras/pagos/canjes) heredan concesionaria_id por el
             //    trigger derive_concesionaria_* (BEFORE INSERT), igual que con la extensión.
@@ -85,11 +108,18 @@ export class CreateVenta {
                 data: { estado: 'vendido' }
             });
 
-            // 3. Cerrar la reserva si venía de una.
-            if (reservaId) {
+            // 3. Cerrar la reserva que la venta consume (la indicada o la del mismo cliente) y
+            //    cancelar las otras reservas activas del auto: ya no se pueden honrar.
+            if (planReservas.consumir) {
                 await tx.reserva.update({
-                    where: { id: reservaId, ...tenantWhere, deletedAt: null },
+                    where: { id: planReservas.consumir, ...tenantWhere, deletedAt: null },
                     data: { estado: 'convertida_en_venta' }
+                });
+            }
+            if (planReservas.cancelar.length > 0) {
+                await tx.reserva.updateMany({
+                    where: { id: { in: planReservas.cancelar }, ...tenantWhere, deletedAt: null },
+                    data: { estado: 'cancelada' }
                 });
             }
 

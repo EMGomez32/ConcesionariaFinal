@@ -2,7 +2,10 @@ import { ISolicitudFinanciacionRepository } from '../../../domain/repositories/I
 import { SolicitudFinanciacion } from '../../../domain/entities/SolicitudFinanciacion';
 import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
+import { whereDeBusqueda, clienteCoincide, vehiculoCoincide } from '../busqueda';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { firmarRuta } from '../../security/urlFirmada';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 // Lo que el cliente puede escribir al crear. `estado` queda afuera a propósito:
 // el default del schema es 'borrador' y la máquina de estados asume ese punto de
@@ -59,17 +62,25 @@ const INCLUDES = {
 
 export class PrismaSolicitudFinanciacionRepository implements ISolicitudFinanciacionRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<SolicitudFinanciacion>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
 
-        const where = coerceFilter(filter);
+        // q no es columna: fuera del filtro antes de coerceFilter (ver busqueda.ts).
+        const { q, ...resto } = filter ?? {};
+        const where = coerceFilter(resto);
+
+        const busqueda = whereDeBusqueda(q, (t) => [
+            { cliente: clienteCoincide(t) },
+            { vehiculo: vehiculoCoincide(t) },
+            { financiera: { nombre: { contains: t, mode: 'insensitive' as const } } },
+        ]);
+        if (busqueda) where.AND = busqueda;
 
         const results = await prisma.solicitudFinanciacion.findMany({
             where,
             take: limitNum,
             skip: (pageNum - 1) * limitNum,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('SolicitudFinanciacion', sortBy, sortOrder, 'createdAt'),
             include: INCLUDES,
         });
 
@@ -150,7 +161,8 @@ export class PrismaSolicitudFinanciacionRepository implements ISolicitudFinancia
             s.sucursal,
             s.venta,
             s.presupuesto,
-            s.archivos,
+            // Adjuntos privados (DNI, recibos): la url que sale es firmada y vence; ver urlFirmada.ts.
+            s.archivos?.map((a: any) => ({ ...a, url: firmarRuta(a.url) })),
             s.vehiculo
         );
     }

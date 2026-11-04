@@ -16,11 +16,11 @@ export const upsertCotizacionSchema = z.object({
     // z.coerce.date rechaza fechas inválidas ('2026-13-40', 'abc'). Acepta
     // 'YYYY-MM-DD' (se interpreta como medianoche UTC, que es lo que guarda la
     // columna @db.Date).
-    fecha: z.coerce.date({ error: 'fecha inválida (usá el formato YYYY-MM-DD)' }),
+    fecha: z.coerce.date({ error: 'La fecha no es válida: usá el formato AAAA-MM-DD' }),
     // Pesos por 1 USD: tiene que ser un número mayor a 0. Una cotización <= 0 no
     // existe y además rompería la conversión (división por cero al pasar ARS→USD).
     valor: z.coerce
-        .number({ error: 'valor debe ser un número' })
-        .positive('valor debe ser mayor a 0'),
+        .number({ error: 'El valor tiene que ser un número' })
+        .positive('El valor tiene que ser mayor a 0'),
     concesionariaId: optionalFk,
 });

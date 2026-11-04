@@ -27,7 +27,7 @@ const optionalFk = z.preprocess(
 // (no se valida ni rechaza). Un email real sigue exigiendo formato válido.
 const emailOpcional = z.preprocess(
     (v) => (v === '' ? undefined : v),
-    z.string().email('Email inválido').optional(),
+    z.string().email('El email no es válido').optional(),
 );
 
 // FK que SÍ admite null explícito (para DESASIGNAR): '' / 0 / null => null (borra la
@@ -41,7 +41,7 @@ const nullableFk = z.preprocess(
 // Etapa del embudo comercial (espejo del enum EstadoLead de Prisma). Opcional: en
 // create el default de la DB es `nuevo`; en update sólo viene cuando se cambia.
 const estadoLeadEnum = z.enum(['nuevo', 'contactado', 'negociando', 'ganado', 'perdido'], {
-    error: 'Estado inválido. Válidos: nuevo, contactado, negociando, ganado, perdido',
+    error: 'Elegí un estado válido: nuevo, contactado, negociando, ganado o perdido',
 }).optional();
 
 // Canal por el que entró la consulta (espejo del enum OrigenLead de Prisma).
@@ -49,7 +49,7 @@ const estadoLeadEnum = z.enum(['nuevo', 'contactado', 'negociando', 'ganado', 'p
 // leads que entran por la bandeja de preguntas quedaban imposibles de guardar
 // desde el form de cliente (la edición rebotaba por "origen inválido").
 const ORIGENES_LEAD = ['deruedas', 'mercadolibre', 'instagram', 'facebook', 'whatsapp', 'web', 'mostrador', 'referido', 'otro'] as const;
-const MSG_ORIGEN = 'Origen inválido. Válidos: deruedas, mercadolibre, instagram, facebook, whatsapp, web, mostrador, referido, otro';
+const MSG_ORIGEN = 'Elegí un origen válido: DeRuedas, Mercado Libre, Instagram, Facebook, WhatsApp, web, mostrador, referido u otro';
 
 // origenLead en create/update: nullable en DB (los históricos no lo registraron),
 // así que el '' del form (limpieza) → null; ausente (undefined) → no se toca.
@@ -137,13 +137,13 @@ export const importClientesSchema = z.object({
         dni: z.string().optional(),
         observaciones: z.string().optional(),
         origenLead: z.string().optional(),
-        vendedorAsignadoId: z.number({ error: 'vendedorAsignadoId debe ser un número' }).int().optional(),
+        vendedorAsignadoId: z.number({ error: 'El vendedor asignado no es válido' }).int().optional(),
     }))
         .min(1, 'El lote debe traer al menos una fila')
         .max(300, 'Máximo 300 filas por lote'),
     opciones: z.object({
-        estadoInicial: z.enum(['contactado', 'nuevo'], { error: 'Estado inicial inválido. Válidos: contactado, nuevo' }),
+        estadoInicial: z.enum(['contactado', 'nuevo'], { error: 'Elegí un estado inicial válido: contactado o nuevo' }),
         origenDefault: z.string().optional(),
-        actualizarExistentes: z.boolean({ error: 'actualizarExistentes debe ser booleano' }),
+        actualizarExistentes: z.boolean({ error: 'Indicá si se actualizan los clientes que ya existen' }),
     }),
 });

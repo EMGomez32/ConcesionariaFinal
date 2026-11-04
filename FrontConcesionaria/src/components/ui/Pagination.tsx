@@ -19,13 +19,16 @@ const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPage
                 onClick={() => onPageChange(currentPage - 1)}
                 aria-label="Página anterior"
             >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={16} aria-hidden="true" />
                 <span>Anterior</span>
             </button>
 
-            <div className="pager-status">
-                <span className="pager-current">{currentPage}</span>
-                <span className="pager-divider">/</span>
+            {/* "3 / 12" se lee "Página 3 de 12" y se anuncia al cambiar. */}
+            <div className="pager-status" aria-live="polite">
+                <span className="sr-only">Página </span>
+                <span className="pager-current" aria-current="page">{currentPage}</span>
+                <span className="pager-divider" aria-hidden="true">/</span>
+                <span className="sr-only"> de </span>
                 <span className="pager-total">{totalPages}</span>
             </div>
 
@@ -37,7 +40,7 @@ const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPage
                 aria-label="Página siguiente"
             >
                 <span>Siguiente</span>
-                <ChevronRight size={16} />
+                <ChevronRight size={16} aria-hidden="true" />
             </button>
 
             <style>{`
@@ -70,7 +73,7 @@ const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPage
 
                 .pager-btn:hover:not(:disabled) {
                     border-color: var(--accent);
-                    color: var(--accent);
+                    color: var(--accent-text);
                     background: var(--accent-light);
                     transform: translateY(-1px);
                 }

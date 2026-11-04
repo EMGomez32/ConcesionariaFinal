@@ -1,6 +1,16 @@
-import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
+import axios, { type AxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import { queryClient } from './queryClient';
-import { useAuthStore, getPersistedRefreshToken } from '../store/authStore';
+import {
+    useAuthStore,
+    AUTH_STORAGE_KEY,
+    decodeJwtPayload,
+    leerRefreshHeredado,
+    olvidarRefreshHeredado,
+    type User,
+} from '../store/authStore';
+import { guardarRegreso, marcarAvisoLogin, avisarOtrasPestanas, escucharOtrasPestanas } from '../store/sesion';
+import { MENSAJES_ERROR, mensajePorEstado, traducirMensajeTecnico } from '../utils/getErrorMessage';
+import type { ApiErrorShape } from '../utils/error';
 
 declare module 'axios' {
     interface AxiosRequestConfig {
@@ -13,8 +23,17 @@ declare module 'axios' {
     }
 }
 
+const API_URL = import.meta.env.VITE_API_BASE_URL;
+
 const axiosInstance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL,
+    baseURL: API_URL,
+    // La cookie httpOnly del refresh (`autenza_rt`, Path=/api/auth) tiene que viajar
+    // también cuando el front y la API están en orígenes distintos (desarrollo).
+    withCredentials: true,
+    // Sin tope, una request colgada (red móvil, proxy caído) dejaba la pantalla
+    // cargando para siempre. 60 s cubre reportes y PDFs pesados; quien suba
+    // archivos grandes puede pasar su propio `timeout`.
+    timeout: 60_000,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -31,47 +50,107 @@ axiosInstance.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Single-flight del refresh: una sola promesa compartida a nivel módulo. Cuando el
-// access token vence y varias requests disparan 401 en paralelo, TODAS se suscriben
-// a este mismo refresh en vez de llamar cada una a /auth/refresh con el mismo
-// refresh token. Sin esto: el backend ROTA el refresh en cada uso y tiene detección
-// de reuso (revokeAllForUser), así que el 2º request usaría un token ya rotado →
-// revoca TODAS las sesiones → logout espurio. Con la cola: un solo /auth/refresh por
-// ventana de expiración; el resto reintenta con el token nuevo.
-//
-// El single-flight en memoria sólo cubre UNA pestaña (la variable vive por módulo/tab).
-// Para el caso multi-pestaña se suman dos defensas: (1) performRefresh relee el refresh
-// MÁS fresco de localStorage, no el de memoria (otra pestaña pudo haberlo rotado ya); y
-// (2) runExclusiveRefresh serializa el refresh ENTRE pestañas con la Web Locks API.
+/* ───────────────────────────────────────────────────────────────────────────
+ * Refresh de la sesión
+ *
+ * El refresh token vive en una cookie httpOnly que pone el backend: el front no
+ * lo lee ni lo manda (sólo el access token, en memoria). /auth/refresh rota la
+ * cookie en cada uso y tiene detección de reuso (revokeAllForUser): si dos
+ * requests mandan el MISMO refresh, el segundo revoca todas las sesiones →
+ * logout espurio. Por eso:
+ *
+ *  1. Single-flight por pestaña: una sola promesa compartida a nivel módulo. Las
+ *     requests que dan 401 en paralelo se suscriben a ese mismo refresh.
+ *  2. Exclusión ENTRE pestañas con Web Locks: sólo una pestaña ejecuta
+ *     /auth/refresh a la vez. Cuando la siguiente entra, la cookie ya es la rotada
+ *     (el navegador la actualizó con la respuesta anterior), así que nunca se
+ *     reusa una revocada. Antes esto se lograba releyendo el refresh de
+ *     localStorage; ahora lo resuelve la cookie, que es una sola para todas.
+ *  3. BroadcastChannel: la pestaña que renovó comparte el access token nuevo. Si
+ *     otra pestaña estaba esperando el lock, usa ése y no rota otra vez.
+ *  4. Evento `storage` sobre la clave del usuario: si en otra pestaña se cerró la
+ *     sesión, ésta también; si se entró con OTRA cuenta, ésta se recarga.
+ * Sin Web Locks degrada al single-flight por pestaña.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
 let refreshPromise: Promise<string> | null = null;
+/** Último access token que llegó de otra pestaña (y cuándo). */
+let renovadoAfuera: { access: string; en: number } | null = null;
+
+escucharOtrasPestanas((msg) => {
+    const { user } = useAuthStore.getState();
+    if (!user) return;
+    if (msg.userId != null && msg.userId !== user.id) return;
+    renovadoAfuera = { access: msg.access, en: Date.now() };
+    useAuthStore.getState().setAccessToken(msg.access);
+});
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('storage', (e) => {
+        if (e.key !== AUTH_STORAGE_KEY) return;
+        const actual = useAuthStore.getState().user;
+        if (!actual) return; // pestaña sin sesión (login, capacitación): no hay nada que sincronizar
+        let otro: User | null = null;
+        try { otro = (JSON.parse(e.newValue ?? 'null') as { state?: { user?: User | null } } | null)?.state?.user ?? null; } catch { return; }
+        if (!otro) {
+            // Se cerró la sesión en otra pestaña: acá también (el backend ya revocó la cookie).
+            useAuthStore.getState().logout();
+            queryClient.clear();
+        } else if (otro.id !== actual.id) {
+            // Se entró con otra cuenta en otra pestaña: la cookie ahora es de ese usuario.
+            window.location.reload();
+        } else {
+            // Mismo usuario con datos actualizados (nombre, 2FA): se sincroniza.
+            useAuthStore.setState({ user: otro });
+        }
+    });
+}
 
 async function performRefresh(): Promise<string> {
-    // Preferir el refresh persistido: si otra pestaña ya rotó el token, nuestra memoria
-    // quedó vieja pero localStorage tiene el nuevo. Mandar el viejo → detección de reuso.
-    const refreshToken = getPersistedRefreshToken() ?? useAuthStore.getState().refreshToken;
-    if (!refreshToken) throw new Error('No refresh token');
-    // axios "pelado" (no axiosInstance) → no re-entra en este interceptor.
-    const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/auth/refresh`, {
-        refreshToken,
-    });
-    const { access, refresh } = response.data as { access: string; refresh: string };
-    // Guardar AMBOS: el refresh viejo quedó revocado en el backend; si no
-    // persistimos el nuevo, el próximo refresh mandaría el revocado y dispararía
-    // la detección de reuso (logout de todas las sesiones).
-    useAuthStore.getState().setTokens(access, refresh);
+    // La primera vez después del deploy, el refresh del storage viejo migra la sesión
+    // a la cookie (el backend lo acepta en el cuerpo). Después, cuerpo vacío: cookie.
+    const heredado = leerRefreshHeredado();
+    let response: AxiosResponse<{ access: string; refresh?: string }>;
+    try {
+        // axios "pelado" (no axiosInstance) → no re-entra en el interceptor de abajo.
+        response = await axios.post(`${API_URL}/auth/refresh`, heredado ? { refreshToken: heredado } : {}, {
+            withCredentials: true,
+            timeout: 20_000,
+        });
+    } catch (err) {
+        // Si el backend contestó (aunque sea rechazándolo), el heredado ya no sirve.
+        if ((err as AxiosError)?.response) olvidarRefreshHeredado();
+        throw err;
+    }
+    olvidarRefreshHeredado();
+    const { access, refresh } = response.data;
+    const payload = decodeJwtPayload(access);
+    const { user } = useAuthStore.getState();
+    if (user && payload?.userId != null && payload.userId !== user.id) {
+        // La cookie es de OTRO usuario (se entró con otra cuenta en otra pestaña y el
+        // evento storage no llegó). Recargar adopta esa sesión sin mezclar datos; la
+        // promesa queda pendiente a propósito para que nadie siga con este token.
+        window.location.reload();
+        return new Promise<string>(() => {});
+    }
+    useAuthStore.getState().setTokens(access, refresh ?? null);
+    avisarOtrasPestanas({ tipo: 'renovada', access, userId: payload?.userId });
     return access;
 }
 
-// Serializa el refresh ENTRE pestañas: sólo una pestaña ejecuta /auth/refresh a la vez.
-// Las demás esperan el lock y, al entrar, performRefresh relee el token ya rotado de
-// localStorage → nunca reusan uno revocado. Si el navegador no soporta Web Locks, degrada
-// al single-flight por pestaña (sigue cubriendo el caso secuencial vía la lectura persistida).
 async function runExclusiveRefresh(): Promise<string> {
+    const pedidoEn = Date.now();
+    const tarea = async () => {
+        // Mientras se esperaba el lock, otra pestaña pudo renovar: su access sirve igual
+        // y rotar de nuevo sería gastar otra vuelta de refresh.
+        if (renovadoAfuera && renovadoAfuera.en >= pedidoEn) return renovadoAfuera.access;
+        return performRefresh();
+    };
     if (typeof navigator !== 'undefined' && 'locks' in navigator && navigator.locks?.request) {
         // `await` desenrolla el Promise<Promise<string>> que tipa LockManager.request.
-        return await navigator.locks.request('autenza-auth-refresh', () => performRefresh());
+        return await navigator.locks.request('autenza-auth-refresh', tarea);
     }
-    return performRefresh();
+    return tarea();
 }
 
 function refreshAccessToken(): Promise<string> {
@@ -81,40 +160,156 @@ function refreshAccessToken(): Promise<string> {
     return refreshPromise;
 }
 
+/**
+ * ¿El backend RECHAZÓ la sesión (refresh vencido, revocado o ausente)? Sólo
+ * entonces se cierra la sesión. Un corte de red, un 5xx (backend caído detrás
+ * del proxy) o un 429 son pasajeros: cerrar la sesión por eso echaba a la gente
+ * en medio del trabajo.
+ */
+const sesionRechazada = (err: unknown): boolean => {
+    const status = (err as AxiosError)?.response?.status;
+    return status === 400 || status === 401 || status === 403;
+};
+
+/**
+ * La sesión venció: se recuerda dónde estaba el usuario y el aviso para el login,
+ * se limpia el estado y (si se pide) se va a /login. El href recarga la página
+ * (heap nuevo → caché nuevo); el clear() es defensa en profundidad por si algún
+ * día esto pasa a ser navegación SPA (los datos del usuario saliente no deben
+ * sobrevivir en el QueryClient).
+ */
+function sesionVencida({ irAlLogin }: { irAlLogin: boolean }) {
+    const { pathname, search } = window.location;
+    guardarRegreso(pathname + search);
+    marcarAvisoLogin('sesion-vencida');
+    useAuthStore.getState().logout();
+    queryClient.clear();
+    if (irAlLogin && !pathname.startsWith('/login')) window.location.assign('/login');
+}
+
+export type ResultadoRestauracion = 'ok' | 'vencida' | 'sin-conexion';
+
+/**
+ * Restaura la sesión al arrancar: hay usuario persistido pero no access token
+ * (vive en memoria, se perdió al recargar). Pide /auth/refresh con la cookie.
+ *  - 'ok': hay access token nuevo.
+ *  - 'vencida': el backend rechazó la cookie → estado limpio + aviso en el login.
+ *  - 'sin-conexion': no se pudo preguntar (red, backend caído); la sesión NO se
+ *    toca y se puede reintentar.
+ */
+export async function restaurarSesion(): Promise<ResultadoRestauracion> {
+    const { user, isAuthenticated } = useAuthStore.getState();
+    if (!user) return 'vencida';
+    if (isAuthenticated) return 'ok';
+    try {
+        await refreshAccessToken();
+        return 'ok';
+    } catch (err) {
+        if (!sesionRechazada(err)) return 'sin-conexion';
+        sesionVencida({ irAlLogin: false });
+        return 'vencida';
+    }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Normalización de errores
+ *
+ * Todo error que sale de este cliente tiene la forma ApiErrorShape con un
+ * `message` en español apto para mostrar. Antes se rechazaba `response.data` o
+ * `error.message` crudos: un corte de red llegaba a la pantalla como "Network
+ * Error" y un 502 del proxy como el HTML de la página de nginx.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+async function normalizarError(error: unknown): Promise<unknown> {
+    // La cancelación (AbortController de React Query al desmontar) se deja pasar
+    // tal cual: React Query la reconoce y no la trata como falla.
+    if (axios.isCancel(error)) return error;
+    const e = error as AxiosError;
+    if (!e?.isAxiosError) return error;
+
+    if (!e.response) {
+        const esTimeout = e.code === 'ECONNABORTED' || e.code === 'ETIMEDOUT';
+        const r: ApiErrorShape = esTimeout
+            ? { error: 'TIMEOUT', message: MENSAJES_ERROR.timeout }
+            : { error: 'NETWORK_ERROR', message: MENSAJES_ERROR.red };
+        return r;
+    }
+
+    const status = e.response.status;
+    let data: unknown = e.response.data;
+    // Descargas (responseType: 'blob'): el error JSON del backend viene dentro del Blob.
+    if (typeof Blob !== 'undefined' && data instanceof Blob) {
+        try { data = JSON.parse(await data.text()); } catch { data = null; }
+    } else if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch { /* HTML o texto plano: se descarta abajo */ }
+    }
+
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const d = data as Record<string, unknown>;
+        let message = typeof d.message === 'string' ? d.message.trim() : '';
+        // El 500 genérico del backend ("Ha ocurrido un error inesperado.") y los
+        // mensajes técnicos se reemplazan por el texto del sistema.
+        const tecnico = message ? traducirMensajeTecnico(message) : null;
+        if (!message || tecnico || d.error === 'INTERNAL_SERVER_ERROR') {
+            message = mensajePorEstado(status) ?? tecnico ?? 'No se pudo completar la operación.';
+        }
+        return { ...d, message, status };
+    }
+
+    const r: ApiErrorShape = {
+        error: `HTTP_${status}`,
+        message: mensajePorEstado(status) ?? 'No se pudo completar la operación.',
+        status,
+    };
+    return r;
+}
+
+/** Rutas de auth en las que un 401 es la respuesta (credenciales, código), no una sesión vencida. */
+const RUTAS_SIN_REFRESH = /\/auth\/(login|refresh|logout|forgot-password|reset-password)(\/|\?|$)/;
+
 axiosInstance.interceptors.response.use(
     (response) => (response.config?.rawResponse ? response : response.data),
     async (error) => {
         const originalRequest = error.config;
         const url: string = originalRequest?.url || '';
-        const isRefreshCall = url.includes('/auth/refresh');
 
-        if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isRefreshCall) {
+        if (
+            error.response?.status === 401 &&
+            originalRequest &&
+            !originalRequest._retry &&
+            !RUTAS_SIN_REFRESH.test(url) &&
+            useAuthStore.getState().user
+        ) {
             originalRequest._retry = true;
-            const { refreshToken } = useAuthStore.getState();
-
-            if (refreshToken) {
-                try {
-                    const access = await refreshAccessToken();
-                    originalRequest.headers = originalRequest.headers || {};
-                    originalRequest.headers.Authorization = `Bearer ${access}`;
-                    return axiosInstance(originalRequest);
-                } catch (refreshError) {
-                    useAuthStore.getState().logout();
-                    // El href de abajo recarga la página (heap nuevo → caché nuevo),
-                    // así que este clear() es defensa en profundidad: si algún día
-                    // esto pasa a ser navegación SPA, los datos del usuario saliente
-                    // no deben sobrevivir en el QueryClient (ver performLogout).
-                    queryClient.clear();
-                    window.location.href = '/login';
-                    // Rechazar con la misma forma desempaquetada que el resto del
-                    // interceptor (línea de abajo), no el AxiosError crudo.
-                    const err = refreshError as { response?: { data?: unknown }; message?: string };
-                    return Promise.reject(err?.response?.data ?? err?.message ?? refreshError);
+            try {
+                const access = await refreshAccessToken();
+                originalRequest.headers = originalRequest.headers || {};
+                originalRequest.headers.Authorization = `Bearer ${access}`;
+                return axiosInstance(originalRequest);
+            } catch (refreshError) {
+                if (!sesionRechazada(refreshError)) {
+                    // No se pudo renovar por un problema pasajero: la sesión sigue y la
+                    // request falla con el motivo real (sin conexión, servidor caído).
+                    return Promise.reject(await normalizarError(refreshError));
                 }
+                sesionVencida({ irAlLogin: true });
+                const r: ApiErrorShape = { error: 'SESION_VENCIDA', message: MENSAJES_ERROR.sesionVencida, status: 401 };
+                return Promise.reject(r);
             }
         }
 
-        return Promise.reject(error.response?.data || error.message);
+        // El rol de este usuario pasó a exigir 2FA (o su sesión es anterior a la política) y todavía no
+        // lo activó: el backend sólo le deja usar /api/auth/*. Se lo manda a activarlo.
+        if (
+            error.response?.status === 403 &&
+            error.response?.data?.error === 'MFA_ENROLLMENT_REQUIRED' &&
+            !window.location.pathname.startsWith('/activar-2fa')
+        ) {
+            useAuthStore.getState().setUser({ mfaPendiente: true });
+            window.location.assign('/activar-2fa');
+        }
+
+        return Promise.reject(await normalizarError(error));
     }
 );
 

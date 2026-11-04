@@ -3,6 +3,7 @@ import { WhatsappController } from '../controllers/WhatsappController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
 import { createCuentaSchema } from '../validation/whatsapp.schema';
+import { envioLimiter } from '../middlewares/rateLimiters';
 
 const router = Router();
 
@@ -95,7 +96,7 @@ router.post('/cuentas', authorize('admin'), validateBody(createCuentaSchema), Wh
  *       404: { $ref: '#/components/responses/NotFound' }
  *       409: { description: La cuenta está desactivada }
  */
-router.post('/cuentas/:id/conectar', authorize('admin'), WhatsappController.conectar);
+router.post('/cuentas/:id/conectar', envioLimiter, authorize('admin'), WhatsappController.conectar);
 
 /**
  * @openapi

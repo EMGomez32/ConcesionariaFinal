@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { obligatorio, invalido } from './mensajes';
 
 // Schemas de validación de ventas. Payloads verificados contra los DTOs reales
 // del front (ventas.api.ts, VentaSubResources.tsx). Se usa `coerce` para aceptar
@@ -8,10 +9,10 @@ import { z } from 'zod';
 // lo no declarado.
 
 const idField = (label: string) =>
-    z.coerce.number({ error: `${label} es obligatorio` }).int(`${label} inválido`).positive(`${label} es obligatorio`);
+    z.coerce.number({ error: obligatorio(label) }).int(invalido(label)).positive(obligatorio(label));
 
 const montoField = (label: string) =>
-    z.coerce.number({ error: `${label} es obligatorio` }).positive(`${label} debe ser mayor a 0`);
+    z.coerce.number({ error: obligatorio(label) }).positive(`${label} debe ser mayor a 0`);
 
 // FK opcional: 0 / '' / null se interpretan como "sin FK" (undefined), porque el
 // form puede inicializar el campo en 0. Si viene un id real, se valida positivo.
@@ -19,6 +20,19 @@ const optionalFk = z.preprocess(
     (v) => (v === 0 || v === '' || v === null ? undefined : v),
     z.coerce.number().int().positive().optional(),
 );
+
+// Fecha que el use-case pasa DIRECTO a Prisma (`...ventaData` / `...data` en el
+// create). El front la manda desde un <input type="date"> como "YYYY-MM-DD", y
+// Prisma rechaza ese string para un DateTime ("Expected ISO-8601 DateTime") → 500
+// al registrar la venta, al convertir un presupuesto y al agregar un pago. Se
+// valida y se convierte acá, con la misma convención que el resto del backend
+// (`new Date("YYYY-MM-DD")` = medianoche UTC, ver RegistrarPagoCuota). También
+// acepta un ISO completo, que es lo que mandan los tests y otros clientes.
+const fechaField = (msgVacia: string) =>
+    z.string()
+        .min(1, msgVacia)
+        .refine((s) => !Number.isNaN(new Date(s).getTime()), 'La fecha no es válida')
+        .transform((s) => new Date(s));
 
 const metodoPagoEnum = z.enum(['efectivo', 'transferencia', 'tarjeta', 'cheque', 'otro']);
 const monedaEnum = z.enum(['ARS', 'USD']);
@@ -30,7 +44,7 @@ const pagoItem = z.object({
     metodo: metodoPagoEnum,
     referencia: z.string().optional(),
     observaciones: z.string().optional(),
-    fecha: z.string().optional(),
+    fecha: fechaField('La fecha del pago no puede estar vacía').optional(),
 });
 
 const externoItem = z.object({
@@ -54,7 +68,7 @@ export const createVentaSchema = z.object({
     precioVenta: montoField('El precio de venta'),
     moneda: monedaEnum,
     formaPago: formaPagoEnum,
-    fechaVenta: z.string().min(1, 'La fecha de venta es obligatoria'),
+    fechaVenta: fechaField('La fecha de venta es obligatoria'),
     observaciones: z.string().optional(),
     pagos: z.array(pagoItem).optional(),
     externos: z.array(externoItem).optional(),
@@ -76,3 +90,22 @@ export const changeEstadoEntregaSchema = z.object({
 export const addPagoSchema = pagoItem;
 export const addExtraSchema = externoItem;
 export const addCanjeSchema = canjeItem;
+
+// POST /presupuestos/:id/convertir-en-venta. Antes iba SIN validar: el body crudo
+// (precioVenta, pagos, externos, canjes...) entraba a CreateVenta con montos
+// negativos o NaN y claves extra en los create anidados. El cliente y el vehículo
+// salen del presupuesto, no del body; acá sólo lo que el use-case realmente lee.
+// Todo es opcional: el front manda formaPago/fechaVenta/moneda/observaciones y el
+// resto se toma del presupuesto.
+export const convertirPresupuestoSchema = z.object({
+    sucursalId: optionalFk,
+    vendedorId: optionalFk,
+    precioVenta: montoField('El precio de venta').optional(),
+    moneda: monedaEnum.optional(),
+    formaPago: formaPagoEnum.optional(),
+    fechaVenta: fechaField('La fecha de venta no puede estar vacía').optional(),
+    observaciones: z.string().optional(),
+    pagos: z.array(pagoItem).optional(),
+    externos: z.array(externoItem).optional(),
+    canjes: z.array(canjeItem).optional(),
+});

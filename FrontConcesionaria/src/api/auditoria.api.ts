@@ -1,6 +1,9 @@
 import client from './client';
 
-export type AccionAudit = 'create' | 'update' | 'cancel' | 'delete_soft' | 'login' | 'logout' | 'refinanciar';
+// Espejo del enum AccionAudit de Prisma.
+export type AccionAudit =
+  | 'create' | 'update' | 'cancel' | 'delete_soft' | 'delete' | 'refinanciar'
+  | 'login' | 'logout' | 'login_fail' | 'password_reset_request' | 'password_reset_done';
 
 export interface AuditLog {
   id: number;

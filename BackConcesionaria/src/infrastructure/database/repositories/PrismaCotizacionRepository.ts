@@ -2,6 +2,7 @@ import { ICotizacionRepository } from '../../../domain/repositories/ICotizacionR
 import { Cotizacion } from '../../../domain/entities/Cotizacion';
 import prisma from '../prisma';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { parsePagination } from '../queryOptions';
 
 /**
  * Normaliza una fecha a la medianoche UTC de ese día. La columna es @db.Date:
@@ -22,9 +23,8 @@ const SORTABLE = ['fecha', 'valor', 'createdAt', 'updatedAt'];
 
 export class PrismaCotizacionRepository implements ICotizacionRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Cotizacion>> {
-        const { limit = 20, page = 1, sortBy = 'fecha', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'fecha', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
 
         const where: any = {};
         // Rango opcional por fecha (?desde=&hasta=), fechas puras en UTC.

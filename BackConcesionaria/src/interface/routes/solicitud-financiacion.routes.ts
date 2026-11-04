@@ -5,6 +5,7 @@ import { authorize } from '../middlewares/authorize.middleware';
 
 import { validateBody } from '../middlewares/validate.middleware';
 import { createSolicitudSchema, updateSolicitudSchema } from '../validation/solicitud-financiacion.schema';
+import { uploadLimiter } from '../middlewares/rateLimiters';
 const router = Router();
 
 /**
@@ -160,7 +161,7 @@ router.get('/:id/archivos', SolicitudFinanciacionController.listArchivos);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.post('/:id/archivos/upload', authorize('admin', 'vendedor'), uploadSingle, SolicitudFinanciacionController.uploadArchivo);
+router.post('/:id/archivos/upload', uploadLimiter, authorize('admin', 'vendedor'), uploadSingle, SolicitudFinanciacionController.uploadArchivo);
 
 /**
  * @openapi

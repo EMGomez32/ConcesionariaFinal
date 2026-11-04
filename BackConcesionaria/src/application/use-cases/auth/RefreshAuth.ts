@@ -3,6 +3,7 @@ import { IRefreshTokenRepository } from '../../../domain/repositories/IRefreshTo
 import { UnauthorizedException } from '../../../domain/exceptions/BaseException';
 import { withAuthBypass } from '../../../infrastructure/database/unitOfWork';
 import config from '../../../config';
+import { mfaPendiente } from '../../../infrastructure/security/mfaPolicy';
 
 export class RefreshAuth {
     constructor(
@@ -34,8 +35,14 @@ export class RefreshAuth {
             }));
             if (!usuario || !usuario.activo) throw new Error('Invalid user');
 
-            // Rotation
-            await this.refreshTokenRepository.update(stored.id, { isRevoked: true });
+            // Rotation ATÓMICA: el UPDATE ... WHERE is_revoked = false lo gana una sola
+            // request. Antes era leer-y-después-actualizar: dos refresh concurrentes con
+            // el mismo token pasaban los dos y emitían dos cadenas de sesión válidas.
+            // El que pierde la carrera recibe 401 a secas (no dispara la detección de
+            // reuso: en la carrera no hay forma de distinguir un doble envío legítimo de
+            // un robo, y matar todas las sesiones por un doble clic sería peor).
+            const claimed = await this.refreshTokenRepository.claimForRotation(stored.id);
+            if (!claimed) throw new Error('Concurrent rotation');
 
             // Reconstruir el payload desde la DB, NO del token viejo. Dos motivos:
             //  1) `payload` (jwt.verify del refresh) trae los claims reservados de JWT
@@ -54,6 +61,8 @@ export class RefreshAuth {
                 concesionariaId: usuario.concesionariaId,
                 sucursalId: usuario.sucursalId,
                 roles,
+                // El rol exige 2FA y el usuario aún no lo activó: sigue restringido a configurarlo.
+                ...(mfaPendiente(roles, usuario.totpEnabled) ? { mfaPending: true } : {}),
             };
             const access = this.tokenService.generateAccessToken(newPayload);
             const refresh = this.tokenService.generateRefreshToken(newPayload);

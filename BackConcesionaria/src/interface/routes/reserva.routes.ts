@@ -4,6 +4,7 @@ import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
 import { createReservaSchema, updateReservaSchema } from '../validation/reserva.schema';
+import { costosoLimiter } from '../middlewares/rateLimiters';
 
 /**
  * CRITERIO DE PERMISOS: quien HACE el trabajo lo REGISTRA; ANULAR es del admin,
@@ -83,7 +84,7 @@ router.get('/:id', ReservaController.getById);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id/comprobante', ComprobanteController.reservaPdf);
+router.get('/:id/comprobante', costosoLimiter, ComprobanteController.reservaPdf);
 
 /**
  * @openapi

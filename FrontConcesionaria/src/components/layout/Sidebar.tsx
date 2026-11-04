@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
 import { X, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import Isotipo from '../brand/Isotipo';
@@ -5,6 +6,10 @@ import { useAuthStore } from '../../store/authStore';
 import { useSidebarStore } from '../../store/sidebarStore';
 import { NAV_SECTIONS } from '../../config/nav';
 import type { NavSection } from '../../config/nav';
+import { useMediaQuery, MQ_MENU_MOVIL } from './useMediaQuery';
+
+/** id del panel, para el aria-controls del botón "Abrir menú" del TopBar. */
+export const ID_MENU_LATERAL = 'menu-lateral';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -17,13 +22,43 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTIONS, brandTag = 'Concesionaria' }) => {
   const { user } = useAuthStore();
-  const collapsed = useSidebarStore((s) => s.collapsed);
+  const collapsedGuardado = useSidebarStore((s) => s.collapsed);
   const toggle = useSidebarStore((s) => s.toggle);
+  const esMovil = useMediaQuery(MQ_MENU_MOVIL);
+  // En móvil el panel siempre va completo: el "colapsado" es una preferencia de
+  // escritorio (el botón ni se ve) y sin esto el panel abría con 280px de ancho
+  // pero sin los nombres de las secciones.
+  const collapsed = collapsedGuardado && !esMovil;
+  // Cerrado en móvil el panel queda fuera de pantalla: `inert` lo saca del orden
+  // de tabulación y del árbol de accesibilidad (antes el Tab recorría los ~25
+  // links invisibles antes de llegar al contenido).
+  const cerradoEnMovil = esMovil && !isOpen;
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Al abrirlo en móvil el foco entra al panel (botón de cerrar) y al cerrarlo
+  // vuelve a donde estaba (el botón "Abrir menú").
+  useEffect(() => {
+    if (!esMovil || !isOpen) return;
+    const previo = document.activeElement as HTMLElement | null;
+    closeBtnRef.current?.focus();
+    return () => {
+      if (previo && document.contains(previo)) previo.focus();
+    };
+  }, [esMovil, isOpen]);
   const isSuperAdmin = user?.roles.includes('super_admin');
   const isAdmin = isSuperAdmin || user?.roles.includes('admin');
+  // El tasador PURO (sólo tasa) no ve el resto del sistema: los ítems sin `roles`
+  // se muestran a todos, así que acá se recorta a mano su única sección.
+  const esTasadorPuro =
+    !!user?.roles.includes('tasador') && !isAdmin && !user?.roles.includes('vendedor');
 
   return (
-    <aside className={`sidebar ${isOpen ? 'open' : ''} ${collapsed ? 'is-collapsed' : ''}`}>
+    <aside
+      id={ID_MENU_LATERAL}
+      className={`sidebar ${isOpen ? 'open' : ''} ${collapsed ? 'is-collapsed' : ''}`}
+      inert={cerradoEnMovil}
+      aria-label="Menú"
+    >
       <div className="sidebar-header">
         <div className="logo-container" aria-hidden="true">
           <Isotipo size={collapsed ? 22 : 28} color="#fff" />
@@ -34,7 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
             <span className="logo-tag">{brandTag}</span>
           </div>
         )}
-        <button className="sidebar-close-btn" onClick={onClose} aria-label="Cerrar menú">
+        <button ref={closeBtnRef} type="button" className="sidebar-close-btn" onClick={onClose} aria-label="Cerrar menú">
           <X size={20} />
         </button>
       </div>
@@ -42,6 +77,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
       <nav className="sidebar-nav" aria-label="Navegación principal" data-tour="sidebar-nav">
         {sections.map((section) => {
           const visibleItems = section.items.filter((it) =>
+            // Tasador puro: sólo Tasaciones, nada más.
+            (!esTasadorPuro || it.path === '/tasaciones') &&
             (!it.superAdminOnly || isSuperAdmin) &&
             (!it.adminOnly || isAdmin) &&
             (!it.roles || it.roles.some((r) => user?.roles.includes(r))),
@@ -58,6 +95,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
                     to={item.path}
                     end={item.path === '/'}
                     data-tour={`nav:${item.path}`}
+                    // Tocar el ítem de la pantalla en la que ya estás no cambia la
+                    // ruta: sin esto el panel móvil quedaba abierto.
+                    onClick={esMovil ? onClose : undefined}
                     className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                     title={collapsed ? item.label : undefined}
                     aria-label={collapsed ? item.label : undefined}
@@ -178,7 +218,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
 
         .logo-tag {
             font-size: var(--text-2xs);
-            color: rgba(255, 255, 255, 0.45); /* impeccable-disable-line design-system-color: texto sobre navy fijo, no cambia con el tema */
+            /* 0.55: 6.2:1 sobre el navy (con 0.45 quedaba en 4.47 en tema oscuro). */
+            color: rgba(255, 255, 255, 0.55); /* impeccable-disable-line design-system-color: texto sobre navy fijo, no cambia con el tema */
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.18em;
@@ -208,7 +249,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sections = NAV_SECTI
             font-family: var(--font-sans);
             font-size: var(--text-2xs);
             font-weight: 700;
-            color: rgba(255, 255, 255, 0.32); /* impeccable-disable-line design-system-color: texto sobre navy fijo, no cambia con el tema */
+            /* Era 0.32 (2.85:1). Con 0.55: 6.22:1 sobre #0a0f1f y 6.27:1 sobre
+               #06080f (tema oscuro), 6.01 en la zona del glow violeta. */
+            color: rgba(255, 255, 255, 0.55); /* impeccable-disable-line design-system-color: texto sobre navy fijo, no cambia con el tema */
             text-transform: uppercase;
             letter-spacing: 0.16em;
             padding-left: 1rem;

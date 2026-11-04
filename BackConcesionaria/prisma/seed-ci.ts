@@ -49,7 +49,7 @@ const connectionString = (process.env.DATABASE_URL || '').replace('prisma+postgr
 const pool = new Pool({ connectionString, max: 1 });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) } as any);
 
-const ROLES = ['admin', 'vendedor', 'cobrador', 'postventa', 'lectura', 'super_admin'] as const;
+const ROLES = ['admin', 'vendedor', 'cobrador', 'postventa', 'lectura', 'super_admin', 'tasador'] as const;
 const CONC_NOMBRE = 'Concesionaria Test CI';
 
 async function ensureUsuario(

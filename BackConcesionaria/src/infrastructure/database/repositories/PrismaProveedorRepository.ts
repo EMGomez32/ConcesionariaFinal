@@ -4,12 +4,12 @@ import prisma from '../prisma';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { VEHICULO_PUBLICO } from '../proyecciones';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 export class PrismaProveedorRepository implements IProveedorRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Proveedor>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
 
         // coerceFilter convierte los query params (?activo=true llega como
         // string) a los tipos que espera Prisma.
@@ -33,7 +33,7 @@ export class PrismaProveedorRepository implements IProveedorRepository {
             where,
             take: limitNum,
             skip: (pageNum - 1) * limitNum,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('Proveedor', sortBy, sortOrder, 'createdAt'),
         });
 
         const total = await prisma.proveedor.count({ where });

@@ -21,13 +21,20 @@ export interface CreateVentaDto {
 }
 
 export interface VentaFilters {
+    /**
+     * Búsqueda en el servidor (contrato 1): nombre/DNI del cliente, dominio/marca/
+     * modelo del vehículo y número de venta. Reemplaza el filtrado de la página en memoria.
+     */
+    q?: string;
     sucursalId?: number;
     clienteId?: number;
     vendedorId?: number;
     vehiculoId?: number;
     estadoEntrega?: string;
     formaPago?: string;
+    /** `fechaVenta` desde (inclusive), YYYY-MM-DD (contrato 2). */
     fechaDesde?: string;
+    /** `fechaVenta` hasta (inclusive), YYYY-MM-DD (contrato 2). */
     fechaHasta?: string;
 }
 

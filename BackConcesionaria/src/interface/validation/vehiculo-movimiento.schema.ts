@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { obligatorio, invalido } from './mensajes';
 
 // Schemas de validación de los movimientos de vehículo. El payload autoritativo es
 // el DTO real del front (FrontConcesionaria/src/api/vehiculo-movimientos.api.ts).
@@ -23,7 +24,7 @@ import { z } from 'zod';
 // vehículo dentro del repositorio).
 
 const idField = (label: string) =>
-    z.coerce.number({ error: `${label} es obligatorio` }).int(`${label} inválido`).positive(`${label} es obligatorio`);
+    z.coerce.number({ error: obligatorio(label) }).int(invalido(label)).positive(obligatorio(label));
 
 // FK opcional: 0 / '' / null se interpretan como "sin FK" (undefined), porque el
 // form puede inicializar el select en 0. Si viene un id real, se valida positivo.

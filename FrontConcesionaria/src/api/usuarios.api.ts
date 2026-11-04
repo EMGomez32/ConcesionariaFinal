@@ -30,11 +30,13 @@ export const usuariosApi = {
     },
 
     // Autogestión: el usuario logueado sobre su propia cuenta (Configuración).
-    updateMe: (data: { nombre?: string; email?: string }) => {
+    // `currentPassword` es obligatoria SÓLO si cambia el email. `refreshToken` (el de la
+    // sesión actual) le dice al backend cuál sesión conservar al cerrar las demás.
+    updateMe: (data: { nombre?: string; email?: string; currentPassword?: string; refreshToken?: string }) => {
         return client.patch('/usuarios/me', data);
     },
 
-    changeMyPassword: (currentPassword: string, newPassword: string) => {
-        return client.post('/usuarios/me/password', { currentPassword, newPassword });
+    changeMyPassword: (currentPassword: string, newPassword: string, refreshToken?: string) => {
+        return client.post('/usuarios/me/password', { currentPassword, newPassword, refreshToken });
     },
 };

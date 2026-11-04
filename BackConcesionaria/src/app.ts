@@ -14,6 +14,7 @@ import integracionRoutes from './interface/routes/integracion.routes';
 import { authenticate } from './interface/middlewares/authenticate.middleware';
 import prisma from './infrastructure/database/prisma';
 import { logger } from './infrastructure/logging/logger';
+import { crearRouterUploads } from './interface/middlewares/uploads.middleware';
 
 const app = express();
 
@@ -141,14 +142,7 @@ app.get('/health', async (_req, res) => {
 // interprete como HTML, y la CSP `sandbox` (sin tokens) hace que cualquier
 // HTML/SVG servido corra en un origen aislado y sin scripts.
 const uploadsDir = process.env.UPLOADS_DIR || path.resolve(process.cwd(), 'uploads');
-app.use('/uploads', express.static(uploadsDir, {
-    maxAge: '7d',
-    etag: true,
-    setHeaders: (res) => {
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox; frame-ancestors 'none'");
-    },
-}));
+app.use('/uploads', crearRouterUploads(uploadsDir));
 
 // Webhooks públicos de integraciones (Meta Lead Ads): SIN JWT — montados ANTES
 // del router /api (que aplica authenticate global). La seguridad es la del

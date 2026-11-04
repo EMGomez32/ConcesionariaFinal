@@ -476,8 +476,8 @@ export default function BillingPage() {
     <div className="page-container">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Billing SaaS</h1>
-          <p className="page-subtitle">Planes, suscripciones y facturación</p>
+          <h1 className="page-title">Planes y suscripciones</h1>
+          <p className="page-subtitle">Los planes del servicio, quién está suscripto y sus facturas</p>
         </div>
       </div>
 
@@ -701,11 +701,11 @@ export default function BillingPage() {
                     <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{inv.dueDate?.slice(0, 10) ?? '—'}</td>
                     <td><span className={INV_STATUS_COLORS[inv.status]}>{INV_STATUS_LABELS[inv.status]}</span></td>
                     <td style={{ display: 'flex', gap: '0.25rem' }}>
-                      <button className="icon-btn" title="Ver pagos" onClick={() => handleViewInvoice(inv)}>
+                      <button type="button" className="icon-btn" title="Ver pagos" aria-label="Ver los pagos de la factura" onClick={() => handleViewInvoice(inv)}>
                         <Eye size={16} />
                       </button>
                       {inv.status !== 'paid' && inv.status !== 'void' && (
-                        <button className="icon-btn" title="Registrar pago" onClick={() => { setPayInvoice(inv); setPayForm({ monto: '', moneda: inv.moneda, metodo: 'transferencia' }); setShowPayModal(true); }}>
+                        <button type="button" className="icon-btn" title="Registrar pago" aria-label="Registrar un pago de la factura" onClick={() => { setPayInvoice(inv); setPayForm({ monto: '', moneda: inv.moneda, metodo: 'transferencia' }); setShowPayModal(true); }}>
                           <Receipt size={16} />
                         </button>
                       )}

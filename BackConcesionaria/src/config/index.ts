@@ -19,7 +19,7 @@ interface Config {
 }
 
 const config: Config = {
-    env: process.env.NODE_ENV || 'development',
+    env: process.env.NODE_ENV || 'production',
     port: parseInt(process.env.PORT || '3000', 10),
     prisma: {
         url: process.env.DATABASE_URL,

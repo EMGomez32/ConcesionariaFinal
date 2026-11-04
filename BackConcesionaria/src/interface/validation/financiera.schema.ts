@@ -19,7 +19,7 @@ const optionalFk = z.preprocess(
 // `body('email').optional({ checkFalsy: true }).isEmail()`: '' => "sin email".
 const emailOpcional = z.preprocess(
     (v) => (v === '' ? undefined : v),
-    z.string().email('Email inválido').optional(),
+    z.string().email('El email no es válido').optional(),
 );
 
 // Enum TipoFinanciera del schema.prisma (financiera | banco | otra). El mensaje
@@ -28,7 +28,7 @@ const emailOpcional = z.preprocess(
 // original, un tipo presente pero inválido ('' incluido) se rechaza; el front
 // manda uno de los tres o nada (Prisma default `financiera`).
 const tipoFinanciera = z
-    .enum(['financiera', 'banco', 'otra'], { error: 'Tipo inválido. Válidos: financiera, banco, otra' })
+    .enum(['financiera', 'banco', 'otra'], { error: 'Elegí un tipo válido: financiera, banco u otra' })
     .optional();
 
 export const createFinancieraSchema = z.object({

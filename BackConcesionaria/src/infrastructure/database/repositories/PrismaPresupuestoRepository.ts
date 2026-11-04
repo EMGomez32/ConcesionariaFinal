@@ -4,21 +4,39 @@ import prisma from '../prisma';
 import { USUARIO_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
 import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
+import { parsePagination, parseOrderBy } from '../queryOptions';
+import { whereDeBusqueda, clienteCoincide, vehiculoCoincide } from '../busqueda';
 
 export class PrismaPresupuestoRepository implements IPresupuestoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<Presupuesto>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
 
-        const where = coerceFilter(filter);
+        const { vehiculoId, q, ...resto } = filter ?? {};
+        const where = coerceFilter(resto);
+        // El presupuesto no tiene vehiculoId: las unidades van en sus ítems. Filtrar por
+        // vehículo (pestaña Presupuestos de la ficha) = presupuestos con algún ítem
+        // vigente de esa unidad. Un id inválido no matchea nada en vez de listar todo.
+        if (vehiculoId !== undefined && vehiculoId !== null && vehiculoId !== '') {
+            const id = Number(vehiculoId);
+            where.items = { some: { vehiculoId: Number.isInteger(id) ? id : -1, deletedAt: null } };
+        }
 
+        // Búsqueda (ver busqueda.ts). Va en el AND y no en `items`, así combina con el
+        // filtro por vehículo de arriba. El número del presupuesto es texto
+        // (PRES-2026-001): se busca por `contains`, además del id.
+        const busqueda = whereDeBusqueda(q, (t) => [
+            { cliente: clienteCoincide(t) },
+            { items: { some: { deletedAt: null, vehiculo: vehiculoCoincide(t) } } },
+            { nroPresupuesto: { contains: t, mode: 'insensitive' } },
+        ]);
+        if (busqueda) where.AND = busqueda;
 
         const results = await prisma.presupuesto.findMany({
             where,
             take: limitNum,
             skip: (pageNum - 1) * limitNum,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('Presupuesto', sortBy, sortOrder, 'createdAt'),
             include: {
                 cliente: true,
                 sucursal: true,

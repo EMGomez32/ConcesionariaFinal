@@ -3,9 +3,12 @@ import type { ModoIntegracion } from '@prisma/client';
 import prisma from '../../infrastructure/database/prisma';
 import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
-import { BaseException, NotFoundException, ValidationException } from '../../domain/exceptions/BaseException';
+import { BaseException, NotFoundException } from '../../domain/exceptions/BaseException';
+import { errorDeValidacion } from '../middlewares/validate.middleware';
+import { mapaDeErrores } from '../validation/mensajes';
 import { cifrarConfig, estaCifrado } from '../../infrastructure/security/secretBox';
 import { estadoCanalesMeta } from '../../domain/services/canalesMeta';
+import { DestinoNoPermitidoError, resolverDestinoPublico } from '../../infrastructure/security/destinoSeguro';
 import {
     CAMPOS_SECRETOS,
     OPCIONALES_BORRABLES_META,
@@ -95,13 +98,25 @@ function assertNoEsDemo(integracion: { modo?: string | null }, accion: 'editar' 
 
 // Function declaration (no arrow) a propósito: el `never` explícito deja que
 // el control-flow de TS narrowee el safeParse tras el `if (!success)`.
+// Misma forma y mensajes que validateBody (sin el path técnico en el message).
 function lanzarValidacion(issues: { path: PropertyKey[]; message: string }[]): never {
-    const details = issues.map((issue) => ({
-        campo: ['config', ...issue.path].join('.'),
-        mensaje: issue.message,
-    }));
-    const message = details.map((d) => `${d.campo}: ${d.mensaje}`).join('; ');
-    throw new ValidationException(details, message);
+    throw errorDeValidacion(issues, ['config']);
+}
+
+/**
+ * SSRF: el host IMAP lo elige el admin y el backend se conecta a él solo. Además del chequeo
+ * de forma de Zod, acá se RESUELVE el DNS y se exige que todas las direcciones sean públicas
+ * (nada de db, backend, LAN, Tailscale ni metadatos de nube). Se vuelve a validar al conectar.
+ */
+async function assertHostImapPublico(host: unknown): Promise<void> {
+    try {
+        await resolverDestinoPublico(String(host ?? ''));
+    } catch (e) {
+        if (e instanceof DestinoNoPermitidoError) {
+            throw new BaseException(400, e.message, 'HOST_NO_PERMITIDO');
+        }
+        throw e;
+    }
 }
 
 export class IntegracionController {
@@ -130,6 +145,7 @@ export class IntegracionController {
             // y la bandeja mezclando hilos fabricados con mensajes de gente de
             // verdad. Mismo corte simétrico que ya tiene Mercado Libre.
             if (tipo === 'meta') await assertSinDemoMetaActiva(concesionariaId);
+            if (tipo === 'email') await assertHostImapPublico((config as any)?.host);
             const creada = await prisma.integracionCanal.create({
                 data: { concesionariaId, tipo, nombre, activo: activo ?? true, config: cifrarConfig(config) },
             });
@@ -169,7 +185,7 @@ export class IntegracionController {
                 // La config llega PARCIAL y se valida contra el tipo GUARDADO (el
                 // tipo no se cambia por PATCH), mergeando sobre la config existente.
                 const schemaParcial = existente.tipo === 'meta' ? updateMetaConfigSchema : updateEmailConfigSchema;
-                const parcial = schemaParcial.safeParse(config);
+                const parcial = schemaParcial.safeParse(config, { error: mapaDeErrores });
                 if (!parcial.success) lanzarValidacion(parcial.error.issues);
                 const guardada = (existente.config ?? {}) as Record<string, unknown>;
                 // Sólo pisan lo guardado las claves que trajeron VALOR: una clave
@@ -203,8 +219,10 @@ export class IntegracionController {
                 }
                 // La config resultante tiene que quedar COMPLETA para su tipo.
                 const schemaCompleto = existente.tipo === 'meta' ? metaConfigSchema : emailConfigSchema;
-                const completa = schemaCompleto.safeParse(mergeada);
+                const completa = schemaCompleto.safeParse(mergeada, { error: mapaDeErrores });
                 if (!completa.success) lanzarValidacion(completa.error.issues);
+                // Si cambió el host (o se edita la config de una casilla), se re-resuelve el DNS.
+                if (existente.tipo === 'email') await assertHostImapPublico((completa.data as any).host);
                 // Cifrar al persistir. Esto también es la migración lazy: una
                 // config legada en claro queda cifrada en su primer update.
                 configFinal = cifrarConfig(completa.data as Record<string, unknown>);

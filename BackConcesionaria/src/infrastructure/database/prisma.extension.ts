@@ -84,7 +84,8 @@ const SOFT_DELETE_MODELS = [
 // injection. AuditLog has `concesionaria_id` but we treat it as tenant-scoped
 // (RLS applies). The other globals (Rol, Plan, RefreshToken, Concesionaria
 // itself) skip RLS.
-const GLOBAL_MODELS = ['Concesionaria', 'Rol', 'Plan', 'RefreshToken'];
+// SecurityEvent: rastro de plataforma sin tenant ni RLS (ver securityEvents.ts).
+const GLOBAL_MODELS = ['Concesionaria', 'Rol', 'Plan', 'RefreshToken', 'SecurityEvent', 'RecoveryCode'];
 
 const isSoftDeleteModel = (model: string) =>
     SOFT_DELETE_MODELS.some((m) => m.toLowerCase() === model.toLowerCase());

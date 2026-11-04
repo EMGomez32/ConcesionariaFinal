@@ -245,7 +245,7 @@ export function FileUploader({
 
                 .uploader-zone:hover:not(:disabled) .uploader-zone-text strong,
                 .uploader-zone.is-drag .uploader-zone-text strong {
-                    color: var(--accent);
+                    color: var(--accent-text);
                 }
 
                 .uploader-zone-hint {

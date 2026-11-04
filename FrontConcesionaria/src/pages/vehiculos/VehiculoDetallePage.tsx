@@ -7,6 +7,9 @@ import { gastosApi, type GastoVehiculo } from '../../api/gastos.api';
 import { gastosCategoriaApi, type GastoCategoria } from '../../api/gastos-categorias.api';
 import { vehiculoInteresApi, type VehiculoInteres } from '../../api/vehiculoInteres.api';
 import { vehiculoPreciosApi, type VehiculoPrecioHistorial } from '../../api/vehiculoPrecios.api';
+import { presupuestosApi } from '../../api/presupuestos.api';
+import { reservasApi } from '../../api/reservas.api';
+import { ventasApi } from '../../api/ventas.api';
 import mercadolibreApi, { esCuentaDemo } from '../../api/mercadolibre.api';
 import type {
     EstadoCuentaMl,
@@ -25,7 +28,11 @@ import Select from '../../components/ui/Select';
 import Modal from '../../components/ui/Modal';
 import { FileUploader } from '../../components/ui/FileUploader';
 import { useUIStore } from '../../store/uiStore';
+import { useAuthStore } from '../../store/authStore';
+import { useConfirm } from '../../hooks/useConfirm';
 import { waShareLink } from '../../utils/whatsapp';
+import PageTitle from '../../components/ui/PageTitle';
+import { ESTADO_VEHICULO, estadoVehiculoLabel } from './vehiculoTextos';
 import {
     ArrowLeft, Car, Calendar, DollarSign, MapPin,
     FileImage, Wrench, ArrowLeftRight, FileText,
@@ -39,13 +46,7 @@ import type { PaginatedResponse, ApiError } from '../../types/api.types';
 
 type Tab = 'info' | 'archivos' | 'gastos' | 'movimientos' | 'presupuestos' | 'reservas' | 'ventas' | 'interesados' | 'precios';
 
-const STATUS_MAP: Record<EstadoVehiculo, { label: string; variant: 'warning' | 'success' | 'info' | 'default' | 'danger' }> = {
-    preparacion: { label: 'En Preparación', variant: 'warning' },
-    publicado: { label: 'Publicado', variant: 'success' },
-    reservado: { label: 'Reservado', variant: 'info' },
-    vendido: { label: 'Vendido', variant: 'default' },
-    devuelto: { label: 'Devuelto', variant: 'danger' },
-};
+const STATUS_MAP = ESTADO_VEHICULO;
 
 // Fecha @db.Date → DD/MM/YYYY sin pasar por new Date() (evita el corrimiento de día
 // en UTC-3 que arrastran las otras filas de fecha de esta ficha).
@@ -70,11 +71,31 @@ interface VehiculoFull extends Vehiculo {
     archivos?: VehiculoArchivo[];
     gastos?: GastoVehiculo[];
     movimientos?: VehiculoMovimiento[];
-    presupuestos?: { id: number; nroPresupuesto?: string; cliente?: { nombre: string }; fechaEmision?: string; estado?: string; precioFinal?: number }[];
-    reservas?: { id: number; cliente?: { nombre: string }; montoSena?: number; fechaVencimiento?: string; estado?: string }[];
-    ventas?: { id: number; cliente?: { nombre: string }; fechaVenta?: string; precioFinal?: number; formaPago?: string; estadoEntrega?: string }[];
     proveedorCompra?: { id: number; nombre: string };
 }
+
+// Filas de las pestañas Presupuestos / Reservas / Ventas, con los nombres de campo
+// que devuelven sus listados (el detalle del vehículo no trae esas relaciones).
+interface PresupuestoFicha {
+    id: number; nroPresupuesto?: string; cliente?: { nombre: string }; fechaCreacion?: string;
+    estado?: string; moneda?: string; items?: { vehiculoId?: number; precioFinal?: number | string }[];
+}
+interface ReservaFicha {
+    id: number; cliente?: { nombre: string }; monto?: number | null; moneda?: string;
+    fechaVencimiento?: string | null; estado?: string;
+}
+interface VentaFicha {
+    id: number; cliente?: { nombre: string }; fechaVenta?: string; precioVenta?: number | string;
+    moneda?: string; formaPago?: string; estadoEntrega?: string;
+}
+
+// "convertida_en_venta" → "Convertida en venta": los estados no se muestran crudos.
+const legible = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ') : '-');
+
+const FORMA_PAGO_LABEL: Record<string, string> = {
+    contado: 'Contado', transferencia: 'Transferencia', financiado_propio: 'Financiación propia',
+    financiado_externo: 'Crédito externo', canje_mas_diferencia: 'Canje más diferencia', mixto: 'Mixto',
+};
 
 const TIPO_ARCHIVO_OPTS = ['foto', 'documento', 'comprobante', 'plano', 'otro'];
 
@@ -98,6 +119,7 @@ const VehiculoDetallePage = () => {
     // el taller es su trabajo) pero NO marca la portada, que es decisión comercial.
     // Ver hooks/usePermisos.ts.
     const permisos = usePermisos();
+    const confirm = useConfirm();
     const puedePublicarMl = permisos.esAdmin;
 
     const [activeTab, setActiveTab] = useState<Tab>('info');
@@ -113,6 +135,10 @@ const VehiculoDetallePage = () => {
     // Movimientos state
     const [movList, setMovList] = useState<VehiculoMovimiento[]>([]);
     const [loadingMov, setLoadingMov] = useState(false);
+    const [presupuestos, setPresupuestos] = useState<PresupuestoFicha[]>([]);
+    const [reservas, setReservas] = useState<ReservaFicha[]>([]);
+    const [ventas, setVentas] = useState<VentaFicha[]>([]);
+    const [loadingOperaciones, setLoadingOperaciones] = useState(false);
 
     // Gastos state
     const [gastosList, setGastosList] = useState<GastoVehiculo[]>([]);
@@ -239,6 +265,36 @@ const VehiculoDetallePage = () => {
         if (activeTab === 'movimientos') loadMovimientos();
     }, [activeTab, loadMovimientos]);
 
+    /*
+     * Presupuestos, reservas y ventas de la unidad. El detalle del vehículo no trae
+     * esas relaciones (las pestañas leían campos que nunca llegaban y mostraban 0),
+     * así que se piden a sus listados filtrando por vehículo. Se cargan con la ficha
+     * porque las pestañas muestran el contador antes de abrirlas.
+     */
+    const loadOperaciones = useCallback(async () => {
+        if (!id) return;
+        const vehiculoId = Number(id);
+        setLoadingOperaciones(true);
+        try {
+            const [p, r, v] = await Promise.all([
+                presupuestosApi.getAll({ vehiculoId }, { limit: 50 }) as unknown as Promise<PaginatedResponse<PresupuestoFicha>>,
+                reservasApi.getAll({ vehiculoId, limit: 50 }) as unknown as Promise<PaginatedResponse<ReservaFicha>>,
+                ventasApi.getAll({ vehiculoId }, { limit: 50 }) as unknown as Promise<PaginatedResponse<VentaFicha>>,
+            ]);
+            setPresupuestos(p?.results || []);
+            setReservas(r?.results || []);
+            setVentas(v?.results || []);
+        } catch {
+            addToast('Error al cargar presupuestos, reservas y ventas de la unidad', 'error');
+        } finally {
+            setLoadingOperaciones(false);
+        }
+    }, [id, addToast]);
+
+    useEffect(() => {
+        loadOperaciones();
+    }, [loadOperaciones]);
+
     const loadGastos = useCallback(async () => {
         if (!id) return;
         setLoadingGastos(true);
@@ -307,16 +363,21 @@ const VehiculoDetallePage = () => {
         if (activeTab === 'precios') loadPrecios();
     }, [activeTab, loadPrecios]);
 
-    const handleDeleteInteres = async (i: VehiculoInteres) => {
-        if (!window.confirm('¿Quitar a este cliente de los interesados?')) return;
-        try {
-            await vehiculoInteresApi.delete(i.id);
-            addToast('Interés eliminado', 'success');
-            setInteresados(prev => prev.filter(x => x.id !== i.id));
-        } catch {
-            addToast('Error al eliminar el interés', 'error');
-        }
-    };
+    const handleDeleteInteres = (i: VehiculoInteres) => confirm({
+        title: 'Quitar interesado',
+        message: `¿Quitar a ${i.cliente?.nombre ?? 'este cliente'} de los interesados en esta unidad?`,
+        type: 'danger',
+        confirmLabel: 'Quitar',
+        onConfirm: async () => {
+            try {
+                await vehiculoInteresApi.delete(i.id);
+                addToast('Interesado quitado', 'success');
+                setInteresados(prev => prev.filter(x => x.id !== i.id));
+            } catch (err) {
+                addToast(getApiErrorMessage(err, 'No se pudo quitar el interesado'), 'error');
+            }
+        },
+    });
 
     const handleAddGasto = async () => {
         if (!gastoForm.categoriaId || !gastoForm.monto || !gastoForm.fechaGasto) {
@@ -373,19 +434,24 @@ const VehiculoDetallePage = () => {
         }
     };
 
-    const handleDeleteGasto = async (gastoId: number) => {
-        if (!window.confirm('¿Eliminar este gasto? Esta acción no se puede deshacer.')) return;
-        setDeletingGastoId(gastoId);
-        try {
-            await gastosApi.delete(gastoId);
-            addToast('Gasto eliminado', 'success');
-            loadGastos();
-        } catch {
-            addToast('Error al eliminar gasto', 'error');
-        } finally {
-            setDeletingGastoId(null);
-        }
-    };
+    const handleDeleteGasto = (gastoId: number) => confirm({
+        title: 'Eliminar el gasto',
+        message: '¿Eliminar este gasto? No se puede deshacer.',
+        type: 'danger',
+        confirmLabel: 'Eliminar',
+        onConfirm: async () => {
+            setDeletingGastoId(gastoId);
+            try {
+                await gastosApi.delete(gastoId);
+                addToast('Gasto eliminado', 'success');
+                loadGastos();
+            } catch (err) {
+                addToast(getApiErrorMessage(err, 'No se pudo eliminar el gasto'), 'error');
+            } finally {
+                setDeletingGastoId(null);
+            }
+        },
+    });
 
     const handleArchivoUploaded = () => {
         addToast('Archivo subido correctamente', 'success');
@@ -397,15 +463,22 @@ const VehiculoDetallePage = () => {
 
     const handleDeleteArchivo = async (archivo: VehiculoArchivo) => {
         const label = archivo.originalName ?? archivo.descripcion ?? `Archivo ${archivo.id}`;
-        if (!window.confirm(`¿Eliminar el archivo "${label}"?`)) return;
-        try {
-            await vehiculoArchivosApi.delete(archivo.id);
-            addToast('Archivo eliminado', 'success');
-            setArchivos(prev => prev.filter(a => a.id !== archivo.id));
-        } catch (err: unknown) {
-            const apiError = err as ApiError;
-            addToast(apiError?.message || 'Error al eliminar archivo', 'error');
-        }
+        await confirm({
+            title: 'Eliminar el archivo',
+            message: `¿Eliminar el archivo "${label}"? No se puede deshacer.`,
+            type: 'danger',
+            confirmLabel: 'Eliminar',
+            onConfirm: async () => {
+                try {
+                    await vehiculoArchivosApi.delete(archivo.id);
+                    addToast('Archivo eliminado', 'success');
+                    setArchivos(prev => prev.filter(a => a.id !== archivo.id));
+                } catch (err: unknown) {
+                    const apiError = err as ApiError;
+                    addToast(apiError?.message || 'No se pudo eliminar el archivo', 'error');
+                }
+            },
+        });
     };
 
     const gastoColumns: Column<GastoVehiculo>[] = [
@@ -420,7 +493,7 @@ const VehiculoDetallePage = () => {
         {
             header: 'Monto',
             accessor: (g) => (
-                <span className="fw-bold">${Number(g.monto).toLocaleString('es-AR')}</span>
+                <span className="fw-bold">{money(Number(g.monto), g.moneda)}</span>
             )
         },
         {
@@ -436,8 +509,8 @@ const VehiculoDetallePage = () => {
             align: 'right',
             accessor: (g) => (
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button className="icon-btn small" onClick={(e) => { e.stopPropagation(); openEditGasto(g); }} title="Editar"><Edit size={14} /></button>
-                    <button className="icon-btn small danger" onClick={(e) => { e.stopPropagation(); handleDeleteGasto(g.id); }} disabled={deletingGastoId === g.id} title="Eliminar"><Trash2 size={14} /></button>
+                    <button type="button" className="icon-btn small" onClick={(e) => { e.stopPropagation(); openEditGasto(g); }} title="Editar" aria-label="Editar el gasto"><Edit size={14} aria-hidden="true" /></button>
+                    <button type="button" className="icon-btn small danger" onClick={(e) => { e.stopPropagation(); handleDeleteGasto(g.id); }} disabled={deletingGastoId === g.id} title="Eliminar" aria-label="Eliminar el gasto"><Trash2 size={14} aria-hidden="true" /></button>
                 </div>
             )
         }
@@ -470,7 +543,7 @@ const VehiculoDetallePage = () => {
         }
     ];
 
-    const presupuestoColumns: Column<{ id: number; nroPresupuesto?: string; cliente?: { nombre: string }; fechaEmision?: string; estado?: string; precioFinal?: number }>[] = [
+    const presupuestoColumns: Column<PresupuestoFicha>[] = [
         {
             header: 'Nro',
             accessor: (p) => <span className="fw-bold">#{p.nroPresupuesto || p.id}</span>
@@ -481,57 +554,61 @@ const VehiculoDetallePage = () => {
         },
         {
             header: 'Fecha',
-            accessor: (p) => p.fechaEmision ? new Date(p.fechaEmision).toLocaleDateString('es-AR') : '-'
+            accessor: (p) => formatFecha(p.fechaCreacion)
         },
         {
             header: 'Estado',
-            accessor: (p) => <span className="tipo-chip">{p.estado || '-'}</span>
+            accessor: (p) => <span className="tipo-chip">{legible(p.estado)}</span>
         },
         {
-            header: 'Total',
-            accessor: (p) => <span className="fw-bold">{p.precioFinal ? `$${Number(p.precioFinal).toLocaleString('es-AR')}` : '-'}</span>
+            // El precio de ESTA unidad en el presupuesto (puede cotizar varias).
+            header: 'Precio cotizado',
+            accessor: (p) => {
+                const item = p.items?.find((it) => it.vehiculoId === Number(id));
+                return <span className="fw-bold">{item?.precioFinal != null ? money(Number(item.precioFinal), p.moneda) : '-'}</span>;
+            }
         }
     ];
 
-    const reservaColumns: Column<{ id: number; cliente?: { nombre: string }; montoSena?: number; fechaVencimiento?: string; estado?: string }>[] = [
+    const reservaColumns: Column<ReservaFicha>[] = [
         {
             header: 'Cliente',
             accessor: (r) => r.cliente?.nombre || '-'
         },
         {
             header: 'Seña',
-            accessor: (r) => <span className="fw-bold">{r.montoSena ? `$${Number(r.montoSena).toLocaleString('es-AR')}` : '-'}</span>
+            accessor: (r) => <span className="fw-bold">{r.monto != null ? money(Number(r.monto), r.moneda) : '-'}</span>
         },
         {
             header: 'Vencimiento',
-            accessor: (r) => r.fechaVencimiento ? new Date(r.fechaVencimiento).toLocaleDateString('es-AR') : '-'
+            accessor: (r) => formatFecha(r.fechaVencimiento)
         },
         {
             header: 'Estado',
-            accessor: (r) => <span className="tipo-chip">{r.estado}</span>
+            accessor: (r) => <span className="tipo-chip">{legible(r.estado)}</span>
         }
     ];
 
-    const ventaColumns: Column<{ id: number; cliente?: { nombre: string }; fechaVenta?: string; precioFinal?: number; formaPago?: string; estadoEntrega?: string }>[] = [
+    const ventaColumns: Column<VentaFicha>[] = [
         {
             header: 'Cliente',
             accessor: (v) => v.cliente?.nombre || '-'
         },
         {
             header: 'Fecha',
-            accessor: (v) => v.fechaVenta ? new Date(v.fechaVenta).toLocaleDateString('es-AR') : '-'
+            accessor: (v) => formatFecha(v.fechaVenta)
         },
         {
-            header: 'Precio final',
-            accessor: (v) => <span className="fw-bold">{v.precioFinal ? `$${Number(v.precioFinal).toLocaleString('es-AR')}` : '-'}</span>
+            header: 'Precio de venta',
+            accessor: (v) => <span className="fw-bold">{v.precioVenta != null ? money(Number(v.precioVenta), v.moneda) : '-'}</span>
         },
         {
             header: 'Forma de pago',
-            accessor: (v) => v.formaPago || '-'
+            accessor: (v) => (v.formaPago ? FORMA_PAGO_LABEL[v.formaPago] ?? legible(v.formaPago) : '-')
         },
         {
             header: 'Entrega',
-            accessor: (v) => <span className="tipo-chip">{v.estadoEntrega || '-'}</span>
+            accessor: (v) => <span className="tipo-chip">{legible(v.estadoEntrega)}</span>
         }
     ];
 
@@ -573,14 +650,16 @@ const VehiculoDetallePage = () => {
             accessor: (i) => (
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                     <button
+                        type="button"
                         className="icon-btn small"
                         onClick={(e) => { e.stopPropagation(); navigate(`/presupuestos?nuevoClienteId=${i.clienteId}&nuevoVehiculoId=${id}`); }}
-                        title="Generar presupuesto para este cliente"
+                        title="Crear presupuesto para este cliente"
+                        aria-label={`Crear presupuesto para ${i.cliente?.nombre ?? 'este cliente'}`}
                     >
-                        <FileText size={14} />
+                        <FileText size={14} aria-hidden="true" />
                     </button>
-                    <button className="icon-btn small danger" onClick={(e) => { e.stopPropagation(); handleDeleteInteres(i); }} title="Quitar interesado">
-                        <Trash2 size={14} />
+                    <button type="button" className="icon-btn small danger" onClick={(e) => { e.stopPropagation(); handleDeleteInteres(i); }} title="Quitar interesado" aria-label={`Quitar a ${i.cliente?.nombre ?? 'este cliente'} de los interesados`}>
+                        <Trash2 size={14} aria-hidden="true" />
                     </button>
                 </div>
             ),
@@ -630,9 +709,6 @@ const VehiculoDetallePage = () => {
         },
     ];
 
-    const presupuestos = useMemo(() => vehiculo?.presupuestos ?? [], [vehiculo]);
-    const reservas = useMemo(() => vehiculo?.reservas ?? [], [vehiculo]);
-    const ventas = useMemo(() => vehiculo?.ventas ?? [], [vehiculo]);
     // Los gastos se acumulan por moneda: sumar ARS y USD en un solo número no
     // representa ningún importe real.
     const totalesGastos = useMemo(() => {
@@ -646,8 +722,8 @@ const VehiculoDetallePage = () => {
     const totalGastosLabel = useMemo(() => {
         const partes = Object.entries(totalesGastos)
             .filter(([, monto]) => monto > 0)
-            .map(([moneda, monto]) => `$${monto.toLocaleString('es-AR')} ${moneda}`);
-        return partes.length ? partes.join(' · ') : '$0 ARS';
+            .map(([moneda, monto]) => money(monto, moneda));
+        return partes.length ? partes.join(' · ') : money(0);
     }, [totalesGastos]);
 
     if (loading) return (
@@ -683,10 +759,11 @@ const VehiculoDetallePage = () => {
 
     return (
         <div className="detalle-container">
+            <PageTitle title={`${vehiculo.marca} ${vehiculo.modelo}`} />
             {/* Header */}
             <div className="detalle-header">
-                <button className="back-btn" onClick={() => navigate('/vehiculos')}>
-                    <ArrowLeft size={20} />
+                <button type="button" className="back-btn" onClick={() => navigate('/vehiculos')} aria-label="Volver a Vehículos" title="Volver">
+                    <ArrowLeft size={20} aria-hidden="true" />
                 </button>
                 <div className="vehiculo-hero">
                     <div className="vehiculo-avatar-lg">
@@ -695,7 +772,7 @@ const VehiculoDetallePage = () => {
                     <div>
                         <h1>{vehiculo.marca} {vehiculo.modelo} {vehiculo.version && `· ${vehiculo.version}`}</h1>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.4rem' }}>
-                            <span className="dominio-tag">{vehiculo.dominio || 'S/D'}</span>
+                            <span className="dominio-tag">{vehiculo.dominio || 'Sin dominio'}</span>
                             <Badge variant={STATUS_MAP[vehiculo.estado].variant}>{STATUS_MAP[vehiculo.estado].label}</Badge>
                             {(() => {
                                 const d = docStatus(vehiculo.vencimientoVtv, vehiculo.vencimientoSeguro);
@@ -724,7 +801,7 @@ const VehiculoDetallePage = () => {
                 <div className="stat-card glass">
                     <DollarSign size={20} style={{ color: 'var(--accent)' }} />
                     <div>
-                        <div className="stat-value">{vehiculo.precioLista ? `$${Number(vehiculo.precioLista).toLocaleString('es-AR')}` : '-'}</div>
+                        <div className="stat-value">{vehiculo.precioLista ? money(Number(vehiculo.precioLista), vehiculo.moneda) : '-'}</div>
                         <div className="stat-label">Precio lista</div>
                     </div>
                 </div>
@@ -735,7 +812,7 @@ const VehiculoDetallePage = () => {
                     <div className="stat-card glass">
                         <DollarSign size={20} style={{ color: 'var(--warning)' }} />
                         <div>
-                            <div className="stat-value">{vehiculo.precioCompra ? `$${Number(vehiculo.precioCompra).toLocaleString('es-AR')}` : '-'}</div>
+                            <div className="stat-value">{vehiculo.precioCompra ? money(Number(vehiculo.precioCompra), vehiculo.moneda) : '-'}</div>
                             <div className="stat-label">Precio compra</div>
                         </div>
                     </div>
@@ -770,14 +847,17 @@ const VehiculoDetallePage = () => {
             {puedePublicarMl && <TarjetaMercadoLibre vehiculoId={vehiculo.id} estadoVehiculo={vehiculo.estado} />}
 
             {/* Tabs */}
-            <div className="tabs-bar glass">
+            <div className="tabs-bar glass" role="tablist" aria-label="Secciones de la ficha">
                 {tabs.map(t => (
                     <button
                         key={t.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === t.key}
                         className={`tab-btn ${activeTab === t.key ? 'active' : ''}`}
                         onClick={() => setActiveTab(t.key)}
                     >
-                        <t.icon size={15} />
+                        <t.icon size={15} aria-hidden="true" />
                         <span>{t.label}</span>
                         {t.count !== undefined && <span className="tab-badge">{t.count}</span>}
                     </button>
@@ -798,17 +878,17 @@ const VehiculoDetallePage = () => {
                             { icon: Hash, label: 'Dominio', value: vehiculo.dominio },
                             { icon: Hash, label: 'VIN', value: vehiculo.vin },
                             { icon: Hash, label: 'Color', value: vehiculo.color },
-                            { icon: Hash, label: 'Km ingreso', value: vehiculo.kmIngreso ? `${vehiculo.kmIngreso.toLocaleString()} km` : undefined },
+                            { icon: Hash, label: 'Km ingreso', value: vehiculo.kmIngreso ? `${vehiculo.kmIngreso.toLocaleString('es-AR')} km` : undefined },
                         ]} />
                         <InfoSection title="Datos de compra" rows={[
                             { icon: MapPin, label: 'Sucursal', value: vehiculo.sucursal?.nombre },
-                            { icon: Calendar, label: 'Fecha ingreso', value: vehiculo.fechaIngreso ? new Date(vehiculo.fechaIngreso).toLocaleDateString('es-AR') : undefined },
+                            { icon: Calendar, label: 'Fecha ingreso', value: vehiculo.fechaIngreso ? formatFecha(vehiculo.fechaIngreso) : undefined },
                             // Datos de compra: sólo admin (ver la tarjeta de arriba). InfoSection
                             // saltea las filas con value undefined, así que para el resto del
                             // equipo estas dos no se dibujan.
-                            { icon: Calendar, label: 'Fecha compra', value: permisos.vePrecioDeCompra && vehiculo.fechaCompra ? new Date(vehiculo.fechaCompra).toLocaleDateString('es-AR') : undefined },
-                            { icon: DollarSign, label: 'Precio compra', value: permisos.vePrecioDeCompra && vehiculo.precioCompra ? `$${Number(vehiculo.precioCompra).toLocaleString('es-AR')}` : undefined },
-                            { icon: DollarSign, label: 'Precio lista', value: vehiculo.precioLista ? `$${Number(vehiculo.precioLista).toLocaleString('es-AR')}` : undefined },
+                            { icon: Calendar, label: 'Fecha compra', value: permisos.vePrecioDeCompra && vehiculo.fechaCompra ? formatFecha(vehiculo.fechaCompra) : undefined },
+                            { icon: DollarSign, label: 'Precio compra', value: permisos.vePrecioDeCompra && vehiculo.precioCompra ? money(Number(vehiculo.precioCompra), vehiculo.moneda) : undefined },
+                            { icon: DollarSign, label: 'Precio lista', value: vehiculo.precioLista ? money(Number(vehiculo.precioLista), vehiculo.moneda) : undefined },
                             // "El vendedor NO VE: … proveedor": el backend lo recorta en
                             // `sanitizarDatosDeCompra`, y el renglón se gatea acá para que no
                             // quede un campo vacío sin explicación.
@@ -937,17 +1017,17 @@ const VehiculoDetallePage = () => {
                                                                                 <Star size={15} fill="currentColor" />
                                                                             </span>
                                                                         ) : (
-                                                                            <button className="icon-btn" title="Marcar como foto principal" onClick={() => handleSetPrincipal(a)}>
-                                                                                <Star size={15} />
+                                                                            <button type="button" className="icon-btn" title="Marcar como foto principal" aria-label="Marcar como foto principal" onClick={() => handleSetPrincipal(a)}>
+                                                                                <Star size={15} aria-hidden="true" />
                                                                             </button>
                                                                         )
                                                                     )}
-                                                                    <a href={a.url} target="_blank" rel="noreferrer" className="icon-btn" title="Ver archivo">
-                                                                        <ExternalLink size={15} />
+                                                                    <a href={a.url} target="_blank" rel="noreferrer" className="icon-btn" title="Ver archivo" aria-label="Ver el archivo (se abre en otra pestaña)">
+                                                                        <ExternalLink size={15} aria-hidden="true" />
                                                                     </a>
                                                                     {permisos.archivosBorrar && (
-                                                                        <button className="icon-btn danger" title="Eliminar" onClick={() => handleDeleteArchivo(a)}>
-                                                                            <Trash2 size={15} />
+                                                                        <button type="button" className="icon-btn danger" title="Eliminar" aria-label="Eliminar el archivo" onClick={() => handleDeleteArchivo(a)}>
+                                                                            <Trash2 size={15} aria-hidden="true" />
                                                                         </button>
                                                                     )}
                                                                 </div>
@@ -1046,6 +1126,7 @@ const VehiculoDetallePage = () => {
                     <DataTable
                         columns={presupuestoColumns}
                         data={presupuestos}
+                        isLoading={loadingOperaciones}
                         emptyMessage="No hay presupuestos para este vehículo."
                         emptyIcon={<FileText size={40} className="text-secondary" />}
                     />
@@ -1056,6 +1137,7 @@ const VehiculoDetallePage = () => {
                     <DataTable
                         columns={reservaColumns}
                         data={reservas}
+                        isLoading={loadingOperaciones}
                         emptyMessage="No hay reservas para este vehículo."
                         emptyIcon={<Bookmark size={40} className="text-secondary" />}
                     />
@@ -1066,6 +1148,7 @@ const VehiculoDetallePage = () => {
                     <DataTable
                         columns={ventaColumns}
                         data={ventas}
+                        isLoading={loadingOperaciones}
                         emptyMessage="Este vehículo no ha sido vendido aún."
                         emptyIcon={<ShoppingCart size={40} className="text-secondary" />}
                     />
@@ -1098,6 +1181,7 @@ const VehiculoDetallePage = () => {
                 .detalle-container { display: flex; flex-direction: column; gap: 1.75rem; animation: fadeIn 0.4s ease-out; }
                 .detalle-header { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
                 .back-btn { padding: 0.625rem; border-radius: var(--radius-md); background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary); transition: all 0.15s; cursor: pointer; }
+                .back-btn:focus-visible { box-shadow: 0 0 0 3px var(--ring); }
                 .back-btn:hover { background: var(--bg-secondary); color: var(--text-primary); transform: translateX(-2px); }
 
                 .vehiculo-hero { display: flex; align-items: center; gap: 1.25rem; }
@@ -1113,9 +1197,10 @@ const VehiculoDetallePage = () => {
                 .stat-label { font-size: var(--text-xs); color: var(--text-secondary); margin-top: 0.2rem; }
 
                 .tabs-bar { display: flex; gap: 0.4rem; padding: 0.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); width: fit-content; flex-wrap: wrap; }
-                .tab-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: var(--radius-md); font-weight: 600; font-size: var(--text-sm); color: var(--text-secondary); transition: all 0.15s; cursor: pointer; }
+                .tab-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: var(--radius-md); font-weight: 600; font-size: var(--text-sm); color: var(--text-secondary); background: transparent; border: 1px solid transparent; transition: all 0.15s; cursor: pointer; }
                 .tab-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }
-                .tab-btn.active { background: var(--accent); color: var(--text-white); }
+                .tab-btn:focus-visible { box-shadow: 0 0 0 3px var(--ring); }
+                .tab-btn.active { background: var(--accent); color: var(--text-on-accent); }
                 .tab-badge { background: color-mix(in srgb, currentColor 25%, transparent); padding: 0.1rem 0.45rem; border-radius: var(--radius-pill); font-size: var(--text-2xs); font-weight: 700; }
                 .tab-btn:not(.active) .tab-badge { background: var(--bg-secondary); color: var(--text-muted); }
 
@@ -1250,6 +1335,10 @@ type AccionMl = 'pausar' | 'reactivar' | 'cerrar' | 'sincronizar';
 
 const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: number; estadoVehiculo: EstadoVehiculo }) => {
     const { addToast } = useUIStore();
+    const confirm = useConfirm();
+    // El detalle técnico de por qué falta la integración (variables del servidor)
+    // sólo le sirve a quien administra la plataforma.
+    const esSuperAdmin = !!useAuthStore((s) => s.user?.roles?.includes('super_admin'));
 
     const [cargando, setCargando] = useState(true);
     const [errorCarga, setErrorCarga] = useState<string | null>(null);
@@ -1350,9 +1439,24 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
         // sistema. Sobre un aviso simulado no puede afirmar que la baja impacta
         // en Mercado Libre — no hay ningún aviso allá que cerrar.
         const confirmarCierre = avisoSimulado
-            ? 'Cerrar la publicación simulada. No hay ningún aviso en Mercado Libre: el cierre pasa sólo adentro del sistema y, para volver a ofrecer la unidad, hay que publicarla de nuevo. ¿Cerrarla?'
-            : 'Cerrar la publicación es definitivo en Mercado Libre: para volver a ofrecer la unidad hay que publicarla de nuevo. ¿Cerrarla?';
-        if (cual === 'cerrar' && !window.confirm(confirmarCierre)) return;
+            ? 'No hay ningún aviso en Mercado Libre: el cierre pasa sólo adentro del sistema y, para volver a ofrecer la unidad, hay que publicarla de nuevo.'
+            : 'Cerrar es definitivo en Mercado Libre: para volver a ofrecer la unidad hay que publicarla de nuevo.';
+        if (cual === 'cerrar') {
+            await confirm({
+                title: avisoSimulado ? 'Cerrar la publicación simulada' : 'Cerrar la publicación',
+                message: confirmarCierre,
+                type: 'danger',
+                confirmLabel: 'Cerrar publicación',
+                cancelLabel: 'Volver',
+                onConfirm: () => correr(cual),
+            });
+            return;
+        }
+        await correr(cual);
+    };
+
+    const correr = async (cual: AccionMl) => {
+        if (!publicacion) return;
         setAccion(cual);
         try {
             const fn = {
@@ -1440,14 +1544,23 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
             ) : !conectada ? (
                 <p className="ml-hint">
                     {cuenta?.configurada === false
-                        ? 'La integración con Mercado Libre no está configurada en el servidor: faltan las credenciales de la aplicación (ML_CLIENT_ID / ML_CLIENT_SECRET) o la clave de cifrado de secretos (INTEGRACIONES_SECRET_KEY).'
+                        ? (
+                            <>
+                                La integración con Mercado Libre no está configurada. Pedile al administrador que la active en Ajustes.
+                                {esSuperAdmin && (
+                                    <span className="ml-detalle-tecnico">
+                                        {' '}Detalle técnico: faltan ML_CLIENT_ID / ML_CLIENT_SECRET o INTEGRACIONES_SECRET_KEY en el servidor.
+                                    </span>
+                                )}
+                            </>
+                        )
                         : 'Todavía no hay una cuenta de Mercado Libre vinculada. Vinculala desde Ajustes para poder publicar esta unidad.'}
                 </p>
             ) : !publicacion ? (
                 <div className="ml-fila">
                     <p className="ml-hint">
                         {noPublicable
-                            ? `Esta unidad está en estado "${estadoVehiculo}": no se publica en Mercado Libre stock que no está disponible.`
+                            ? `Esta unidad está "${estadoVehiculoLabel(estadoVehiculo).toLowerCase()}": en Mercado Libre sólo se publica stock disponible.`
                             : 'Esta unidad todavía no está publicada.'}
                     </p>
                     {puedePublicar && <div className="ml-acciones">{botonPublicar}</div>}
@@ -1532,7 +1645,7 @@ const TarjetaMercadoLibre = ({ vehiculoId, estadoVehiculo }: { vehiculoId: numbe
                     )}
                     {noPublicable && estado !== 'cerrada' && (
                         <p className="ml-hint">
-                            El vehículo está en estado "{estadoVehiculo}": la publicación se cierra o se pausa sola.
+                            El vehículo está "{estadoVehiculoLabel(estadoVehiculo).toLowerCase()}": la publicación se cierra o se pausa sola.
                         </p>
                     )}
 

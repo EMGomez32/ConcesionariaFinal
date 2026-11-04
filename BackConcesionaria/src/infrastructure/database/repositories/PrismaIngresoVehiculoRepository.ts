@@ -8,12 +8,12 @@ import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../security/tenantGuard';
 import { PROVEEDOR_PUBLICO, USUARIO_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<IngresoVehiculo>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
 
         const where = coerceFilter(filter);
 
@@ -21,7 +21,7 @@ export class PrismaIngresoVehiculoRepository implements IIngresoVehiculoReposito
             where,
             take: limitNum,
             skip: (pageNum - 1) * limitNum,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('IngresoVehiculo', sortBy, sortOrder, 'createdAt'),
             include: {
                 vehiculo: { select: VEHICULO_PUBLICO },
                 sucursal: true,

@@ -8,19 +8,19 @@ import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../security/tenantGuard';
 import { PROVEEDOR_PUBLICO, USUARIO_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
+import { parsePagination, parseOrderBy } from '../queryOptions';
 
 export class PrismaVehiculoMovimientoRepository implements IVehiculoMovimientoRepository {
     async findAll(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<VehiculoMovimiento>> {
-        const { limit = 20, page = 1, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-        const limitNum = Number(limit);
-        const pageNum = Number(page);
+        const { sortBy = 'createdAt', sortOrder = 'desc' } = options;
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
         const where = coerceFilter(filter);
 
         const results = await prisma.vehiculoMovimiento.findMany({
             where,
             take: limitNum,
             skip: (pageNum - 1) * limitNum,
-            orderBy: { [sortBy as string]: sortOrder },
+            orderBy: parseOrderBy('VehiculoMovimiento', sortBy, sortOrder, 'createdAt'),
             include: {
                 vehiculo: { select: VEHICULO_PUBLICO },
                 desdeSucursal: true,

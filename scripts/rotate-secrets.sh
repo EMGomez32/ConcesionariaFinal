@@ -21,6 +21,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
+# Todo lo que se cree (el backup del .env con los secretos viejos) queda sólo para el dueño (600).
+umask 077
+
 cd "$(dirname "$0")/.."
 
 # --- Pre-checks -------------------------------------------------------------
@@ -34,6 +37,7 @@ gen() { openssl rand -hex 48 2>/dev/null || head -c 48 /dev/urandom | od -An -tx
 STAMP="$(date +%Y%m%d_%H%M%S)"
 BAK=".env.bak.${STAMP}"
 cp .env "${BAK}"
+chmod 600 "${BAK}"
 echo "[rotate] backup del .env -> ${BAK}"
 
 # --- 2. Rotar JWT secrets ---------------------------------------------------

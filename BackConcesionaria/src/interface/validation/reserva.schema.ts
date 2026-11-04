@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { obligatorio, invalido } from './mensajes';
 
 // Schemas de validación de reservas. Payloads verificados contra los DTOs reales
 // del front (reservas.api.ts):
@@ -14,10 +15,10 @@ import { z } from 'zod';
 // front lo manda siempre).
 
 const idField = (label: string) =>
-    z.coerce.number({ error: `${label} es obligatorio` }).int(`${label} inválido`).positive(`${label} es obligatorio`);
+    z.coerce.number({ error: obligatorio(label) }).int(invalido(label)).positive(obligatorio(label));
 
 const montoField = (label: string) =>
-    z.coerce.number({ error: `${label} es obligatorio` }).positive(`${label} debe ser mayor a 0`);
+    z.coerce.number({ error: obligatorio(label) }).positive(`${label} debe ser mayor a 0`);
 
 const monedaEnum = z.enum(['ARS', 'USD']);
 const estadoReservaEnum = z.enum(['activa', 'convertida_en_venta', 'cancelada', 'vencida']);

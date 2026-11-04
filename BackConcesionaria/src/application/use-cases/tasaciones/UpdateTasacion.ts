@@ -1,7 +1,7 @@
 import { ITasacionRepository } from '../../../domain/repositories/ITasacionRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { configCartera } from '../../services/carteraCliente';
-import { actorEsAdmin, actorUserId } from '../../../infrastructure/security/roles';
+import { actorEsAdmin, actorEsTasador, actorUserId } from '../../../infrastructure/security/roles';
 
 /**
  * Completar una tasación existente: es lo que hace el TASADOR cuando le pone el
@@ -27,7 +27,9 @@ export class UpdateTasacion {
         const poneValor = data.valorEstimado !== undefined && data.valorEstimado !== null;
         if (poneValor) {
             const { tasacionSoloTasador } = await configCartera((existente as any).concesionariaId);
-            const puedeTasar = actorEsAdmin() || !tasacionSoloTasador;
+            // El tasador SIEMPRE puede poner el valor (es su función). El vendedor
+            // sólo cuando la casa no restringe la tasación al tasador.
+            const puedeTasar = actorEsAdmin() || actorEsTasador() || !tasacionSoloTasador;
             if (!puedeTasar) {
                 throw new BaseException(
                     403,
