@@ -1,0 +1,72 @@
+# Rutas sensibles de AUTENZA.
+#
+# Un cambio en estas rutas es de RIESGO ALTO (docs/seguridad/gestion-de-cambios.md):
+# checklist de desarrollo seguro completa, segunda lectura diferida del diff y plan
+# de rollback escrito. Cuando haya un segundo revisor, la protección de `main` puede
+# exigir la aprobación de code owners sobre estas rutas.
+#
+# La última regla que coincide gana: las más específicas van al final.
+
+# --- Autenticación, autorización y seguridad ---
+/BackConcesionaria/src/infrastructure/security/                    @EMGomez32
+/BackConcesionaria/src/interface/middlewares/                      @EMGomez32
+/BackConcesionaria/src/application/use-cases/auth/                 @EMGomez32
+/BackConcesionaria/src/application/services/mfaService.ts          @EMGomez32
+/BackConcesionaria/src/interface/routes/auth.routes.ts             @EMGomez32
+/BackConcesionaria/src/interface/controllers/AuthController.ts     @EMGomez32
+/BackConcesionaria/src/interface/controllers/MfaController.ts      @EMGomez32
+/BackConcesionaria/src/interface/controllers/refreshCookie.ts      @EMGomez32
+/BackConcesionaria/src/interface/validation/password.ts            @EMGomez32
+/BackConcesionaria/src/config/                                     @EMGomez32
+/BackConcesionaria/src/routes/                                     @EMGomez32
+/FrontConcesionaria/src/store/authStore.ts                         @EMGomez32
+/AppConcesionaria/src/store/authStore.ts                           @EMGomez32
+/AppConcesionaria/src/api/                                         @EMGomez32
+
+# --- Aislamiento de tenant y base de datos ---
+/BackConcesionaria/src/infrastructure/database/                    @EMGomez32
+/BackConcesionaria/prisma/                                         @EMGomez32
+/BackConcesionaria/prisma/migrations/                              @EMGomez32
+
+# --- Plata ---
+/BackConcesionaria/src/application/use-cases/ventas/               @EMGomez32
+/BackConcesionaria/src/application/use-cases/financiaciones/       @EMGomez32
+/BackConcesionaria/src/application/use-cases/financiacion-solicitudes/ @EMGomez32
+/BackConcesionaria/src/application/use-cases/reservas/             @EMGomez32
+/BackConcesionaria/src/application/use-cases/presupuestos/         @EMGomez32
+/BackConcesionaria/src/application/use-cases/billing/              @EMGomez32
+/BackConcesionaria/src/application/use-cases/afip/                 @EMGomez32
+/BackConcesionaria/src/application/use-cases/gastos/               @EMGomez32
+/BackConcesionaria/src/application/use-cases/gastos-fijos/         @EMGomez32
+/BackConcesionaria/src/application/services/precioAutorizacion.ts  @EMGomez32
+/BackConcesionaria/src/domain/services/                            @EMGomez32
+/BackConcesionaria/src/infrastructure/afip/                        @EMGomez32
+
+# --- Terceros e integraciones ---
+/BackConcesionaria/src/infrastructure/integraciones/               @EMGomez32
+/BackConcesionaria/src/infrastructure/mercadolibre/                @EMGomez32
+/BackConcesionaria/src/infrastructure/whatsapp/                    @EMGomez32
+/BackConcesionaria/src/interface/routes/webhook.routes.ts          @EMGomez32
+/BackConcesionaria/package.json                                    @EMGomez32
+/FrontConcesionaria/package.json                                   @EMGomez32
+/AppConcesionaria/package.json                                     @EMGomez32
+
+# --- Tests centinela (no se debilitan sin revisión) ---
+/BackConcesionaria/tests/integration/permisos-mutaciones.test.ts   @EMGomez32
+/BackConcesionaria/tests/unit/centinelaLecturas.test.ts            @EMGomez32
+
+# --- Infraestructura, CI y scripts ---
+/.github/                                                          @EMGomez32
+/docker-compose.yml                                                @EMGomez32
+/.env.example                                                      @EMGomez32
+/BackConcesionaria/Dockerfile                                      @EMGomez32
+/FrontConcesionaria/Dockerfile                                     @EMGomez32
+/FrontConcesionaria/nginx.conf                                     @EMGomez32
+/scripts/                                                          @EMGomez32
+/BackConcesionaria/scripts/                                        @EMGomez32
+
+# --- Políticas y licencia ---
+/docs/seguridad/                                                   @EMGomez32
+/docs/privacidad/                                                  @EMGomez32
+/SECURITY.md                                                       @EMGomez32
+/LICENSE                                                           @EMGomez32

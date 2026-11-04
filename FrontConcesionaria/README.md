@@ -1,73 +1,54 @@
-# React + TypeScript + Vite
+# FrontConcesionaria — Web de AUTENZA
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+SPA en React 19 + Vite + TypeScript (react-router, TanStack Query, zustand,
+react-hook-form, driver.js para los tours). CSS propio con tokens, sin Tailwind.
+Cómo levantar el monorepo completo: [README de la raíz](../README.md).
 
-Currently, two official plugins are available:
+## Comandos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+| Comando | Qué hace |
+|---|---|
+| `npm ci --legacy-peer-deps` | Instala dependencias respetando el lockfile. |
+| `npm run dev` | Servidor de desarrollo en `http://localhost:5173`. |
+| `npm run build` | `tsc -b` + `vite build` (es lo que corre el CI). |
+| `npx vitest --run` | Tests (Vitest + Testing Library, entorno jsdom). |
+| `npm run lint` | ESLint. |
 
-## React Compiler
+## Variables
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- `.env.development`: `VITE_API_BASE_URL` del backend local.
+- `.env.production`: `VITE_API_BASE_URL=/api` (nginx sirve la API en el mismo origen).
 
-## Expanding the ESLint configuration
+Todo lo que empieza con `VITE_` queda **público** dentro del bundle. Nunca pongas
+un secreto ahí.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Estructura
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+src/
+  api/          clientes HTTP por recurso (axios)
+  store/        estado de sesión (el access token vive en memoria; el refresh va en cookie httpOnly)
+  pages/        una carpeta por módulo (ventas, financiaciones, atenciones, conversaciones, ...)
+  components/   UI compartida (Input, Select, tablas, modales)
+  onboarding/   tours guiados por rol
+  test/         setup de Vitest
+nginx.conf      cabeceras de seguridad (CSP, HSTS, etc.) y proxy de /api y /uploads al backend
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Reglas de UI
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- La identidad visual y los tokens están en [DESIGN.md](../DESIGN.md) y en `marca-autenza/`.
+- Los tours se anclan con atributos `data-tour`. No los borres ni los renombres sin
+  actualizar `src/onboarding/`.
+- El menú y los guards de rol son comodidad: el permiso real lo decide el backend.
+- `src/pages/capacitacion/contenido.ts` describe permisos por rol en una página
+  pública. Si cambiás un permiso, actualizalo y verificalo contra los `authorize`
+  del backend.
+- No uses `dangerouslySetInnerHTML` ni `innerHTML`.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Producción
+
+La imagen (`Dockerfile`) compila el bundle y lo sirve con nginx sin root
+(`nginx-unprivileged`). `nginx.conf` define la CSP y las demás cabeceras; si
+agregás un origen externo, la CSP lo va a bloquear hasta que lo sumes ahí, y
+eso es un cambio de riesgo alto ([gestión de cambios](../docs/seguridad/gestion-de-cambios.md)).
