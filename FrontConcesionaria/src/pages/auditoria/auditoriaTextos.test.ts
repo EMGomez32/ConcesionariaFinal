@@ -13,6 +13,15 @@ describe('fraseAuditoria', () => {
         expect(fraseAuditoria({ accion: 'login', entidad: 'Usuario' })).toBe('Inició sesión');
     });
 
+    it('las acciones de privacidad (Ley 25.326) se leen como frases', () => {
+        expect(fraseAuditoria({ accion: 'export', entidad: 'Cliente' })).toBe('Descargó los datos de un cliente (derecho de acceso)');
+        expect(fraseAuditoria({ accion: 'export', entidad: 'Exportacion' })).toBe('Exportó un listado');
+        expect(fraseAuditoria({ accion: 'suprimir', entidad: 'Cliente' })).toBe('Suprimió los datos de un cliente');
+        expect(fraseAuditoria({ accion: 'acceso_soporte', entidad: 'AccesoSoporte' })).toBe('El soporte de AUTENZA consultó datos');
+        expect(accionAuditoriaLabel('revocar_consentimiento')).toBe('Consentimiento revocado');
+        expect(entidadAuditoriaLabel('SolicitudTitular')).toBe('Pedido de un titular de datos');
+    });
+
     it('una entidad o acción desconocida nunca sale cruda', () => {
         expect(entidadAuditoriaLabel('AlgoNuevo')).toBe('Algo nuevo');
         expect(accionAuditoriaLabel('algo_raro')).toBe('Algo raro');

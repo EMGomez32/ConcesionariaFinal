@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Download, Eye, ShieldCheck } from 'lucide-react';
+import { Download, Eye, ShieldCheck, Headset } from 'lucide-react';
 import { auditoriaApi } from '../../api/auditoria.api';
 import type { AuditLog, AccionAudit, AuditLogFilter } from '../../api/auditoria.api';
 import { useUIStore } from '../../store/uiStore';
@@ -30,6 +30,15 @@ const ENTIDADES_FILTRO = Object.keys(ENTIDAD_AUDITORIA)
   .map((k) => ({ value: k, label: ENTIDAD_AUDITORIA[k].nombre }))
   .sort((a, b) => a.label.localeCompare(b.label, 'es'));
 
+/**
+ * Quién hizo la acción. Un acceso del soporte de AUTENZA se rotula como tal aunque la
+ * fila del usuario no sea visible desde la concesionaria (es una cuenta de plataforma).
+ */
+const quienAuditoria = (log: AuditLog): string => {
+  if (log.accion === 'acceso_soporte') return log.usuario ? `Soporte de AUTENZA (${log.usuario.nombre})` : 'Soporte de AUTENZA';
+  return log.usuario ? `${log.usuario.nombre} (${log.usuario.email})` : 'Automático (sin usuario)';
+};
+
 const DetailModal = ({ log, onClose }: DetailModalProps) => (
   <Modal
     isOpen={log !== null}
@@ -52,7 +61,7 @@ const DetailModal = ({ log, onClose }: DetailModalProps) => (
           </div>
           <div>
             <div style={dlStyle}>Quién</div>
-            <div>{log.usuario ? `${log.usuario.nombre} (${log.usuario.email})` : 'Automático (sin usuario)'}</div>
+            <div>{quienAuditoria(log)}</div>
           </div>
           <div>
             <div style={dlStyle}>Sobre qué</div>
@@ -181,6 +190,9 @@ export default function AuditoriaPage() {
     : logs;
 
   const filtrosActivos = [filterAccion, filterEntidad, filterStartDate, filterEndDate].filter(Boolean).length;
+  // Ley 25.326 / ISO 27701: la concesionaria tiene que poder ver cuándo el personal de
+  // AUTENZA (el encargado del tratamiento) miró sus datos.
+  const soloSoporte = filterAccion === 'acceso_soporte';
   const limpiarFiltros = () => {
     setSearch('');
     setFilterAccion('');
@@ -214,7 +226,9 @@ export default function AuditoriaPage() {
       clave: 'usuario',
       titulo: 'Quién',
       celda: (log) => (
-        log.usuario ? (
+        log.accion === 'acceso_soporte' ? (
+          <span className="listado-principal" style={{ fontWeight: 500, maxWidth: '20ch' }}>Soporte de AUTENZA</span>
+        ) : log.usuario ? (
           <>
             <span className="listado-principal" style={{ fontWeight: 500, maxWidth: '20ch' }}>{log.usuario.nombre}</span>
             <span className="listado-secundario" style={{ maxWidth: '24ch' }}>{log.usuario.email}</span>
@@ -258,10 +272,21 @@ export default function AuditoriaPage() {
         icono={<ShieldCheck size={22} />}
         clave="auditoria"
         acciones={(
-          <Button variant="secondary" onClick={handleExport} loading={exporting} title="Descargar los registros del filtro actual en CSV (Excel)">
-            <Download size={16} aria-hidden="true" />
-            Exportar CSV
-          </Button>
+          <>
+            <Button
+              variant={soloSoporte ? 'primary' : 'secondary'}
+              onClick={() => { setFilterAccion(soloSoporte ? '' : 'acceso_soporte'); setPage(1); }}
+              aria-pressed={soloSoporte}
+              title="Ver cuándo el personal de AUTENZA consultó datos de tu concesionaria"
+            >
+              <Headset size={16} aria-hidden="true" />
+              Accesos de soporte de AUTENZA
+            </Button>
+            <Button variant="secondary" onClick={handleExport} loading={exporting} title="Descargar los registros del filtro actual en CSV (Excel)">
+              <Download size={16} aria-hidden="true" />
+              Exportar CSV
+            </Button>
+          </>
         )}
         busqueda={<BusquedaListado valor={search} onChange={setSearch} placeholder="Buscar en esta página: usuario, detalle…" etiqueta="Buscar en los registros de esta página" />}
         filtrosActivos={filtrosActivos}
@@ -290,6 +315,12 @@ export default function AuditoriaPage() {
           </>
         )}
       >
+        {soloSoporte && (
+          <p className="text-muted" style={{ margin: '0 0 var(--space-3)' }}>
+            Cada vez que alguien del soporte de AUTENZA consulta datos de tu concesionaria queda registrado acá (un registro
+            por persona y por tipo de dato cada media hora). Si ves un acceso que no pediste, escribinos.
+          </p>
+        )}
         <ListadoTabla
           etiqueta="Registros de auditoría"
           columnas={columnas}
