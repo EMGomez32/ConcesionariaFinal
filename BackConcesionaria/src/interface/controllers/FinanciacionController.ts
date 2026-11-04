@@ -9,6 +9,8 @@ import { RegistrarPagoCuota } from '../../application/use-cases/financiaciones/R
 import { RefinanciarFinanciacion } from '../../application/use-cases/financiaciones/RefinanciarFinanciacion';
 import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
+import { actorEsAdmin } from '../../infrastructure/security/roles';
+import { ForbiddenException } from '../../domain/exceptions/BaseException';
 
 const repository = new PrismaFinanciacionRepository();
 const refinanciarUC = new RefinanciarFinanciacion(repository);
@@ -112,16 +114,25 @@ export class FinanciacionController {
         }
     }
 
+    /**
+     * Cancelar el plan es del admin (PROC-32). Va como middleware ANTES de
+     * `validateBody`: desde que cancelar exige motivo, validar primero le
+     * contestaba 400 ("contá el motivo") a un cobrador, o sea que le explicaba cómo
+     * completar algo que no le corresponde. UpdateFinanciacion lo vuelve a chequear.
+     */
+    static gateCancelacion(req: Request, _res: Response, next: NextFunction) {
+        if (req.body?.estado === 'cancelada' && !actorEsAdmin()) {
+            return next(new ForbiddenException('Cancelar un plan es del administrador. Podés marcarlo en mora o al día.'));
+        }
+        next();
+    }
+
     static async update(req: Request, res: Response, next: NextFunction) {
         try {
             const id = parseInt(req.params.id as string, 10);
+            // La auditoría (estado anterior → nuevo y el motivo si cancela) la escribe
+            // UpdateFinanciacion dentro de su transacción.
             const result = await updateFinanciacionUC.execute(id, req.body);
-            await audit({
-                entidad: 'Financiacion',
-                accion: 'update',
-                entidadId: id,
-                detalle: `Financiacion ${id} actualizada`,
-            });
             res.json(result);
         } catch (error) {
             next(error);

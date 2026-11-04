@@ -196,7 +196,10 @@ router.post('/:id/refinanciar', authorize('admin', 'cobrador', 'vendedor'), vali
  *   patch:
  *     tags: [Financiación]
  *     summary: Actualizar financiación
- *     description: Requiere rol admin, vendedor o cobrador.
+ *     description: >
+ *       Requiere rol admin, vendedor o cobrador. Pasar a `cancelada` es sólo admin y
+ *       exige `motivo` (mínimo 10 caracteres). `refinanciada` no se fija a mano: se
+ *       usa POST /financiaciones/{id}/refinanciar.
  *     parameters:
  *       - { name: id, in: path, required: true, schema: { type: integer } }
  *     requestBody:
@@ -208,6 +211,7 @@ router.post('/:id/refinanciar', authorize('admin', 'cobrador', 'vendedor'), vali
  *             properties:
  *               estado: { type: string }
  *               observaciones: { type: string }
+ *               motivo: { type: string, description: 'Obligatorio si estado = cancelada' }
  *     responses:
  *       200: { description: Financiación actualizada, content: { application/json: { schema: { type: object } } } }
  *       400: { $ref: '#/components/responses/ValidationError' }
@@ -215,13 +219,13 @@ router.post('/:id/refinanciar', authorize('admin', 'cobrador', 'vendedor'), vali
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-// OJO: este PATCH acepta estado:'cancelada' y el front lo ofrece como "Cerrar
-// Contrato", en paralelo al DELETE "Anular Contrato". O sea que el criterio
-// "anular es del admin" no queda garantizado por cerrar el DELETE: para que lo
-// esté hay que chequear la transición a 'cancelada' dentro de UpdateFinanciacion.
-// Se deja en los tres roles operativos para no romper la edición corriente del
-// contrato, que es trabajo diario de vendedor y cobrador.
-router.patch('/:id', authorize('admin', 'vendedor', 'cobrador'), validateBody(updateFinanciacionSchema), FinanciacionController.update);
+// OJO: este PATCH acepta estado:'cancelada' ("Cancelar plan"), en paralelo al
+// DELETE "Anular Contrato". El criterio "anular es del admin" no queda garantizado
+// por cerrar el DELETE: por eso `gateCancelacion` (antes de validar el body) y
+// UpdateFinanciacion cierran el DESTINO `cancelada` a admin, con motivo (PROC-32).
+// La ruta sigue en los tres roles operativos porque mora / al día es trabajo
+// diario de vendedor y cobrador.
+router.patch('/:id', authorize('admin', 'vendedor', 'cobrador'), FinanciacionController.gateCancelacion, validateBody(updateFinanciacionSchema), FinanciacionController.update);
 
 /**
  * @openapi

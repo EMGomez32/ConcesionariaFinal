@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { obligatorio, invalido } from './mensajes';
+import { motivoObligatorio, motivoOpcional } from './motivo';
 
 // Schemas de validación de financiaciones. Payloads verificados contra los DTOs
 // reales del front (financiaciones.api.ts: CreateFinanciacionDto, PagarCuotaDto y
@@ -113,15 +114,23 @@ export const refinanciarFinanciacionSchema = z.object({
     observaciones: z.string().optional(),
 });
 
-// PATCH /financiaciones/:id — sólo `estado` y `observaciones` son editables. Todo
-// lo demás (monto, cuotas, ventaId, tenant, id...) se descarta: el repo pasa
-// `data` tal cual a prisma.update, así que esta lista es la única barrera anti
+// PATCH /financiaciones/:id — sólo `estado` y `observaciones` son editables (más el
+// `motivo`, que no es columna: va a la auditoría). Todo lo demás (monto, cuotas,
+// ventaId, tenant, id...) se descarta: esta lista es la barrera anti
 // mass-assignment. La validez de la TRANSICIÓN de estado la sigue chequeando
-// UpdateFinanciacion (assertValidTransition). El front sólo manda `{ estado }`;
-// ambos campos van opcionales para no romper un PATCH parcial.
+// UpdateFinanciacion (assertValidTransition). Campos opcionales para no romper un
+// PATCH parcial, salvo el motivo cuando se CANCELA (PROC-32): cancelar cierra el
+// contrato para siempre y es del admin, que tiene que decir por qué.
 export const updateFinanciacionSchema = z.object({
     estado: estadoFinanciacionEnum.optional(),
     observaciones: z.string().optional(),
+    motivo: motivoOpcional,
+}).superRefine((v, ctx) => {
+    if (v.estado !== 'cancelada') return;
+    const r = motivoObligatorio('de la cancelación').safeParse(v.motivo ?? '');
+    if (!r.success) {
+        ctx.addIssue({ code: 'custom', path: ['motivo'], message: r.error.issues[0]?.message ?? 'Contá el motivo de la cancelación' });
+    }
 });
 
 // PATCH /financiaciones/cuotas/:cuotaId/pagar — registrar pago de cuota.
