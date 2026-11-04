@@ -58,7 +58,8 @@ describe('Auth', () => {
         const newPass = 'temp-' + Date.now();
         const resetRes = await api.post(
             `/api/usuarios/${userId}/reset-password`,
-            { password: newPass },
+            // Step-up: la contraseña del que hace el reset (el super_admin del seed).
+            { password: newPass, currentPassword: 'super123' },
             authHeaders(sa.token)
         );
         expect(resetRes.status).toBe(204);
@@ -68,9 +69,9 @@ describe('Auth', () => {
         expect(newLogin.status).toBe(200);
 
         // Y la política rechaza una contraseña corta o de las comunes.
-        const corta = await api.post(`/api/usuarios/${userId}/reset-password`, { password: 'admin123' }, authHeaders(sa.token));
+        const corta = await api.post(`/api/usuarios/${userId}/reset-password`, { password: 'admin123', currentPassword: 'super123' }, authHeaders(sa.token));
         expect(corta.status).toBe(400);
-        const comun = await api.post(`/api/usuarios/${userId}/reset-password`, { password: 'password123' }, authHeaders(sa.token));
+        const comun = await api.post(`/api/usuarios/${userId}/reset-password`, { password: 'password123', currentPassword: 'super123' }, authHeaders(sa.token));
         expect(comun.status).toBe(400);
 
         await api.delete(`/api/usuarios/${userId}`, authHeaders(sa.token));

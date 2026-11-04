@@ -4,6 +4,7 @@ import { withTenantTransaction } from '../../infrastructure/database/unitOfWork'
 import { env } from '../../config/env';
 import { logger } from '../../infrastructure/logging/logger';
 import { BaseException, NotFoundException } from '../../domain/exceptions/BaseException';
+import { esFotoDeVehiculo } from '../../infrastructure/storage/zonaPrivada';
 import {
     AtributoCategoria,
     MeliError,
@@ -146,10 +147,14 @@ const appUrlEsLocal = (): boolean => /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.
 
 const esImagen = (mimeType: string | null): boolean => !!mimeType && mimeType.startsWith('image/');
 
-/** Fotos publicables, con la principal primero (es la portada del aviso). */
+/**
+ * Fotos publicables, con la principal primero (es la portada del aviso). Sólo las de tipo
+ * foto: la foto de un título o de una cédula también es una imagen, pero lleva datos del
+ * titular y vive en la zona privada (Mercado Libre ni siquiera podría bajarla).
+ */
 const fotosDelVehiculo = (vehiculo: VehiculoParaPublicar) =>
     vehiculo.archivos
-        .filter((a) => esImagen(a.mimeType))
+        .filter((a) => esImagen(a.mimeType) && esFotoDeVehiculo(a.tipo))
         .sort((a, b) => Number(b.esPrincipal) - Number(a.esPrincipal) || a.id - b.id);
 
 const tituloSugerido = (vehiculo: VehiculoParaPublicar): string =>

@@ -12,6 +12,7 @@ import type { BadgeVariant } from '../../components/ui/Badge';
 export const ACCIONES_AUDITORIA = [
     'create', 'update', 'cancel', 'delete_soft', 'delete', 'refinanciar',
     'login', 'logout', 'login_fail', 'password_reset_request', 'password_reset_done',
+    'export', 'suprimir', 'bloquear', 'desbloquear', 'revocar_consentimiento', 'acceso_soporte',
 ] as const;
 
 export const ACCION_AUDITORIA: Record<string, { label: string; variant: BadgeVariant }> = {
@@ -26,6 +27,13 @@ export const ACCION_AUDITORIA: Record<string, { label: string; variant: BadgeVar
     login_fail: { label: 'Ingreso fallido', variant: 'danger' },
     password_reset_request: { label: 'Pedido de contraseña', variant: 'warning' },
     password_reset_done: { label: 'Contraseña restablecida', variant: 'default' },
+    export: { label: 'Exportación', variant: 'warning' },
+    // Rótulos cortos: van en un badge de la tabla. La frase larga la arma fraseAuditoria.
+    suprimir: { label: 'Supresión', variant: 'danger' },
+    bloquear: { label: 'Bloqueo', variant: 'warning' },
+    desbloquear: { label: 'Desbloqueo', variant: 'default' },
+    revocar_consentimiento: { label: 'Revocación', variant: 'warning' },
+    acceso_soporte: { label: 'Soporte', variant: 'violet' },
 };
 
 const capitalizar = (t: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
@@ -38,6 +46,7 @@ export const accionAuditoriaVariant = (accion: string): BadgeVariant =>
 
 /** Entidad con su artículo: "un vehículo", "una venta". */
 export const ENTIDAD_AUDITORIA: Record<string, { nombre: string; conArticulo: string }> = {
+    AccesoSoporte: { nombre: 'Acceso del soporte de AUTENZA', conArticulo: 'datos de la concesionaria' },
     Atencion: { nombre: 'Atención', conArticulo: 'una atención' },
     AtencionVehiculo: { nombre: 'Unidad de una atención', conArticulo: 'una unidad de una atención' },
     CategoriaGastoFijo: { nombre: 'Rubro de gasto fijo', conArticulo: 'un rubro de gastos fijos' },
@@ -48,6 +57,7 @@ export const ENTIDAD_AUDITORIA: Record<string, { nombre: string; conArticulo: st
     Concesionaria: { nombre: 'Concesionaria', conArticulo: 'la concesionaria' },
     Conversacion: { nombre: 'Conversación', conArticulo: 'una conversación' },
     Cotizacion: { nombre: 'Cotización del dólar', conArticulo: 'una cotización del dólar' },
+    Exportacion: { nombre: 'Exportación', conArticulo: 'un listado' },
     Financiacion: { nombre: 'Plan de financiación', conArticulo: 'un plan de financiación' },
     Financiera: { nombre: 'Financiera', conArticulo: 'una financiera' },
     GastoFijo: { nombre: 'Gasto fijo', conArticulo: 'un gasto fijo' },
@@ -70,6 +80,7 @@ export const ENTIDAD_AUDITORIA: Record<string, { nombre: string; conArticulo: st
     SolicitudFinanciacion: { nombre: 'Solicitud de financiación', conArticulo: 'una solicitud de financiación' },
     SolicitudFinanciacionArchivo: { nombre: 'Archivo de solicitud de financiación', conArticulo: 'un archivo de una solicitud de financiación' },
     SolicitudPrecioMinimo: { nombre: 'Pedido de precio mínimo', conArticulo: 'un pedido de precio mínimo' },
+    SolicitudTitular: { nombre: 'Pedido de un titular de datos', conArticulo: 'un pedido de un titular de datos' },
     Sucursal: { nombre: 'Sucursal', conArticulo: 'una sucursal' },
     Suscripcion: { nombre: 'Suscripción', conArticulo: 'la suscripción' },
     Tasacion: { nombre: 'Tasación', conArticulo: 'una tasación' },
@@ -110,6 +121,13 @@ export const fraseAuditoria = (log: Pick<AuditLog, 'accion' | 'entidad'>): strin
         case 'login_fail': return 'Intento de ingreso fallido';
         case 'password_reset_request': return 'Pidió restablecer la contraseña';
         case 'password_reset_done': return 'Restableció la contraseña';
+        // Privacidad (Ley 25.326)
+        case 'export': return log.entidad === 'Cliente' ? 'Descargó los datos de un cliente (derecho de acceso)' : 'Exportó un listado';
+        case 'suprimir': return 'Suprimió los datos de un cliente';
+        case 'bloquear': return 'Bloqueó los datos de un cliente';
+        case 'desbloquear': return 'Levantó el bloqueo de un cliente';
+        case 'revocar_consentimiento': return 'Registró que un cliente revocó el consentimiento';
+        case 'acceso_soporte': return 'El soporte de AUTENZA consultó datos';
         default: return `${accionAuditoriaLabel(log.accion)} · ${entidadAuditoriaLabel(log.entidad)}`;
     }
 };

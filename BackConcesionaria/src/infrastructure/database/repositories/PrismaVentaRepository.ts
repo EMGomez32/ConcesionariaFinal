@@ -5,6 +5,8 @@ import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../security/tenantGuard';
+import { auditEnTx, detalleConCambio } from '../../security/auditTx';
+import { withTenantTransaction } from '../unitOfWork';
 import { USUARIO_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
 import { parsePagination, parseOrderBy } from '../queryOptions';
 import { whereDeBusqueda, clienteCoincide, vehiculoCoincide, rangoDeFechas } from '../busqueda';
@@ -66,6 +68,58 @@ export class PrismaVentaRepository implements IVentaRepository {
         return v ? this.mapToEntity(v) : null;
     }
 
+    /**
+     * Reporte de anulaciones. Va por el cliente extendido (tenant inyectado por la
+     * extensión, super_admin ve todo) con `deletedAt: { not: null }` EXPLÍCITO: la
+     * extensión sólo agrega `deletedAt: null` cuando el where no lo menciona.
+     *
+     * Proyección cerrada a propósito (VEHICULO_PUBLICO / USUARIO_PUBLICO, cliente
+     * con nombre y documento): es un listado y el centinela de lecturas no deja
+     * pasar includes anchos. Filtros: rango por FECHA DE ANULACIÓN (fechaDesde /
+     * fechaHasta, YYYY-MM-DD inclusive) y vendedor.
+     */
+    async findAnuladas(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<any>> {
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
+        const where: any = { deletedAt: { not: null } };
+        const { fechaDesde, fechaHasta, vendedorId } = filter ?? {};
+        if (vendedorId && Number.isInteger(Number(vendedorId))) where.vendedorId = Number(vendedorId);
+        const desde = typeof fechaDesde === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fechaDesde) ? new Date(`${fechaDesde}T00:00:00.000Z`) : null;
+        const hasta = typeof fechaHasta === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fechaHasta) ? new Date(`${fechaHasta}T23:59:59.999Z`) : null;
+        if (desde || hasta) where.deletedAt = { not: null, ...(desde ? { gte: desde } : {}), ...(hasta ? { lte: hasta } : {}) };
+
+        const results = await prisma.venta.findMany({
+            where,
+            take: limitNum,
+            skip: (pageNum - 1) * limitNum,
+            orderBy: { deletedAt: 'desc' },
+            select: {
+                id: true,
+                concesionariaId: true,
+                fechaVenta: true,
+                precioVenta: true,
+                moneda: true,
+                formaPago: true,
+                estadoEntrega: true,
+                deletedAt: true,
+                motivoAnulacion: true,
+                bajoPiso: true,
+                cliente: { select: { id: true, nombre: true, dni: true } },
+                vehiculo: { select: VEHICULO_PUBLICO },
+                vendedor: { select: USUARIO_PUBLICO },
+                anuladaPor: { select: USUARIO_PUBLICO },
+            },
+        });
+        const total = await prisma.venta.count({ where });
+
+        return {
+            results: results.map(({ deletedAt, ...v }) => ({ ...v, anuladaEn: deletedAt })),
+            page: pageNum,
+            limit: limitNum,
+            totalPages: Math.ceil(total / limitNum),
+            totalResults: total,
+        };
+    }
+
     async create(data: any): Promise<Venta> {
         const v = await prisma.venta.create({ data });
         return this.mapToEntity(v);
@@ -102,9 +156,34 @@ export class PrismaVentaRepository implements IVentaRepository {
     // borrar el renglón de cualquier otra venta del tenant pasando un ventaId
     // inventado. La extensión reescribe deleteMany como updateMany de deletedAt
     // (soft delete) y le inyecta el concesionariaId, igual que a delete.
+    //
+    // QUITAR UN PAGO ES LA REVERSA que exige anular una venta (PROC-30): es plata
+    // cobrada que deja de figurar. Por eso el soft-delete y su rastro (con monto,
+    // método y referencia del pago quitado) van en UNA transacción: antes la
+    // auditoría era "Pago N eliminado", fire-and-forget y después del commit.
+    // La venta se busca primero con el cliente extendido (tenant inyectado: una venta
+    // ajena da 404) y el pago se ata a ESA venta dentro de la tx.
     async removePago(ventaId: number, pagoId: number): Promise<void> {
-        const { count } = await prisma.ventaPago.deleteMany({ where: { id: pagoId, ventaId } });
-        if (count === 0) throw new NotFoundException('Pago de la venta');
+        const venta = await prisma.venta.findUnique({ where: { id: ventaId }, select: { id: true, concesionariaId: true } });
+        if (!venta) throw new NotFoundException('Pago de la venta');
+        await withTenantTransaction(async (tx) => {
+            const pago = await tx.ventaPago.findFirst({
+                where: { id: pagoId, ventaId, deletedAt: null },
+                select: { id: true, monto: true, metodo: true, referencia: true, fecha: true },
+            });
+            if (!pago) throw new NotFoundException('Pago de la venta');
+            await tx.ventaPago.update({ where: { id: pagoId }, data: { deletedAt: new Date() } });
+            await auditEnTx(tx, {
+                concesionariaId: venta.concesionariaId,
+                entidad: 'VentaPago',
+                entidadId: pagoId,
+                accion: 'delete_soft',
+                detalle: detalleConCambio(
+                    `Pago ${pagoId} quitado de la venta ${ventaId}: ${pago.monto} en ${pago.metodo}${pago.referencia ? `, ref. ${pago.referencia}` : ''}`,
+                    { ventaId, antes: { pago }, despues: { pago: null } },
+                ),
+            });
+        });
     }
 
     // Extras
@@ -167,7 +246,8 @@ export class PrismaVentaRepository implements IVentaRepository {
             v.vendedor,
             v.extras,
             v.pagos,
-            v.canjes
+            v.canjes,
+            v.bajoPiso ?? false
         );
     }
 }

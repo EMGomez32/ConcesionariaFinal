@@ -1,6 +1,8 @@
 generator client {
   provider = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  // partialIndexes: índices únicos con WHERE (ver Venta). Sin esto Prisma sólo sabe
+  // declarar unicidad TOTAL, que con soft-delete cuenta también las filas borradas.
+  previewFeatures = ["driverAdapters", "partialIndexes"]
 }
 
 datasource db {
@@ -91,6 +93,7 @@ model Concesionaria {
   vehiculos               Vehiculo[]
   ventas                  Venta[]
   comprobantesAfip        ComprobanteAfip[]
+  solicitudesTitular      SolicitudTitular[]
 
   @@map("concesionarias")
 }
@@ -169,6 +172,7 @@ model Usuario {
   sucursal                 Sucursal?                 @relation(fields: [sucursalId], references: [id])
   vehiculoMovimientos      VehiculoMovimiento[]      @relation("MovimientoRegistradoPor")
   ventas                   Venta[]                   @relation("VentaVendedor")
+  ventasAnuladas           Venta[]                   @relation("VentaAnuladaPor")
   objetivos                ObjetivoVendedor[]
   seguimientos             ClienteSeguimiento[]
   tasaciones               Tasacion[]                @relation("TasacionTasador")
@@ -245,6 +249,25 @@ model Cliente {
   /// tasación o reserva), nunca para abrir la atención.
   consentimientoContacto  Boolean                 @default(false) @map("consentimiento_contacto")
   consentimientoEn        DateTime?               @map("consentimiento_en")
+  /// EVIDENCIA del consentimiento (ISO 27701 A.7.2.4): qué texto se le informó al
+  /// titular cuando lo dio. Guarda la VERSIÓN, no el texto: el texto de cada versión
+  /// vive en `domain/services/consentimiento.ts` y no se reescribe nunca (una versión
+  /// nueva es una entrada nueva). Null = consentimiento histórico, anterior a que se
+  /// guardara la versión.
+  consentimientoVersion   String?                 @map("consentimiento_version")
+  /// Cuándo el titular REVOCÓ el consentimiento de contacto (art. 5 Ley 25.326: el
+  /// consentimiento es revocable). Distinto de "nunca lo dio": un cliente que revocó
+  /// sale de la agenda de seguimientos y no se lo vuelve a contactar.
+  consentimientoRevocadoEn DateTime?              @map("consentimiento_revocado_en")
+  /// Bloqueo de los datos (art. 16 Ley 25.326): el titular pidió que no se lo
+  /// contacte ni se usen sus datos mientras dura el pedido, o se conservan sólo por
+  /// obligación legal después de una supresión. Null = no bloqueado.
+  bloqueadoEn             DateTime?               @map("bloqueado_en")
+  bloqueoMotivo           String?                 @map("bloqueo_motivo")
+  /// Supresión ejecutada (art. 16). Con la ficha anonimizada del todo la fila queda
+  /// además dada de baja; si había obligación legal de conservar, queda viva con los
+  /// datos mínimos y bloqueada. Ver application/services/privacidad/supresionTitular.ts.
+  suprimidoEn             DateTime?               @map("suprimido_en")
   /// Etapa del cliente en el embudo comercial (pipeline de leads).
   estadoLead              EstadoLead              @default(nuevo) @map("estado_lead")
   /// Canal por el que entró la consulta (DeRuedas, redes, mostrador...).
@@ -286,6 +309,7 @@ model Cliente {
   conversaciones          Conversacion[]
   preguntasMl             PreguntaMl[]
   ventas                  Venta[]
+  solicitudesTitular      SolicitudTitular[]
 
   @@index([concesionariaId])
   @@index([concesionariaId, estadoLead])
@@ -607,7 +631,9 @@ model Vehiculo {
   proveedorCompra          Proveedor?                @relation("VehiculoProveedorCompra", fields: [proveedorCompraId], references: [id])
   sucursal                 Sucursal                  @relation(fields: [sucursalId], references: [id])
   ventaCanjeVehiculo       VentaCanjeVehiculo[]
-  ventas                   Venta?
+  // Lista y no 1:1: una unidad puede acumular ventas ANULADAS (soft-delete) y,
+  // como mucho, UNA viva. Esa unicidad la da el índice parcial de Venta.
+  ventas                   Venta[]
   interesados              VehiculoInteres[]
   atencionVehiculos        AtencionVehiculo[]
   solicitudesPrecioMinimo  SolicitudPrecioMinimo[]
@@ -1010,7 +1036,9 @@ model Presupuesto {
   sucursal                Sucursal                @relation(fields: [sucursalId], references: [id])
   vendedor                Usuario                 @relation("PresupuestoVendedor", fields: [vendedorId], references: [id])
   solicitudesFinanciacion SolicitudFinanciacion[]
-  venta                   Venta?
+  // Lista por el mismo motivo que Vehiculo.ventas: un presupuesto cuya venta se
+  // anuló se puede volver a convertir. A lo sumo UNA venta viva (índice parcial).
+  ventas                  Venta[]
 
   @@unique([concesionariaId, nroPresupuesto])
   @@index([concesionariaId])
@@ -1083,8 +1111,9 @@ model Venta {
   id                      Int                     @id @default(autoincrement())
   concesionariaId         Int                     @map("concesionaria_id")
   sucursalId              Int                     @map("sucursal_id")
-  vehiculoId              Int                     @unique @map("vehiculo_id")
-  presupuestoId           Int?                    @unique @map("presupuesto_id")
+  // Sin @unique de campo a propósito: ver los @@unique parciales de abajo.
+  vehiculoId              Int                     @map("vehiculo_id")
+  presupuestoId           Int?                    @map("presupuesto_id")
   clienteId               Int                     @map("cliente_id")
   vendedorId              Int                     @map("vendedor_id")
   fechaVenta              DateTime                @map("fecha_venta") @db.Date
@@ -1094,9 +1123,22 @@ model Venta {
   observaciones           String?
   estadoEntrega           EstadoEntrega           @default(pendiente) @map("estado_entrega")
   fechaEntrega            DateTime?               @map("fecha_entrega") @db.Date
+  // Se vendió por DEBAJO del precio mínimo de la ficha (PROC-34): con una
+  // autorización vigente o por un admin, que son los únicos caminos que CreateVenta
+  // deja. Es la marca del reporte de descuentos; el detalle (quién autorizó, qué
+  // solicitud) va en la auditoría de la venta. No lleva el valor del piso: GET
+  // /ventas lo ve el vendedor y el piso es el dato que no tiene que ver.
+  bajoPiso                Boolean                 @default(false) @map("bajo_piso")
   createdAt               DateTime                @default(now()) @map("created_at")
   updatedAt               DateTime                @updatedAt @map("updated_at")
   deletedAt               DateTime?               @map("deleted_at")
+  // ANULACIÓN (PROC-30). Anular sigue siendo el soft-delete de siempre: con
+  // deletedAt la venta sale de listados y reportes. Lo nuevo es que deja de ser
+  // un borrado mudo: el POR QUÉ y el QUIÉN quedan en la propia fila (además del
+  // audit_log) para poder listar las anuladas sin reconstruirlas del rastro.
+  motivoAnulacion         String?                 @map("motivo_anulacion")
+  anuladaPorId            Int?                    @map("anulada_por_id")
+  anuladaPor              Usuario?                @relation("VentaAnuladaPor", fields: [anuladaPorId], references: [id])
   // Una venta puede acumular varias financiaciones a lo largo del tiempo: la
   // original y las sucesivas refinanciaciones de su saldo.
   financiaciones          Financiacion[]
@@ -1121,6 +1163,18 @@ model Venta {
   @@index([vendedorId])
   @@index([fechaVenta])
   @@index([estadoEntrega])
+  // UNA venta VIVA por unidad y por presupuesto. Parciales (WHERE deleted_at IS
+  // NULL) y no totales: anular una venta es un soft-delete, y con el @unique total
+  // de antes la fila anulada seguía ocupando el índice, así que la unidad volvía a
+  // `publicado` pero el siguiente POST /ventas rebotaba con P2002 — invendible sin
+  // tocar la base a mano (PROC-31; el mismo pozo que documenta Financiacion.ventaId).
+  // La doble venta CONCURRENTE la sigue frenando el FOR UPDATE de CreateVenta; esto
+  // es el respaldo en la base por si algún camino se saltea ese lock.
+  // OJO: el cliente generado igual ofrece `findUnique({ where: { vehiculoId } })`,
+  // pero con anuladas de por medio puede haber varias filas: buscá con findFirst
+  // filtrando `deletedAt: null`.
+  @@unique([vehiculoId], map: "ventas_vehiculo_id_viva_key", where: raw("deleted_at IS NULL"))
+  @@unique([presupuestoId], map: "ventas_presupuesto_id_viva_key", where: raw("deleted_at IS NULL"))
   @@map("ventas")
 }
 
@@ -1914,6 +1968,61 @@ model AuditLog {
   @@map("audit_log")
 }
 
+/// Pedido de un titular de datos para ejercer sus derechos (arts. 14 a 16 de la Ley
+/// 25.326; ISO 27701 A.7.3.9 "gestionar solicitudes"). Es el REGISTRO que permite
+/// demostrar que cada pedido se atendió y en plazo: por eso no tiene baja (ni lógica
+/// ni física) y el vencimiento se guarda calculado al recibirlo, para que un cambio
+/// posterior de la regla no reescriba plazos ya informados al titular.
+///
+/// `clienteId` es opcional: el pedido puede llegar de alguien que todavía no se
+/// identificó contra una ficha (o que no está en la base, y hay que contestarle eso).
+/// `titularNombre` es el mínimo para saber de quién es el pedido; se conserva aunque
+/// la ficha se suprima, porque es la prueba de que se cumplió con la supresión.
+model SolicitudTitular {
+  id              Int                    @id @default(autoincrement())
+  concesionariaId Int                    @map("concesionaria_id")
+  clienteId       Int?                   @map("cliente_id")
+  tipo            TipoSolicitudTitular
+  titularNombre   String                 @map("titular_nombre")
+  /// Por dónde llegó el pedido (mail, presencial, carta documento...). Texto libre corto.
+  canal           String?
+  detalle         String?
+  /// Fecha de recepción del pedido: desde acá corre el plazo legal.
+  recibidaEl      DateTime               @map("recibida_el") @db.Date
+  /// Vencimiento legal calculado al registrar (ver domain/services/plazosTitular.ts).
+  venceEl         DateTime               @map("vence_el") @db.Date
+  estado          EstadoSolicitudTitular @default(pendiente)
+  resolucion      String?
+  resueltaEn      DateTime?              @map("resuelta_en")
+  /// Sin FK a usuarios a propósito: es un rastro, no una relación de negocio, y un
+  /// usuario dado de baja no puede dejar el registro sin decir quién lo atendió.
+  registradaPorId Int?                   @map("registrada_por_id")
+  atendidaPorId   Int?                   @map("atendida_por_id")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  concesionaria   Concesionaria          @relation(fields: [concesionariaId], references: [id])
+  cliente         Cliente?               @relation(fields: [clienteId], references: [id])
+
+  @@index([concesionariaId, estado, venceEl])
+  @@index([clienteId])
+  @@map("solicitudes_titular")
+}
+
+enum TipoSolicitudTitular {
+  acceso
+  rectificacion
+  supresion
+  bloqueo
+  oposicion
+}
+
+enum EstadoSolicitudTitular {
+  pendiente
+  en_curso
+  resuelta
+  rechazada
+}
+
 // Rastro de seguridad SIN tenant: lo que audit_log no puede guardar porque su
 // concesionaria_id es NOT NULL con FK. Acciones de super_admin (sin concesionaria),
 // intentos de login contra emails que no existen y alertas de fuerza bruta. Es un
@@ -2318,6 +2427,17 @@ enum AccionAudit {
   login_fail
   password_reset_request
   password_reset_done
+  /// Exportación masiva o de datos de un titular (PRIV-10 / PRIV-05): quién sacó
+  /// datos personales del sistema, de qué, con qué filtros y cuántas filas.
+  export
+  /// Supresión (anonimización) de un titular a su pedido (art. 16 Ley 25.326).
+  suprimir
+  bloquear
+  desbloquear
+  revocar_consentimiento
+  /// Lectura de datos del tenant por el personal de AUTENZA (super_admin). La ve el
+  /// admin de la concesionaria en "Accesos de soporte" (PRIV-13).
+  acceso_soporte
 }
 
 enum PlanInterval {

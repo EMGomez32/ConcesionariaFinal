@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { urlComprobanteAnulable } from './urlComprobante';
 
 // Schema de validación de items de postventa. Migración 1:1 de
 // modules/postventa-items/item.validation.ts (express-validator). Payload
@@ -25,12 +26,6 @@ const nullableInt = () =>
         z.coerce.number().int().positive().nullable().optional(),
     );
 
-const nullableString = () =>
-    z.preprocess(
-        (v) => (v === '' ? undefined : v),
-        z.string().nullable().optional(),
-    );
-
 export const createItemSchema = z.object({
     casoId: requiredId('El caso es obligatorio'),
     // El repo hace `new Date(fecha)`; el front manda 'YYYY-MM-DD' del <input date>.
@@ -41,5 +36,5 @@ export const createItemSchema = z.object({
     // ser 0 (mantener la laxitud del validation viejo: no se usa .positive()).
     monto: z.coerce.number({ error: 'El monto tiene que ser un número' }).min(0, 'El monto no puede ser negativo'),
     proveedorId: nullableInt(),
-    comprobanteUrl: nullableString(),
+    comprobanteUrl: urlComprobanteAnulable(),
 });

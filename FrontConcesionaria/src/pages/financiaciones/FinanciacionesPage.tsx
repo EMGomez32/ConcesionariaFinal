@@ -10,6 +10,7 @@ import Badge, { type BadgeVariant } from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import MotivoDialog from '../../components/ui/MotivoDialog';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
@@ -29,6 +30,7 @@ import { useConfirm } from '../../hooks/useConfirm';
 import { waShareLink } from '../../utils/whatsapp';
 import { formatFecha, hoyLocal } from '../../utils/fecha';
 import { formatMoneda } from '../../utils/moneda';
+import { METODO_PAGO_LABEL } from '../../components/ventas/estados';
 import { getApiErrorMessage } from '../../utils/error';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -84,6 +86,8 @@ interface Cuota {
     montoCuota: number | string;
     saldoCuota: number | string;
     estado: EstadoCuota;
+    /** Cobros de la cuota (sólo en el detalle), con la referencia para conciliar. */
+    pagos?: { id: number; fechaPago: string; monto: number | string; metodo: string; referencia: string | null }[];
 }
 
 // Fila de financiación devuelta por la API
@@ -218,6 +222,8 @@ const FinanciacionesPage = () => {
     // es sólo del admin: era un botón muerto en la pantalla de uso diario de otro rol.
     // Ver hooks/usePermisos.ts.
     const permisos = usePermisos();
+    // Plan que se está por CANCELAR: pide motivo y es sólo del admin (PROC-32).
+    const [cancelandoPlanId, setCancelandoPlanId] = useState<number | null>(null);
 
     // ── Catálogos ────────────────────────────────────────────────────────────
     const loadCatalogos = useCallback(async () => {
@@ -363,18 +369,34 @@ const FinanciacionesPage = () => {
         }
     };
 
-    // Los cambios de estado se confirman: cancelar el plan no tiene vuelta atrás.
-    const confirmarCambioEstado = (id: number, t: { label: string; next: EstadoFinanciacion }) => confirm({
-        title: t.label,
-        message: t.next === 'cancelada'
-            ? `El plan N° ${nroPlan(id)} queda cancelado: ya no se puede reactivar ni refinanciar.`
-            : t.next === 'en_mora'
+    // Los cambios de estado se confirman. Cancelar el plan, además, pide el motivo:
+    // no tiene vuelta atrás y queda en la auditoría.
+    const confirmarCambioEstado = (id: number, t: { label: string; next: EstadoFinanciacion }) => {
+        if (t.next === 'cancelada') {
+            setCancelandoPlanId(id);
+            return;
+        }
+        return confirm({
+            title: t.label,
+            message: t.next === 'en_mora'
                 ? `El plan N° ${nroPlan(id)} queda marcado en mora.`
                 : `El plan N° ${nroPlan(id)} vuelve a figurar al día.`,
-        type: t.next === 'cancelada' ? 'danger' : t.next === 'en_mora' ? 'warning' : 'question',
-        confirmLabel: t.label,
-        onConfirm: () => handleCambioEstado(id, t.next),
-    });
+            type: t.next === 'en_mora' ? 'warning' : 'question',
+            confirmLabel: t.label,
+            onConfirm: () => handleCambioEstado(id, t.next),
+        });
+    };
+
+    // Si el backend rechaza (p. ej. sin permiso), el error lo muestra el diálogo.
+    const cancelarPlan = async (motivo: string) => {
+        if (cancelandoPlanId === null) return;
+        const id = cancelandoPlanId;
+        await financiacionesApi.updateEstado(id, 'cancelada', motivo);
+        addToast(`Plan: ${finStatusMap.cancelada.label}`, 'success');
+        setCancelandoPlanId(null);
+        recargarLista();
+        if (detailId === id) refreshDetail(id);
+    };
 
     // Al elegir la venta se precargan su cliente y su moneda.
     const elegirVenta = (ventaId: number) => {
@@ -1149,7 +1171,10 @@ const FinanciacionesPage = () => {
                                             Refinanciar
                                         </Button>
                                     )}
-                                    {finTransitions[detail.estado as EstadoFinanciacion].map(t => (
+                                    {finTransitions[detail.estado as EstadoFinanciacion]
+                                        // Cancelar el plan es del admin; mora / al día, de quien opera.
+                                        .filter(t => t.next !== 'cancelada' || permisos.financiacionCancelar)
+                                        .map(t => (
                                         <Button
                                             key={t.next}
                                             variant={t.next === 'cancelada' ? 'secondary' : t.next === 'en_mora' ? 'danger' : 'primary'}
@@ -1190,6 +1215,13 @@ const FinanciacionesPage = () => {
                                                     <Badge variant={cuotaStatusMap[c.estado as EstadoCuota]?.variant ?? 'default'}>
                                                         {cuotaStatusMap[c.estado as EstadoCuota]?.label ?? c.estado}
                                                     </Badge>
+                                                    {/* Cada cobro con su referencia: es lo que se concilia contra el banco. */}
+                                                    {c.pagos?.map(p => (
+                                                        <div key={p.id} className="text-xs text-muted tabular-nums" style={{ marginTop: '0.25rem', whiteSpace: 'nowrap' }}>
+                                                            {formatFecha(p.fechaPago)} · {formatMoneda(p.monto, detail.moneda)} · {METODO_PAGO_LABEL[p.metodo] ?? p.metodo}
+                                                            {p.referencia ? ` · ${p.referencia}` : ''}
+                                                        </div>
+                                                    ))}
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
                                                     <div className="flex items-center gap-2 justify-end">
@@ -1351,6 +1383,19 @@ const FinanciacionesPage = () => {
                     </p>
                 </div>
             </Modal>
+
+            {cancelandoPlanId !== null && (
+                <MotivoDialog
+                    isOpen
+                    title={`Cancelar el plan N° ${nroPlan(cancelandoPlanId)}`}
+                    message="El plan queda cancelado: ya no se puede reactivar ni refinanciar, y sus cuotas dejan de cobrarse."
+                    label="Motivo de la cancelación"
+                    placeholder="Ej.: se anuló la venta, el cliente canceló la deuda por fuera…"
+                    confirmLabel="Cancelar plan"
+                    onCancel={() => setCancelandoPlanId(null)}
+                    onConfirm={cancelarPlan}
+                />
+            )}
 
             {/* DELETE MODAL (BAJA) */}
             <ConfirmDialog

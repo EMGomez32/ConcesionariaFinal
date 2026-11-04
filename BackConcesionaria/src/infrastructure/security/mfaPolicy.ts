@@ -4,21 +4,26 @@ import { env } from '../../config/env';
  * Roles que DEBEN tener 2FA activado.
  *
  *  - MFA_REQUIRED_ROLES con valor manda: "super_admin,admin", "super_admin". El valor "none" no exige a nadie.
- *  - Sin definir O VACÍA (docker compose pasa las variables sin definir como cadena vacía): en producción se exige a super_admin (la cuenta que administra todas las
- *    concesionarias de la plataforma); en desarrollo y test no se exige a nadie, para no trabar el
- *    login de los usuarios demo ni la suite de integración.
+ *  - Sin definir O VACÍA (docker compose pasa las variables sin definir como cadena vacía): en producción se exige a
+ *    super_admin (la cuenta que administra todas las concesionarias de la plataforma) y a admin (el
+ *    que ve toda la PII y las finanzas del tenant y gestiona usuarios, contraseñas y 2FA de los
+ *    demás: una contraseña de admin filtrada sin segundo factor era el tenant entero). En desarrollo
+ *    y test no se exige a nadie, para no trabar el login de los usuarios demo ni la suite de integración.
  *
  * "Exigir" significa: quien tiene ese rol y todavía no activó el 2FA puede entrar, pero su sesión
  * queda en `mfaPending` y la API sólo le deja configurarlo hasta que lo haga (ver authenticate).
  * Escape de emergencia: MFA_REQUIRED_ROLES=none en el .env y reiniciar.
  */
+/** Default de producción si MFA_REQUIRED_ROLES no está definida. */
+export const ROLES_MFA_PRODUCCION: readonly string[] = ['super_admin', 'admin'];
+
 export function rolesQueExigenMfa(): string[] {
     const crudo = (process.env.MFA_REQUIRED_ROLES ?? '').trim();
     if (crudo.toLowerCase() === 'none') return [];
     if (crudo !== '') {
         return crudo.split(',').map((r) => r.trim()).filter(Boolean);
     }
-    return env.NODE_ENV === 'production' ? ['super_admin'] : [];
+    return env.NODE_ENV === 'production' ? [...ROLES_MFA_PRODUCCION] : [];
 }
 
 export const exigeMfa = (roles: string[] | undefined): boolean => {

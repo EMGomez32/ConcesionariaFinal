@@ -45,3 +45,9 @@ Thumbs.db
 
 # ── Evidencia local del último simulacro de restore ─────────
 scripts/restore-drill.log
+
+# ── Deploy y endurecimiento del host (scripts/deploy.sh, scripts/hardening) ─
+# El registro de deploys (scripts/deploys.log) ya queda cubierto por *.log.
+scripts/.deploy.lock
+# Evidencia de verify-host.sh: tiene datos internos del host; el repo es público.
+evidencia-host-*.md

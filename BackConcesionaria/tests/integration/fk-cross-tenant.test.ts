@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, loginAsAdmin, authHeaders, unique, tryDelete } from './helpers';
+import { api, loginAsSuperAdmin, loginAsAdmin, authHeaders, unique, tryDelete, anularVenta, cancelarReserva } from './helpers';
 
 /**
  * Integridad cross-tenant de las FKs del body.
@@ -141,7 +141,7 @@ describe('Integridad cross-tenant de FKs del body', () => {
     });
 
     afterAll(async () => {
-        await tryDelete(`/api/ventas/${ventaA2Id}`, saToken);
+        await anularVenta(ventaA2Id, saToken);
         await tryDelete(`/api/vehiculos/${vehiculoA2Id}`, saToken);
         await tryDelete(`/api/vehiculos/${vehiculoAId}`, saToken);
         await tryDelete(`/api/clientes/${clienteAId}`, adToken);
@@ -246,6 +246,6 @@ describe('Integridad cross-tenant de FKs del body', () => {
         );
         expect(res.status).toBe(201);
         // Cleanup: liberar el vehículo cancelando la reserva.
-        await tryDelete(`/api/reservas/${res.data.id}`, adToken);
+        await cancelarReserva(res.data.id, adToken);
     });
 });

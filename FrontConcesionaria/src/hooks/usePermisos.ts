@@ -50,14 +50,36 @@ export interface Permisos {
     ventasQuitarExtra: boolean;
 
     // ── Reservas ─────────────────────────────────────────────────────────────
-    /** POST /reservas y PATCH /reservas/:id (incluye cancelar la seña). */
+    /** POST /reservas y PATCH /reservas/:id (extender el vencimiento, observaciones, vencerla ya vencida). */
     reservasOperar: boolean;
+    /**
+     * PATCH /reservas/:id con estado `cancelada` (con motivo) o con otro `monto`.
+     * Cancelar una seña es devolver plata y liberar la unidad: es del admin
+     * (PROC-33). El backend lo corta por CAMPO, no por ruta.
+     */
+    reservasCancelar: boolean;
 
     // ── Financiación ─────────────────────────────────────────────────────────
     /** POST /financiaciones, PATCH /financiaciones/:id, POST /:id/refinanciar */
     financiacionOperar: boolean;
     /** DELETE /financiaciones/:id — "Anular Contrato". */
     financiacionAnular: boolean;
+
+    // ── Financiación externa (solicitudes a bancos) ──────────────────────────
+    /** GET /financiacion-solicitudes y /:id — admin, vendedor y consulta. */
+    solicitudesVer: boolean;
+    /**
+     * GET /financiacion-solicitudes/:id/archivos y la subida/baja de adjuntos: los papeles
+     * (DNI, recibos de sueldo) son de admin y vendedor. Al vendedor el servidor además se los
+     * recorta a los clientes de su cartera.
+     */
+    solicitudesAdjuntos: boolean;
+    /**
+     * PATCH /financiaciones/:id con estado `cancelada` ("Cancelar plan", con motivo).
+     * Cierra el contrato para siempre: es del admin (PROC-32). Mora / al día siguen
+     * en `financiacionOperar`.
+     */
+    financiacionCancelar: boolean;
     /** PATCH /financiaciones/cuotas/:cuotaId/pagar */
     financiacionCobrarCuota: boolean;
 
@@ -80,6 +102,15 @@ export interface Permisos {
     // ── CRM ──────────────────────────────────────────────────────────────────
     /** GET/POST/PATCH/DELETE /cliente-seguimientos — la bitácora de la negociación. */
     seguimientosVer: boolean;
+
+    // ── Derechos del titular (Ley 25.326) ────────────────────────────────────
+    /**
+     * GET /privacidad/clientes/:id/informe, POST .../suprimir, .../bloquear,
+     * .../desbloquear y el registro /privacidad/solicitudes: todo admin.
+     */
+    privacidadGestionar: boolean;
+    /** POST /privacidad/clientes/:id/revocar-consentimiento — admin y vendedor (su cartera). */
+    privacidadRevocarConsentimiento: boolean;
 
     // ── Datos sensibles ──────────────────────────────────────────────────────
     /**
@@ -147,9 +178,14 @@ export function usePermisos(): Permisos {
         ventasQuitarExtra: esAdmin || esVendedor,
 
         reservasOperar: esAdmin || esVendedor,
+        reservasCancelar: esAdmin,
 
         financiacionOperar: esAdmin || esVendedor || esCobrador,
         financiacionAnular: esAdmin,
+
+        solicitudesVer: esAdmin || esVendedor || tiene('lectura'),
+        solicitudesAdjuntos: esAdmin || esVendedor,
+        financiacionCancelar: esAdmin,
         financiacionCobrarCuota: esAdmin || esVendedor || esCobrador,
 
         ingresosCrear: esAdmin || esVendedor,
@@ -161,6 +197,9 @@ export function usePermisos(): Permisos {
         archivosMarcarPrincipal: esAdmin || esVendedor,
 
         seguimientosVer: esAdmin || esVendedor,
+
+        privacidadGestionar: esAdmin,
+        privacidadRevocarConsentimiento: esAdmin || esVendedor,
 
         veValorDeIngreso: esAdmin,
         vePrecioDeCompra: esAdmin,

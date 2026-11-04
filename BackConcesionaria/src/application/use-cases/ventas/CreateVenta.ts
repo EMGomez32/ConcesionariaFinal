@@ -6,6 +6,10 @@ import { withTenantTransaction } from '../../../infrastructure/database/unitOfWo
 import { context } from '../../../infrastructure/security/context';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 import { resolverReservasParaVenta } from '../../../domain/services/reservaVenta';
+import { evaluarPisoDeVenta } from '../../../domain/services/pisoDeVenta';
+import { actorEsAdmin, actorUserId } from '../../../infrastructure/security/roles';
+import { auditEnTx, detalleConCambio } from '../../../infrastructure/security/auditTx';
+import { autorizacionVigente } from '../../services/precioAutorizacion';
 import { sincronizarEnSegundoPlano } from '../../services/meliPublicacion';
 
 export class CreateVenta {
@@ -55,8 +59,8 @@ export class CreateVenta {
             // Lock del vehículo acotado al tenant + revalidación bajo lock: serializa
             // dos ventas concurrentes del MISMO auto (la 2da espera el commit de la 1ra,
             // ve 'vendido' y aborta). Cierra la doble venta que un findById sin lock deja.
-            const rows = await tx.$queryRaw<Array<{ estado: string }>>(Prisma.sql`
-                SELECT estado FROM vehiculos
+            const rows = await tx.$queryRaw<Array<{ estado: string; precio_minimo: string | null; moneda: string }>>(Prisma.sql`
+                SELECT estado, precio_minimo, moneda FROM vehiculos
                 WHERE id = ${ventaData.vehiculoId} AND deleted_at IS NULL ${tenantSql}
                 FOR UPDATE`);
             const locked = rows[0];
@@ -64,6 +68,29 @@ export class CreateVenta {
             if (locked.estado === 'vendido') {
                 throw new BaseException(400, 'El vehículo ya está vendido', 'VEHICULO_VENDIDO');
             }
+
+            // PISO DE VENTA (PROC-34), con el piso leído BAJO el lock. Por debajo del
+            // mínimo (o en otra moneda) sólo vende el admin o quien tenga una
+            // autorización vigente SUYA para esta unidad. `usuarioId` explícito: así
+            // `autorizacionVigente` no aplica el atajo de rol y busca la solicitud.
+            const pisoFicha = locked.precio_minimo == null ? null : Number(locked.precio_minimo);
+            const esAdmin = actorEsAdmin();
+            const precioVenta = Number(ventaData.precioVenta);
+            const monedaVenta = ventaData.moneda ?? 'ARS';
+            const necesitaAutorizacion = pisoFicha !== null && !esAdmin
+                && (monedaVenta !== locked.moneda || precioVenta < pisoFicha);
+            const autorizacion = necesitaAutorizacion ? await autorizacionVigente(ventaData.vehiculoId, actorUserId()) : null;
+            const piso = evaluarPisoDeVenta({
+                precioVenta,
+                monedaVenta,
+                pisoFicha,
+                monedaUnidad: locked.moneda,
+                esAdmin,
+                autorizacion: autorizacion
+                    ? { solicitudId: autorizacion.solicitudId, precio: Number(autorizacion.precioMinimo), moneda: autorizacion.moneda }
+                    : null,
+            });
+            if (!piso.ok) throw new BaseException(403, piso.message, 'PRECIO_BAJO_MINIMO');
 
             // Reservas del auto, decididas BAJO EL LOCK del vehículo (ver resolverReservasParaVenta):
             // la reserva indicada tiene que ser de ESTE auto y estar activa; un auto reservado para
@@ -95,6 +122,7 @@ export class CreateVenta {
                     ...ventaData,
                     concesionariaId: tenantId,
                     presupuestoId,
+                    bajoPiso: piso.bajoPiso,
                     extras: { create: externos || [] },
                     pagos: { create: pagos || [] },
                     canjes: { create: canjes || [] }
@@ -130,6 +158,39 @@ export class CreateVenta {
                     data: { estado: 'aceptado' }
                 });
             }
+
+            // 5. Rastro DENTRO de la transacción: la venta no existe sin él. Va con el
+            //    estado del vehículo antes/después y, si la unidad tenía piso, cómo se
+            //    pasó el control (el valor del piso sólo lo lee el admin: /auditoria es
+            //    authorize('admin')).
+            await auditEnTx(tx, {
+                concesionariaId: tenantId,
+                entidad: 'Venta',
+                entidadId: venta.id,
+                accion: 'create',
+                detalle: detalleConCambio(
+                    `Venta ${venta.id} creada${piso.bajoPiso ? ' por debajo del precio mínimo' : ''}`,
+                    {
+                        venta: {
+                            vehiculoId: ventaData.vehiculoId, clienteId: ventaData.clienteId, vendedorId: ventaData.vendedorId,
+                            precioVenta, moneda: monedaVenta, formaPago: ventaData.formaPago,
+                            presupuestoId: presupuestoId ?? null, reservaId: planReservas.consumir,
+                        },
+                        antes: { estadoVehiculo: locked.estado },
+                        despues: { estadoVehiculo: 'vendido' },
+                        ...(pisoFicha !== null ? {
+                            piso: {
+                                via: piso.via,
+                                bajoPiso: piso.bajoPiso,
+                                comparable: piso.comparable,
+                                pisoFicha,
+                                monedaUnidad: locked.moneda,
+                                ...(autorizacion ? { solicitudId: autorizacion.solicitudId, precioAutorizado: Number(autorizacion.precioMinimo) } : {}),
+                            },
+                        } : {}),
+                    },
+                ),
+            });
 
             return venta;
         });

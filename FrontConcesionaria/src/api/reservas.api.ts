@@ -52,11 +52,14 @@ export const reservasApi = {
         observaciones?: string;
     }) => client.post('/reservas', data),
 
+    // Cancelar (`estado: 'cancelada'`, con `motivo` obligatorio) y cambiar el `monto`
+    // son sólo admin; `vencida` sólo con la fecha ya pasada (422 si no).
     update: (id: number, data: {
         estado?: EstadoReserva;
         monto?: number;
         fechaVencimiento?: string;
         observaciones?: string;
+        motivo?: string;
     }) => client.patch(`/reservas/${id}`, data),
 
     delete: (id: number) =>

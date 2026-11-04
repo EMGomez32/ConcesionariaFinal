@@ -41,17 +41,28 @@ import reporteRoutes from '../interface/routes/reporte.routes';
 import cotizacionRoutes from '../interface/routes/cotizacion.routes';
 import metaVentaRoutes from '../interface/routes/meta-venta.routes';
 import objetivoVendedorRoutes from '../interface/routes/objetivo-vendedor.routes';
+import privacidadRoutes from '../interface/routes/privacidad.routes';
 import { authenticate } from '../interface/middlewares/authenticate.middleware';
 import { authorize } from '../interface/middlewares/authorize.middleware';
+import { auditoriaExport } from '../interface/middlewares/auditoriaExport.middleware';
+import { accesoSoporte } from '../interface/middlewares/accesoSoporte.middleware';
 import ApiResponse from '../utils/ApiResponse';
+import prisma from '../infrastructure/database/prisma';
 
 const router = express.Router();
 
 // ── Rutas públicas (sin autenticación) ───────────────────────────────────────
 
-// Health check
-router.get('/health', (req, res) => {
-    res.send(ApiResponse.success({ status: 'UP', timestamp: new Date() }));
+// Health check. Consulta la base: si sólo respondiera que el proceso está vivo, ni el
+// monitor externo (.github/workflows/uptime.yml) ni el smoke de scripts/deploy.sh se
+// enterarían de una base caída. Responde 503 sin detalles del error (es público).
+router.get('/health', async (_req, res) => {
+    try {
+        await (prisma as any).$queryRaw`SELECT 1`;
+        res.send(ApiResponse.success({ status: 'UP', timestamp: new Date() }));
+    } catch {
+        res.status(503).send(ApiResponse.error('Base de datos no disponible', 503, 'DB_UNAVAILABLE'));
+    }
 });
 
 // Auth (login/refresh/logout son públicos por definición)
@@ -63,6 +74,11 @@ router.use('/auth', authEvents, authRoutes);
 // de datos responde sin un JWT válido. La autorización por rol se aplica
 // adicionalmente en cada router con authorize(...).
 router.use(authenticate);
+
+// Rastros de privacidad (no cortan nada, sólo anotan): cada CSV exportado (PRIV-10) y
+// cada lectura del personal de AUTENZA sobre los datos de una concesionaria (PRIV-13).
+router.use(auditoriaExport);
+router.use(accesoSoporte);
 
 // SaaS Core
 router.use('/concesionarias', concesionariaRoutes);
@@ -136,6 +152,11 @@ router.use('/mercadolibre', mercadolibreRoutes);
 router.use('/auditoria', authorize('admin'), auditoriaRoutes);
 // Rastro de plataforma (sin tenant): SÓLO super_admin (el authorize va en la ruta, ver security-event.routes.ts).
 router.use('/security-events', securityEventRoutes);
+
+// Derechos del titular (Ley 25.326): informe de acceso, supresión, bloqueo, revocación
+// del consentimiento y registro de pedidos. SIN authorize de montaje: el gating es por
+// ruta (casi todo admin; la revocación también la registra el vendedor).
+router.use('/privacidad', privacidadRoutes);
 
 // Reportes
 router.use('/reportes', reporteRoutes);

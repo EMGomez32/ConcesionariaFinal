@@ -1,0 +1,36 @@
+# Configuración de gitleaks (escaneo de secretos del job "Secretos (gitleaks)" de ci.yml).
+# Parte de las reglas por defecto y sólo agrega excepciones ACOTADAS: valores de prueba
+# que, por cómo se llaman, la regla genérica confunde con claves reales.
+#
+# Antes de agregar una excepción: ¿es de verdad un valor de prueba, que no sirve para
+# nada fuera de un test o del CI? Si hay duda, NO se exceptúa: se cambia el valor.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Secretos JWT de prueba en tests unitarios/integración y en el CI (no se usan en ningún entorno real)"
+# AND: tiene que ser un archivo de tests o el workflow de CI Y la línea tiene que ser
+# la de un secreto JWT. Un secreto de otro tipo en esos archivos se sigue detectando.
+condition = "AND"
+paths = [
+    '''^BackConcesionaria/tests/''',
+    '''^\.github/workflows/ci\.yml$''',
+]
+regexTarget = "line"
+regexes = [
+    '''JWT_(REFRESH_)?SECRET''',
+]
+
+[[allowlists]]
+description = "Contraseña literal de prueba de los tests de integración (se crea y se usa sólo contra la base descartable del CI)"
+# AND: archivo de tests de integración Y el valor detectado es exactamente este literal.
+# Cualquier otro valor en esos archivos se sigue detectando.
+condition = "AND"
+paths = [
+    '''^BackConcesionaria/tests/integration/''',
+]
+regexTarget = "secret"
+regexes = [
+    '''^nueva-clave-12345$''',
+]

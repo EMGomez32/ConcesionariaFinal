@@ -12,6 +12,9 @@ import { detectarTipoArchivo, extensionParaMime } from '../../src/infrastructure
 import { firmarRuta, verificarRutaFirmada } from '../../src/infrastructure/security/urlFirmada';
 import { LocalStorageAdapter } from '../../src/infrastructure/storage/LocalStorageAdapter';
 import { crearRouterUploads, esRutaPrivada, rutaNormalizada } from '../../src/interface/middlewares/uploads.middleware';
+import {
+    esFotoDeVehiculo, esStorageKeyPrivado, prefijoAdjuntosSolicitud, prefijoDocumentosVehiculo, prefijoFotosVehiculo, urlParaCliente,
+} from '../../src/infrastructure/storage/zonaPrivada';
 import { uploadSingle } from '../../src/interface/middlewares/upload.middleware';
 import { BaseException } from '../../src/domain/exceptions/BaseException';
 import { context } from '../../src/infrastructure/security/context';
@@ -220,10 +223,23 @@ describe('rutaNormalizada / esRutaPrivada', () => {
         expect(esRutaPrivada(n as string)).toBe(true);
     });
 
-    test.each(['/vehiculos/1/x.png', '/concesionarias/1/branding/logo.png', '/solicitudesx/1/x', '/otra/solicitudes/1/x'])(
-        '%s es zona pública', (p) => {
-            expect(esRutaPrivada(rutaNormalizada(p) as string)).toBe(false);
-        });
+    test.each([
+        // El layout REAL: LocalStorageAdapter sanea `solicitudes/42` → `solicitudes-42`. El guarda
+        // anterior sólo miraba `/solicitudes/…` y estas rutas salían por la zona pública.
+        '/solicitudes-42/2026-11/abc.pdf', '/SOLICITUDES-42/2026-11/abc.pdf', '/%73olicitudes-42/2026-11/abc.pdf',
+        '/vehiculos-12/../solicitudes-42/2026-11/abc.pdf', '//solicitudes-42/2026-11/abc.pdf',
+        // Documentos de vehículos (PRIV-11), en los dos layouts.
+        '/vehiculos-docs-7/2026-11/titulo.pdf', '/vehiculos-docs/7/titulo.pdf', '/Vehiculos-Docs-7/2026-11/titulo.pdf',
+    ])('%s (layout real del storage) es zona privada', (p) => {
+        expect(esRutaPrivada(rutaNormalizada(p) as string)).toBe(true);
+    });
+
+    test.each([
+        '/vehiculos/1/x.png', '/vehiculos-1/2026-11/x.png', '/concesionarias/1/branding/logo.png', '/concesionarias-1/logo.png',
+        '/solicitudesx/1/x', '/otra/solicitudes/1/x', '/otra/solicitudes-1/x', '/vehiculos-docsx/1/x',
+    ])('%s es zona pública', (p) => {
+        expect(esRutaPrivada(rutaNormalizada(p) as string)).toBe(false);
+    });
 
     test('un path mal codificado → null (se rechaza con 400)', () => {
         expect(rutaNormalizada('/%E0%A4%A')).toBeNull();
@@ -251,7 +267,7 @@ describe('crearRouterUploads (servidor real sobre un directorio temporal)', () =
     test('el archivo privado SIN firma → 403 y sin cache', async () => {
         const r = await request(app).get(privada);
         expect(r.status).toBe(403);
-        expect(r.headers['cache-control']).toBe('no-store');
+        expect(r.headers['cache-control']).toBe('private, no-store');
         expect(r.text).not.toContain('DATO PERSONAL');
     });
 
@@ -298,4 +314,86 @@ describe('crearRouterUploads (servidor real sobre un directorio temporal)', () =
     test('no lista directorios', async () => {
         expect((await request(app).get('/uploads/vehiculos/')).status).toBe(404);
     });
+});
+
+// ── Flujo real: lo que guarda el storage tiene que caer en la zona que corresponde ──────
+// El hallazgo original (APP-01) fue exactamente este desajuste: los tests probaban una ruta
+// (`/solicitudes/7/…`) que el storage nunca genera. Acá el archivo lo escribe el MISMO
+// LocalStorageAdapter que usa la app, con los MISMOS prefijos que usan los controllers.
+describe('storage real + /uploads: adjuntos y documentos quedan privados, las fotos públicas', () => {
+    let dir: string;
+    let app: express.Express;
+    let adapter: LocalStorageAdapter;
+    // El PDF llega como binario: se junta el cuerpo a mano para comparar el contenido.
+    const bajar = (url: string) => request(app).get(url).buffer(true).parse((res, cb) => {
+        let d = '';
+        res.setEncoding('utf8');
+        res.on('data', (c: string) => { d += c; });
+        res.on('end', () => cb(null, d));
+    });
+    const archivo = (contenido: string, mimetype = 'application/pdf') =>
+        ({ buffer: Buffer.from(contenido), mimetype, originalname: 'x.pdf', size: contenido.length, extension: mimetype === 'image/png' ? 'png' : 'pdf' }) as any;
+
+    beforeAll(async () => {
+        dir = await fs.mkdtemp(path.join(os.tmpdir(), 'uploads-real-'));
+        adapter = new LocalStorageAdapter(dir);
+        app = express();
+        app.use('/uploads', crearRouterUploads(dir));
+    });
+    afterAll(async () => { await fs.rm(dir, { recursive: true, force: true }); });
+
+    test('adjunto de solicitud: el storage lo guarda en solicitudes-<id>/ y sin firma da 403', async () => {
+        const saved = await adapter.save(archivo('DNI DEL CLIENTE'), prefijoAdjuntosSolicitud(42));
+        expect(saved.storageKey).toMatch(/^solicitudes-42\/\d{4}-\d{2}\/[0-9a-f]{32}\.pdf$/);
+        expect(esStorageKeyPrivado(saved.storageKey)).toBe(true);
+
+        const sinFirma = await bajar(saved.url);
+        expect(sinFirma.status).toBe(403);
+        expect(sinFirma.headers['cache-control']).toBe('private, no-store');
+        expect(String(sinFirma.body)).not.toContain('DNI DEL CLIENTE');
+
+        const firmada = urlParaCliente(saved);
+        expect(firmada).toMatch(/\?exp=\d+&sig=[0-9a-f]{64}$/);
+        const ok = await bajar(firmada);
+        expect(ok.status).toBe(200);
+        expect(ok.body).toBe('DNI DEL CLIENTE');
+        expect(ok.headers['cache-control']).toBe('private, no-store');
+        expect(ok.headers['referrer-policy']).toBe('no-referrer');
+
+        const vencida = firmarRuta(saved.url, 60, Date.now() - 3600_000);
+        expect((await request(app).get(vencida)).status).toBe(403);
+    });
+
+    test('documento de vehículo (título, cédula) → privado; foto del mismo vehículo → pública', async () => {
+        const doc = await adapter.save(archivo('TITULO DEL AUTOMOTOR'), prefijoDocumentosVehiculo(7));
+        expect(doc.storageKey).toMatch(/^vehiculos-docs-7\//);
+        expect((await request(app).get(doc.url)).status).toBe(403);
+        const okDoc = await bajar(urlParaCliente(doc));
+        expect(okDoc.status).toBe(200);
+        expect(okDoc.body).toBe('TITULO DEL AUTOMOTOR');
+
+        const foto = await adapter.save(archivo('FOTO', 'image/png'), prefijoFotosVehiculo(7));
+        expect(foto.storageKey).toMatch(/^vehiculos-7\//);
+        expect(urlParaCliente(foto)).toBe(foto.url); // pública: no se firma
+        const r = await request(app).get(foto.url);
+        expect(r.status).toBe(200);
+        expect(r.headers['cache-control']).toBe('public, max-age=604800');
+    });
+});
+
+describe('urlParaCliente / esFotoDeVehiculo', () => {
+    test('firma desde el storageKey (lo fija el servidor), nunca desde la url de la fila', () => {
+        // Una fila con url manipulada no consigue que se le firme otra ruta.
+        const u = urlParaCliente({ url: '/uploads/solicitudes-99/2026-11/ajeno.pdf', storageKey: 'solicitudes-42/2026-11/propio.pdf' });
+        expect(u.startsWith('/uploads/solicitudes-42/2026-11/propio.pdf?exp=')).toBe(true);
+        // Sin storageKey (link externo del alta legacy) no se firma nada.
+        expect(urlParaCliente({ url: '/uploads/solicitudes-99/2026-11/ajeno.pdf', storageKey: null }))
+            .toBe('/uploads/solicitudes-99/2026-11/ajeno.pdf');
+        expect(urlParaCliente({ url: 'https://ejemplo.com/a.pdf' })).toBe('https://ejemplo.com/a.pdf');
+    });
+
+    test.each([[null, true], [undefined, true], ['foto', true], [' Foto ', true], ['documento', false], ['comprobante', false], ['plano', false], ['otro', false]])(
+        'tipo %p → foto: %p', (tipo, esperado) => {
+            expect(esFotoDeVehiculo(tipo as string | null | undefined)).toBe(esperado);
+        });
 });

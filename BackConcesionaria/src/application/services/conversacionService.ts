@@ -23,6 +23,14 @@ import { estadoCanalesMeta, motivoCanalMetaNoConfigurado } from '../../domain/se
 import { buscarClientePorContacto, conContextoSistema, ingestarConsulta } from './consultaIngest';
 
 /**
+ * Lo que la bandeja muestra del cliente vinculado. Lleva el bloqueo y la revocación del
+ * consentimiento (Ley 25.326) para que el hilo se vea rotulado "no contactar": el
+ * vendedor puede leer lo que el titular escribe, pero tiene que saber que pidió que no lo
+ * contacten antes de mandarle algo que no sea la respuesta a su consulta.
+ */
+const CLIENTE_EN_BANDEJA = { id: true, nombre: true, bloqueadoEn: true, consentimientoRevocadoEn: true } as const;
+
+/**
  * Bandeja MULTI-CANAL de conversaciones: el lado de DATOS de la atención.
  *
  * Un vendedor atiende CONSULTAS, no canales: WhatsApp, los DM de Instagram y
@@ -529,7 +537,7 @@ export async function listar(filtros: FiltroConversaciones) {
                 claveHilo: true,
                 contactoExternoId: true,
                 comentarioExternoId: true,
-                cliente: { select: { id: true, nombre: true } },
+                cliente: { select: CLIENTE_EN_BANDEJA },
                 asignadoA: { select: { id: true, nombre: true } },
                 // El include NO hereda el filtro de borrados de la extensión: va
                 // a mano (ver cabecera de prisma.extension.ts).
@@ -721,7 +729,7 @@ export async function detalle(id: number) {
             // El front lo declara obligatorio en ConversacionDetalle y hasta
             // ahora llegaba undefined.
             updatedAt: true,
-            cliente: { select: { id: true, nombre: true } },
+            cliente: { select: CLIENTE_EN_BANDEJA },
             asignadoA: { select: { id: true, nombre: true } },
         },
     });
@@ -1084,7 +1092,7 @@ export async function actualizar(id: number, cambios: CambiosConversacion) {
             ...(cambios.asignadoAId !== undefined ? { asignadoAId: cambios.asignadoAId } : {}),
         },
         include: {
-            cliente: { select: { id: true, nombre: true } },
+            cliente: { select: CLIENTE_EN_BANDEJA },
             asignadoA: { select: { id: true, nombre: true } },
         },
     });

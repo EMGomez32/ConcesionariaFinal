@@ -1,4 +1,7 @@
 // Unit tests PUROS (sin DB): piezas del rastro de seguridad.
+// authEvents importa el notificador de alertas, que lee el env validado: en el job de unit
+// tests no hay JWT_SECRET, así que se mockea (sin webhook: las alertas no salen).
+jest.mock('../../src/config/env', () => ({ env: { NODE_ENV: 'test' } }));
 jest.mock('../../src/infrastructure/database/prisma', () => ({
     rawPrisma: { securityEvent: { create: jest.fn() } },
 }));

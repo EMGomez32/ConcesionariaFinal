@@ -19,6 +19,7 @@ import { useUIStore } from '../../store/uiStore';
 import { FileUploader } from '../../components/ui/FileUploader';
 import PageTitle from '../../components/ui/PageTitle';
 import { useConfirm } from '../../hooks/useConfirm';
+import { usePermisos } from '../../hooks/usePermisos';
 import { formatFecha } from '../../utils/fecha';
 import { formatMoneda } from '../../utils/moneda';
 
@@ -89,6 +90,9 @@ const fmtDia = (d?: string | null) => formatFecha(d);
 export default function FinanciacionExternaPage() {
     const addToast = useUIStore((s) => s.addToast);
     const confirm = useConfirm();
+    // Los adjuntos (DNI, recibos de sueldo) son de admin y vendedor: el perfil de consulta
+    // ve la solicitud pero no los papeles (el servidor le responde 403).
+    const { solicitudesAdjuntos } = usePermisos();
 
     // ─ tabs ─
     const [tab, setTab] = useState<'solicitudes' | 'financieras'>('solicitudes');
@@ -235,9 +239,9 @@ export default function FinanciacionExternaPage() {
     }, [addToast]);
 
     useEffect(() => {
-        if (detailSolicitud) loadArchivosSol(detailSolicitud.id);
+        if (detailSolicitud && solicitudesAdjuntos) loadArchivosSol(detailSolicitud.id);
         else setArchivosSol([]);
-    }, [detailSolicitud, loadArchivosSol]);
+    }, [detailSolicitud, loadArchivosSol, solicitudesAdjuntos]);
 
     const handleDeleteArchivoSol = (archivo: SolicitudArchivo) => {
         const label = archivo.originalName ?? archivo.descripcion ?? `Archivo ${archivo.id}`;
@@ -876,7 +880,11 @@ export default function FinanciacionExternaPage() {
                             </h3>
                         </div>
 
-                        {loadingArchivosSol ? (
+                        {!solicitudesAdjuntos ? (
+                            <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+                                Los papeles de la solicitud (DNI, recibos de sueldo) los ven el administrador y el vendedor que la arma.
+                            </p>
+                        ) : loadingArchivosSol ? (
                             <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>Cargando...</p>
                         ) : archivosSol.length === 0 ? (
                             <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>Sin archivos adjuntos.</p>
@@ -906,16 +914,18 @@ export default function FinanciacionExternaPage() {
                             </div>
                         )}
 
-                        <FileUploader
-                            endpoint={solicitudesFinanciacionApi.uploadEndpoint(detailSolicitud.id)}
-                            extraFields={{ tipo: 'documento' }}
-                            onUploaded={() => {
-                                addToast('Archivo subido', 'success');
-                                loadArchivosSol(detailSolicitud.id);
-                            }}
-                            accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
-                            label="Subir nuevo archivo"
-                        />
+                        {solicitudesAdjuntos && (
+                            <FileUploader
+                                endpoint={solicitudesFinanciacionApi.uploadEndpoint(detailSolicitud.id)}
+                                extraFields={{ tipo: 'documento' }}
+                                onUploaded={() => {
+                                    addToast('Archivo subido', 'success');
+                                    loadArchivosSol(detailSolicitud.id);
+                                }}
+                                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+                                label="Subir nuevo archivo"
+                            />
+                        )}
                     </div>
 
                     {ESTADO_SOL_TRANSITIONS[detailSolicitud.estado].length > 0 && (

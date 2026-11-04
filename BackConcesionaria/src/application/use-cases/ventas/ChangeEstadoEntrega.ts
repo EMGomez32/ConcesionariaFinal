@@ -24,6 +24,9 @@ export class ChangeEstadoEntrega {
             updateData.fechaEntrega = new Date();
         }
 
-        return this.ventaRepository.update(id, updateData);
+        // Se devuelve también el estado de partida: la auditoría del cambio guarda
+        // el antes y el después, y el controller no tiene por qué releer la venta.
+        const actualizada = await this.ventaRepository.update(id, updateData);
+        return { venta: actualizada, estadoAnterior: venta.estadoEntrega };
     }
 }

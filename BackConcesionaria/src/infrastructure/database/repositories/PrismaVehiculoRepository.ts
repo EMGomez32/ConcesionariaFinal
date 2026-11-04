@@ -1,6 +1,7 @@
 import { IVehiculoRepository } from '../../../domain/repositories/IVehiculoRepository';
 import { Vehiculo } from '../../../domain/entities/Vehiculo';
 import prisma from '../prisma';
+import { conUrlParaCliente } from '../../storage/zonaPrivada';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { parsePagination } from '../queryOptions';
 
@@ -113,7 +114,8 @@ export class PrismaVehiculoRepository implements IVehiculoRepository {
             v.updatedAt,
             v.deletedAt,
             v.sucursal,
-            v.archivos,
+            // Los documentos de la unidad salen con URL firmada (zona privada); las fotos, tal cual.
+            v.archivos?.map((a: any) => conUrlParaCliente(a)),
             v.moneda ?? 'ARS',
             v.vencimientoVtv ?? null,
             v.vencimientoSeguro ?? null,

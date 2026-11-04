@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VERSIONES_CONSENTIMIENTO } from '../../domain/services/consentimiento';
 
 /**
  * Validación del módulo de ATENCIÓN PRESENCIAL (el flujo del vendedor).
@@ -157,6 +158,13 @@ export const completarClienteSchema = z.object({
      * cliente, que es un camino auditado aparte).
      */
     consentimientoContacto: z.coerce.boolean().optional(),
+    /**
+     * Evidencia (PRIV-04): la versión del texto que la pantalla le mostró al titular.
+     * Sólo versiones del catálogo; si no viene, el backend estampa la vigente.
+     */
+    consentimientoVersion: z.enum(VERSIONES_CONSENTIMIENTO as [string, ...string[]], {
+        error: 'La versión del texto de consentimiento no es válida',
+    }).optional(),
 });
 
 /**

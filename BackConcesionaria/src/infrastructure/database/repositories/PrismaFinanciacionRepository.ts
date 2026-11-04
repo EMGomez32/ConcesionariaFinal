@@ -135,7 +135,21 @@ export class PrismaFinanciacionRepository implements IFinanciacionRepository {
             // El detalle identifica el contrato por el vehículo de la venta, y
             // linkea con el contrato que refinancia / que lo refinanció.
             include: {
-                cuotasPlan: { where: { deletedAt: null }, orderBy: { nroCuota: 'asc' } },
+                // Cada cuota con SUS cobros (PROC-35): fecha, monto, método y la
+                // referencia con la que se concilia contra el banco. Sólo en el
+                // detalle: en el listado sería una consulta por fila. Sin la clave
+                // de idempotencia, que es plomería del front.
+                cuotasPlan: {
+                    where: { deletedAt: null },
+                    orderBy: { nroCuota: 'asc' },
+                    include: {
+                        pagos: {
+                            where: { deletedAt: null },
+                            orderBy: { fechaPago: 'asc' },
+                            select: { id: true, fechaPago: true, monto: true, metodo: true, referencia: true, observaciones: true },
+                        },
+                    },
+                },
                 venta: { include: { vehiculo: { select: VEHICULO_PUBLICO } } },
                 cliente: true,
                 refinanciaA: { select: { id: true, estado: true, montoFinanciado: true, moneda: true } },

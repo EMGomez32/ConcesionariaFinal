@@ -57,6 +57,7 @@ const FinanciacionesPage = lazy(() => import('./pages/financiaciones/Financiacio
 const FinanciacionExternaPage = lazy(() => import('./pages/solicitudes/FinanciacionExternaPage'));
 const PostventaPage = lazy(() => import('./pages/postventa/PostventaPage'));
 const AuditoriaPage = lazy(() => import('./pages/auditoria/AuditoriaPage'));
+const SolicitudesTitularPage = lazy(() => import('./pages/privacidad/SolicitudesTitularPage'));
 const ReportesPage = lazy(() => import('./pages/reportes/ReportesPage'));
 // Billing deshabilitado temporalmente — descomentar este import y la ruta para reactivar.
 // const BillingPage = lazy(() => import('./pages/billing/BillingPage'));
@@ -177,10 +178,13 @@ function App() {
 
               {/* Otros */}
               <Route path="/financiaciones" element={<FinanciacionesPage />} />
-              <Route path="/solicitudes" element={<FinanciacionExternaPage />} />
+              <Route path="/solicitudes" element={<RequireRole allowedRoles={['admin', 'super_admin', 'vendedor', 'lectura']}><FinanciacionExternaPage /></RequireRole>} />
               <Route path="/postventa" element={<PostventaPage />} />
               <Route path="/reportes" element={<ReportesPage />} />
               <Route path="/auditoria" element={<RequireRole allowedRoles={['admin', 'super_admin']}><AuditoriaPage /></RequireRole>} />
+              {/* Pedidos de los titulares de datos (Ley 25.326): las rutas /privacidad son de admin. */}
+              <Route path="/privacidad" element={<Navigate to="/privacidad/solicitudes" replace />} />
+              <Route path="/privacidad/solicitudes" element={<RequireRole allowedRoles={['admin', 'super_admin']}><SolicitudesTitularPage /></RequireRole>} />
               {/* Billing deshabilitado temporalmente — descomentar (y su import arriba + ítem en nav.ts) para reactivar. */}
               {/* <Route path="/billing" element={<RequireRole allowedRoles={['admin', 'super_admin']}><BillingPage /></RequireRole>} /> */}
               <Route path="/configuracion" element={<ConfiguracionPage />} />

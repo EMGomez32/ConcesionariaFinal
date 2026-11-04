@@ -4,6 +4,9 @@ import { UnauthorizedException } from '../../../domain/exceptions/BaseException'
 import { withAuthBypass } from '../../../infrastructure/database/unitOfWork';
 import config from '../../../config';
 import { mfaPendiente } from '../../../infrastructure/security/mfaPolicy';
+import { recordSecurityEvent } from '../../../infrastructure/security/securityEvents';
+import { notificarAlertaSeguridad } from '../../../infrastructure/security/alertasSeguridad';
+import { context } from '../../../infrastructure/security/context';
 
 export class RefreshAuth {
     constructor(
@@ -20,7 +23,24 @@ export class RefreshAuth {
             if (!stored) throw new Error('Not found');
 
             if (stored.isRevoked) {
+                // REUSO de un refresh ya rotado: o lo robaron, o lo tiene alguien más. Se cortan
+                // todas las sesiones del usuario y, ahora, queda el rastro y sale la alerta (antes
+                // pasaba en silencio y nadie se enteraba de una sesión robada).
                 await this.refreshTokenRepository.revokeAllForUser(stored.usuarioId);
+                await recordSecurityEvent({
+                    accion: 'refresh_reuse',
+                    entidad: 'Usuario',
+                    entidadId: stored.usuarioId,
+                    usuarioId: stored.usuarioId,
+                    detalle: 'Reuso de un refresh token ya rotado: se cerraron todas las sesiones del usuario',
+                    ip: context.getIp() ?? null,
+                    userAgent: context.getUserAgent() ?? null,
+                });
+                notificarAlertaSeguridad({
+                    tipo: 'refresh_reuse',
+                    usuarioId: stored.usuarioId,
+                    detalle: 'Reuso de un refresh token ya rotado (posible sesión robada); se cerraron todas sus sesiones',
+                });
                 throw new Error('Revoked');
             }
 

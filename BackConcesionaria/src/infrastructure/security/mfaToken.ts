@@ -32,11 +32,3 @@ export function verificarMfaToken(token: unknown): number | null {
         return null;
     }
 }
-
-/** Id de usuario del token SIN verificar la firma: sólo para agrupar el rate limit por cuenta. */
-export function usuarioDeMfaTokenSinVerificar(token: unknown): number | null {
-    if (typeof token !== 'string') return null;
-    const p = jwt.decode(token) as jwt.JwtPayload | null;
-    const id = Number(p?.sub);
-    return Number.isInteger(id) && id > 0 ? id : null;
-}

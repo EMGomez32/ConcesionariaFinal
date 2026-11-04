@@ -94,3 +94,81 @@ export function resolverReservasParaVenta(input: {
 export function debeLiberarVehiculo(estadoVehiculo: string | undefined, otrasReservasActivas: number): boolean {
     return estadoVehiculo === 'reservado' && otrasReservasActivas === 0;
 }
+
+/**
+ * "Hoy" como fecha de calendario (YYYY-MM-DD) en Argentina, que es contra lo que se
+ * compara el vencimiento de una seña (`venceEl` es @db.Date: medianoche UTC del
+ * día). Con `toISOString()` a las 21 h de Buenos Aires ya sería "mañana".
+ */
+export function hoyEnArgentina(ahora: Date = new Date()): string {
+    // en-CA formatea como YYYY-MM-DD.
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(ahora);
+}
+
+/** Parte de fecha de un @db.Date / ISO, sin convertir de zona. */
+const diaDe = (d: Date | string): string => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
+
+/**
+ * ¿La seña ya venció? Vence EL día de `venceEl`: recién al día siguiente está
+ * vencida (mismo criterio que la pantalla, `fecha < hoy`). Sin vencimiento, nunca.
+ */
+export function reservaYaVencio(venceEl: Date | string | null | undefined, hoy: string): boolean {
+    if (!venceEl) return false;
+    return diaDe(venceEl) < hoy;
+}
+
+/**
+ * QUIÉN PUEDE TOCAR QUÉ DE UNA SEÑA (PROC-33). La ruta PATCH /reservas/:id está
+ * abierta a admin y vendedor; los campos que mueven plata o liberan la unidad, no.
+ *
+ *  - Cancelar: sólo admin. Cancelar una seña ya cobrada es devolver plata y liberar
+ *    la unidad; el vendedor que la tomó no puede ser el que la deshace.
+ *  - Cambiar el monto: sólo admin. Es alterar una seña ya cobrada.
+ *  - Marcar vencida: cualquiera, pero sólo si la fecha YA pasó. Antes de eso
+ *    "vencida" es una cancelación con otro nombre (y sin motivo).
+ *  - Mover el vencimiento a una fecha PASADA: sólo admin, por lo mismo (adelantarla
+ *    a ayer y después marcarla vencida). Extenderla sí puede el vendedor: es el
+ *    pedido corriente del cliente que necesita unos días más.
+ *
+ * Devuelve el problema (status + código + mensaje) o null. Pura, para testearla sola.
+ */
+export function problemaDeCambioDeReserva(args: {
+    esAdmin: boolean;
+    hoy: string;
+    actual: { estado: string; montoSenia: number | null; venceEl: Date | string | null };
+    cambios: { estado?: string; monto?: number | null; fechaVencimiento?: string | null };
+}): { status: number; code: string; message: string } | null {
+    const { esAdmin, hoy, actual, cambios } = args;
+
+    if (cambios.estado === 'cancelada' && actual.estado !== 'cancelada' && !esAdmin) {
+        return {
+            status: 403, code: 'FORBIDDEN',
+            message: 'Cancelar una seña es del administrador. Si el cliente se arrepintió, pedíselo con el motivo.',
+        };
+    }
+    if (cambios.monto !== undefined && !esAdmin) {
+        const nuevo = cambios.monto === null ? null : Number(cambios.monto);
+        if (nuevo !== actual.montoSenia) {
+            return { status: 403, code: 'FORBIDDEN', message: 'Cambiar el monto de una seña ya tomada es del administrador.' };
+        }
+    }
+    if (cambios.fechaVencimiento !== undefined && cambios.fechaVencimiento && !esAdmin) {
+        if (diaDe(cambios.fechaVencimiento) < hoy) {
+            return {
+                status: 403, code: 'FORBIDDEN',
+                message: 'Podés extender el vencimiento de la seña, no moverlo a una fecha que ya pasó.',
+            };
+        }
+    }
+    if (cambios.estado === 'vencida' && actual.estado !== 'vencida' && !reservaYaVencio(actual.venceEl, hoy)) {
+        return {
+            status: 422, code: 'RESERVA_NO_VENCIDA',
+            message: actual.venceEl
+                ? `La seña vence el ${diaDe(actual.venceEl).split('-').reverse().join('/')}: todavía no se puede marcar vencida. Si se cae antes, la cancela un administrador.`
+                : 'La seña no tiene fecha de vencimiento: no se puede marcar vencida. Si se cae, la cancela un administrador.',
+        };
+    }
+    return null;
+}

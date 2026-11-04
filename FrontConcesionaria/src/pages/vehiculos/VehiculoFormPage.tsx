@@ -67,10 +67,13 @@ const VehiculoFormPage = () => {
     const { register, handleSubmit, reset, setError, getValues, setValue, watch, formState: { errors } } = useForm<VehiculoForm>({
         defaultValues: isEdit ? {} : valoresIniciales(sucursalDelUsuario),
     });
-    // Sólo se pide el motivo si el precio de lista cambió respecto del guardado.
+    // Sólo se pide el motivo si el precio de lista cambió respecto del guardado, y es
+    // OBLIGATORIO si BAJA: el backend lo exige (PROC-34) porque bajar el precio de
+    // lista sin decir por qué es la forma de saltear el piso de venta.
     const precioLista = watch('precioLista');
     const cambioPrecio = isEdit && precioLista != null && !Number.isNaN(Number(precioLista))
         && Number(precioLista) !== precioOriginal;
+    const bajaPrecio = cambioPrecio && precioOriginal != null && Number(precioLista) < precioOriginal;
 
     useEffect(() => {
         const toOpts = (res: unknown): Opt[] =>
@@ -287,11 +290,17 @@ const VehiculoFormPage = () => {
                                     validate: (v) => vacioONoNegativo(v) || 'El precio no puede ser negativo',
                                 })} />
                             {cambioPrecio && (
-                                <Input id="veh-motivo-precio" label="Motivo del cambio de precio (opcional)"
+                                <Input id="veh-motivo-precio"
+                                    label={bajaPrecio ? 'Motivo de la baja de precio *' : 'Motivo del cambio de precio (opcional)'}
                                     placeholder="Ej.: más de 60 días en stock, ajuste a mercado…" maxLength={500}
-                                    hint="Queda en el historial de precios de la unidad."
+                                    hint={bajaPrecio
+                                        ? 'Obligatorio cuando el precio baja (al menos 10 caracteres). Queda en el historial de precios.'
+                                        : 'Queda en el historial de precios de la unidad.'}
                                     error={errors.motivoCambioPrecio?.message}
-                                    {...register('motivoCambioPrecio')} />
+                                    {...register('motivoCambioPrecio', {
+                                        validate: (v) => !bajaPrecio || (v ?? '').trim().length >= 10
+                                            || 'Contá por qué baja el precio (al menos 10 caracteres)',
+                                    })} />
                             )}
                         </div>
                     </div>

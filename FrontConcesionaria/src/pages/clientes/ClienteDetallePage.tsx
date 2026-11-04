@@ -25,6 +25,7 @@ import { formatFecha } from '../../utils/fecha';
 import { formatMoneda, formatTotales, totalesPorMoneda } from '../../utils/moneda';
 import { useConfirm } from '../../hooks/useConfirm';
 import { etiquetaDocumento, AYUDA_DOCUMENTO } from '../../components/clientes/documento';
+import PrivacidadTitular from '../../components/clientes/PrivacidadTitular';
 import {
     ENTREGA_ESTADO, FINANCIACION_ESTADO, POSTVENTA_ESTADO, PRESUPUESTO_ESTADO,
     RESERVA_ESTADO, SOLICITUD_ESTADO, VEHICULO_ESTADO, rotuloEstado, type EstadoMeta,
@@ -103,6 +104,9 @@ const ClienteDetallePage = () => {
     const user = useAuthStore((s) => s.user);
     // Admin/vendedor pueden registrar y borrar contactos (mismo criterio que el backend).
     const puedeEditar = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin' || r === 'vendedor');
+    // Financiación externa: el servidor la abre a admin, vendedor y consulta (GET
+    // /financiacion-solicitudes). Para los demás roles ni se pide: un 403 tumbaría la ficha entera.
+    const veSolicitudes = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin' || r === 'vendedor' || r === 'lectura');
 
     const [activeTab, setActiveTab] = useState<Tab>('info');
     const [descargandoEC, setDescargandoEC] = useState(false);
@@ -155,7 +159,7 @@ const ClienteDetallePage = () => {
                     presupuestosApi.getAll({ clienteId: cid }),
                     reservasApi.getAll({ clienteId: cid }),
                     financiacionesApi.getAll({ clienteId: cid }),
-                    solicitudesFinanciacionApi.getAll({ clienteId: cid }),
+                    veSolicitudes ? solicitudesFinanciacionApi.getAll({ clienteId: cid }) : Promise.resolve([]),
                     postventaApi.getCasos({ clienteId: cid }),
                     opcional<EstadoCuenta | null>(reportesApi.estadoCuenta(cid), 'el estado de cuenta', null),
                     opcional<Seguimiento[]>(seguimientosApi.getByCliente(cid), 'la bitácora de seguimiento', []),
@@ -179,7 +183,7 @@ const ClienteDetallePage = () => {
             }
         };
         load();
-    }, [id, puedeEditar, recarga]);
+    }, [id, puedeEditar, veSolicitudes, recarga]);
 
     // Carga diferida del stock: sólo la primera vez que se abre el tab "Interés"
     // (evita pedir el listado completo de vehículos en el load inicial de la ficha).
@@ -369,7 +373,7 @@ const ClienteDetallePage = () => {
         { key: 'reservas', label: 'Reservas', icon: BookmarkCheck, count: reservas.length },
         { key: 'presupuestos', label: 'Presupuestos', icon: FileBarChart, count: presupuestos.length },
         { key: 'financiaciones', label: 'Financiación', icon: Banknote, count: financiaciones.length },
-        { key: 'solicitudes', label: 'Financiación externa', icon: FileSignature, count: solicitudes.length },
+        ...(veSolicitudes ? [{ key: 'solicitudes' as const, label: 'Financiación externa', icon: FileSignature, count: solicitudes.length }] : []),
         { key: 'postventa', label: 'Postventa', icon: Wrench, count: postventaCasos.length },
         ...(puedeEditar ? [{ key: 'seguimiento' as const, label: 'Seguimiento', icon: Clock, count: seguimientos.length }] : []),
         { key: 'interes', label: 'Interés', icon: Star, count: interes.length },
@@ -400,6 +404,12 @@ const ClienteDetallePage = () => {
                             )}
                             {/* Lead nacido de una pregunta simulada: sobrevive a
                                 apagar la demostración, así que la ficha lo dice. */}
+                            {/* Ley 25.326: revocó el consentimiento o pidió el bloqueo. */}
+                            {(cliente.bloqueadoEn || cliente.consentimientoRevocadoEn) && (
+                                <Badge variant="danger" title={cliente.bloqueadoEn ? 'Datos bloqueados: no se lo contacta ni se le cargan datos' : 'Revocó el consentimiento de contacto'}>
+                                    No contactar
+                                </Badge>
+                            )}
                             {cliente.origenSimulado && (
                                 <Badge variant="warning" title="La consulta que originó esta ficha la generó el modo demostración de Mercado Libre: no la hizo un interesado real">
                                     Simulación
@@ -536,6 +546,14 @@ const ClienteDetallePage = () => {
                                 <p className="observaciones-text">{cliente.observaciones}</p>
                             </div>
                         )}
+                        <PrivacidadTitular
+                            cliente={cliente}
+                            onActualizado={() => setRecarga((n) => n + 1)}
+                            onSuprimidoTotal={() => {
+                                queryClient.invalidateQueries({ queryKey: ['clientes'] });
+                                navigate('/clientes');
+                            }}
+                        />
                     </div>
                 )}
 

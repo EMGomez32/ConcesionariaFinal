@@ -7,9 +7,12 @@ import { recordSecurityEvent } from './securityEvents';
 // confundirse con un 'create' cualquiera.
 // 'delete_soft' es la baja lógica (la de la mayoría de recursos). 'delete' es la
 // baja FÍSICA, reservada para datos de referencia sin soft-delete (p. ej. cotizaciones).
-type AccionAudit =
+// Las de privacidad (export, suprimir, bloquear, desbloquear, revocar_consentimiento,
+// acceso_soporte) van también en el enum de Prisma: la lista de allá es la que manda.
+export type AccionAudit =
     | 'create' | 'update' | 'cancel' | 'delete_soft' | 'delete' | 'login' | 'logout' | 'refinanciar'
-    | 'login_fail' | 'password_reset_request' | 'password_reset_done';
+    | 'login_fail' | 'password_reset_request' | 'password_reset_done'
+    | 'export' | 'suprimir' | 'bloquear' | 'desbloquear' | 'revocar_consentimiento' | 'acceso_soporte';
 
 interface AuditParams {
     entidad: string;
@@ -66,6 +69,14 @@ export async function audit(params: AuditParams): Promise<void> {
             } as any,
         }));
     } catch (err) {
-        logger.error('[audit] failed to write audit log', { err, params });
+        // Sin `params` entero ni el mensaje del error: el `detalle` puede llevar nombres o
+        // emails, y un error de validación de Prisma repite los valores del INSERT.
+        logger.error('[audit] failed to write audit log', {
+            error: (err as any)?.name ?? 'Error',
+            code: (err as any)?.code ?? null,
+            entidad: params.entidad,
+            accion: params.accion,
+            entidadId: params.entidadId ?? null,
+        });
     }
 }

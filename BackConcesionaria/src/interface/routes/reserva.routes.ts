@@ -3,7 +3,7 @@ import { ReservaController } from '../controllers/ReservaController';
 import { ComprobanteController } from '../controllers/ComprobanteController';
 import { authorize } from '../middlewares/authorize.middleware';
 import { validateBody } from '../middlewares/validate.middleware';
-import { createReservaSchema, updateReservaSchema } from '../validation/reserva.schema';
+import { cancelarReservaSchema, createReservaSchema, updateReservaSchema } from '../validation/reserva.schema';
 import { costosoLimiter } from '../middlewares/rateLimiters';
 
 /**
@@ -19,12 +19,14 @@ import { costosoLimiter } from '../middlewares/rateLimiters';
  * alcanza para aplicar "anular es del admin". `DeleteReserva` NO es un hard
  * delete —cancela, libera el vehículo y registra el movimiento— y `UpdateReserva`
  * con estado 'cancelada' o 'vencida' hace exactamente lo mismo. El front usa
- * SIEMPRE el PATCH; el DELETE hoy no lo llama nadie. O sea: cerrar el DELETE a
- * admin cierra una puerta que nadie usa, y la puerta real por la que se anula es
- * el PATCH, que queda en admin+vendedor (cancelar una seña cuando el cliente se
- * arrepiente es trabajo del vendedor). Si se quiere que anular sea sólo del
- * admin de verdad, hay que chequearlo POR TRANSICIÓN DE ESTADO dentro de
- * UpdateReserva, no por verbo. Eso es lógica de negocio y excede este cambio.
+ * SIEMPRE el PATCH; el DELETE hoy no lo llama nadie.
+ *
+ * Por eso, desde PROC-33, "anular es del admin" se chequea POR CAMPO dentro de
+ * UpdateReserva (`problemaDeCambioDeReserva`) y, antes de validar el body, en
+ * `ReservaController.gateCampos`: cancelar y cambiar el monto son del admin (con
+ * motivo al cancelar); marcar vencida, sólo con la fecha ya pasada. La ruta sigue
+ * en admin+vendedor porque extender el vencimiento y las observaciones son del
+ * vendedor.
  */
 
 const router = Router();
@@ -124,7 +126,11 @@ router.post('/', authorize('admin', 'vendedor'), validateBody(createReservaSchem
  *   patch:
  *     tags: [Reservas]
  *     summary: Actualizar reserva
- *     description: Requiere rol admin o vendedor. Incluye pasarla a 'cancelada' o 'vencida'.
+ *     description: >
+ *       Requiere rol admin o vendedor. Cancelar (estado `cancelada`, con `motivo`
+ *       obligatorio) y cambiar el `monto` son sólo admin. `vencida` sólo si la
+ *       fecha de vencimiento ya pasó. El vendedor puede extender el vencimiento,
+ *       no moverlo a una fecha pasada.
  *     parameters:
  *       - { name: id, in: path, required: true, schema: { type: integer } }
  *     requestBody:
@@ -134,9 +140,11 @@ router.post('/', authorize('admin', 'vendedor'), validateBody(createReservaSchem
  *           schema:
  *             type: object
  *             properties:
+ *               estado: { type: string }
  *               monto: { type: number }
- *               vencimiento: { type: string, format: date-time }
+ *               fechaVencimiento: { type: string, format: date }
  *               observaciones: { type: string }
+ *               motivo: { type: string, description: 'Obligatorio si estado = cancelada' }
  *     responses:
  *       200: { description: Reserva actualizada, content: { application/json: { schema: { type: object } } } }
  *       400: { $ref: '#/components/responses/ValidationError' }
@@ -144,9 +152,10 @@ router.post('/', authorize('admin', 'vendedor'), validateBody(createReservaSchem
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-// Ésta es la ruta por la que el front cancela reservas (no el DELETE). Queda en
-// admin+vendedor a propósito: el cliente que se arrepiente lo atiende el vendedor.
-router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updateReservaSchema), ReservaController.update);
+// Ésta es la ruta por la que el front cancela reservas (no el DELETE). La ruta queda
+// en admin+vendedor; los CAMPOS de admin los corta `gateCampos` antes de validar el
+// body (un 403 no puede depender de que el vendedor haya mandado el motivo).
+router.patch('/:id', authorize('admin', 'vendedor'), ReservaController.gateCampos, validateBody(updateReservaSchema), ReservaController.update);
 
 /**
  * @openapi
@@ -154,11 +163,23 @@ router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updateReservaS
  *   delete:
  *     tags: [Reservas]
  *     summary: Cancelar reserva
- *     description: Libera el vehículo y genera un movimiento `liberacion_reserva`. Requiere rol admin.
+ *     description: >
+ *       Libera el vehículo y genera un movimiento `liberacion_reserva`. Requiere rol
+ *       admin y `motivo` (mínimo 10 caracteres) en el body.
  *     parameters:
  *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [motivo]
+ *             properties:
+ *               motivo: { type: string, minLength: 10, maxLength: 500 }
  *     responses:
  *       204: { description: Reserva cancelada }
+ *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
@@ -166,6 +187,6 @@ router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updateReservaS
  */
 // admin, por el criterio de cabecera. Pero leé la salvedad de arriba antes de
 // creer que con esto "anular quedó cerrado": el front cancela por el PATCH.
-router.delete('/:id', authorize('admin'), ReservaController.delete);
+router.delete('/:id', authorize('admin'), validateBody(cancelarReservaSchema), ReservaController.delete);
 
 export default router;

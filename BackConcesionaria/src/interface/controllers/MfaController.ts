@@ -7,12 +7,15 @@ import { withAuthBypass } from '../../infrastructure/database/unitOfWork';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
 import { exigeMfa } from '../../infrastructure/security/mfaPolicy';
+import { assertObjetivoGestionable } from '../../infrastructure/security/objetivoGestionable';
 import {
     confirmarSetupMfa, desactivarMfa, estadoMfa, iniciarSetupMfa, regenerarCodigosMfa, verificarSegundoFactor,
 } from '../../application/services/mfaService';
 import { emitirSesion } from '../../application/use-cases/auth/emitirSesion';
 import { ponerCookieRefresh } from './refreshCookie';
 import { RevokeUserSessions } from '../../application/use-cases/auth/RevokeUserSessions';
+import { exigirContrasenaDelActor } from '../../application/services/reautenticacion';
+import { avisarCambioDeCuenta } from '../../infrastructure/email/mailer';
 
 const tokenService = new JwtTokenService();
 const refreshRepo = new PrismaRefreshTokenRepository();
@@ -138,9 +141,9 @@ export class MfaController {
             // Un admin sólo opera sobre usuarios de SU concesionaria (404, no 403: no se revela que existe).
             if (!esSuper && objetivo.concesionariaId !== actor.concesionariaId) throw new NotFoundException('Usuario');
             // Y nunca sobre un super_admin: quitarle el 2FA a la cuenta de plataforma es de otro super_admin.
-            if (!esSuper && rolesDe(objetivo).includes('super_admin')) {
-                throw new ForbiddenException('Sólo un super_admin puede resetear el 2FA de otro super_admin.');
-            }
+            assertObjetivoGestionable(objetivo);
+            // STEP-UP: apagarle el segundo factor a otro abre su cuenta a quien tenga su contraseña.
+            await exigirContrasenaDelActor(req.body?.currentPassword);
 
             await desactivarMfa(id);
             await revokeSessions.execute(id);
@@ -149,6 +152,7 @@ export class MfaController {
                 detalle: `2FA reseteado por un administrador (usuario ${id}); sesiones cerradas`,
                 concesionariaId: objetivo.concesionariaId,
             });
+            avisarCambioDeCuenta(objetivo.email, '2fa_reseteado');
             res.status(204).send();
         } catch (error) { next(error); }
     }

@@ -69,9 +69,16 @@ describe('Motivo del cambio de precio de lista', () => {
         expect(res.data.color).toBe('Gris');
     });
 
-    test('Cambio de precio sin motivo queda con motivo vacío', async () => {
-        await api.patch(`/api/vehiculos/${vehId}`, { precioLista: 5700 }, authHeaders(token));
-        const fila = (await historial()).find((x) => Number(x.precioNuevo) === 5700);
+    test('Subir el precio sin motivo queda con motivo vacío', async () => {
+        await api.patch(`/api/vehiculos/${vehId}`, { precioLista: 5900 }, authHeaders(token));
+        const fila = (await historial()).find((x) => Number(x.precioNuevo) === 5900);
         expect(fila?.motivo ?? null).toBeNull();
+    });
+
+    test('Bajar el precio sin motivo se rechaza (PROC-34): 400 en el campo del motivo', async () => {
+        const res = await api.patch(`/api/vehiculos/${vehId}`, { precioLista: 5700 }, authHeaders(token));
+        expect(res.status).toBe(400);
+        expect(res.data.details).toEqual([expect.objectContaining({ campo: 'motivoCambioPrecio' })]);
+        expect((await historial()).find((x) => Number(x.precioNuevo) === 5700)).toBeUndefined();
     });
 });

@@ -139,8 +139,11 @@ router.get('/mercadolibre/callback', async (req: Request, res: Response) => {
     const volverAlPanel = (params: string): void => {
         res.redirect(`${env.APP_URL}/configuracion?${params}`);
     };
-    const conError = (detalle: string): void =>
-        volverAlPanel(`ml=error&detalle=${encodeURIComponent(detalle)}`);
+    // Sólo un CÓDIGO viaja en la URL; el texto lo pone el front (ConfiguracionPage). Antes
+    // viajaba el mensaje (`detalle=…`) y el panel lo mostraba tal cual: cualquiera podía armar
+    // un link a /configuracion?ml=error&detalle=<lo que quisiera> y la app lo decía con su voz.
+    const conError = (codigo: 'state_invalido' | 'sin_codigo' | 'cuenta_ajena' | 'fallo_vinculacion'): void =>
+        volverAlPanel(`ml=error&codigo=${codigo}`);
 
     try {
         const code = typeof req.query.code === 'string' ? req.query.code : '';
@@ -159,7 +162,7 @@ router.get('/mercadolibre/callback', async (req: Request, res: Response) => {
             // Vencido (TTL 10 min), manipulado, ausente, ya usado o abierto en
             // otro navegador. El motivo real NO se loguea ni se devuelve: el
             // state es material de autenticación y todos se arreglan igual.
-            conError('El link de vinculación venció, ya se usó o se abrió en otro navegador. Volvé a intentarlo desde Configuración.');
+            conError('state_invalido');
             return;
         }
         const concesionariaId = payload.cid;
@@ -167,7 +170,7 @@ router.get('/mercadolibre/callback', async (req: Request, res: Response) => {
         // ML manda `error=access_denied` cuando el usuario cancela la pantalla de
         // autorización: sin code no hay nada que canjear.
         if (!code) {
-            conError('Mercado Libre no devolvió el código de autorización (¿se canceló la vinculación?).');
+            conError('sin_codigo');
             return;
         }
 
@@ -189,7 +192,7 @@ router.get('/mercadolibre/callback', async (req: Request, res: Response) => {
             select: { id: true },
         }));
         if (ajena) {
-            conError('Esa cuenta de Mercado Libre ya está vinculada a otra concesionaria. Desvinculala de allá antes de conectarla acá.');
+            conError('cuenta_ajena');
             return;
         }
 
@@ -245,10 +248,10 @@ router.get('/mercadolibre/callback', async (req: Request, res: Response) => {
     } catch (err) {
         // Canje rechazado: code ya usado, code vencido (duran minutos) o la
         // Redirect URI de la app de ML distinta a la que mandamos. El detalle de
-        // ML sirve para diagnosticar y no contiene secretos.
+        // ML sirve para diagnosticar y no contiene secretos: queda en el log, no en la URL.
         const detalle = mensajeCorto(err);
         logger.error(`[meli-oauth] falló la vinculación: ${detalle}`);
-        conError(detalle || 'No se pudo vincular la cuenta de Mercado Libre.');
+        conError('fallo_vinculacion');
     }
 });
 

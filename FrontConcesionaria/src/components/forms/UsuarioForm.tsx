@@ -29,6 +29,10 @@ const UsuarioForm: React.FC<UsuarioFormProps> = ({ usuario, onSave, onCancel, lo
         comisionPorcentaje: usuario?.comisionPorcentaje != null ? String(usuario.comisionPorcentaje) : '',
         roleIds: usuario?.roles?.map(r => r.rolId) || [] as number[],
     });
+    // Step-up: cambiarle el email a una cuenta existente pide la contraseña de quien edita
+    // (el backend responde 400 STEP_UP_REQUIRED sin ella). Sólo se muestra si el email cambió.
+    const [miPassword, setMiPassword] = useState('');
+    const cambiaEmail = !!usuario && formData.email.trim().toLowerCase() !== (usuario.email ?? '').toLowerCase();
 
     const [concesionarias, setConcesionarias] = useState<Concesionaria[]>([]);
     const [selectedConcesionariaId, setSelectedConcesionariaId] = useState<number>(
@@ -110,6 +114,7 @@ const UsuarioForm: React.FC<UsuarioFormProps> = ({ usuario, onSave, onCancel, lo
             // Sólo super_admin elige el tenant; para un admin lo pone el backend
             // desde el token (y el body se ignora), así que no hace falta mandarlo.
             ...(isSuperAdmin ? { concesionariaId: selectedConcesionariaId } : {}),
+            ...(cambiaEmail ? { currentPassword: miPassword } : {}),
         };
         onSave(payload as unknown as CreateUsuarioDto | UpdateUsuarioDto);
     };
@@ -147,6 +152,23 @@ const UsuarioForm: React.FC<UsuarioFormProps> = ({ usuario, onSave, onCancel, lo
                     required
                 />
 
+                {cambiaEmail && (
+                    <div className="full-width">
+                        <Input
+                            label="Tu contraseña *"
+                            type="password"
+                            name="miPassword"
+                            value={miPassword}
+                            onChange={(e) => setMiPassword(e.target.value)}
+                            placeholder="Para confirmar el cambio de email"
+                            hint="Cambiar el email cambia a dónde llega la recuperación de contraseña. Le avisamos al email anterior."
+                            icon={<Lock size={18} />}
+                            autoComplete="current-password"
+                            required
+                        />
+                    </div>
+                )}
+
                 {!usuario && (
                     <div className="full-width">
                         <Input
@@ -155,7 +177,7 @@ const UsuarioForm: React.FC<UsuarioFormProps> = ({ usuario, onSave, onCancel, lo
                             name="password"
                             value={formData.password}
                             onChange={handleChange}
-                            placeholder="Mínimo 6 caracteres"
+                            placeholder="Mínimo 10 caracteres"
                             icon={<Lock size={18} />}
                             required
                         />

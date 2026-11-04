@@ -8,6 +8,7 @@ import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
 import { assertMismoTenant } from '../../infrastructure/security/tenantGuard';
 import { storage } from '../../infrastructure/storage/LocalStorageAdapter';
+import { esFotoDeVehiculo, prefijoDocumentosVehiculo, prefijoFotosVehiculo } from '../../infrastructure/storage/zonaPrivada';
 import { BaseException } from '../../domain/exceptions/BaseException';
 
 const repository = new PrismaVehiculoArchivoRepository();
@@ -65,12 +66,17 @@ export class VehiculoArchivoController {
             // binario: si no, un id ajeno o inexistente deja archivos huérfanos.
             await assertMismoTenant('vehiculo', vehiculoId);
 
-            const saved = await storage.save(file, `vehiculos/${vehiculoId}`);
+            // Las fotos van a la zona PÚBLICA (las baja Mercado Libre y las muestra la ficha PDF);
+            // todo lo demás —título, cédula, boleto, comprobante— a la PRIVADA, que sólo se abre
+            // con URL firmada y vigente (ver storage/zonaPrivada.ts).
+            const tipo = req.body.tipo ?? null;
+            const prefijo = esFotoDeVehiculo(tipo) ? prefijoFotosVehiculo(vehiculoId) : prefijoDocumentosVehiculo(vehiculoId);
+            const saved = await storage.save(file, prefijo);
             const user = context.getUser();
 
             const result = await createUC.execute({
                 vehiculoId,
-                tipo: req.body.tipo ?? null,
+                tipo,
                 descripcion: req.body.descripcion ?? null,
                 url: saved.url,
                 storageKey: saved.storageKey,

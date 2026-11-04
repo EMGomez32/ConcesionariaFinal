@@ -376,7 +376,7 @@ export const ROLES: Rol[] = [
                     'Al guardar, el auto queda Reservado y el movimiento queda registrado. Si estaba publicado en Mercado Libre, el aviso se pausa.',
                     'Bajá el comprobante de seña en PDF y entregáselo al cliente.',
                     'Las reservas que están por vencer se marcan en ámbar, y también te aparecen en el tablero.',
-                    'Si la operación se cae, cancelá la reserva: el auto vuelve a Publicado y queda el movimiento de liberación.',
+                    'Si la operación se cae, la reserva la cancela un administrador, con el motivo: el auto vuelve a Publicado y queda el movimiento de liberación. Si ya pasó la fecha de vencimiento, la podés marcar vencida vos.',
                 ],
                 pantalla: 'Reservas',
             },
@@ -429,10 +429,12 @@ export const ROLES: Rol[] = [
             // está cerrado a admin, pero el front no lo usa NUNCA: cancela por
             // PATCH /reservas/:id con estado 'cancelada', que es admin+vendedor y hace
             // lo mismo (libera el vehículo, lo republica en Mercado Libre y registra el
-            // movimiento). Y está bien que sea así: el cliente que se arrepiente lo
-            // atiende el vendedor, en el momento, o la unidad queda bloqueada.
+            // movimiento). Hasta PROC-33 eso era a propósito ("la seña es la
+            // excepción"); desde ahí el PATCH chequea por campo: cancelar y cambiar el
+            // monto de una seña son del admin, con motivo, y el vendedor sólo la marca
+            // vencida cuando la fecha ya pasó (así la unidad no queda trabada).
             'No anula operaciones. Una venta, un plan de financiación o un acta de ingreso los carga y los corrige, pero darlos de baja es del administrador. Lo mismo con vehículos, clientes, presupuestos, gastos y proveedores.',
-            'La seña es la excepción, y es a propósito: si el cliente se arrepiente, el vendedor la cancela en el momento y el auto vuelve a publicarse solo. Queda en Auditoría con nombre y fecha.',
+            'Tampoco cancela una seña ni le cambia el monto: si el cliente se arrepiente, la cancela un administrador y deja escrito el motivo. Lo que sí puede es extender el vencimiento y, una vez pasada la fecha, marcarla vencida para que el auto vuelva a publicarse.',
             // Decía "ni un extra, ni el usado que se tomó en canje": de las tres, sólo
             // la del pago era cierta. El canje se CERRÓ a admin al detectar esto (es el
             // renglón que baja el total de la venta: un usado de $8.000.000 se descuenta
@@ -480,7 +482,7 @@ export const ROLES: Rol[] = [
             'Reportes → Por vencer',
         ],
         notaMenu:
-            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas de atención (Consultas, Bandeja, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
+            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas de atención (Consultas, Bandeja, Mercado Libre, Seguimientos y Tasaciones), Financiación externa, Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
         tareas: [
             {
                 titulo: 'Cobrar una cuota',
@@ -559,7 +561,7 @@ export const ROLES: Rol[] = [
             'Reportes → Próx. service',
         ],
         notaMenu:
-            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas de atención (Consultas, Bandeja, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
+            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas de atención (Consultas, Bandeja, Mercado Libre, Seguimientos y Tasaciones), Financiación externa, Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
         tareas: [
             {
                 titulo: 'Abrir un caso',
@@ -998,8 +1000,10 @@ export const MODULOS: Modulo[] = [
     {
         nombre: 'Fin. Externa',
         seccion: 'Finanzas & Postventa',
-        qué: 'Las solicitudes a bancos y financieras: monto pedido, plazo, tasa estimada, papeles adjuntos y el seguimiento hasta que sale aprobada o rechazada, con el monto y la tasa finales. Puede existir sin auto elegido, para la pre-aprobación.',
-        roles: TODOS,
+        qué: 'Las solicitudes a bancos y financieras: monto pedido, plazo, tasa estimada, papeles adjuntos y el seguimiento hasta que sale aprobada o rechazada, con el monto y la tasa finales. Puede existir sin auto elegido, para la pre-aprobación. Los papeles (DNI, recibos de sueldo) los ven sólo el administrador y el vendedor del cliente; el perfil de consulta ve la solicitud sin los adjuntos.',
+        // Lleva el cliente entero y su situación crediticia: el servidor no se la abre a
+        // cobrador ni a postventa, y el menú tampoco se la muestra.
+        roles: ['admin', 'vendedor', 'lectura'],
     },
     {
         nombre: 'Gastos Fijos',
@@ -1239,7 +1243,7 @@ export const ESTADO_HONESTO: { titulo: string; detalle: string }[] = [
         // página es pública y el sistema está en producción. Se nombran pantallas
         // y operaciones, que es lo que el dueño entiende y lo que se puede señalar.
         detalle:
-            'Primero lo que cambió, porque es la parte buena: los límites por perfil los aplica el servidor y no el menú. Vale para los reportes de plata, para las bandejas de atención y para las pantallas de operación del día a día: registrar una venta, tomar una seña, armar un plan de cuotas, mandar una unidad al taller o subirle fotos. Saberse la dirección de una pantalla no alcanza para entrar. Y registrar quedó separado de anular: dar de baja una venta, una financiación, un acta de ingreso, un pago ya cobrado o el usado tomado en canje es del administrador. El vendedor carga la operación; no la borra. Dos excepciones, dichas de frente porque son a propósito: la seña la cancela el vendedor cuando el cliente se arrepiente —si no, la unidad queda bloqueada— y los extras de una venta los corrige quien los cargó. Las dos quedan en Auditoría con nombre y fecha. Del lado de la administración hay un matiz que conviene saber: Auditoría es del administrador y punto, pero el listado de usuarios lo necesitan media docena de pantallas para el selector de "vendedor asignado", así que en vez de cerrarlo se recortó — quien no es administrador ve nombres y funciones, no mails ni comisiones. Lo que sigue siendo un límite: los perfiles de la concesionaria son cinco y vienen fijos —administrador, vendedor, cobrador, postventa y consulta— más la cuenta de plataforma, que no se le asigna a nadie del salón y por eso arriba vas a contar seis fichas. No se inventa uno nuevo ni se le corre un permiso suelto a una persona. Si alguien hace dos trabajos, se le dan dos perfiles: vendedor y cobrador a la vez, por ejemplo, y suma los dos. Si tu concesionaria necesita un recorte que no entra en esos cinco, decilo antes de contratar y lo hablamos.',
+            'Primero lo que cambió, porque es la parte buena: los límites por perfil los aplica el servidor y no el menú. Vale para los reportes de plata, para las bandejas de atención y para las pantallas de operación del día a día: registrar una venta, tomar una seña, armar un plan de cuotas, mandar una unidad al taller o subirle fotos. Saberse la dirección de una pantalla no alcanza para entrar. Y registrar quedó separado de anular: dar de baja una venta, una financiación, un acta de ingreso, un pago ya cobrado o el usado tomado en canje es del administrador. El vendedor carga la operación; no la borra. Cancelar una seña, cancelar un plan de cuotas o anular una venta, además, piden el motivo por escrito, y en Auditoría queda cómo estaba y cómo quedó. Una excepción, dicha de frente porque es a propósito: los extras de una venta los corrige quien los cargó, y queda en Auditoría con nombre y fecha. Del lado de la administración hay un matiz que conviene saber: Auditoría es del administrador y punto, pero el listado de usuarios lo necesitan media docena de pantallas para el selector de "vendedor asignado", así que en vez de cerrarlo se recortó — quien no es administrador ve nombres y funciones, no mails ni comisiones. Lo que sigue siendo un límite: los perfiles de la concesionaria son cinco y vienen fijos —administrador, vendedor, cobrador, postventa y consulta— más la cuenta de plataforma, que no se le asigna a nadie del salón y por eso arriba vas a contar seis fichas. No se inventa uno nuevo ni se le corre un permiso suelto a una persona. Si alguien hace dos trabajos, se le dan dos perfiles: vendedor y cobrador a la vez, por ejemplo, y suma los dos. Si tu concesionaria necesita un recorte que no entra en esos cinco, decilo antes de contratar y lo hablamos.',
     },
     {
         titulo: 'La tasación la hace tu tasador, no el sistema',

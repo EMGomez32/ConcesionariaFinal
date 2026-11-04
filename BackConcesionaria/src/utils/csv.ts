@@ -38,5 +38,8 @@ export function sendCsv(res: Response, filenameBase: string, cols: Col[], rows: 
     const filename = `${filenameBase}-${new Date().toISOString().slice(0, 10)}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    // Cuántas filas salieron: lo lee el rastro de exportaciones (auditoriaExport.middleware)
+    // para dejar constancia de CUÁNTO se sacó del sistema, no sólo de que se exportó.
+    res.setHeader('X-Export-Filas', String(rows.length));
     res.send('﻿' + csv);
 }

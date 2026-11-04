@@ -3,6 +3,7 @@ import { VehiculoArchivo } from '../../../domain/entities/VehiculoArchivo';
 import prisma from '../prisma';
 import { assertMismoTenant } from '../../security/tenantGuard';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
+import { urlParaCliente } from '../../storage/zonaPrivada';
 
 export class PrismaVehiculoArchivoRepository implements IVehiculoArchivoRepository {
     async findByVehiculo(vehiculoId: number): Promise<VehiculoArchivo[]> {
@@ -61,7 +62,8 @@ export class PrismaVehiculoArchivoRepository implements IVehiculoArchivoReposito
         return new VehiculoArchivo(
             a.id,
             a.vehiculoId,
-            a.url,
+            // Documentos (zona privada): URL firmada y con vencimiento. Fotos y links externos, tal cual.
+            urlParaCliente(a),
             a.tipo ?? null,
             a.descripcion ?? null,
             a.originalName ?? null,

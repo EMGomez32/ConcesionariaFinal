@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- El tema se fija ANTES del primer paint con el script de abajo (sin flash),
+<!-- El tema se fija ANTES del primer paint con public/tema-inicial.js (sin flash),
      con la misma regla que src/store/themeStore.ts: si el usuario eligió un tema
      con el toggle del TopBar (store `autenza-theme`), ése; si nunca eligió, el del
      sistema (prefers-color-scheme). El CSS resuelve los tokens con :root (claro)
@@ -7,22 +7,9 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <script>
-      // Aplica el tema antes de pintar, para que no haya flash de tema.
-      (function () {
-        var t = null;
-        try {
-          var raw = localStorage.getItem('autenza-theme');
-          var s = raw && JSON.parse(raw).state;
-          // v1 guarda `elegido`; v0 guardaba `theme` (sólo al usar el toggle).
-          t = s && (s.elegido || s.theme);
-        } catch (e) { /* storage bloqueado o ilegible: se sigue al sistema */ }
-        if (t !== 'light' && t !== 'dark') {
-          t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        document.documentElement.setAttribute('data-theme', t);
-      })();
-    </script>
+    <!-- Síncrono y en el <head> a propósito: corre antes del primer paint. Es un archivo
+         de public/ porque la CSP (script-src 'self') bloquea los scripts inline. -->
+    <script src="/tema-inicial.js"></script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
@@ -32,12 +19,8 @@
     <meta name="theme-color" content="#10b981" />
     <meta name="color-scheme" content="light dark" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap"
-    />
+    <!-- Las tipografías se autoalojan (@fontsource, importadas en src/main.tsx): ningún
+         pedido sale a Google Fonts ni a otro tercero al abrir la página. -->
 
     <!--
       Metadatos de previsualización, ESTÁTICOS a propósito.

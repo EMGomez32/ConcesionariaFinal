@@ -44,3 +44,18 @@ describe('enmascararEmail', () => {
         expect(enmascararEmail('sin-arroba')).toBe('***');
     });
 });
+
+describe('aviso de cambio de cuenta sin SMTP', () => {
+    test('no falla, deja rastro y no escribe el email completo', async () => {
+        jest.resetModules();
+        const info = jest.fn();
+        jest.doMock('../../src/infrastructure/logging/logger', () => ({ logger: { warn: jest.fn(), error: jest.fn(), info } }));
+        jest.doMock('../../src/config/env', () => ({ env: { NODE_ENV: 'production', SMTP_HOST: '', SMTP_PORT: undefined } }));
+        const { sendAvisoDeCuenta } = await import('../../src/infrastructure/email/mailer');
+        await expect(sendAvisoDeCuenta('titular@empresa.com', 'password_reseteada')).resolves.toBeUndefined();
+        const log = info.mock.calls.map((c) => String(c[0])).join('\n');
+        expect(log).toContain('password_reseteada');
+        expect(log).toContain('ti***@empresa.com');
+        expect(log).not.toContain('titular@empresa.com');
+    });
+});

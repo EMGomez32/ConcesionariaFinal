@@ -50,6 +50,7 @@ export const mfaApi = {
     login2fa: (mfaToken: string, factor: { code?: string; recoveryCode?: string }) =>
         client.post<SesionResponse & { usoRecuperacion?: boolean }>('/auth/login/2fa', { mfaToken, ...factor }),
 
-    /** Admin: resetea el 2FA de un usuario que perdió el dispositivo. */
-    resetDeUsuario: (usuarioId: number) => client.post<void>(`/usuarios/${usuarioId}/2fa/reset`, {}),
+    /** Admin: resetea el 2FA de un usuario que perdió el dispositivo. Pide la contraseña del admin (step-up). */
+    resetDeUsuario: (usuarioId: number, currentPassword: string) =>
+        client.post<void>(`/usuarios/${usuarioId}/2fa/reset`, { currentPassword }),
 };
