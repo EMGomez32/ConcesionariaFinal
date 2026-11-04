@@ -8,9 +8,13 @@ const BASE: Record<string, string> = {
     JWT_SECRET: 'un-secreto-largo-y-distinto-para-jwt-123456',
     JWT_REFRESH_SECRET: 'otro-secreto-largo-y-distinto-para-refresh-654321',
 };
+// Producción además exige la clave de cifrado en reposo (ver el describe de abajo): los casos
+// de producción que deben arrancar la traen.
+const CLAVE_SECRETOS = { INTEGRACIONES_SECRET_KEY: 'ab'.repeat(32) };
 const APP_ROL = {
     APP_DATABASE_URL: 'postgresql://app_rw:clave@db:5432/concesionaria',
     APP_DB_PASSWORD: 'clave',
+    ...CLAVE_SECRETOS,
 };
 
 function cargarEnv(vars: Record<string, string | undefined>) {
@@ -70,7 +74,7 @@ describe('rol app_rw obligatorio en producción', () => {
     });
 
     test('la válvula de emergencia ALLOW_SUPERUSER_DB=1 permite arrancar sin el rol', () => {
-        const r = cargarEnv({ NODE_ENV: 'production', ALLOW_SUPERUSER_DB: '1' });
+        const r = cargarEnv({ NODE_ENV: 'production', ALLOW_SUPERUSER_DB: '1', ...CLAVE_SECRETOS });
         expect(r.salidas).toEqual([]);
         expect(r.env.APP_DATABASE_URL).toBeUndefined();
     });
@@ -86,5 +90,34 @@ describe('rol app_rw obligatorio en producción', () => {
 
     test('APP_DATABASE_URL sin APP_DB_PASSWORD sigue siendo inválido (ya lo era)', () => {
         expect(cargarEnv({ NODE_ENV: 'development', APP_DATABASE_URL: APP_ROL.APP_DATABASE_URL }).salidas).toEqual([1]);
+    });
+});
+
+describe('INTEGRACIONES_SECRET_KEY obligatoria en producción', () => {
+    test('producción SIN la clave → el arranque falla con el motivo', () => {
+        const { INTEGRACIONES_SECRET_KEY: _, ...sinClave } = APP_ROL;
+        void _;
+        const r = cargarEnv({ NODE_ENV: 'production', ...sinClave });
+        expect(r.salidas).toEqual([1]);
+        expect(r.errores).toContain('INTEGRACIONES_SECRET_KEY');
+    });
+
+    test('vacía (así la pasa docker compose si no está definida) cuenta como ausente', () => {
+        expect(cargarEnv({ NODE_ENV: 'production', ...APP_ROL, INTEGRACIONES_SECRET_KEY: '' }).salidas).toEqual([1]);
+    });
+
+    test('con un valor que no es de 64 hex también falla', () => {
+        expect(cargarEnv({ NODE_ENV: 'production', ...APP_ROL, INTEGRACIONES_SECRET_KEY: 'corta' }).salidas).toEqual([1]);
+    });
+
+    test('con la clave válida arranca', () => {
+        const r = cargarEnv({ NODE_ENV: 'production', ...APP_ROL });
+        expect(r.salidas).toEqual([]);
+        expect(r.env.INTEGRACIONES_SECRET_KEY).toHaveLength(64);
+    });
+
+    test('en desarrollo y en test sigue siendo opcional', () => {
+        expect(cargarEnv({ NODE_ENV: 'development' }).salidas).toEqual([]);
+        expect(cargarEnv({ NODE_ENV: 'test' }).salidas).toEqual([]);
     });
 });

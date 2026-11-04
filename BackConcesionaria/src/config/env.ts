@@ -35,9 +35,10 @@ const envSchema = z.object({
     // para una migración de emergencia: con '1' la app puede correr como superusuario y la RLS queda inactiva.
     ALLOW_SUPERUSER_DB: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['0', '1']).optional()),
     JWT_SECRET: z.string().min(10),
-    // Clave de cifrado en reposo de los secretos de integraciones (AES-256-GCM).
-    // 64 hex = 32 bytes: `openssl rand -hex 32`. Opcional: sin ella los secretos
-    // se guardan en claro (warning al arranque; los protege sólo la RLS).
+    // Clave de cifrado en reposo de los secretos de integraciones y del 2FA (AES-256-GCM).
+    // 64 hex = 32 bytes: `openssl rand -hex 32`. OBLIGATORIA en producción (ver el
+    // superRefine). En desarrollo/test es opcional: sin ella los secretos se guardan en
+    // claro (warning al arranque; los protege sólo la RLS).
     INTEGRACIONES_SECRET_KEY: z.preprocess(
         (v) => (v === '' ? undefined : v),
         z.string().regex(/^[0-9a-fA-F]{64}$/, 'INTEGRACIONES_SECRET_KEY debe ser 64 caracteres hex (openssl rand -hex 32)').optional(),
@@ -129,6 +130,17 @@ const envSchema = z.object({
             code: z.ZodIssueCode.custom,
             path: ['APP_DATABASE_URL'],
             message: 'En producción APP_DATABASE_URL (rol app_rw) es obligatoria: sin ella la app correría como superusuario y la RLS no filtraría. Configurala junto con APP_DB_PASSWORD (ver .env.example) o, sólo en una emergencia, ALLOW_SUPERUSER_DB=1.',
+        });
+    }
+    // Sin la clave, cifrarSecreto() guarda en CLARO los secretos TOTP (el segundo factor de
+    // cada usuario), los tokens de Meta y las contraseñas IMAP: un volcado de la base o un
+    // backup sin cifrar anulaba el 2FA y daba las credenciales de los canales. En producción
+    // el cifrado en reposo no puede ser opcional: el arranque falla con el motivo.
+    if (!data.INTEGRACIONES_SECRET_KEY) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['INTEGRACIONES_SECRET_KEY'],
+            message: 'En producción INTEGRACIONES_SECRET_KEY es obligatoria (64 hex: openssl rand -hex 32): sin ella los secretos del 2FA y de las integraciones se guardarían en claro. Guardá una copia fuera del servidor: sin la misma clave no se pueden leer los secretos ya cifrados.',
         });
     }
     for (const [key, value] of [['JWT_SECRET', data.JWT_SECRET], ['JWT_REFRESH_SECRET', data.JWT_REFRESH_SECRET]] as const) {

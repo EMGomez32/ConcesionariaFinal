@@ -66,6 +66,17 @@ export async function buscarIntegracionMeta(integracionId: number): Promise<Inte
 }
 
 /**
+ * Comparación de secretos en tiempo constante, aunque tengan distinto largo: se comparan
+ * los SHA-256 (siempre 32 bytes) con timingSafeEqual. Con `===` el tiempo de respuesta
+ * depende de cuántos caracteres iniciales coinciden y el token se puede adivinar de a uno.
+ */
+export function secretosIguales(a: string, b: string): boolean {
+    const ha = crypto.createHash('sha256').update(a, 'utf8').digest();
+    const hb = crypto.createHash('sha256').update(b, 'utf8').digest();
+    return crypto.timingSafeEqual(ha, hb);
+}
+
+/**
  * Handshake de suscripción (GET): si hub.mode === 'subscribe' y el token
  * coincide con el configurado, devuelve el challenge a responder en texto
  * plano; si no, null (→ 403).
@@ -77,7 +88,7 @@ export function resolverVerificacionMeta(
     const config = integracion.config as ConfigMeta | null;
     const modo = query['hub.mode'];
     const token = query['hub.verify_token'];
-    if (modo === 'subscribe' && typeof token === 'string' && config?.verifyToken && token === config.verifyToken) {
+    if (modo === 'subscribe' && typeof token === 'string' && config?.verifyToken && secretosIguales(token, config.verifyToken)) {
         return String(query['hub.challenge'] ?? '');
     }
     return null;
