@@ -44,6 +44,8 @@ import objetivoVendedorRoutes from '../interface/routes/objetivo-vendedor.routes
 import privacidadRoutes from '../interface/routes/privacidad.routes';
 import { authenticate } from '../interface/middlewares/authenticate.middleware';
 import { authorize } from '../interface/middlewares/authorize.middleware';
+import { auditoriaExport } from '../interface/middlewares/auditoriaExport.middleware';
+import { accesoSoporte } from '../interface/middlewares/accesoSoporte.middleware';
 import ApiResponse from '../utils/ApiResponse';
 
 const router = express.Router();
@@ -64,6 +66,11 @@ router.use('/auth', authEvents, authRoutes);
 // de datos responde sin un JWT válido. La autorización por rol se aplica
 // adicionalmente en cada router con authorize(...).
 router.use(authenticate);
+
+// Rastros de privacidad (no cortan nada, sólo anotan): cada CSV exportado (PRIV-10) y
+// cada lectura del personal de AUTENZA sobre los datos de una concesionaria (PRIV-13).
+router.use(auditoriaExport);
+router.use(accesoSoporte);
 
 // SaaS Core
 router.use('/concesionarias', concesionariaRoutes);
