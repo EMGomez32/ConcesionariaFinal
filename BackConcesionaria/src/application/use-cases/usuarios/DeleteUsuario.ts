@@ -1,6 +1,7 @@
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { RevokeUserSessions } from '../auth/RevokeUserSessions';
+import { assertObjetivoGestionable } from '../../../infrastructure/security/usuarioPolicy';
 
 export class DeleteUsuario {
     constructor(
@@ -13,6 +14,8 @@ export class DeleteUsuario {
         if (!exists) {
             throw new NotFoundException('Usuario');
         }
+        // Borrar al super_admin deja a la plataforma sin administración: sólo otro super_admin.
+        assertObjetivoGestionable(exists);
         const result = await this.usuarioRepository.delete(id);
         // Una baja no puede seguir renovando sesión.
         await this.revokeSessions.execute(id);
