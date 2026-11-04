@@ -236,8 +236,11 @@ describe('Derechos del titular (privacidad)', () => {
             expect((await api.get(`/api/financiacion-solicitudes/${sol.data.id}/archivos`, authHeaders(adminToken))).data).toHaveLength(1);
 
             expect((await api.delete(`/api/financiacion-solicitudes/${sol.data.id}`, authHeaders(adminToken))).status).toBe(204);
-            // Antes el adjunto seguía saliendo (firmado) de una solicitud dada de baja.
-            expect((await api.get(`/api/financiacion-solicitudes/${sol.data.id}/archivos`, authHeaders(adminToken))).data).toEqual([]);
+            // Antes el adjunto seguía saliendo (firmado) de una solicitud dada de baja. Ahora
+            // la solicitud dada de baja ya no es visible (404) y, aunque lo fuera, no tiene
+            // adjuntos: lo que importa es que el adjunto no salga y que se haya borrado.
+            const tras = await api.get(`/api/financiacion-solicitudes/${sol.data.id}/archivos`, authHeaders(adminToken));
+            expect(tras.status === 404 || (Array.isArray(tras.data) && tras.data.length === 0)).toBe(true);
             const aud = await api.get('/api/auditoria?accion=delete&entidad=SolicitudFinanciacionArchivo&limit=20', authHeaders(adminToken));
             expect(aud.data.results.some((r: any) => r.detalle.includes(`solicitud ${sol.data.id}`))).toBe(true);
         });
