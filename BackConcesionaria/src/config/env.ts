@@ -86,6 +86,13 @@ const envSchema = z.object({
         (v) => (v === undefined || v === '' ? undefined : Number(v)),
         z.number().int().min(30_000).default(300_000),
     ),
+    // ── Alertas de seguridad ─────────────────────────────────────────────────
+    // Webhook OPCIONAL que recibe un POST JSON por cada evento de seguridad que alguien
+    // tiene que mirar ya: racha de logins fallidos, reuso de un refresh token (sesión
+    // robada) y login de super_admin. Sirve cualquier receptor de webhooks (Slack,
+    // Discord, un bot de Telegram detrás de un relay, n8n…). Vacía = sin alertas
+    // (quedan igual en security_events y en el log). En producción tiene que ser https.
+    SECURITY_ALERT_WEBHOOK_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
     // ── Cierre automático de atenciones (módulo del vendedor) ────────────────
     // Hora local a la que se considera cerrado el día. A partir de ahí, toda
     // atención que siga `abierta` la cierra el sistema y el vendedor recibe la
@@ -141,6 +148,14 @@ const envSchema = z.object({
             code: z.ZodIssueCode.custom,
             path: ['INTEGRACIONES_SECRET_KEY'],
             message: 'En producción INTEGRACIONES_SECRET_KEY es obligatoria (64 hex: openssl rand -hex 32): sin ella los secretos del 2FA y de las integraciones se guardarían en claro. Guardá una copia fuera del servidor: sin la misma clave no se pueden leer los secretos ya cifrados.',
+        });
+    }
+    // Las alertas viajan con ids y emails enmascarados: en producción no van en claro.
+    if (data.SECURITY_ALERT_WEBHOOK_URL && !data.SECURITY_ALERT_WEBHOOK_URL.startsWith('https://')) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['SECURITY_ALERT_WEBHOOK_URL'],
+            message: 'En producción SECURITY_ALERT_WEBHOOK_URL tiene que ser https://.',
         });
     }
     for (const [key, value] of [['JWT_SECRET', data.JWT_SECRET], ['JWT_REFRESH_SECRET', data.JWT_REFRESH_SECRET]] as const) {

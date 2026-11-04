@@ -121,3 +121,18 @@ describe('INTEGRACIONES_SECRET_KEY obligatoria en producción', () => {
         expect(cargarEnv({ NODE_ENV: 'test' }).salidas).toEqual([]);
     });
 });
+
+describe('SECURITY_ALERT_WEBHOOK_URL', () => {
+    test('opcional: sin ella arranca igual', () => {
+        expect(cargarEnv({ NODE_ENV: 'production', ...APP_ROL }).env.SECURITY_ALERT_WEBHOOK_URL).toBeUndefined();
+    });
+
+    test('en producción tiene que ser https', () => {
+        expect(cargarEnv({ NODE_ENV: 'production', ...APP_ROL, SECURITY_ALERT_WEBHOOK_URL: 'http://alertas.example/hook' }).salidas).toEqual([1]);
+        expect(cargarEnv({ NODE_ENV: 'production', ...APP_ROL, SECURITY_ALERT_WEBHOOK_URL: 'https://alertas.example/hook' }).salidas).toEqual([]);
+    });
+
+    test('en desarrollo acepta http (un receptor local)', () => {
+        expect(cargarEnv({ NODE_ENV: 'development', SECURITY_ALERT_WEBHOOK_URL: 'http://localhost:9000/hook' }).salidas).toEqual([]);
+    });
+});

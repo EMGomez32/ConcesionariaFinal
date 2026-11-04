@@ -15,6 +15,8 @@ import { sendPasswordResetEmail } from '../../infrastructure/email/mailer';
 import { env } from '../../config/env';
 import { logger } from '../../infrastructure/logging/logger';
 import { ponerCookieRefresh, limpiarCookieRefresh, refreshDeLaRequest } from './refreshCookie';
+import { recordSecurityEvent } from '../../infrastructure/security/securityEvents';
+import { notificarAlertaSeguridad } from '../../infrastructure/security/alertasSeguridad';
 
 const tokenService = new JwtTokenService();
 const refreshRepo = new PrismaRefreshTokenRepository();
@@ -24,6 +26,32 @@ const logoutUC = new LogoutAuth(tokenService, refreshRepo);
 const loginSegundoFactorUC = new LoginSegundoFactor(tokenService, refreshRepo);
 
 const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
+
+/**
+ * Login de la cuenta de PLATAFORMA (super_admin): saltea el aislamiento entre concesionarias,
+ * así que cada ingreso queda en security_events (sin tenant: audit_log no lo puede guardar
+ * si la cuenta no tiene concesionaria) y sale como alerta si hay webhook. Un login que el
+ * dueño no reconoce es la señal más temprana de una cuenta tomada.
+ */
+async function rastroLoginSuperAdmin(
+    user: { id: number; email: string; roles?: string[]; concesionariaId?: number | null; mfaPendiente?: boolean },
+    con2fa: boolean,
+): Promise<void> {
+    if (!user.roles?.includes('super_admin')) return;
+    const detalle = con2fa ? 'Login de super_admin con 2FA' : user.mfaPendiente ? 'Login de super_admin (falta configurar el 2FA)' : 'Login de super_admin sin 2FA';
+    await recordSecurityEvent({
+        accion: 'login_super_admin',
+        entidad: 'Usuario',
+        entidadId: user.id,
+        usuarioId: user.id,
+        concesionariaId: user.concesionariaId ?? null,
+        email: user.email,
+        detalle,
+        ip: context.getIp() ?? null,
+        userAgent: context.getUserAgent() ?? null,
+    });
+    notificarAlertaSeguridad({ tipo: 'super_admin_login', usuarioId: user.id, email: user.email, detalle });
+}
 const RESET_TTL_MS = 60 * 60 * 1000; // 1 hora
 
 export class AuthController {
@@ -50,6 +78,8 @@ export class AuthController {
                 });
             }
 
+            await rastroLoginSuperAdmin(result.user, false);
+
             // Web: el refresh va además en la cookie httpOnly. El cuerpo no cambia (app móvil).
             ponerCookieRefresh(res, result.tokens.refresh);
             res.json(result);
@@ -75,6 +105,7 @@ export class AuthController {
                     concesionariaId: sesion.user.concesionariaId,
                 });
             }
+            await rastroLoginSuperAdmin(sesion.user, true);
             ponerCookieRefresh(res, sesion.tokens.refresh);
             res.json({ ...sesion, ...(usoRecuperacion ? { usoRecuperacion: true } : {}) });
         } catch (error) {
