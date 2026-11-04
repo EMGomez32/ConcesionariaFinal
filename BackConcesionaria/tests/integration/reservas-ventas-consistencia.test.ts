@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, loginAsAdmin, authHeaders, unique, tryDelete } from './helpers';
+import { api, loginAsSuperAdmin, loginAsAdmin, authHeaders, unique, cancelarReserva } from './helpers';
 
 /**
  * Consistencia reserva ↔ venta ↔ estado del vehículo (auditoría de seguridad, H7):
@@ -55,10 +55,10 @@ describe('Consistencia reserva / venta / vehículo', () => {
         return r.data.id;
     }
 
-    const reservar = (vehiculoId: number, clienteId: number) =>
+    const reservar = (vehiculoId: number, clienteId: number, fechaVencimiento = '2099-12-31') =>
         api.post(
             '/api/reservas',
-            { sucursalId, vendedorId, clienteId, vehiculoId, monto: 1000, moneda: 'ARS', fechaVencimiento: '2026-12-31' },
+            { sucursalId, vendedorId, clienteId, vehiculoId, monto: 1000, moneda: 'ARS', fechaVencimiento },
             authHeaders(adToken),
         );
 
@@ -86,7 +86,7 @@ describe('Consistencia reserva / venta / vehículo', () => {
         expect(venta.data.error).toBe('RESERVA_INVALIDA');
         // Nada se movió: v2 sigue disponible y la reserva sigue activa.
         expect(await estadoDe(v2)).toBe('publicado');
-        await tryDelete(`/api/reservas/${r.data.id}`, adToken);
+        await cancelarReserva(r.data.id, adToken);
     });
 
     test('auto reservado para OTRO cliente: la venta sin reservaId se rechaza (409) y el auto sigue reservado', async () => {
@@ -100,7 +100,7 @@ describe('Consistencia reserva / venta / vehículo', () => {
         expect(venta.data.error).toBe('VEHICULO_RESERVADO');
         expect(await estadoDe(v)).toBe('reservado');
 
-        await tryDelete(`/api/reservas/${r.data.id}`, adToken);
+        await cancelarReserva(r.data.id, adToken);
     });
 
     test('auto reservado por el MISMO cliente: la venta consume su reserva sola', async () => {
@@ -122,7 +122,7 @@ describe('Consistencia reserva / venta / vehículo', () => {
         expect(r.status).toBe(201);
         expect(await estadoDe(v)).toBe('reservado');
 
-        const del = await api.delete(`/api/reservas/${r.data.id}`, authHeaders(adToken));
+        const del = await cancelarReserva(r.data.id, adToken);
         expect(del.status).toBeLessThan(300);
         expect(await estadoDe(v)).toBe('publicado');
     });
@@ -137,17 +137,29 @@ describe('Consistencia reserva / venta / vehículo', () => {
         expect(p.data.error).toBe('CONVERSION_MANUAL');
         expect(await estadoDe(v)).toBe('reservado');
 
-        await tryDelete(`/api/reservas/${r.data.id}`, adToken);
+        await cancelarReserva(r.data.id, adToken);
     });
 
-    test('vencer una reserva (PATCH estado=vencida) libera el auto', async () => {
+    test('vencer una reserva YA vencida (PATCH estado=vencida) libera el auto', async () => {
         const v = await nuevoVehiculo();
-        const r = await reservar(v, clienteA);
+        const r = await reservar(v, clienteA, '2020-01-01');
         expect(r.status).toBe(201);
 
         const p = await api.patch(`/api/reservas/${r.data.id}`, { estado: 'vencida' }, authHeaders(adToken));
         expect(p.status).toBe(200);
         expect(await estadoDe(v)).toBe('publicado');
+    });
+
+    test('una reserva que todavía no venció no se marca vencida (422): sería cancelarla sin motivo', async () => {
+        const v = await nuevoVehiculo();
+        const r = await reservar(v, clienteA);
+        expect(r.status).toBe(201);
+
+        const p = await api.patch(`/api/reservas/${r.data.id}`, { estado: 'vencida' }, authHeaders(adToken));
+        expect(p.status).toBe(422);
+        expect(p.data.error).toBe('RESERVA_NO_VENCIDA');
+        expect(await estadoDe(v)).toBe('reservado');
+        await cancelarReserva(r.data.id, adToken);
     });
 
     test('dos ventas SIMULTÁNEAS del mismo auto: sólo una gana', async () => {
