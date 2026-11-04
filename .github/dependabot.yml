@@ -1,0 +1,152 @@
+# Dependabot: PRs semanales para mantener al día las dependencias (npm de los tres
+# paquetes, Actions del CI e imágenes de Docker). Cada PR pasa por el mismo CI que
+# cualquier cambio (build, tests, npm audit, CodeQL) antes de poder mergearse.
+#
+# - Menores y parches van AGRUPADOS en un PR por paquete; las majors, de a una (son
+#   las que pueden romper y conviene revisarlas por separado).
+# - cooldown: no propone una versión hasta que tenga unos días publicada. Las versiones
+#   maliciosas que se cuelan en npm suelen detectarse y retirarse en ese lapso. No
+#   aplica a las actualizaciones de SEGURIDAD, que llegan apenas hay aviso.
+# - Los avisos de seguridad (Dependabot alerts / security updates) se activan en
+#   Settings → Code security; este archivo sólo configura las actualizaciones de versión.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /BackConcesionaria
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      backend-menores:
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /FrontConcesionaria
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      frontend-menores:
+        patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      # SheetJS se instala desde su CDN oficial (tarball versionado en package.json):
+      # Dependabot no puede actualizarlo. Se revisa a mano en https://cdn.sheetjs.com.
+      - dependency-name: xlsx
+
+  - package-ecosystem: npm
+    directory: /AppConcesionaria
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      app-menores:
+        patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      # Las versiones de Expo, React Native y React las fija el SDK de Expo: se suben
+      # todas juntas con `npx expo install --fix` al cambiar de SDK, no de a una.
+      # Sólo se dejan pasar los parches dentro del SDK.
+      - dependency-name: 'expo'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: 'expo-*'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: '@expo/*'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: 'react-native'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: 'react-native-*'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: 'react'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: '@types/react'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: 'ci(deps)'
+    # Las Actions están fijadas por SHA con el tag en un comentario; Dependabot
+    # actualiza las dos cosas juntas.
+    groups:
+      actions:
+        patterns: ['*']
+
+  # Imágenes base de los Dockerfile (fijadas por digest): propone el digest nuevo de
+  # la misma etiqueta (parches de seguridad de Alpine, Node, nginx, Postgres).
+  - package-ecosystem: docker
+    directories:
+      - /BackConcesionaria
+      - /FrontConcesionaria
+      - /scripts/backup-image
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: 'chore(docker)'
+    groups:
+      imagenes:
+        patterns: ['*']
+    ignore:
+      # Cambiar de major de Postgres exige migrar el directorio de datos (pg_upgrade o
+      # dump/restore): nunca por un PR automático. Node: se decide a mano (LTS).
+      - dependency-name: 'postgres'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'node'
+        update-types: ['version-update:semver-major']
+
+  # La imagen de la base en docker-compose.yml (misma regla que arriba).
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: 'chore(docker)'
+    ignore:
+      - dependency-name: 'postgres'
+        update-types: ['version-update:semver-major']

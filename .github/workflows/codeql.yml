@@ -1,0 +1,53 @@
+name: CodeQL
+
+# Análisis estático de seguridad (SAST) del código JavaScript/TypeScript: back, front
+# y app. Busca inyecciones, XSS, SSRF, path traversal, regex catastróficas, etc. Los
+# hallazgos aparecen en Security → Code scanning y, en un PR, como anotaciones.
+# Semanal además de push/PR: las consultas de CodeQL se actualizan y pueden encontrar
+# cosas nuevas en código que no cambió.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 9 * * 1' # lunes 06:17 (Argentina)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: CodeQL (javascript-typescript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Subir los resultados a Code scanning.
+      security-events: write
+      # Leer el estado del propio workflow (lo pide codeql-action).
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
+        with:
+          languages: javascript-typescript
+          # JS/TS se analiza sin compilar.
+          build-mode: none
+          # Suite ampliada de seguridad (más consultas que la default).
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - '**/node_modules/**'
+              - '**/dist/**'
+              # Herramientas de diseño del editor, no código de la app.
+              - '.github/skills/**'
+              # Tests: usan credenciales y payloads de prueba a propósito.
+              - 'BackConcesionaria/tests/**'
+              - '**/*.test.ts'
+              - '**/*.test.tsx'
+      - uses: github/codeql-action/analyze@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
+        with:
+          category: '/language:javascript-typescript'
