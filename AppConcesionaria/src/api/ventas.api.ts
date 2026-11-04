@@ -1,4 +1,5 @@
 import { api } from './client';
+import { Paginado } from '../lib/paginacion';
 import { Importe } from './atenciones.api';
 import type { BadgeTone } from '../components/ui';
 
@@ -31,7 +32,6 @@ export interface Venta {
     pagos?: VentaPago[];
 }
 
-interface Paginado<T> { results: T[]; page: number; limit: number; totalPages: number; totalResults: number }
 
 export interface CreateVentaDto {
     sucursalId: number;
@@ -46,8 +46,9 @@ export interface CreateVentaDto {
 }
 
 export const ventasApi = {
-    list: (search?: string, page = 1, limit = 30) =>
-        api.get('/ventas', { params: { ...(search ? { search } : {}), page, limit } })
+    // Búsqueda en el servidor con `q` (cliente o unidad): contrato de la fase 2.
+    list: (q?: string, page = 1, limit = 30) =>
+        api.get('/ventas', { params: { ...(q ? { q } : {}), page, limit } })
             .then((r) => r.data as Paginado<Venta>),
     getById: (id: number) => api.get(`/ventas/${id}`).then((r) => r.data as Venta),
     create: (data: CreateVentaDto) => api.post('/ventas', data).then((r) => r.data as Venta),

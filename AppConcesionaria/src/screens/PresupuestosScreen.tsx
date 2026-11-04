@@ -1,66 +1,86 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
-import { colors, spacing, fonts, fontSize } from '../theme/tokens';
-import { Card, Badge, Field, GhostButton, T } from '../components/ui';
-import { num } from '../api/atenciones.api';
-import { presupuestosApi, Presupuesto, ESTADO_PRESUPUESTO_LABEL } from '../api/presupuestos.api';
-
-const money = (v: any, m = 'ARS') => {
-    const n = num(v);
-    if (n == null) return '—';
-    return `${m === 'USD' ? 'US$' : '$'}${n.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
-};
-const fecha = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('es-AR') : '');
+import { View, Text, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { spacing, fonts, fontSize } from '../theme/tokens';
+import { makeStyles, useTheme } from '../theme/theme';
+import { Card, Badge, Field, GhostButton, T, EstadoLista, PieLista } from '../components/ui';
+import { presupuestosApi, ESTADO_PRESUPUESTO_LABEL } from '../api/presupuestos.api';
+import { useDebounced, useListaPaginada } from '../hooks/useListaPaginada';
+import { fechaDia, formatMoneda } from '../lib/formato';
 
 export default function PresupuestosScreen({ navigation }: any) {
+    const s = useStyles();
+    const { colors } = useTheme();
     const [search, setSearch] = useState('');
-    const q = useQuery({ queryKey: ['presupuestos', search], queryFn: () => presupuestosApi.list(search.trim() || undefined, 1, 50) });
-    const items = q.data?.results ?? [];
+    const busqueda = useDebounced(search.trim());
+    const lista = useListaPaginada(
+        ['presupuestos', busqueda],
+        (page, limit) => presupuestosApi.list(busqueda || undefined, page, limit),
+    );
 
     return (
         <View style={s.root}>
             <FlatList
-                data={items}
+                data={lista.items}
                 keyExtractor={(p) => String(p.id)}
                 contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}
                 keyboardShouldPersistTaps="handled"
-                refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.accent} />}
+                refreshControl={<RefreshControl refreshing={lista.refrescando} onRefresh={lista.refrescar} tintColor={colors.accentText} />}
+                onEndReached={lista.cargarMas}
+                onEndReachedThreshold={0.4}
                 ListHeaderComponent={
                     <View>
-                        <T.H1 style={{ marginTop: spacing.sm }}>Presupuestos</T.H1>
-                        <T.Muted style={{ marginBottom: spacing.lg, marginTop: spacing.xs }}>Las cotizaciones para el cliente.</T.Muted>
-                        <GhostButton title="+  Nuevo presupuesto" onPress={() => navigation.navigate('PresupuestoNuevo')} />
-                        <Field placeholder="Buscar por número o cliente…" value={search} onChangeText={setSearch} style={{ marginTop: spacing.md }} />
+                        <T.Muted style={{ marginBottom: spacing.lg }}>Los presupuestos que le pasaste a cada cliente.</T.Muted>
+                        <GhostButton title="Crear presupuesto" icon="plus" onPress={() => navigation.navigate('PresupuestoNuevo')} />
+                        <Field
+                            placeholder="Buscar por número, cliente o unidad…"
+                            accessibilityLabel="Buscar presupuestos"
+                            autoCorrect={false}
+                            value={search}
+                            onChangeText={setSearch}
+                            style={{ marginTop: spacing.md }}
+                            right={lista.buscando ? <ActivityIndicator color={colors.accentText} style={{ marginRight: spacing.md }} /> : null}
+                        />
                     </View>
                 }
                 renderItem={({ item }) => {
                     const est = ESTADO_PRESUPUESTO_LABEL[item.estado];
+                    const total = formatMoneda(item.total, item.moneda);
                     return (
-                        <Card style={{ marginTop: spacing.md }} onPress={() => navigation.navigate('PresupuestoDetalle', { id: item.id })}>
+                        <Card
+                            style={{ marginTop: spacing.md }}
+                            onPress={() => navigation.navigate('PresupuestoDetalle', { id: item.id })}
+                            accessibilityLabel={`Presupuesto ${item.nroPresupuesto}, ${est.label}, ${total}, ${item.cliente?.nombre ?? ''}`}
+                            accessibilityHint="Abre el presupuesto"
+                        >
                             <View style={s.rowTop}>
                                 <Text style={s.nro}>{item.nroPresupuesto}</Text>
                                 <Badge label={est.label} tone={est.tone} />
                             </View>
-                            <Text style={s.total}>{money(item.total, item.moneda)}</Text>
+                            <Text style={s.total}>{total}</Text>
                             <T.Muted style={{ marginTop: 2 }}>
-                                {[item.cliente?.nombre, fecha(item.fechaCreacion)].filter(Boolean).join(' · ')}
+                                {[item.cliente?.nombre, fechaDia(item.fechaCreacion)].filter(Boolean).join(' · ')}
                             </T.Muted>
                         </Card>
                     );
                 }}
-                ListEmptyComponent={
-                    q.isLoading ? <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.xl }} />
-                        : <T.Muted style={{ textAlign: 'center', marginTop: spacing.xl }}>No hay presupuestos.</T.Muted>
+                ListEmptyComponent={<EstadoLista q={lista.q} que="los presupuestos" vacio={busqueda ? 'Ningún presupuesto coincide con la búsqueda.' : 'No hay presupuestos.'} />}
+                ListFooterComponent={
+                    <PieLista
+                        cargandoMas={lista.q.isFetchingNextPage}
+                        errorMas={lista.q.isFetchNextPageError}
+                        onRetry={lista.cargarMas}
+                        mostrando={lista.items.length}
+                        total={lista.total}
+                    />
                 }
             />
         </View>
     );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     root: { flex: 1, backgroundColor: colors.bg },
     rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
     nro: { color: colors.text, fontFamily: fonts.brand, fontSize: fontSize.md, fontWeight: '700', flex: 1 },
-    total: { color: colors.text, fontFamily: fonts.brandBold, fontSize: fontSize.xl, fontWeight: '800', marginTop: spacing.xs },
-});
+    total: { color: colors.text, fontFamily: fonts.brandBold, fontSize: fontSize.xl, fontWeight: '800', marginTop: spacing.xs, fontVariant: ['tabular-nums'] },
+}));

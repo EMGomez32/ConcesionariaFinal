@@ -1,4 +1,5 @@
 import { api } from './client';
+import { Paginado } from '../lib/paginacion';
 
 /**
  * API de Atenciones (el Mostrador del vendedor) — el flujo completo de la visita:
@@ -205,7 +206,7 @@ export interface CerrarAtencionDto {
 // ── API ────────────────────────────────────────────────────────────────────
 export const atencionesApi = {
     list: (estado?: EstadoAtencion, page = 1, limit = 50) =>
-        api.get('/atenciones', { params: { ...(estado ? { estado } : {}), page, limit } }).then((r) => r.data as { results: AtencionListItem[]; total: number }),
+        api.get('/atenciones', { params: { ...(estado ? { estado } : {}), page, limit } }).then((r) => r.data as Paginado<AtencionListItem>),
 
     alertas: () =>
         api.get('/atenciones/alertas').then((r) => r.data as {
@@ -237,6 +238,19 @@ export const atencionesApi = {
         api.patch(`/atenciones/${id}/cierre`, data).then((r) => r.data),
 };
 
+/**
+ * La unidad con la que se precarga el presupuesto o la venta desde la atención:
+ * la que el cliente vino a buscar; si no hay, y en la visita se mostró UNA sola,
+ * esa. Nunca una que ya no se puede vender (vendida o devuelta).
+ */
+export const unidadDeLaVisita = (a: Pick<AtencionDetalle, 'vehiculos'>): UnidadSugerida | undefined => {
+    const vendible = (u?: UnidadSugerida) => !!u && u.estado !== 'vendido' && u.estado !== 'devuelto';
+    const buscada = a.vehiculos?.find((v) => v.tipo === 'buscada' && vendible(v.vehiculo))?.vehiculo;
+    if (buscada) return buscada;
+    const mostradas = (a.vehiculos ?? []).filter((v) => vendible(v.vehiculo));
+    return mostradas.length === 1 ? mostradas[0].vehiculo : undefined;
+};
+
 // ── Códigos de error del flujo ───────────────────────────────────────────────
 export const COD_CLIENTE_AJENO = 'CLIENTE_ASIGNADO_A_OTRO_VENDEDOR';
 export const COD_DATOS_CLIENTE = 'DATOS_CLIENTE_REQUERIDOS';
@@ -262,9 +276,9 @@ export const MOTIVO_LABEL: Record<MotivoAtencion, string> = {
 export const RESULTADO_LABEL: Record<ResultadoAtencion, string> = {
     reserva: 'Reserva / seña tomada',
     sin_unidad: 'No hay unidad que le sirva',
-    cotizacion: 'Cotización entregada',
+    cotizacion: 'Presupuesto entregado',
     test_drive: 'Test drive realizado',
-    permuta_a_tasar: 'Permuta enviada a tasar',
+    permuta_a_tasar: 'Canje enviado a tasar',
     en_analisis: 'En análisis',
     se_retiro: 'Se retiró sin definir',
 };

@@ -1,37 +1,47 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { colors, spacing, fonts, fontSize } from '../theme/tokens';
-import { Card, Badge, T } from '../components/ui';
+import { spacing, fonts, fontSize } from '../theme/tokens';
+import { makeStyles, useTheme } from '../theme/theme';
+import { Card, Badge, Banner, T, ErrorCarga } from '../components/ui';
 import { num } from '../api/atenciones.api';
 import { presupuestosApi, PresupuestoItem, ESTADO_PRESUPUESTO_LABEL } from '../api/presupuestos.api';
+import { fechaDia, formatMoneda as money, formatKm } from '../lib/formato';
 
-const money = (v: any, m = 'ARS') => {
-    const n = num(v);
-    if (n == null) return '—';
-    return `${m === 'USD' ? 'US$' : '$'}${n.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
-};
 const itemVeh = (i: PresupuestoItem) => i.vehiculo ? [i.vehiculo.marca, i.vehiculo.modelo, i.vehiculo.dominio].filter(Boolean).join(' ') : (i.vehiculoId ? `Unidad #${i.vehiculoId}` : 'Ítem');
 
 export default function PresupuestoDetalleScreen({ route }: any) {
+    const s = useStyles();
+    const { colors } = useTheme();
     const id: number = route.params?.id;
+    /** Recién creado desde la app: se confirma arriba, sin volver a la lista en silencio. */
+    const creado: boolean = !!route.params?.creado;
     const q = useQuery({ queryKey: ['presupuesto', id], queryFn: () => presupuestosApi.getById(id) });
     const p = q.data;
 
-    if (q.isLoading) return <View style={s.center}><ActivityIndicator color={colors.accent} /></View>;
-    if (!p) return <View style={s.center}><T.Muted>No se pudo cargar el presupuesto.</T.Muted></View>;
+    if (q.isLoading) return <View style={s.center}><ActivityIndicator color={colors.accentText} accessibilityLabel="Cargando" /></View>;
+    if (!p) {
+        return (
+            <View style={[s.center, { padding: spacing.lg }]}>
+                <ErrorCarga que="el presupuesto" error={q.error} onRetry={() => { q.refetch(); }} style={{ alignSelf: 'stretch' }} />
+            </View>
+        );
+    }
 
     const m = p.moneda;
     const est = ESTADO_PRESUPUESTO_LABEL[p.estado];
 
     return (
         <ScrollView style={s.root} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40 }}>
+            {creado ? (
+                <Banner title="Presupuesto creado" text={`Quedó guardado como ${p.nroPresupuesto}.`} style={{ marginBottom: spacing.lg }} />
+            ) : null}
             <T.H1>{p.nroPresupuesto}</T.H1>
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, alignItems: 'center' }}>
                 <Badge label={est.label} tone={est.tone} />
                 {p.cliente?.nombre ? <T.Muted>{p.cliente.nombre}</T.Muted> : null}
             </View>
-            {p.validoHasta ? <T.Muted style={{ marginTop: spacing.xs }}>Válido hasta {new Date(p.validoHasta).toLocaleDateString('es-AR')}</T.Muted> : null}
+            {p.validoHasta ? <T.Muted style={{ marginTop: spacing.xs }}>Válido hasta {fechaDia(p.validoHasta)}</T.Muted> : null}
 
             <Card style={{ marginTop: spacing.lg }}>
                 <T.H2>Unidades</T.H2>
@@ -66,7 +76,7 @@ export default function PresupuestoDetalleScreen({ route }: any) {
                     <View style={s.item}>
                         <View style={{ flex: 1 }}>
                             <T.Body style={{ fontWeight: '600' }}>{p.canje.descripcion || 'Usado en parte de pago'}</T.Body>
-                            <T.Muted>{[p.canje.dominio, p.canje.anio, p.canje.km != null ? `${Number(p.canje.km).toLocaleString('es-AR')} km` : null].filter(Boolean).join(' · ')}</T.Muted>
+                            <T.Muted>{[p.canje.dominio, p.canje.anio, formatKm(p.canje.km)].filter(Boolean).join(' · ')}</T.Muted>
                         </View>
                         <Text style={[s.itemPrecio, { color: colors.warning }]}>− {money(p.canje.valorTomado, m)}</Text>
                     </View>
@@ -90,11 +100,11 @@ export default function PresupuestoDetalleScreen({ route }: any) {
     );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     root: { flex: 1, backgroundColor: colors.bg },
     center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
     item: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, paddingVertical: 8 },
-    itemPrecio: { color: colors.text, fontSize: fontSize.base, fontWeight: '700' },
+    itemPrecio: { color: colors.text, fontSize: fontSize.base, fontWeight: '700', fontVariant: ['tabular-nums'] },
     totalK: { color: colors.text, fontFamily: fonts.brand, fontSize: fontSize.md, fontWeight: '700' },
-    totalV: { color: colors.accent, fontFamily: fonts.brandBold, fontSize: fontSize.xl, fontWeight: '800' },
-});
+    totalV: { color: colors.accentText, fontFamily: fonts.brandBold, fontSize: fontSize.xl, fontWeight: '800', fontVariant: ['tabular-nums'] },
+}));
