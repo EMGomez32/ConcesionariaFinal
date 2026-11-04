@@ -16,6 +16,7 @@ import {
     DollarSign,
     CreditCard,
     ClipboardList,
+    FileLock2,
     CalendarClock,
     Gauge,
     GitCompare,
@@ -135,6 +136,8 @@ export const NAV_SECTIONS: NavSection[] = [
             { label: 'Sucursales', path: '/sucursales', icon: Store, keywords: ['locales'] },
             { label: 'Usuarios', path: '/usuarios', icon: UserPlus, keywords: ['empleados', 'staff'], adminOnly: true },
             { label: 'Auditoría', path: '/auditoria', icon: ClipboardList, keywords: ['logs', 'historial'], adminOnly: true },
+            // Registro de pedidos de acceso, rectificación, supresión, bloqueo u oposición (Ley 25.326).
+            { label: 'Pedidos de titulares', path: '/privacidad/solicitudes', icon: FileLock2, crumb: 'Pedidos de titulares', keywords: ['privacidad', 'datos personales', 'ley 25.326', 'derechos', 'supresión', 'acceso', 'rectificación', 'bloqueo', 'oposición', 'arco'], adminOnly: true },
             // Billing: sección deshabilitada temporalmente. El código (página, API,
             // hooks y backend) queda intacto para reactivarla en el futuro; basta
             // con descomentar esta línea, el ícono BadgeCheck arriba y la ruta en App.tsx.
