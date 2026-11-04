@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../../infrastructure/database/prisma';
+import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { audit } from '../../../infrastructure/security/audit';
 import { context } from '../../../infrastructure/security/context';
 import { resolveConcesionariaId } from '../../../infrastructure/security/resolveConcesionariaId';
@@ -49,6 +50,16 @@ function serializar(s: FilaSolicitud, nombres: Map<number, string>, ahora: Date)
         registradaPor: s.registradaPorId ? nombres.get(s.registradaPorId) ?? null : null,
         atendidaPor: s.atendidaPorId ? nombres.get(s.atendidaPorId) ?? null : null,
     };
+}
+
+/**
+ * ¿La ficha es de esta concesionaria? Va por una transacción RAW (no la extensión) para
+ * aceptar también fichas dadas de baja o ya suprimidas: el pedido se puede registrar
+ * después de atenderlo, y la ficha suprimida sale de los listados.
+ */
+async function clienteDelTenant(clienteId: number, concesionariaId: number): Promise<boolean> {
+    const c = await withTenantTransaction((tx) => tx.cliente.findFirst({ where: { id: clienteId, concesionariaId }, select: { id: true } }));
+    return !!c;
 }
 
 const INCLUDE = { cliente: { select: { id: true, nombre: true, apellido: true } } } as const;
@@ -119,8 +130,7 @@ export async function crearSolicitudTitular(datos: {
     if (datos.clienteId) {
         // La ficha tiene que ser de la MISMA concesionaria: si no, el registro de un
         // tenant apuntaría al cliente de otro.
-        const c = await prisma.cliente.findFirst({ where: { id: datos.clienteId, concesionariaId }, select: { id: true } });
-        if (!c) throw new ValidationException([{ campo: 'clienteId', mensaje: 'El cliente no existe en esta concesionaria' }], 'El cliente no existe en esta concesionaria');
+        if (!(await clienteDelTenant(datos.clienteId, concesionariaId))) throw new ValidationException([{ campo: 'clienteId', mensaje: 'El cliente no existe en esta concesionaria' }], 'El cliente no existe en esta concesionaria');
     }
 
     const hoy = aDiaUtc(new Date());
@@ -173,8 +183,7 @@ export async function actualizarSolicitudTitular(id: number, datos: {
 
     if (datos.clienteId !== undefined) {
         if (datos.clienteId !== null) {
-            const c = await prisma.cliente.findFirst({ where: { id: datos.clienteId, concesionariaId: actual.concesionariaId }, select: { id: true } });
-            if (!c) throw new ValidationException([{ campo: 'clienteId', mensaje: 'El cliente no existe en esta concesionaria' }], 'El cliente no existe en esta concesionaria');
+            if (!(await clienteDelTenant(datos.clienteId, actual.concesionariaId))) throw new ValidationException([{ campo: 'clienteId', mensaje: 'El cliente no existe en esta concesionaria' }], 'El cliente no existe en esta concesionaria');
         }
         data.clienteId = datos.clienteId;
     }
