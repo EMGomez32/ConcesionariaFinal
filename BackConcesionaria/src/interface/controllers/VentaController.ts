@@ -190,13 +190,9 @@ export class VentaController {
         try {
             const ventaId = parseInt(req.params.id as string, 10);
             const pagoId = parseInt(req.params.pagoId as string, 10);
+            // La auditoría (con monto, método y referencia del pago quitado) la escribe
+            // el repositorio dentro de la misma transacción del soft-delete.
             await repository.removePago(ventaId, pagoId);
-            await audit({
-                entidad: 'VentaPago',
-                accion: 'delete_soft',
-                entidadId: pagoId,
-                detalle: `Pago ${pagoId} eliminado de venta ${ventaId}`,
-            });
             res.status(204).send();
         } catch (error) { next(error); }
     }

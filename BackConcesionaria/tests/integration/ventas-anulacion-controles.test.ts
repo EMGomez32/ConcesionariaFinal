@@ -93,6 +93,11 @@ describe('Anular una venta: motivo, bloqueos y reporte (PROC-30)', () => {
             // La reversa es por su camino (admin, auditada): quitar el pago.
             const [pagoId] = bloqueada.data.details.bloqueos[0].ids;
             expect((await api.delete(`/api/ventas/${ventaId}/pagos/${pagoId}`, authHeaders(adToken))).status).toBe(204);
+            // La reversa deja su propio rastro, con lo que se quitó (no sólo "pago N eliminado").
+            const logs = await api.get(`/api/auditoria?entidad=VentaPago&entidadId=${pagoId}&accion=delete_soft&limit=5`, authHeaders(adToken));
+            const [frase, cambio] = String(logs.data.results[0]?.detalle).split('\n');
+            expect(frase).toContain('ref. TRF-1');
+            expect(JSON.parse(cambio).antes.pago).toEqual(expect.objectContaining({ id: pagoId, monto: '2000', metodo: 'transferencia', referencia: 'TRF-1' }));
             expect((await anularVenta(ventaId, adToken)).status).toBe(204);
         });
 

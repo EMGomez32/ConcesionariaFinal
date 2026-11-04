@@ -5,6 +5,8 @@ import { coerceFilter } from '../queryFilter';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
 import { NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../security/tenantGuard';
+import { auditEnTx, detalleConCambio } from '../../security/auditTx';
+import { withTenantTransaction } from '../unitOfWork';
 import { USUARIO_PUBLICO, VEHICULO_PUBLICO } from '../proyecciones';
 import { parsePagination, parseOrderBy } from '../queryOptions';
 import { whereDeBusqueda, clienteCoincide, vehiculoCoincide, rangoDeFechas } from '../busqueda';
@@ -154,9 +156,34 @@ export class PrismaVentaRepository implements IVentaRepository {
     // borrar el renglón de cualquier otra venta del tenant pasando un ventaId
     // inventado. La extensión reescribe deleteMany como updateMany de deletedAt
     // (soft delete) y le inyecta el concesionariaId, igual que a delete.
+    //
+    // QUITAR UN PAGO ES LA REVERSA que exige anular una venta (PROC-30): es plata
+    // cobrada que deja de figurar. Por eso el soft-delete y su rastro (con monto,
+    // método y referencia del pago quitado) van en UNA transacción: antes la
+    // auditoría era "Pago N eliminado", fire-and-forget y después del commit.
+    // La venta se busca primero con el cliente extendido (tenant inyectado: una venta
+    // ajena da 404) y el pago se ata a ESA venta dentro de la tx.
     async removePago(ventaId: number, pagoId: number): Promise<void> {
-        const { count } = await prisma.ventaPago.deleteMany({ where: { id: pagoId, ventaId } });
-        if (count === 0) throw new NotFoundException('Pago de la venta');
+        const venta = await prisma.venta.findUnique({ where: { id: ventaId }, select: { id: true, concesionariaId: true } });
+        if (!venta) throw new NotFoundException('Pago de la venta');
+        await withTenantTransaction(async (tx) => {
+            const pago = await tx.ventaPago.findFirst({
+                where: { id: pagoId, ventaId, deletedAt: null },
+                select: { id: true, monto: true, metodo: true, referencia: true, fecha: true },
+            });
+            if (!pago) throw new NotFoundException('Pago de la venta');
+            await tx.ventaPago.update({ where: { id: pagoId }, data: { deletedAt: new Date() } });
+            await auditEnTx(tx, {
+                concesionariaId: venta.concesionariaId,
+                entidad: 'VentaPago',
+                entidadId: pagoId,
+                accion: 'delete_soft',
+                detalle: detalleConCambio(
+                    `Pago ${pagoId} quitado de la venta ${ventaId}: ${pago.monto} en ${pago.metodo}${pago.referencia ? `, ref. ${pago.referencia}` : ''}`,
+                    { ventaId, antes: { pago }, despues: { pago: null } },
+                ),
+            });
+        });
     }
 
     // Extras
