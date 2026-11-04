@@ -6,11 +6,36 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "5"
 
+# Límites de recursos. La Pi es COMPARTIDA con otros proyectos: sin límites, un
+# proceso desbocado (una fuga de memoria, una fork bomb tras un RCE) puede tirar
+# abajo la Pi entera, base incluida. Los valores son GENEROSOS a propósito (varias
+# veces el consumo normal medido de cada servicio): la idea es contener un
+# desborde, no ajustar al límite. Si `docker compose ps` muestra reinicios por OOM
+# (`docker inspect -f '{{.State.OOMKilled}}' <contenedor>`), subir el valor.
+# OJO Raspberry Pi: si el kernel arranca sin el cgroup de memoria, Docker avisa
+# "No memory limit support" y IGNORA mem_limit (pids_limit sí aplica). Para
+# activarlo: agregar `cgroup_enable=memory` en /boot/firmware/cmdline.txt y
+# reiniciar (scripts/hardening/verify-host.sh lo reporta).
+#   pids_limit cuenta procesos + hilos del contenedor.
+
 services:
   db:
-    image: postgres:16-alpine
+    # Fijada por digest (índice multi-arquitectura: sirve en la Pi arm64 y en x86):
+    # el mismo build siempre usa la misma imagen y Dependabot propone el digest nuevo
+    # cada semana. Un cambio de digest RECREA la base en el próximo `up` (unos
+    # segundos de corte); dentro de la major 16 los datos son compatibles.
+    image: postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
     restart: always
     logging: *default-logging
+    # Ni escalada por setuid: el entrypoint baja de root a `postgres` con su-exec
+    # (eso NO es ganar privilegios, así que funciona igual).
+    security_opt:
+      - no-new-privileges:true
+    # Postgres: shared_buffers 128 MB por defecto + un proceso por conexión (pools
+    # de Prisma admin y app_rw, backups); en uso normal anda por 150-300 MB.
+    mem_limit: 1g
+    # Un proceso por conexión: max_connections (100) + ~10 procesos de fondo.
+    pids_limit: 512
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       # Sin default: si POSTGRES_PASSWORD no está en el .env, el arranque falla.
@@ -40,6 +65,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # Node + Prisma + Baileys (una sesión de WhatsApp por número vinculado) ronda
+    # 250-500 MB; el arranque además corre migrate deploy e init-rls/setup-app-role
+    # con ts-node, que compila TypeScript en memoria. 1,5 GB deja margen a todo eso.
+    mem_limit: 1536m
+    # Hilos de V8 y libuv + los procesos npx/ts-node del arranque: ~30-60 en uso.
+    pids_limit: 512
     # Sin ports: el frontend (nginx) le llega por la red interna de docker
     # en backend:3000. No hace falta exponerlo al host, y evita choques con
     # otros servicios que usen el 3000.
@@ -71,8 +102,11 @@ services:
       # Lista exacta de orígenes permitidos (browser CORS).
       # El frontend llama a la API same-origin (nginx proxea /api), así que
       # CORS no bloquea nada; el dominio del tunnel va igual para evitar
-      # warnings "[cors] origin rechazado" en los logs.
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost,http://localhost:5173,https://autenza.nebulant.com.ar}
+      # warnings "[cors] origin rechazado" en los logs. Por defecto SÓLO el origen
+      # de producción (APP_URL): antes el default incluía http://localhost y :5173,
+      # orígenes que en producción no existen y no tienen por qué estar habilitados
+      # con credenciales. Para desarrollo, definirla en el .env local.
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-${APP_URL:-https://autenza.nebulant.com.ar}}
       - UPLOADS_DIR=/app/uploads
       # URL pública del frontend, para el link de recuperación de contraseña.
       - APP_URL=${APP_URL:-https://autenza.nebulant.com.ar}
@@ -87,6 +121,10 @@ services:
       # OJO: el contenedor SÓLO ve las vars listadas acá (tomadas del .env de la
       # RAÍZ) — un valor puesto en BackConcesionaria/.env no llega al runtime.
       - INTEGRACIONES_SECRET_KEY=${INTEGRACIONES_SECRET_KEY:-}
+      # Webhook (Slack/Discord/ntfy, etc.) al que el backend avisa eventos de
+      # seguridad (p. ej. ráfagas de logins fallidos). Opcional: vacía = sin aviso
+      # externo. Es un secreto (quien tenga la URL puede postear): sólo en el .env.
+      - SECURITY_ALERT_WEBHOOK_URL=${SECURITY_ALERT_WEBHOOK_URL:-}
       # --- WhatsApp (Baileys) ---
       # Dónde guarda Baileys las credenciales de cada número vinculado (una
       # subcarpeta por cuenta). TIENE que caer en el volumen wa-auth: si el
@@ -163,6 +201,15 @@ services:
       context: ./scripts/backup-image
     image: autenza-db-backup:local
     restart: always
+    logging: *default-logging
+    # Corre como root (busybox) para leer los volúmenes; sin escalada por setuid igual.
+    security_opt:
+      - no-new-privileges:true
+    # pg_dump | gzip, tar de uploads y age van en streaming (poca memoria); rclone
+    # hace subidas multiparte a R2 con buffers de varios MB por parte.
+    mem_limit: 512m
+    # rclone (Go) abre decenas de hilos durante la subida.
+    pids_limit: 256
     environment:
       - PGUSER=${POSTGRES_USER:-postgres}
       - PGPASSWORD=${POSTGRES_PASSWORD}
@@ -225,6 +272,8 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    mem_limit: 512m
+    pids_limit: 256
     # Solo localhost: para acceder, SSH tunnel a la Pi. Nunca exponer al tunnel
     # de Cloudflare (es acceso directo a la base sin autenticación).
     ports:
@@ -246,6 +295,10 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # nginx sirviendo estáticos y proxy: pocas decenas de MB.
+    mem_limit: 256m
+    # master + un worker por núcleo (4 en la Pi).
+    pids_limit: 128
     # Sólo loopback: el acceso externo entra por el Cloudflare Tunnel, que en la Pi
     # apunta a http://localhost:80 (cloudflared corre en el host). Bindear a
     # 0.0.0.0 exponía el front directo en la LAN / la red Tailscale de la Pi,
