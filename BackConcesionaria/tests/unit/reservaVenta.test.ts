@@ -1,4 +1,4 @@
-import { debeLiberarVehiculo, resolverReservasParaVenta } from '../../src/domain/services/reservaVenta';
+import { debeLiberarVehiculo, resolverReservasParaVenta, hoyEnArgentina, reservaYaVencio, problemaDeCambioDeReserva } from '../../src/domain/services/reservaVenta';
 
 // Unit tests PUROS (sin DB): reglas entre reserva, venta y estado del vehículo.
 const base = { vehiculoId: 10, clienteId: 1 };
@@ -91,4 +91,66 @@ describe('debeLiberarVehiculo', () => {
             expect(debeLiberarVehiculo(estado as string | undefined, 0)).toBe(false);
         },
     );
+});
+
+describe('hoyEnArgentina / reservaYaVencio', () => {
+    test('a las 22 h de Buenos Aires (01 h UTC del día siguiente) sigue siendo "hoy" en Argentina', () => {
+        expect(hoyEnArgentina(new Date('2026-11-04T01:00:00Z'))).toBe('2026-11-03');
+    });
+
+    test('vence EL día del vencimiento: recién al día siguiente está vencida', () => {
+        expect(reservaYaVencio(new Date('2026-11-03T00:00:00Z'), '2026-11-03')).toBe(false);
+        expect(reservaYaVencio(new Date('2026-11-03T00:00:00Z'), '2026-11-04')).toBe(true);
+        expect(reservaYaVencio('2026-11-02', '2026-11-03')).toBe(true);
+    });
+
+    test('sin vencimiento nunca vence', () => {
+        expect(reservaYaVencio(null, '2099-01-01')).toBe(false);
+    });
+});
+
+describe('problemaDeCambioDeReserva (PROC-33: qué campo puede tocar cada rol)', () => {
+    const hoy = '2026-11-03';
+    const actual: { estado: string; montoSenia: number | null; venceEl: string | null } = { estado: 'activa', montoSenia: 1000, venceEl: '2026-12-31' };
+    const vendedor = (cambios: Parameters<typeof problemaDeCambioDeReserva>[0]['cambios'], a = actual) =>
+        problemaDeCambioDeReserva({ esAdmin: false, hoy, actual: a, cambios });
+    const admin = (cambios: Parameters<typeof problemaDeCambioDeReserva>[0]['cambios'], a = actual) =>
+        problemaDeCambioDeReserva({ esAdmin: true, hoy, actual: a, cambios });
+
+    test('el vendedor no cancela; el admin sí', () => {
+        expect(vendedor({ estado: 'cancelada' })).toEqual(expect.objectContaining({ status: 403 }));
+        expect(admin({ estado: 'cancelada' })).toBeNull();
+    });
+
+    test('el vendedor no cambia el monto; reenviar el MISMO monto no es un cambio', () => {
+        expect(vendedor({ monto: 500 })).toEqual(expect.objectContaining({ status: 403 }));
+        expect(vendedor({ monto: 1000 })).toBeNull();
+        expect(admin({ monto: 500 })).toBeNull();
+    });
+
+    test('nadie marca vencida una seña que todavía no venció', () => {
+        expect(vendedor({ estado: 'vencida' })).toEqual(expect.objectContaining({ status: 422, code: 'RESERVA_NO_VENCIDA' }));
+        expect(admin({ estado: 'vencida' })).toEqual(expect.objectContaining({ status: 422 }));
+        expect(admin({ estado: 'vencida' })?.message).toContain('31/12/2026');
+    });
+
+    test('una seña ya vencida la marca cualquiera', () => {
+        expect(vendedor({ estado: 'vencida' }, { ...actual, venceEl: '2026-11-01' })).toBeNull();
+    });
+
+    test('una seña sin vencimiento no se puede marcar vencida', () => {
+        expect(admin({ estado: 'vencida' }, { ...actual, venceEl: null })?.message).toMatch(/no tiene fecha de vencimiento/);
+    });
+
+    test('el vendedor extiende el vencimiento pero no lo mueve a una fecha pasada', () => {
+        expect(vendedor({ fechaVencimiento: '2027-01-15' })).toBeNull();
+        expect(vendedor({ fechaVencimiento: hoy })).toBeNull();
+        expect(vendedor({ fechaVencimiento: '2026-11-02' })).toEqual(expect.objectContaining({ status: 403 }));
+        expect(admin({ fechaVencimiento: '2026-11-02' })).toBeNull();
+    });
+
+    test('observaciones y re-envíos del estado actual no piden nada', () => {
+        expect(vendedor({ estado: 'activa' })).toBeNull();
+        expect(vendedor({})).toBeNull();
+    });
 });
