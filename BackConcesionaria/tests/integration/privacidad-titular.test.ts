@@ -385,6 +385,20 @@ describe('Derechos del titular (privacidad)', () => {
     });
 
     // ─────────────────────────────────────────────────────────────────────────
+    describe('enumeración de emails entre tenants (PRIV-20)', () => {
+        test('dar de alta un email de otra concesionaria no confirma dónde está', async () => {
+            const roles = await api.get('/api/roles', authHeaders(adminToken));
+            const vendedorRol = (roles.data as Array<{ id: number; nombre: string }>).find((r) => r.nombre === 'vendedor')!.id;
+            // superadmin@demo.com existe (cuenta de plataforma, no de esta concesionaria).
+            const res = await api.post('/api/usuarios', { nombre: 'Intento', email: 'superadmin@demo.com', password: PASSWORD, roleIds: [vendedorRol] }, authHeaders(adminToken));
+            expect(res.status).toBe(409);
+            expect(res.data.error).toBe('EMAIL_DUPLICATED');
+            expect(res.data.message).not.toContain('superadmin@demo.com');
+            expect(res.data.message).toMatch(/no está disponible/);
+        });
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
     describe('rastro de exportaciones y accesos de soporte', () => {
         test('el CSV de clientes deja quién, cuántas filas y los filtros con PII enmascarados', async () => {
             const c = await nuevoCliente();
