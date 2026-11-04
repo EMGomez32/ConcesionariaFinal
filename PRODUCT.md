@@ -10,18 +10,21 @@ web
 
 AUTENZA lo usa el personal de una concesionaria de autos, cada rol en su tarea diaria:
 
-- **vendedor** — carga clientes, vehículos, presupuestos y cierra ventas en el mostrador;
-- **cobrador** — gestiona la financiación propia, las cuotas y las cobranzas;
-- **admin** — configura la concesionaria, sucursales, usuarios y catálogos;
+- **vendedor** — atiende en el salón (atenciones), responde consultas y conversaciones, carga clientes, presupuestos y reservas, y cierra ventas;
+- **cobrador** — gestiona la financiación propia, las cuotas, las cobranzas y las refinanciaciones;
+- **admin** — configura la concesionaria, sucursales, usuarios, integraciones y catálogos; es quien anula;
 - **postventa** — gestiona casos de postventa y sus ítems;
+- **tasador** — solo valúa usados (módulo de Tasaciones);
 - **lectura** — consulta sin editar;
-- **super_admin** — opera sobre todas las concesionarias (cruza tenants).
+- **super_admin** — administra la plataforma desde un panel propio (alta de concesionarias, sucursales y usuarios); es el único que cruza tenants.
+
+El vendedor y el tasador también tienen una app móvil (iOS/Android, `AppConcesionaria/`) que usa la misma API.
 
 Es una herramienta de uso operativo y recurrente (gestión del día a día del negocio), no esporádico.
 
 ## Product Purpose
 
-Sistema de gestión integral (ERP operativo) para concesionarias de autos. Administra el ciclo completo del vehículo y del negocio: ingreso / preparación / publicación de unidades, clientes, presupuestos, reservas, ventas, financiación propia con plan de cuotas y cobranzas, postventa, gastos (de vehículo y fijos), proveedores, reportes, auditoría y facturación AFIP. El éxito es que una concesionaria —o una red de varias— opere todo su negocio desde un solo sistema, con los datos aislados por tenant.
+Sistema de gestión integral (ERP operativo) para concesionarias de autos. Administra el ciclo completo del vehículo y del negocio: ingreso / preparación / publicación de unidades (incluida la publicación en Mercado Libre), atención en el salón, consultas de portales y redes, bandeja de conversaciones (WhatsApp, Messenger, Instagram), tasaciones, clientes, presupuestos, reservas, ventas, financiación propia con plan de cuotas y cobranzas, postventa, gastos (de vehículo y fijos), proveedores, reportes, auditoría y facturación AFIP. El éxito es que una concesionaria —o una red de varias— opere todo su negocio desde un solo sistema, con los datos aislados por tenant.
 
 ## Positioning
 
@@ -36,11 +39,12 @@ Multi-tenancy real como mecanismo central, no como agregado: cada concesionaria 
 
 ## Capabilities and Constraints
 
-- **Roles / permisos**: super_admin, admin, vendedor, cobrador, postventa, lectura.
+- **Roles / permisos**: super_admin, admin, vendedor, cobrador, postventa, tasador, lectura. Verificación en dos pasos (TOTP) obligatoria para las cuentas privilegiadas.
 - **Aislamiento multi-tenant** por `concesionariaId`, forzado por la extensión de Prisma + RLS. El super_admin elige la concesionaria al crear recursos; el resto queda atado a su propio tenant. El diseño nunca debe insinuar ni filtrar datos de otra concesionaria.
 - **Cumplimiento fiscal AFIP** (Argentina): la facturación respeta reglas y formatos fiscales. Módulo por cortes (Corte 1 = MOCK / CAE simulado; el real WSAA/WSFEv1 y multi-moneda están pendientes).
 - **Stack** (dado por el código): frontend React + Vite + TypeScript (react-router-dom, @tanstack/react-query, zustand, react-hook-form, lucide-react, driver.js), con CSS propio (sin Tailwind); backend Node/Express + Prisma + PostgreSQL.
-- **Superficies existentes (25)**: dashboard, auth, clientes, vehículos, ingresos, movimientos, ventas, presupuestos, reservas, financiaciones, solicitudes, gastos, gastos-fijos, proveedores, postventa, seguimientos, tasaciones, reportes, auditoría, billing, concesionarias, sucursales, usuarios, configuración, error.
+- **Integraciones**: Meta (Lead Ads, Messenger, Instagram), WhatsApp (cliente no oficial, por QR), Mercado Libre (publicación y preguntas), casilla de email (avisos de portales), cotización del dólar blue para presupuestos. Los modos de demostración se rotulan como tales.
+- **Superficies existentes (web)**: dashboard, auth (login, recuperación, activar 2FA), plataforma (concesionarias, sucursales y usuarios del super_admin), vehículos (y comparador), atenciones, consultas, conversaciones, Mercado Libre (preguntas), clientes, seguimientos, tasaciones, presupuestos, reservas, ventas, financiaciones, solicitudes, ingresos, movimientos, gastos, gastos-fijos, proveedores, postventa, reportes, auditoría, sucursales, usuarios, configuración, capacitación (pública), error. La pantalla de billing existe pero hoy no tiene ruta activa.
 
 ## Brand Commitments
 
