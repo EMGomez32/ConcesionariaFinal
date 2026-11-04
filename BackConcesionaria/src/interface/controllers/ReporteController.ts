@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../../infrastructure/database/prisma';
 import { BaseException } from '../../domain/exceptions/BaseException';
 import { Col, sendCsv } from '../../utils/csv';
+import { CLIENTE_CONTACTABLE } from '../../application/services/privacidad/contactabilidad';
 import { context } from '../../infrastructure/security/context';
 import { actorEsVendedorPuro } from '../../infrastructure/security/roles';
 import { contarAtencionesCerradasPorSistema } from '../../infrastructure/atencion/cierreDiarioWorker';
@@ -1526,6 +1527,8 @@ export class ReporteController {
                             proximoContacto: { lt: new Date(Date.now() + DIAS * 24 * 60 * 60 * 1000) },
                             proximoContactoHecho: false,
                             usuarioId: userId,
+                            // Revocó el consentimiento o pidió el bloqueo: no se lo llama (Ley 25.326).
+                            cliente: CLIENTE_CONTACTABLE,
                         },
                     }),
                     prisma.cliente.count({
@@ -1575,7 +1578,7 @@ export class ReporteController {
                 prisma.vehiculo.count({ where: { estado: { in: ['preparacion', 'publicado', 'reservado'] }, fechaIngreso: { lt: cutoffStock } } }),
                 prisma.postventaCaso.count({ where: { fechaTurno: { gte: inicioHoy, lt: finVentana }, estado: { not: 'resuelto' } } }),
                 prisma.postventaCaso.count({ where: { fechaTurno: inicioHoy, estado: { not: 'resuelto' } } }),
-                prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desdeSeg, lt: finVentana }, proximoContactoHecho: false } }),
+                prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desdeSeg, lt: finVentana }, proximoContactoHecho: false, cliente: CLIENTE_CONTACTABLE } }),
                 prisma.vehiculo.count({ where: { estado: { in: ['preparacion', 'publicado', 'reservado'] }, OR: [{ vencimientoVtv: { lt: finVentanaDoc } }, { vencimientoSeguro: { lt: finVentanaDoc } }] } }),
                 // Consultas sin atender: leads en 'nuevo' sin ningún contacto
                 // registrado. Los simulados quedan afuera: la alerta es trabajo
@@ -1621,7 +1624,9 @@ export class ReporteController {
             const finVentana = new Date(inicioHoy);
             finVentana.setUTCDate(finVentana.getUTCDate() + dias);
             // proximoContactoHecho:false ⇒ los ya realizados salen de la agenda.
-            const enVentana = { proximoContacto: { gte: desde, lt: finVentana }, proximoContactoHecho: false };
+            // Sin los clientes que revocaron el consentimiento o pidieron el bloqueo: la
+            // agenda es a quién llamar, y a ellos no se los llama (Ley 25.326).
+            const enVentana = { proximoContacto: { gte: desde, lt: finVentana }, proximoContactoHecho: false, cliente: CLIENTE_CONTACTABLE };
 
             const [seguimientos, cantidad, vencidos, hoy] = await Promise.all([
                 prisma.clienteSeguimiento.findMany({
@@ -1634,8 +1639,8 @@ export class ReporteController {
                     },
                 }),
                 prisma.clienteSeguimiento.count({ where: enVentana }),
-                prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desde, lt: inicioHoy }, proximoContactoHecho: false } }),
-                prisma.clienteSeguimiento.count({ where: { proximoContacto: inicioHoy, proximoContactoHecho: false } }),
+                prisma.clienteSeguimiento.count({ where: { proximoContacto: { gte: desde, lt: inicioHoy }, proximoContactoHecho: false, cliente: CLIENTE_CONTACTABLE } }),
+                prisma.clienteSeguimiento.count({ where: { proximoContacto: inicioHoy, proximoContactoHecho: false, cliente: CLIENTE_CONTACTABLE } }),
             ]);
 
             const hoyStr = inicioHoy.toISOString().slice(0, 10);

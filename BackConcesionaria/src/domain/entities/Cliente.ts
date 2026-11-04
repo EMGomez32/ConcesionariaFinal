@@ -46,5 +46,14 @@ export class Cliente {
         public readonly vendedorAsignadoEn?: Date | null,
         /** Reloj de la retención: se renueva con cada contacto real. */
         public readonly ultimaInteraccionEn?: Date | null,
+        // ── Privacidad (Ley 25.326) ──────────────────────────────────────────
+        // Viajan a la ficha porque la pantalla tiene que decir si al titular se
+        // lo puede contactar, desde cuándo y con qué texto dio su conformidad.
+        /** Versión del texto de consentimiento informado (domain/services/consentimiento). */
+        public readonly consentimientoVersion?: string | null,
+        public readonly consentimientoRevocadoEn?: Date | null,
+        public readonly bloqueadoEn?: Date | null,
+        public readonly bloqueoMotivo?: string | null,
+        public readonly suprimidoEn?: Date | null,
     ) { }
 }
