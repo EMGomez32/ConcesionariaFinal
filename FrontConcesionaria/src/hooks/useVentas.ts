@@ -89,10 +89,31 @@ export const useChangeEstadoEntrega = () => {
     });
 };
 
+/**
+ * "Anular venta" por estado de entrega (`cancelada`, terminal, sólo admin). Hook
+ * aparte del de avanzar la entrega porque pide motivo y su error lo muestra el
+ * diálogo del motivo, no el toast global.
+ */
+export const useAnularOperacionVenta = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, motivo }: { id: number; motivo: string }) =>
+            ventasApi.changeEstadoEntrega(id, 'cancelada', motivo),
+        meta: { silenciarError: true },
+        onSuccess: (_, { id }) => {
+            queryClient.invalidateQueries({ queryKey: VENTAS_KEYS.all });
+            queryClient.invalidateQueries({ queryKey: VENTAS_KEYS.detail(id) });
+        },
+    });
+};
+
 export const useDeleteVenta = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: (id: number) => ventasApi.delete(id),
+        mutationFn: ({ id, motivo }: { id: number; motivo: string }) => ventasApi.delete(id, motivo),
+        // El error (p. ej. el 409 que dice qué revertir antes) lo muestra el diálogo
+        // del motivo, adentro; el toast global lo repetiría encima.
+        meta: { silenciarError: true },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: VENTAS_KEYS.all });
             queryClient.invalidateQueries({ queryKey: ['vehiculos'] });

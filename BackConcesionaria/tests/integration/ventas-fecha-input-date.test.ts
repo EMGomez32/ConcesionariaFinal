@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, authHeaders, unique } from './helpers';
+import { api, loginAsSuperAdmin, authHeaders, unique, anularVenta } from './helpers';
 
 /**
  * El front manda las fechas de venta y de pago desde un <input type="date">, o sea
@@ -33,7 +33,7 @@ describe('Ventas con fecha "YYYY-MM-DD" (formato del <input type="date">)', () =
     });
 
     afterAll(async () => {
-        for (const id of creados.ventas) await api.delete(`/api/ventas/${id}`, authHeaders(token));
+        for (const id of creados.ventas) await anularVenta(id, token);
         for (const id of creados.presupuestos) await api.delete(`/api/presupuestos/${id}`, authHeaders(token));
         for (const id of creados.vehiculos) await api.delete(`/api/vehiculos/${id}`, authHeaders(token));
         for (const id of creados.clientes) await api.delete(`/api/clientes/${id}`, authHeaders(token));

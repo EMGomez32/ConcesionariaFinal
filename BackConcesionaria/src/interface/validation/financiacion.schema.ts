@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { obligatorio, invalido } from './mensajes';
+import { motivoObligatorio, motivoOpcional } from './motivo';
 
 // Schemas de validación de financiaciones. Payloads verificados contra los DTOs
 // reales del front (financiaciones.api.ts: CreateFinanciacionDto, PagarCuotaDto y
@@ -113,27 +114,36 @@ export const refinanciarFinanciacionSchema = z.object({
     observaciones: z.string().optional(),
 });
 
-// PATCH /financiaciones/:id — sólo `estado` y `observaciones` son editables. Todo
-// lo demás (monto, cuotas, ventaId, tenant, id...) se descarta: el repo pasa
-// `data` tal cual a prisma.update, así que esta lista es la única barrera anti
+// PATCH /financiaciones/:id — sólo `estado` y `observaciones` son editables (más el
+// `motivo`, que no es columna: va a la auditoría). Todo lo demás (monto, cuotas,
+// ventaId, tenant, id...) se descarta: esta lista es la barrera anti
 // mass-assignment. La validez de la TRANSICIÓN de estado la sigue chequeando
-// UpdateFinanciacion (assertValidTransition). El front sólo manda `{ estado }`;
-// ambos campos van opcionales para no romper un PATCH parcial.
+// UpdateFinanciacion (assertValidTransition). Campos opcionales para no romper un
+// PATCH parcial, salvo el motivo cuando se CANCELA (PROC-32): cancelar cierra el
+// contrato para siempre y es del admin, que tiene que decir por qué.
 export const updateFinanciacionSchema = z.object({
     estado: estadoFinanciacionEnum.optional(),
     observaciones: z.string().optional(),
+    motivo: motivoOpcional,
+}).superRefine((v, ctx) => {
+    if (v.estado !== 'cancelada') return;
+    const r = motivoObligatorio('de la cancelación').safeParse(v.motivo ?? '');
+    if (!r.success) {
+        ctx.addIssue({ code: 'custom', path: ['motivo'], message: r.error.issues[0]?.message ?? 'Contá el motivo de la cancelación' });
+    }
 });
 
 // PATCH /financiaciones/cuotas/:cuotaId/pagar — registrar pago de cuota.
-// `referencia` y `observaciones` son parte del DTO pero RegistrarPagoCuota sólo
-// persiste monto/metodo/fechaPago/idempotencyKey; los demás se aceptan y se ignoran.
+// `referencia` (n° de transferencia / recibo / cheque) y `observaciones` se
+// PERSISTEN desde PROC-35: antes se aceptaban y se ignoraban, y sin la referencia
+// el cobro no se puede conciliar contra el banco.
 // `idempotencyKey`: clave que el front genera al abrir el modal de cobro; el
 // backend la usa para no duplicar el pago ante reenvíos (doble-submit / retry).
 export const pagarCuotaSchema = z.object({
     monto: montoField('El monto del pago'),
     metodo: metodoPagoEnum,
-    referencia: z.string().optional(),
-    observaciones: z.string().optional(),
+    referencia: z.string().trim().max(120, 'La referencia es demasiado larga').optional(),
+    observaciones: z.string().trim().max(500, 'Las observaciones son demasiado largas').optional(),
     // Fecha parseable: sin esto un string basura llega a new Date() y explota como
     // 500 en el create (en vez de un 400 de validación).
     fechaPago: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Fecha de pago inválida').optional(),

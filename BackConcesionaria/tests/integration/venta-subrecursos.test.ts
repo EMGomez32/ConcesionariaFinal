@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, authHeaders, unique } from './helpers';
+import { api, loginAsSuperAdmin, authHeaders, unique, anularVenta } from './helpers';
 
 describe('Sub-recursos de venta + trigger Postgres', () => {
     let token: string;
@@ -26,7 +26,7 @@ describe('Sub-recursos de venta + trigger Postgres', () => {
     });
 
     afterAll(async () => {
-        await api.delete(`/api/ventas/${ventaId}`, authHeaders(token));
+        await anularVenta(ventaId, token);
         await api.delete(`/api/vehiculos/${vehId}`, authHeaders(token));
         await api.delete(`/api/clientes/${cliId}`, authHeaders(token));
     });

@@ -91,8 +91,10 @@ export const financiacionesApi = {
         observaciones?: string;
     }) => client.post(`/financiaciones/${id}/refinanciar`, data),
 
-    updateEstado: (id: number, estado: string) =>
-        client.patch(`/financiaciones/${id}`, { estado }),
+    // `motivo` es obligatorio para `cancelada` (sólo admin): el backend lo rechaza con
+    // 400 si falta. Para mora / al día no se manda.
+    updateEstado: (id: number, estado: string, motivo?: string) =>
+        client.patch(`/financiaciones/${id}`, { estado, ...(motivo ? { motivo } : {}) }),
 
     delete: (id: number) =>
         client.delete(`/financiaciones/${id}`),

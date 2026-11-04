@@ -4,6 +4,7 @@ import { BaseException, NotFoundException } from '../../../domain/exceptions/Bas
 import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { context } from '../../../infrastructure/security/context';
 import { debeLiberarVehiculo } from '../../../domain/services/reservaVenta';
+import { auditEnTx, detalleConCambio } from '../../../infrastructure/security/auditTx';
 import { sincronizarEnSegundoPlano } from '../../services/meliPublicacion';
 
 // DELETE /reservas/:id ejecuta una CANCELACIÓN: cambia el estado a 'cancelada',
@@ -12,7 +13,8 @@ import { sincronizarEnSegundoPlano } from '../../services/meliPublicacion';
 export class DeleteReserva {
     constructor(private readonly reservaRepository: IReservaRepository) { }
 
-    async execute(id: number) {
+    async execute(id: number, datos: { motivo: string }) {
+        const motivo = String(datos?.motivo ?? '').trim();
         const current: any = await this.reservaRepository.findById(id);
         if (!current) throw new NotFoundException('Reserva');
 
@@ -51,6 +53,20 @@ export class DeleteReserva {
             const reserva = await tx.reserva.update({
                 where: { id, ...tenantWhere, deletedAt: null },
                 data: { estado: 'cancelada' },
+            });
+
+            // Rastro dentro de la misma transacción (PROC-33/35): sin él no hay cancelación.
+            await auditEnTx(tx, {
+                concesionariaId: current.concesionariaId,
+                entidad: 'Reserva',
+                entidadId: id,
+                accion: 'cancel',
+                detalle: detalleConCambio(`Reserva ${id} cancelada. Motivo: ${motivo}`, {
+                    motivo,
+                    senia: { monto: reserva.montoSenia, moneda: reserva.moneda, metodo: reserva.metodo, referencia: reserva.referencia },
+                    antes: { estado: res.estado },
+                    despues: { estado: 'cancelada' },
+                }),
             });
 
             if (res.estado === 'activa' && veh) {

@@ -12,6 +12,7 @@ import {
     addPagoSchema,
     addExtraSchema,
     addCanjeSchema,
+    anularVentaSchema,
 } from '../validation/venta.schema';
 
 /**
@@ -139,6 +140,31 @@ router.get('/', VentaController.getAll);
 
 /**
  * @openapi
+ * /ventas/anuladas:
+ *   get:
+ *     tags: [Ventas]
+ *     summary: Reporte de ventas anuladas (motivo, quién y cuándo)
+ *     description: >
+ *       Las ventas dadas de baja con DELETE /ventas/{id}, más nuevas primero, con el
+ *       motivo de la anulación y el usuario que la hizo. Filtros por fecha de
+ *       anulación (fechaDesde/fechaHasta, YYYY-MM-DD) y vendedorId. Requiere rol admin.
+ *     parameters:
+ *       - { $ref: '#/components/parameters/pageParam' }
+ *       - { $ref: '#/components/parameters/limitParam' }
+ *       - { name: fechaDesde, in: query, schema: { type: string, format: date } }
+ *       - { name: fechaHasta, in: query, schema: { type: string, format: date } }
+ *       - { name: vendedorId, in: query, schema: { type: integer } }
+ *     responses:
+ *       200: { description: Listado paginado de anulaciones }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ */
+// Sólo admin: es el control de las bajas, no un listado operativo. Va ANTES de
+// `/:id` para que Express no lo tome como un id.
+router.get('/anuladas', authorize('admin'), VentaController.anuladas);
+
+/**
+ * @openapi
  * /ventas/{id}:
  *   get:
  *     tags: [Ventas]
@@ -222,7 +248,9 @@ router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updateVentaSch
  *   patch:
  *     tags: [Ventas]
  *     summary: Cambiar estado de entrega de la venta
- *     description: Requiere rol admin, vendedor o postventa.
+ *     description: >
+ *       Requiere rol admin, vendedor o postventa. Pasar a `cancelada` (anular la
+ *       operación) es sólo admin y exige `motivo` (mínimo 10 caracteres).
  *     parameters:
  *       - { name: id, in: path, required: true, schema: { type: integer } }
  *     requestBody:
@@ -234,6 +262,7 @@ router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updateVentaSch
  *             required: [estadoEntrega]
  *             properties:
  *               estadoEntrega: { type: string }
+ *               motivo: { type: string, description: 'Obligatorio si estadoEntrega = cancelada' }
  *     responses:
  *       200: { description: Estado actualizado, content: { application/json: { schema: { type: object } } } }
  *       400: { $ref: '#/components/responses/ValidationError' }
@@ -252,27 +281,47 @@ router.patch('/:id', authorize('admin', 'vendedor'), validateBody(updateVentaSch
 // el front rotula "Anular Operación" y es terminal. Autorizar `entregada` regalaba
 // `cancelada`. El destino se acota por rol adentro (VentaController:
 // ESTADOS_ENTREGA_DE_ADMIN), que es donde se puede leer el body.
-router.patch('/:id/estado-entrega', authorize('admin', 'vendedor', 'postventa'), validateBody(changeEstadoEntregaSchema), VentaController.changeEstadoEntrega);
+// `gateEstadoEntrega` va ANTES de `validateBody`: el 403 por destino no puede
+// depender de que el body traiga el motivo (ver el controller).
+router.patch('/:id/estado-entrega', authorize('admin', 'vendedor', 'postventa'), VentaController.gateEstadoEntrega, validateBody(changeEstadoEntregaSchema), VentaController.changeEstadoEntrega);
 
 /**
  * @openapi
  * /ventas/{id}:
  *   delete:
  *     tags: [Ventas]
- *     summary: Eliminar venta (soft delete)
- *     description: Requiere rol admin. Anular una venta es la operación con la que se tapa un desvío.
+ *     summary: Anular venta (soft delete con motivo)
+ *     description: >
+ *       Requiere rol admin. Anular una venta es la operación con la que se tapa un
+ *       desvío: exige motivo (mínimo 10 caracteres) y se rechaza con 409
+ *       ANULACION_BLOQUEADA si quedan pagos registrados, una financiación viva o con
+ *       cuotas cobradas, o una factura informada a AFIP (fuera del modo mock). El
+ *       `details.bloqueos` dice qué revertir antes.
  *     parameters:
  *       - { name: id, in: path, required: true, schema: { type: integer } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [motivo]
+ *             properties:
+ *               motivo: { type: string, minLength: 10, maxLength: 500 }
  *     responses:
- *       204: { description: Eliminada }
+ *       204: { description: Anulada }
+ *       400: { $ref: '#/components/responses/ValidationError' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
+ *       409: { $ref: '#/components/responses/Conflict' }
  */
 // Sólo admin: además de revertir el estado del vehículo, DeleteVenta dispara la
 // sincronización con Mercado Libre fuera del request (republica la unidad), así
 // que el alcance real de esta ruta excede a la fila borrada.
-router.delete('/:id', authorize('admin'), VentaController.delete);
+// `authorize` ANTES de `validateBody`: a un no-admin se le contesta 403 sin
+// decirle qué le falta al body.
+router.delete('/:id', authorize('admin'), validateBody(anularVentaSchema), VentaController.delete);
 
 // Sub-recursos: pagos
 /**

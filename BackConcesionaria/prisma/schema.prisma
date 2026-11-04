@@ -1,6 +1,8 @@
 generator client {
   provider = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  // partialIndexes: índices únicos con WHERE (ver Venta). Sin esto Prisma sólo sabe
+  // declarar unicidad TOTAL, que con soft-delete cuenta también las filas borradas.
+  previewFeatures = ["driverAdapters", "partialIndexes"]
 }
 
 datasource db {
@@ -170,6 +172,7 @@ model Usuario {
   sucursal                 Sucursal?                 @relation(fields: [sucursalId], references: [id])
   vehiculoMovimientos      VehiculoMovimiento[]      @relation("MovimientoRegistradoPor")
   ventas                   Venta[]                   @relation("VentaVendedor")
+  ventasAnuladas           Venta[]                   @relation("VentaAnuladaPor")
   objetivos                ObjetivoVendedor[]
   seguimientos             ClienteSeguimiento[]
   tasaciones               Tasacion[]                @relation("TasacionTasador")
@@ -628,7 +631,9 @@ model Vehiculo {
   proveedorCompra          Proveedor?                @relation("VehiculoProveedorCompra", fields: [proveedorCompraId], references: [id])
   sucursal                 Sucursal                  @relation(fields: [sucursalId], references: [id])
   ventaCanjeVehiculo       VentaCanjeVehiculo[]
-  ventas                   Venta?
+  // Lista y no 1:1: una unidad puede acumular ventas ANULADAS (soft-delete) y,
+  // como mucho, UNA viva. Esa unicidad la da el índice parcial de Venta.
+  ventas                   Venta[]
   interesados              VehiculoInteres[]
   atencionVehiculos        AtencionVehiculo[]
   solicitudesPrecioMinimo  SolicitudPrecioMinimo[]
@@ -1031,7 +1036,9 @@ model Presupuesto {
   sucursal                Sucursal                @relation(fields: [sucursalId], references: [id])
   vendedor                Usuario                 @relation("PresupuestoVendedor", fields: [vendedorId], references: [id])
   solicitudesFinanciacion SolicitudFinanciacion[]
-  venta                   Venta?
+  // Lista por el mismo motivo que Vehiculo.ventas: un presupuesto cuya venta se
+  // anuló se puede volver a convertir. A lo sumo UNA venta viva (índice parcial).
+  ventas                  Venta[]
 
   @@unique([concesionariaId, nroPresupuesto])
   @@index([concesionariaId])
@@ -1104,8 +1111,9 @@ model Venta {
   id                      Int                     @id @default(autoincrement())
   concesionariaId         Int                     @map("concesionaria_id")
   sucursalId              Int                     @map("sucursal_id")
-  vehiculoId              Int                     @unique @map("vehiculo_id")
-  presupuestoId           Int?                    @unique @map("presupuesto_id")
+  // Sin @unique de campo a propósito: ver los @@unique parciales de abajo.
+  vehiculoId              Int                     @map("vehiculo_id")
+  presupuestoId           Int?                    @map("presupuesto_id")
   clienteId               Int                     @map("cliente_id")
   vendedorId              Int                     @map("vendedor_id")
   fechaVenta              DateTime                @map("fecha_venta") @db.Date
@@ -1115,9 +1123,22 @@ model Venta {
   observaciones           String?
   estadoEntrega           EstadoEntrega           @default(pendiente) @map("estado_entrega")
   fechaEntrega            DateTime?               @map("fecha_entrega") @db.Date
+  // Se vendió por DEBAJO del precio mínimo de la ficha (PROC-34): con una
+  // autorización vigente o por un admin, que son los únicos caminos que CreateVenta
+  // deja. Es la marca del reporte de descuentos; el detalle (quién autorizó, qué
+  // solicitud) va en la auditoría de la venta. No lleva el valor del piso: GET
+  // /ventas lo ve el vendedor y el piso es el dato que no tiene que ver.
+  bajoPiso                Boolean                 @default(false) @map("bajo_piso")
   createdAt               DateTime                @default(now()) @map("created_at")
   updatedAt               DateTime                @updatedAt @map("updated_at")
   deletedAt               DateTime?               @map("deleted_at")
+  // ANULACIÓN (PROC-30). Anular sigue siendo el soft-delete de siempre: con
+  // deletedAt la venta sale de listados y reportes. Lo nuevo es que deja de ser
+  // un borrado mudo: el POR QUÉ y el QUIÉN quedan en la propia fila (además del
+  // audit_log) para poder listar las anuladas sin reconstruirlas del rastro.
+  motivoAnulacion         String?                 @map("motivo_anulacion")
+  anuladaPorId            Int?                    @map("anulada_por_id")
+  anuladaPor              Usuario?                @relation("VentaAnuladaPor", fields: [anuladaPorId], references: [id])
   // Una venta puede acumular varias financiaciones a lo largo del tiempo: la
   // original y las sucesivas refinanciaciones de su saldo.
   financiaciones          Financiacion[]
@@ -1142,6 +1163,18 @@ model Venta {
   @@index([vendedorId])
   @@index([fechaVenta])
   @@index([estadoEntrega])
+  // UNA venta VIVA por unidad y por presupuesto. Parciales (WHERE deleted_at IS
+  // NULL) y no totales: anular una venta es un soft-delete, y con el @unique total
+  // de antes la fila anulada seguía ocupando el índice, así que la unidad volvía a
+  // `publicado` pero el siguiente POST /ventas rebotaba con P2002 — invendible sin
+  // tocar la base a mano (PROC-31; el mismo pozo que documenta Financiacion.ventaId).
+  // La doble venta CONCURRENTE la sigue frenando el FOR UPDATE de CreateVenta; esto
+  // es el respaldo en la base por si algún camino se saltea ese lock.
+  // OJO: el cliente generado igual ofrece `findUnique({ where: { vehiculoId } })`,
+  // pero con anuladas de por medio puede haber varias filas: buscá con findFirst
+  // filtrando `deletedAt: null`.
+  @@unique([vehiculoId], map: "ventas_vehiculo_id_viva_key", where: raw("deleted_at IS NULL"))
+  @@unique([presupuestoId], map: "ventas_presupuesto_id_viva_key", where: raw("deleted_at IS NULL"))
   @@map("ventas")
 }
 

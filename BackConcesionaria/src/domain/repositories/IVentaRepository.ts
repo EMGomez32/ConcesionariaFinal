@@ -4,6 +4,8 @@ import { PaginatedResponse, QueryOptions } from '../../types/common';
 export interface IVentaRepository {
     findAll(filter?: any, options?: QueryOptions): Promise<PaginatedResponse<Venta>>;
     findById(id: number): Promise<Venta | null>;
+    /** Las ventas ANULADAS (soft-delete) con su motivo y quién las anuló, más nuevas primero. */
+    findAnuladas(filter?: any, options?: QueryOptions): Promise<PaginatedResponse<any>>;
     create(data: any): Promise<Venta>;
     update(id: number, data: any): Promise<Venta>;
     delete(id: number): Promise<void>;

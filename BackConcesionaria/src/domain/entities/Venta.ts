@@ -22,6 +22,8 @@ export class Venta {
         public readonly vendedor?: any,
         public readonly extras?: any[],
         public readonly pagos?: any[],
-        public readonly canjes?: any[]
+        public readonly canjes?: any[],
+        /** Vendida por debajo del precio mínimo de la ficha (PROC-34). Sin el valor del piso. */
+        public readonly bajoPiso: boolean = false
     ) { }
 }

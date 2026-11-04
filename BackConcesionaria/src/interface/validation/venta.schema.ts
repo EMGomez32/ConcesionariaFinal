@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { urlComprobanteOpcional } from './urlComprobante';
 import { obligatorio, invalido } from './mensajes';
+import { bodyOVacio, motivoObligatorio, motivoOpcional } from './motivo';
 
 // Schemas de validación de ventas. Payloads verificados contra los DTOs reales
 // del front (ventas.api.ts, VentaSubResources.tsx). Se usa `coerce` para aceptar
@@ -84,9 +85,26 @@ export const updateVentaSchema = z.object({
     estadoEntrega: z.string().optional(),
 });
 
+// `cancelada` es la otra "anulación" de una venta (terminal, el front la rotula
+// "Anular venta"): pide motivo igual que el DELETE. Para avanzar la entrega no hace
+// falta y, si llega, se ignora.
 export const changeEstadoEntregaSchema = z.object({
     estadoEntrega: estadoEntregaEnum,
+    motivo: motivoOpcional,
+}).superRefine((v, ctx) => {
+    if (v.estadoEntrega !== 'cancelada') return;
+    const r = motivoObligatorio('de la anulación').safeParse(v.motivo ?? '');
+    if (!r.success) {
+        ctx.addIssue({ code: 'custom', path: ['motivo'], message: r.error.issues[0]?.message ?? 'Contá el motivo de la anulación' });
+    }
 });
+
+// DELETE /ventas/:id — ANULAR. El motivo es obligatorio (PROC-30): queda en la venta
+// (`motivoAnulacion`) y en la auditoría. `bodyOVacio` porque un DELETE sin body es lo
+// que mandaba el front viejo: así el 400 dice "contá el motivo" y no "se esperaba un objeto".
+export const anularVentaSchema = bodyOVacio(z.object({
+    motivo: motivoObligatorio('de la anulación'),
+}));
 
 export const addPagoSchema = pagoItem;
 export const addExtraSchema = externoItem;

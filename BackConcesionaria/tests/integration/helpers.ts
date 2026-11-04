@@ -68,3 +68,17 @@ export async function tryDelete(path: string, token: string): Promise<void> {
         }
     }
 }
+
+/**
+ * Motivo de anulación para los tests. Anular una venta exige motivo desde PROC-30
+ * (DELETE /ventas/:id con `{ motivo }`, mínimo 10 caracteres).
+ */
+export const MOTIVO_TEST = 'Anulación de prueba del test de integración';
+
+/** DELETE /ventas/:id con motivo. Devuelve la respuesta cruda (validateStatus siempre true). */
+export const anularVenta = (ventaId: number, token: string, motivo: string = MOTIVO_TEST) =>
+    api.delete(`/api/ventas/${ventaId}`, { ...authHeaders(token), data: { motivo } });
+
+/** DELETE /reservas/:id con motivo (cancelar una seña lo exige desde PROC-33). */
+export const cancelarReserva = (reservaId: number, token: string, motivo: string = MOTIVO_TEST) =>
+    api.delete(`/api/reservas/${reservaId}`, { ...authHeaders(token), data: { motivo } });

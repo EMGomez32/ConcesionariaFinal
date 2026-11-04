@@ -11,7 +11,7 @@ import { useAuthStore } from '../../store/authStore';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
-import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import MotivoDialog from '../../components/ui/MotivoDialog';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Combobox from '../../components/ui/Combobox';
@@ -80,9 +80,8 @@ const ReservasPage = () => {
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
 
-    // Cancel confirm
+    // Cancelar una seña: sólo admin y con motivo (PROC-33).
     const [cancelingId, setCancelingId] = useState<number | null>(null);
-    const [cancelLoading, setCancelLoading] = useState(false);
 
     // Catálogos. Antes cada uno tenía un `.catch(() => {})`: si fallaba, el
     // select quedaba vacío y nadie sabía por qué.
@@ -158,19 +157,13 @@ const ReservasPage = () => {
         }
     };
 
-    const handleCancel = async () => {
+    // Si el backend rechaza, el error lo muestra el diálogo del motivo (queda abierto).
+    const handleCancel = async (motivo: string) => {
         if (!cancelingId) return;
-        setCancelLoading(true);
-        try {
-            await reservasApi.update(cancelingId, { estado: 'cancelada' });
-            addToast('Reserva cancelada. La unidad volvió a Publicado.', 'success');
-            setCancelingId(null);
-            recargar();
-        } catch (e: unknown) {
-            addToast(getErrorMessage(e, 'No se pudo cancelar la reserva'), 'error');
-        } finally {
-            setCancelLoading(false);
-        }
+        await reservasApi.update(cancelingId, { estado: 'cancelada', motivo });
+        addToast('Reserva cancelada. La unidad volvió a Publicado.', 'success');
+        setCancelingId(null);
+        recargar();
     };
 
     const columns: Column<Reserva>[] = [
@@ -221,7 +214,7 @@ const ReservasPage = () => {
                         onClick={(e) => { e.stopPropagation(); navigate(`/reservas/${r.id}`); }}>
                         <Eye size={15} />
                     </button>
-                    {r.estado === 'activa' && permisos.reservasOperar && (
+                    {r.estado === 'activa' && permisos.reservasCancelar && (
                         <button type="button" className="icon-btn danger" title="Cancelar reserva" aria-label={`Cancelar la reserva ${r.id}`}
                             onClick={(e) => { e.stopPropagation(); setCancelingId(r.id); }}>
                             <XCircle size={15} />
@@ -361,17 +354,18 @@ const ReservasPage = () => {
                 </div>
             </Modal>
 
-            <ConfirmDialog
-                isOpen={cancelingId !== null}
-                title="Cancelar reserva"
-                message={`¿Cancelar la reserva N° ${cancelingId}? La unidad vuelve a estar publicada para la venta.`}
-                confirmLabel="Cancelar reserva"
-                cancelLabel="Volver"
-                type="danger"
-                onConfirm={handleCancel}
-                onCancel={() => setCancelingId(null)}
-                loading={cancelLoading}
-            />
+            {cancelingId !== null && (
+                <MotivoDialog
+                    isOpen
+                    title={`Cancelar la reserva N° ${cancelingId}`}
+                    message="La unidad vuelve a estar publicada para la venta y queda el movimiento de liberación."
+                    label="Motivo de la cancelación"
+                    placeholder="Ej.: el cliente se arrepintió y se le devolvió la seña…"
+                    confirmLabel="Cancelar reserva"
+                    onCancel={() => setCancelingId(null)}
+                    onConfirm={handleCancel}
+                />
+            )}
         </div>
     );
 };

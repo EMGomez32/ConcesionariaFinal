@@ -3,9 +3,17 @@ import { BaseException, NotFoundException } from '../../../domain/exceptions/Bas
 import { withTenantTransaction } from '../../../infrastructure/database/unitOfWork';
 import { evaluarPagoCuota } from '../../../domain/services/pagoCuota';
 import { context } from '../../../infrastructure/security/context';
+import { auditEnTx, detalleConCambio } from '../../../infrastructure/security/auditTx';
+
+/** '' o sólo espacios cuentan como "sin dato". */
+const textoONull = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim() ? v.trim() : null;
 
 export class RegistrarPagoCuota {
-    async execute(cuotaId: number, data: { monto: number; metodo: string; fechaPago?: string; idempotencyKey?: string }) {
+    async execute(cuotaId: number, data: {
+        monto: number; metodo: string; fechaPago?: string; idempotencyKey?: string;
+        referencia?: string; observaciones?: string;
+    }) {
         // Aislamiento de tenant en la capa APP (NO depender sólo de la RLS: la app
         // se conecta como superusuario de Postgres, que saltea RLS). Es el mismo
         // filtro que la extensión inyecta y que este camino raw debe replicar.
@@ -30,8 +38,11 @@ export class RegistrarPagoCuota {
                 estado: string;
                 saldo_cuota: string;
                 fecha_pago_completo: Date | null;
+                nro_cuota: number;
+                financiacion_id: number;
+                concesionaria_id: number | null;
             }>>(Prisma.sql`
-                SELECT estado, saldo_cuota, fecha_pago_completo
+                SELECT estado, saldo_cuota, fecha_pago_completo, nro_cuota, financiacion_id, concesionaria_id
                 FROM cuotas
                 WHERE id = ${cuotaId} AND deleted_at IS NULL ${tenantSql}
                 FOR UPDATE`);
@@ -71,18 +82,29 @@ export class RegistrarPagoCuota {
                 },
             });
 
+            // Referencia (n° de transferencia, de recibo, de cheque) y observaciones SE
+            // GUARDAN (PROC-35). Antes se aceptaban y se descartaban: el número con el
+            // que se concilia el cobro contra el banco se perdía, y el recibo de cuota en
+            // PDF —que ya sabía imprimirla— salía siempre sin ella.
+            const referencia = textoONull(data.referencia);
+            const observaciones = textoONull(data.observaciones);
+            let pagoId: number;
             try {
-                await tx.pagoCuota.create({
+                const pago = await tx.pagoCuota.create({
                     data: {
                         cuotaId,
                         monto: ev.monto,
                         metodo: data.metodo as any,
+                        referencia,
+                        observaciones,
                         fechaPago: data.fechaPago ? new Date(data.fechaPago) : new Date(),
                         // Seteo explícito del tenant (no confiar en el trigger/RLS).
                         ...(isSuper ? {} : { concesionariaId: tenantId }),
                         ...(data.idempotencyKey ? { idempotencyKey: data.idempotencyKey } : {}),
                     },
+                    select: { id: true, fechaPago: true },
                 });
+                pagoId = pago.id;
             } catch (e: any) {
                 // Backstop: si por una carrera llegó a colar dos inserts con la misma
                 // clave, el unique lo rebota (P2002). El throw revierte TODA la tx
@@ -91,6 +113,26 @@ export class RegistrarPagoCuota {
                     throw new BaseException(409, 'El pago ya fue registrado (reenvío); recargá para ver el estado', 'PAGO_DUPLICADO');
                 }
                 throw e;
+            }
+
+            // 5) Rastro DENTRO de la transacción (PROC-35): el cobro no existe sin él.
+            //    Va con el saldo y el estado de la cuota antes/después y lo cobrado.
+            const concesionariaId = locked.concesionaria_id ?? tenantId;
+            if (concesionariaId) {
+                await auditEnTx(tx, {
+                    concesionariaId,
+                    entidad: 'Financiacion',
+                    entidadId: locked.financiacion_id,
+                    accion: 'update',
+                    detalle: detalleConCambio(
+                        `Cobro de la cuota ${locked.nro_cuota} (financiación ${locked.financiacion_id}): ${ev.monto} en ${data.metodo}${referencia ? `, ref. ${referencia}` : ''}`,
+                        {
+                            pago: { id: pagoId, cuotaId, monto: ev.monto, metodo: data.metodo, referencia, observaciones },
+                            antes: { saldoCuota: Number(locked.saldo_cuota), estado: locked.estado },
+                            despues: { saldoCuota: ev.nuevoSaldo, estado: ev.nuevoEstado },
+                        },
+                    ),
+                });
             }
 
             return tx.cuota.findUnique({ where: { id: cuotaId } });

@@ -8,6 +8,8 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import MotivoDialog from '../../components/ui/MotivoDialog';
+import { usePermisos } from '../../hooks/usePermisos';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
@@ -70,6 +72,10 @@ const ReservaDetallePage = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { addToast } = useUIStore();
+    // Cancelar la seña es del admin (con motivo); vencerla ya vencida y convertirla
+    // en venta, de quien opera. Antes la ficha mostraba los tres botones a todos y
+    // el backend contestaba 403.
+    const permisos = usePermisos();
 
     const [reserva, setReserva] = useState<Reserva | null>(null);
     const [loading, setLoading] = useState(true);
@@ -101,19 +107,13 @@ const ReservaDetallePage = () => {
             .finally(() => setLoading(false));
     }, [id]);
 
-    const handleCancel = async () => {
+    // Si el backend rechaza, el error lo muestra el diálogo del motivo (queda abierto).
+    const handleCancel = async (motivo: string) => {
         if (!reserva) return;
-        setActionLoading(true);
-        try {
-            const res = await reservasApi.update(reserva.id, { estado: 'cancelada' });
-            setReserva(prev => combinarReserva(prev, res));
-            addToast('Reserva cancelada. La unidad volvió a Publicado.', 'success');
-            setShowCancelModal(false);
-        } catch (e: unknown) {
-            addToast(getErrorMessage(e, 'No se pudo cancelar la reserva'), 'error');
-        } finally {
-            setActionLoading(false);
-        }
+        const res = await reservasApi.update(reserva.id, { estado: 'cancelada', motivo });
+        setReserva(prev => combinarReserva(prev, res));
+        addToast('Reserva cancelada. La unidad volvió a Publicado.', 'success');
+        setShowCancelModal(false);
     };
 
     const handleConvertirEnVenta = async () => {
@@ -240,30 +240,34 @@ const ReservaDetallePage = () => {
                     </Button>
                     {reserva.estado === 'activa' && (
                         <>
-                        {vencida && (
+                        {vencida && permisos.reservasOperar && (
                             <Button variant="outline" size="sm" onClick={() => setShowVencidaModal(true)}>
                                 <Clock size={14} style={{ marginRight: '0.4rem' }} /> Marcar vencida
                             </Button>
                         )}
-                        <Button variant="primary" size="sm" onClick={() => {
-                            // El precio de venta sale del precio de lista de la unidad,
-                            // no de la seña (antes se precargaba la seña como precio).
-                            const lista = Number(reserva.vehiculo?.precioLista) || 0;
-                            const monedaUnidad = reserva.vehiculo?.moneda;
-                            setConvertirForm({
-                                precioVenta: lista,
-                                moneda: monedaUnidad === 'USD' || monedaUnidad === 'ARS' ? monedaUnidad : reserva.moneda,
-                                formaPago: 'contado',
-                                fechaVenta: hoyLocal(),
-                                observaciones: '',
-                            });
-                            setShowConvertirModal(true);
-                        }}>
-                            <ShoppingBag size={14} style={{ marginRight: '0.4rem' }} /> Convertir en venta
-                        </Button>
-                        <Button variant="danger" size="sm" onClick={() => setShowCancelModal(true)}>
-                            <XCircle size={14} style={{ marginRight: '0.4rem' }} /> Cancelar reserva
-                        </Button>
+                        {permisos.ventasOperar && (
+                            <Button variant="primary" size="sm" onClick={() => {
+                                // El precio de venta sale del precio de lista de la unidad,
+                                // no de la seña (antes se precargaba la seña como precio).
+                                const lista = Number(reserva.vehiculo?.precioLista) || 0;
+                                const monedaUnidad = reserva.vehiculo?.moneda;
+                                setConvertirForm({
+                                    precioVenta: lista,
+                                    moneda: monedaUnidad === 'USD' || monedaUnidad === 'ARS' ? monedaUnidad : reserva.moneda,
+                                    formaPago: 'contado',
+                                    fechaVenta: hoyLocal(),
+                                    observaciones: '',
+                                });
+                                setShowConvertirModal(true);
+                            }}>
+                                <ShoppingBag size={14} style={{ marginRight: '0.4rem' }} /> Convertir en venta
+                            </Button>
+                        )}
+                        {permisos.reservasCancelar && (
+                            <Button variant="danger" size="sm" onClick={() => setShowCancelModal(true)}>
+                                <XCircle size={14} style={{ marginRight: '0.4rem' }} /> Cancelar reserva
+                            </Button>
+                        )}
                         </>
                     )}
                 </div>
@@ -338,17 +342,18 @@ const ReservaDetallePage = () => {
                 </div>
             )}
 
-            <ConfirmDialog
-                isOpen={showCancelModal}
-                title={`Cancelar reserva N° ${reserva.id}`}
-                message={`¿Cancelar la reserva? La unidad ${reserva.vehiculo?.marca ?? ''} ${reserva.vehiculo?.modelo ?? ''} vuelve a estar publicada para la venta.`}
-                confirmLabel="Cancelar reserva"
-                cancelLabel="Volver"
-                type="danger"
-                onConfirm={handleCancel}
-                onCancel={() => setShowCancelModal(false)}
-                loading={actionLoading}
-            />
+            {showCancelModal && (
+                <MotivoDialog
+                    isOpen
+                    title={`Cancelar la reserva N° ${reserva.id}`}
+                    message={`La unidad ${`${reserva.vehiculo?.marca ?? ''} ${reserva.vehiculo?.modelo ?? ''}`.trim()} vuelve a estar publicada para la venta y queda el movimiento de liberación.`}
+                    label="Motivo de la cancelación"
+                    placeholder="Ej.: el cliente se arrepintió y se le devolvió la seña…"
+                    confirmLabel="Cancelar reserva"
+                    onCancel={() => setShowCancelModal(false)}
+                    onConfirm={handleCancel}
+                />
+            )}
 
             <Modal
                 isOpen={showConvertirModal}

@@ -1,5 +1,6 @@
 import { IVehiculoRepository } from '../../../domain/repositories/IVehiculoRepository';
-import { NotFoundException } from '../../../domain/exceptions/BaseException';
+import { NotFoundException, ValidationException } from '../../../domain/exceptions/BaseException';
+import { MOTIVO_MIN, motivoSuficiente } from '../../../domain/services/motivo';
 import { assertValidTransition } from '../../../domain/services/stateMachine';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 import { recordPrecioVehiculo } from '../../../infrastructure/pricing/recordPrecioVehiculo';
@@ -28,6 +29,22 @@ export class UpdateVehiculo {
         // clienteOrigenId es dato del ingreso, no del vehículo: se descarta.
         // motivoCambioPrecio tampoco es columna: va al historial de precios, más abajo.
         const { clienteOrigenId, motivoCambioPrecio, ...vehiculoData } = data;
+
+        // BAJAR el precio de lista exige motivo (PROC-34). Es la otra punta del piso de
+        // venta: si el precio de lista se puede bajar sin decir por qué, el descuento
+        // se hace en la ficha y la venta ya sale "al precio". Subirlo o cargarlo por
+        // primera vez no lo pide. Se valida ANTES de escribir nada.
+        // (Borrar el precio para después cargar uno más bajo "desde cero" no es un
+        // atajo: el schema convierte ''/null en "no lo toca", así que un precio ya
+        // cargado no se puede vaciar por PATCH.)
+        if (vehiculoData.precioLista !== undefined && vehiculoData.precioLista !== null && vehiculoData.precioLista !== '') {
+            const anterior = exists.precioLista == null ? null : Number(exists.precioLista);
+            const nuevo = Number(vehiculoData.precioLista);
+            if (anterior !== null && !Number.isNaN(nuevo) && nuevo < anterior && !motivoSuficiente(motivoCambioPrecio)) {
+                const mensaje = `Contá por qué baja el precio de lista (al menos ${MOTIVO_MIN} caracteres): queda en el historial de precios.`;
+                throw new ValidationException([{ campo: 'motivoCambioPrecio', mensaje }], mensaje);
+            }
+        }
 
         // Los inputs type="date" mandan "YYYY-MM-DD" y los selects strings.
         if (vehiculoData.fechaIngreso) vehiculoData.fechaIngreso = new Date(vehiculoData.fechaIngreso);
@@ -66,7 +83,7 @@ export class UpdateVehiculo {
                     precioAnterior: anterior,
                     precioNuevo: nuevo,
                     moneda: updated?.moneda ?? exists.moneda,
-                    motivo: motivoCambioPrecio || null,
+                    motivo: typeof motivoCambioPrecio === 'string' && motivoCambioPrecio.trim() ? motivoCambioPrecio.trim() : null,
                 });
             }
         }

@@ -60,12 +60,23 @@ export const ventasApi = {
     // Cambio de estado de logística: endpoint dedicado que valida la transición
     // (state machine) y setea fechaEntrega al entregar. El endpoint genérico
     // /ventas/:id (update) descarta estadoEntrega a propósito.
-    changeEstadoEntrega: (id: number, estadoEntrega: EstadoEntrega) => {
-        return client.patch<Venta>(`/ventas/${id}/estado-entrega`, { estadoEntrega });
+    // `motivo` es obligatorio para `cancelada` (anular la operación): el backend lo
+    // rechaza con 400 si falta. Para avanzar la entrega no se manda.
+    changeEstadoEntrega: (id: number, estadoEntrega: EstadoEntrega, motivo?: string) => {
+        return client.patch<Venta>(`/ventas/${id}/estado-entrega`, { estadoEntrega, ...(motivo ? { motivo } : {}) });
     },
 
-    delete: (id: number) => {
-        return client.delete<void>(`/ventas/${id}`);
+    // ANULAR la venta (soft-delete, sólo admin). El motivo es obligatorio (mínimo 10
+    // caracteres) y viaja en el body del DELETE. Si quedan pagos, una financiación o
+    // una factura informada a AFIP, el backend responde 409 ANULACION_BLOQUEADA con
+    // el detalle de qué revertir antes.
+    delete: (id: number, motivo: string) => {
+        return client.delete<void>(`/ventas/${id}`, { data: { motivo } });
+    },
+
+    // Reporte de anulaciones (sólo admin): qué se anuló, cuándo, quién y por qué.
+    anuladas: (options: PaginationOptions = {}) => {
+        return client.get<PaginatedResponse<VentaAnulada>>('/ventas/anuladas', { params: options });
     },
 
     // Comprobante de venta en PDF (Blob descargable).
@@ -86,6 +97,22 @@ export const ventasApi = {
     facturaPdf: (id: number) =>
         client.get<Blob>(`/ventas/${id}/factura/pdf`, { responseType: 'blob' }),
 };
+
+/** Una fila del reporte de anulaciones (GET /ventas/anuladas). */
+export interface VentaAnulada {
+    id: number;
+    fechaVenta: string;
+    precioVenta: number | string;
+    moneda: string;
+    formaPago: string;
+    estadoEntrega: EstadoEntrega;
+    motivoAnulacion: string | null;
+    anuladaEn: string;
+    cliente?: { id: number; nombre: string; dni?: string | null } | null;
+    vehiculo?: { id: number; marca?: string; modelo?: string; dominio?: string | null } | null;
+    vendedor?: { id: number; nombre: string } | null;
+    anuladaPor?: { id: number; nombre: string } | null;
+}
 
 // Comprobante fiscal AFIP asociado a una venta.
 export interface ComprobanteAfip {

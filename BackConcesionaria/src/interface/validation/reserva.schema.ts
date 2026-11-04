@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { obligatorio, invalido } from './mensajes';
+import { bodyOVacio, motivoObligatorio, motivoOpcional } from './motivo';
 
 // Schemas de validación de reservas. Payloads verificados contra los DTOs reales
 // del front (reservas.api.ts):
@@ -40,9 +41,25 @@ export const createReservaSchema = z.object({
 // `.min(1)` a propósito: el use-case interpreta '' como "limpiar el vencimiento"
 // (venceEl=null) y hay que preservar ese comportamiento. `moneda` no forma parte
 // del DTO de update del front, por lo que se descarta si llega (anti mass-assignment).
+//
+// `motivo` no es columna: va a la auditoría. Es obligatorio al CANCELAR (PROC-33):
+// cancelar una seña es devolver plata y liberar la unidad, y es del admin.
 export const updateReservaSchema = z.object({
     estado: estadoReservaEnum.optional(),
     monto: montoField('El monto de la seña').optional(),
     fechaVencimiento: z.string().optional(),
     observaciones: z.string().optional(),
+    motivo: motivoOpcional,
+}).superRefine((v, ctx) => {
+    if (v.estado !== 'cancelada') return;
+    const r = motivoObligatorio('de la cancelación').safeParse(v.motivo ?? '');
+    if (!r.success) {
+        ctx.addIssue({ code: 'custom', path: ['motivo'], message: r.error.issues[0]?.message ?? 'Contá el motivo de la cancelación' });
+    }
 });
+
+// DELETE /reservas/:id — la cancelación "oficial" (admin). Mismo motivo obligatorio
+// que cancelar por PATCH: son la misma operación por dos puertas.
+export const cancelarReservaSchema = bodyOVacio(z.object({
+    motivo: motivoObligatorio('de la cancelación'),
+}));

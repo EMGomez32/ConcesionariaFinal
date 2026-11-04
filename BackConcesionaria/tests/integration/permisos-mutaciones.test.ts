@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { api, login, loginAsAdmin, authHeaders, unique, tryDelete } from './helpers';
+import { api, login, loginAsAdmin, authHeaders, unique, tryDelete, anularVenta, cancelarReserva } from './helpers';
 
 /**
  * Regresión del agujero de permisos: 26 rutas que MUTAN datos corrían sin
@@ -253,6 +253,31 @@ describe('Permisos de mutación — el gate de rol por HTTP', () => {
             expect(res.status).toBe(403);
         });
 
+        // Semántica por campo de las rutas de plata (PROC-32/33): la ruta está abierta
+        // al rol operativo, el DESTINO no. Con ids fantasma alcanza porque el corte va
+        // en un middleware antes de validar el body y de ir a la base. Las pruebas con
+        // filas reales están en "campos sensibles: cancelar contratos y señas".
+        test.each(['vendedor', 'cobrador'] as const)('%s NO puede cancelar un plan (PATCH /financiaciones/:id estado=cancelada)', async (rol) => {
+            const res = await pegar('patch', `/api/financiaciones/${ID_FANTASMA}`, token(rol), { estado: 'cancelada', motivo: 'x'.repeat(20) });
+            expect(res.status).toBe(403);
+        });
+
+        test('vendedor NO puede cancelar una seña por PATCH (estado=cancelada)', async () => {
+            const res = await pegar('patch', `/api/reservas/${ID_FANTASMA}`, token('vendedor'), { estado: 'cancelada', motivo: 'x'.repeat(20) });
+            expect(res.status).toBe(403);
+        });
+
+        test('vendedor NO puede cambiar el monto de una seña (PATCH /reservas/:id monto)', async () => {
+            const res = await pegar('patch', `/api/reservas/${ID_FANTASMA}`, token('vendedor'), { monto: 1 });
+            expect(res.status).toBe(403);
+        });
+
+        test('vendedor NO ve el reporte de ventas anuladas (GET /ventas/anuladas)', async () => {
+            // Es el control de las bajas que hace el dueño, no un listado operativo.
+            const res = await api.get('/api/ventas/anuladas', authHeaders(token('vendedor')));
+            expect(res.status).toBe(403);
+        });
+
         test('admin NO puede escribir el catálogo de planes del SaaS (POST /billing/planes)', async () => {
             // `Plan` es un modelo GLOBAL: no lleva concesionariaId, la extensión de
             // Prisma no lo filtra por tenant y la tabla no tiene policy de RLS. Un
@@ -281,6 +306,19 @@ describe('Permisos de mutación — el gate de rol por HTTP', () => {
 
         test('vendedor SÍ puede tomar una reserva (POST /reservas)', async () => {
             const res = await pegar('post', '/api/reservas', token('vendedor'));
+            expect(res.status).not.toBe(403);
+            expect(PASO_EL_GATE).toContain(res.status);
+        });
+
+        test('cobrador SÍ puede marcar un plan en mora (PATCH /financiaciones/:id estado=en_mora)', async () => {
+            // La contracara del candado de `cancelada`: mora / al día sigue siendo suyo.
+            const res = await pegar('patch', `/api/financiaciones/${ID_FANTASMA}`, token('cobrador'), { estado: 'en_mora' });
+            expect(res.status).not.toBe(403);
+            expect(PASO_EL_GATE).toContain(res.status);
+        });
+
+        test('vendedor SÍ puede extender el vencimiento de una seña (PATCH /reservas/:id)', async () => {
+            const res = await pegar('patch', `/api/reservas/${ID_FANTASMA}`, token('vendedor'), { fechaVencimiento: '2100-01-01' });
             expect(res.status).not.toBe(403);
             expect(PASO_EL_GATE).toContain(res.status);
         });
@@ -435,6 +473,179 @@ describe('Permisos de mutación — el gate de rol por HTTP', () => {
                 expect(new Date(despues.data.vendedorAsignadoEn).getTime())
                     .toBeGreaterThanOrEqual(new Date(fechaAntes).getTime());
             }
+        });
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SEMÁNTICA POR CAMPO EN LAS OPERACIONES DE PLATA (PROC-32 / PROC-33).
+    //
+    // `PATCH /financiaciones/:id` y `PATCH /reservas/:id` están bien abiertos a los
+    // roles operativos: marcar mora o volver al día es trabajo del cobrador, y
+    // extender el vencimiento de una seña es del vendedor. El agujero estaba en
+    // QUÉ se podía mandar por esa misma ruta: `estado: 'cancelada'` cerraba un
+    // contrato de crédito o devolvía una seña, y `monto` reescribía una seña ya
+    // cobrada. Esos destinos son del admin (con motivo). Se prueba con filas REALES
+    // y se verifica que nada haya quedado escrito: un 403 después de persistir
+    // sería el mismo agujero con mejor cara.
+    // ─────────────────────────────────────────────────────────────────────────
+    describe('campos sensibles: cancelar contratos y señas, y el monto de la seña, son del admin', () => {
+        let clienteId: number;
+        let reservaId: number;
+        let financiacionId: number;
+        const vehiculos: number[] = [];
+        let ventaId: number;
+        const MOTIVO = 'El cliente pidió dar de baja la operación';
+
+        const nuevoVehiculo = async () => {
+            const r = await api.post('/api/vehiculos', {
+                marca: unique('MPerm'), modelo: 'Campo', anio: 2021, sucursalId: 1,
+                fechaIngreso: '2026-04-25T00:00:00Z', tipo: 'USADO', precioCompra: 5000, precioLista: 6000,
+                estado: 'publicado', origen: 'compra',
+            }, authHeaders(adminToken));
+            expect(r.status).toBe(201);
+            vehiculos.push(r.data.id);
+            return r.data.id as number;
+        };
+
+        const reserva = async () => (await api.get(`/api/reservas/${reservaId}`, authHeaders(adminToken))).data;
+        const financiacion = async () => (await api.get(`/api/financiaciones/${financiacionId}`, authHeaders(adminToken))).data;
+
+        beforeAll(async () => {
+            const cli = await api.post('/api/clientes', { nombre: unique('CliPlata') }, authHeaders(adminToken));
+            expect(cli.status).toBe(201);
+            clienteId = cli.data.id;
+
+            // La seña la toma el VENDEDOR: es su trabajo.
+            const vReserva = await nuevoVehiculo();
+            const r = await api.post('/api/reservas', {
+                sucursalId: 1, vendedorId: sesiones.vendedor.id, clienteId, vehiculoId: vReserva,
+                monto: 1000, moneda: 'ARS', fechaVencimiento: '2099-12-31',
+            }, authHeaders(token('vendedor')));
+            expect(r.status).toBe(201);
+            reservaId = r.data.id;
+
+            const vVenta = await nuevoVehiculo();
+            const v = await api.post('/api/ventas', {
+                sucursalId: 1, clienteId, vendedorId: sesiones.vendedor.id, vehiculoId: vVenta, precioVenta: 6000,
+                moneda: 'ARS', formaPago: 'financiado_propio', fechaVenta: '2026-04-25',
+            }, authHeaders(adminToken));
+            expect(v.status).toBe(201);
+            ventaId = v.data.id;
+            const f = await api.post('/api/financiaciones', {
+                ventaId, clienteId, fechaInicio: '2026-05-10', diaVencimiento: 10, moneda: 'ARS',
+                montoFinanciado: 3000, cuotas: 3,
+            }, authHeaders(adminToken));
+            expect(f.status).toBe(201);
+            financiacionId = f.data.id;
+        });
+
+        afterAll(async () => {
+            if (reservaId && (await reserva())?.estado === 'activa') await cancelarReserva(reservaId, adminToken);
+            if (ventaId) await anularVenta(ventaId, adminToken);
+            for (const id of vehiculos) await tryDelete(`/api/vehiculos/${id}`, adminToken);
+            if (clienteId) await tryDelete(`/api/clientes/${clienteId}`, adminToken);
+        });
+
+        // ── Señas ──────────────────────────────────────────────────────────────
+        test('vendedor NO puede cancelar una seña por PATCH, ni mandando el motivo', async () => {
+            for (const body of [{ estado: 'cancelada' }, { estado: 'cancelada', motivo: MOTIVO }]) {
+                const res = await api.patch(`/api/reservas/${reservaId}`, body, authHeaders(token('vendedor')));
+                // 403 EXACTO: un 400 ("contá el motivo") le estaría explicando al vendedor
+                // cómo completar una cancelación que no le corresponde.
+                expect(res.status).toBe(403);
+            }
+            expect((await reserva()).estado).toBe('activa');
+        });
+
+        test('vendedor NO puede cambiar el monto de la seña', async () => {
+            const res = await api.patch(`/api/reservas/${reservaId}`, { monto: 1 }, authHeaders(token('vendedor')));
+            expect(res.status).toBe(403);
+            expect(Number((await reserva()).monto)).toBe(1000);
+        });
+
+        test('vendedor NO puede marcar vencida una seña que todavía no venció (cancelación con otro nombre)', async () => {
+            const res = await api.patch(`/api/reservas/${reservaId}`, { estado: 'vencida' }, authHeaders(token('vendedor')));
+            expect(res.status).toBe(422);
+            expect(res.data.error).toBe('RESERVA_NO_VENCIDA');
+            expect((await reserva()).estado).toBe('activa');
+        });
+
+        test('vendedor NO puede mover el vencimiento a una fecha pasada (para después "vencerla")', async () => {
+            const res = await api.patch(`/api/reservas/${reservaId}`, { fechaVencimiento: '2020-01-01' }, authHeaders(token('vendedor')));
+            expect(res.status).toBe(403);
+            expect(String((await reserva()).fechaVencimiento).slice(0, 10)).toBe('2099-12-31');
+        });
+
+        test('vendedor SÍ puede extender el vencimiento y anotar observaciones', async () => {
+            const res = await api.patch(
+                `/api/reservas/${reservaId}`,
+                { fechaVencimiento: '2100-01-15', observaciones: 'Pidió unos días más' },
+                authHeaders(token('vendedor')),
+            );
+            expect(res.status).toBe(200);
+            // Y queda auditado con el valor anterior y el nuevo.
+            const logs = await api.get(`/api/auditoria?entidad=Reserva&entidadId=${reservaId}&accion=update&limit=5`, authHeaders(adminToken));
+            const json = JSON.parse(String(logs.data.results[0].detalle).split('\n')[1]);
+            expect(json.antes).toEqual({ venceEl: '2099-12-31', observaciones: null });
+            expect(json.despues).toEqual({ venceEl: '2100-01-15', observaciones: 'Pidió unos días más' });
+        });
+
+        test('el admin cancela la seña sólo con motivo, y queda el antes/después', async () => {
+            const sinMotivo = await api.patch(`/api/reservas/${reservaId}`, { estado: 'cancelada' }, authHeaders(adminToken));
+            expect(sinMotivo.status).toBe(400);
+            expect((await reserva()).estado).toBe('activa');
+
+            const ok = await api.patch(`/api/reservas/${reservaId}`, { estado: 'cancelada', motivo: MOTIVO }, authHeaders(adminToken));
+            expect(ok.status).toBe(200);
+            const logs = await api.get(`/api/auditoria?entidad=Reserva&entidadId=${reservaId}&accion=cancel&limit=5`, authHeaders(adminToken));
+            const [frase, cambio] = String(logs.data.results[0].detalle).split('\n');
+            expect(frase).toContain(MOTIVO);
+            expect(JSON.parse(cambio)).toEqual(expect.objectContaining({
+                motivo: MOTIVO, antes: { estado: 'activa' }, despues: { estado: 'cancelada' },
+            }));
+        });
+
+        // ── Contratos de financiación ──────────────────────────────────────────
+        test.each(['vendedor', 'cobrador'] as const)('%s NO puede cancelar un plan, ni mandando el motivo', async (rol) => {
+            for (const body of [{ estado: 'cancelada' }, { estado: 'cancelada', motivo: MOTIVO }]) {
+                const res = await api.patch(`/api/financiaciones/${financiacionId}`, body, authHeaders(token(rol)));
+                expect(res.status).toBe(403);
+            }
+            expect((await financiacion()).estado).toBe('activa');
+        });
+
+        test('cobrador SÍ marca el plan en mora y al día, auditado con el estado anterior y el nuevo', async () => {
+            const mora = await api.patch(`/api/financiaciones/${financiacionId}`, { estado: 'en_mora' }, authHeaders(token('cobrador')));
+            expect(mora.status).toBe(200);
+            expect(mora.data.estado).toBe('en_mora');
+            const alDia = await api.patch(`/api/financiaciones/${financiacionId}`, { estado: 'activa' }, authHeaders(token('cobrador')));
+            expect(alDia.status).toBe(200);
+
+            const logs = await api.get(`/api/auditoria?entidad=Financiacion&entidadId=${financiacionId}&accion=update&limit=5`, authHeaders(adminToken));
+            const ultimo = JSON.parse(String(logs.data.results[0].detalle).split('\n')[1]);
+            expect(ultimo).toEqual({ antes: { estado: 'en_mora' }, despues: { estado: 'activa' } });
+        });
+
+        test('nadie marca un plan "refinanciada" a mano (se refinancia con el botón)', async () => {
+            const res = await api.patch(`/api/financiaciones/${financiacionId}`, { estado: 'refinanciada' }, authHeaders(adminToken));
+            expect(res.status).toBe(400);
+            expect(res.data.error).toBe('REFINANCIACION_MANUAL');
+            expect((await financiacion()).estado).toBe('activa');
+        });
+
+        test('el admin cancela el plan sólo con motivo, y queda el estado anterior y el nuevo', async () => {
+            const sinMotivo = await api.patch(`/api/financiaciones/${financiacionId}`, { estado: 'cancelada' }, authHeaders(adminToken));
+            expect(sinMotivo.status).toBe(400);
+            expect(sinMotivo.data.details).toEqual(expect.arrayContaining([expect.objectContaining({ campo: 'motivo' })]));
+            expect((await financiacion()).estado).toBe('activa');
+
+            const ok = await api.patch(`/api/financiaciones/${financiacionId}`, { estado: 'cancelada', motivo: MOTIVO }, authHeaders(adminToken));
+            expect(ok.status).toBe(200);
+            expect(ok.data.estado).toBe('cancelada');
+            const logs = await api.get(`/api/auditoria?entidad=Financiacion&entidadId=${financiacionId}&accion=cancel&limit=5`, authHeaders(adminToken));
+            const [frase, cambio] = String(logs.data.results[0].detalle).split('\n');
+            expect(frase).toContain(MOTIVO);
+            expect(JSON.parse(cambio)).toEqual({ motivo: MOTIVO, antes: { estado: 'activa' }, despues: { estado: 'cancelada' } });
         });
     });
 });
