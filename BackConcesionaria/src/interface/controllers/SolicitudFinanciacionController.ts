@@ -9,9 +9,11 @@ import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import { storage } from '../../infrastructure/storage/LocalStorageAdapter';
-import { BaseException } from '../../domain/exceptions/BaseException';
+import { BaseException, ForbiddenException } from '../../domain/exceptions/BaseException';
 import prisma from '../../infrastructure/database/prisma';
-import { firmarRuta } from '../../infrastructure/security/urlFirmada';
+import { conUrlParaCliente, prefijoAdjuntosSolicitud } from '../../infrastructure/storage/zonaPrivada';
+import { actorTieneRol } from '../../infrastructure/security/roles';
+import { filtroCartera } from '../../application/services/carteraCliente';
 
 const repository = new PrismaSolicitudFinanciacionRepository();
 const getSolicitudesUC = new GetSolicitudes(repository);
@@ -19,6 +21,23 @@ const getSolicitudByIdUC = new GetSolicitudById(repository);
 const createSolicitudUC = new CreateSolicitud(repository);
 const updateSolicitudUC = new UpdateSolicitud(repository);
 const deleteSolicitudUC = new DeleteSolicitud(repository);
+
+/**
+ * ¿El actor puede ver los ADJUNTOS de una solicitud (DNI, recibos de sueldo)?
+ *
+ * La solicitud en sí (banco, monto, estado) la ven admin, vendedor y `lectura` (ver las
+ * rutas). Los papeles, sólo quien arma el legajo: admin y vendedor —el contador no
+ * necesita el DNI escaneado de cada cliente—. Y el vendedor "puro", sólo los de clientes
+ * de SU cartera: es la misma regla que recorta el listado de clientes (carteraCliente.ts),
+ * aplicada al dato más sensible que cuelga de un cliente.
+ */
+async function puedeVerAdjuntos(clienteId: number): Promise<boolean> {
+    if (!actorTieneRol('admin', 'vendedor')) return false;
+    const filtro = await filtroCartera();
+    if (!filtro) return true;
+    const enCartera = await prisma.cliente.count({ where: { AND: [{ id: clienteId }, filtro] } });
+    return enCartera > 0;
+}
 
 export class SolicitudFinanciacionController {
     static async getAll(req: Request, res: Response, next: NextFunction) {
@@ -34,7 +53,12 @@ export class SolicitudFinanciacionController {
     static async getById(req: Request, res: Response, next: NextFunction) {
         try {
             const id = parseInt(req.params.id as string, 10);
-            const result = await getSolicitudByIdUC.execute(id);
+            const result: any = await getSolicitudByIdUC.execute(id);
+            // El detalle trae los adjuntos con URL firmada: sólo para quien puede verlos.
+            if (!(await puedeVerAdjuntos(result.clienteId))) {
+                res.json({ ...result, archivos: undefined });
+                return;
+            }
             res.json(result);
         } catch (error) {
             next(error);
@@ -93,13 +117,18 @@ export class SolicitudFinanciacionController {
     static async listArchivos(req: Request, res: Response, next: NextFunction) {
         try {
             const solicitudId = parseInt(req.params.id as string, 10);
+            // La solicitud tiene que existir (y no estar dada de baja) en el tenant del actor.
+            const solicitud: any = await getSolicitudByIdUC.execute(solicitudId);
+            if (!(await puedeVerAdjuntos(solicitud.clienteId))) {
+                throw new ForbiddenException('Los papeles de esta solicitud los ve el administrador o el vendedor que atiende al cliente.');
+            }
             const archivos = await prisma.solicitudFinanciacionArchivo.findMany({
                 where: { solicitudId },
                 orderBy: { createdAt: 'desc' },
             });
             // Los adjuntos (DNI, recibos) son PRIVADOS: la url que sale de acá es una URL firmada
             // y con vencimiento; la que está guardada en la base no abre nada por sí sola.
-            res.json(archivos.map((a) => ({ ...a, url: firmarRuta(a.url) })));
+            res.json(archivos.map((a) => conUrlParaCliente(a)));
         } catch (error) { next(error); }
     }
 
@@ -114,7 +143,8 @@ export class SolicitudFinanciacionController {
             const solicitud = await getSolicitudByIdUC.execute(solicitudId);
             if (!solicitud) throw new BaseException(404, 'Solicitud no encontrada', 'NOT_FOUND');
 
-            const saved = await storage.save(file, `solicitudes/${solicitudId}`);
+            // Zona PRIVADA de /uploads (sólo con URL firmada): ver storage/zonaPrivada.ts.
+            const saved = await storage.save(file, prefijoAdjuntosSolicitud(solicitudId));
             const user = context.getUser();
 
             const result = await prisma.solicitudFinanciacionArchivo.create({
@@ -138,7 +168,7 @@ export class SolicitudFinanciacionController {
                 detalle: `Archivo "${file.originalname}" subido a solicitud ${solicitudId}`,
             });
 
-            res.status(201).json({ ...result, url: firmarRuta(result.url) });
+            res.status(201).json(conUrlParaCliente(result));
         } catch (error) { next(error); }
     }
 

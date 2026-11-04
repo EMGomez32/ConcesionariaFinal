@@ -209,6 +209,43 @@ describe('Centinela de lecturas: los datos de administración no salen por un in
         },
     );
 
+    /**
+     * Rutas de LECTURA con datos personales sensibles (PRIV-03). No alcanza con "tiene
+     * authorize": tienen que dejar AFUERA a los roles que no las usan. Cada entrada dice
+     * qué roles no pueden aparecer en su authorize y por qué.
+     */
+    const LECTURAS_PII: ReadonlyArray<{ archivo: string; ruta: string; prohibidos: string[]; motivo: string }> = [
+        {
+            archivo: 'solicitud-financiacion.routes.ts', ruta: '/', prohibidos: ['cobrador', 'postventa', 'tasador'],
+            motivo: 'cada solicitud trae el cliente entero y su situación crediticia',
+        },
+        {
+            archivo: 'solicitud-financiacion.routes.ts', ruta: '/:id', prohibidos: ['cobrador', 'postventa', 'tasador'],
+            motivo: 'ídem, más los adjuntos firmados para quien puede verlos',
+        },
+        {
+            archivo: 'solicitud-financiacion.routes.ts', ruta: '/:id/archivos', prohibidos: ['cobrador', 'postventa', 'tasador', 'lectura'],
+            motivo: 'DNI escaneado y recibos de sueldo: sólo quien arma el legajo',
+        },
+    ];
+
+    test.each(LECTURAS_PII)(
+        'GET $ruta ($archivo) declara sus roles y deja afuera a $prohibidos — $motivo',
+        ({ archivo, ruta, prohibidos }) => {
+            const fuente = sinComentarios(leer(DIR_RUTAS, archivo));
+            const escapada = ruta.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const m = new RegExp(`router\\.get\\(\\s*'${escapada}'\\s*,([^\\n]*)\\)`).exec(fuente);
+            expect(m).not.toBeNull();
+            const resto = (m as RegExpExecArray)[1];
+            // Roles literales (no un spread de una constante): el centinela tiene que poder leerlos.
+            const auth = /authorize\(([^)]*)\)/.exec(resto);
+            expect(auth).not.toBeNull();
+            const roles = (auth as RegExpExecArray)[1];
+            expect(roles).toMatch(/'[a-z_]+'/);
+            for (const rol of prohibidos) expect(roles).not.toContain(`'${rol}'`);
+        },
+    );
+
     test('el precio mínimo no aparece en ningún `select` de conveniencia', () => {
         // El piso de venta sólo puede salir por precioAutorizacion.ts (solicitud
         // autorizada y vigente) y por la ficha del vehículo para admin. Cualquier

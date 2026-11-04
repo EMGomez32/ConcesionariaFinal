@@ -103,6 +103,9 @@ const ClienteDetallePage = () => {
     const user = useAuthStore((s) => s.user);
     // Admin/vendedor pueden registrar y borrar contactos (mismo criterio que el backend).
     const puedeEditar = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin' || r === 'vendedor');
+    // Financiación externa: el servidor la abre a admin, vendedor y consulta (GET
+    // /financiacion-solicitudes). Para los demás roles ni se pide: un 403 tumbaría la ficha entera.
+    const veSolicitudes = !!user?.roles?.some((r) => r === 'admin' || r === 'super_admin' || r === 'vendedor' || r === 'lectura');
 
     const [activeTab, setActiveTab] = useState<Tab>('info');
     const [descargandoEC, setDescargandoEC] = useState(false);
@@ -155,7 +158,7 @@ const ClienteDetallePage = () => {
                     presupuestosApi.getAll({ clienteId: cid }),
                     reservasApi.getAll({ clienteId: cid }),
                     financiacionesApi.getAll({ clienteId: cid }),
-                    solicitudesFinanciacionApi.getAll({ clienteId: cid }),
+                    veSolicitudes ? solicitudesFinanciacionApi.getAll({ clienteId: cid }) : Promise.resolve([]),
                     postventaApi.getCasos({ clienteId: cid }),
                     opcional<EstadoCuenta | null>(reportesApi.estadoCuenta(cid), 'el estado de cuenta', null),
                     opcional<Seguimiento[]>(seguimientosApi.getByCliente(cid), 'la bitácora de seguimiento', []),
@@ -179,7 +182,7 @@ const ClienteDetallePage = () => {
             }
         };
         load();
-    }, [id, puedeEditar, recarga]);
+    }, [id, puedeEditar, veSolicitudes, recarga]);
 
     // Carga diferida del stock: sólo la primera vez que se abre el tab "Interés"
     // (evita pedir el listado completo de vehículos en el load inicial de la ficha).
@@ -369,7 +372,7 @@ const ClienteDetallePage = () => {
         { key: 'reservas', label: 'Reservas', icon: BookmarkCheck, count: reservas.length },
         { key: 'presupuestos', label: 'Presupuestos', icon: FileBarChart, count: presupuestos.length },
         { key: 'financiaciones', label: 'Financiación', icon: Banknote, count: financiaciones.length },
-        { key: 'solicitudes', label: 'Financiación externa', icon: FileSignature, count: solicitudes.length },
+        ...(veSolicitudes ? [{ key: 'solicitudes' as const, label: 'Financiación externa', icon: FileSignature, count: solicitudes.length }] : []),
         { key: 'postventa', label: 'Postventa', icon: Wrench, count: postventaCasos.length },
         ...(puedeEditar ? [{ key: 'seguimiento' as const, label: 'Seguimiento', icon: Clock, count: seguimientos.length }] : []),
         { key: 'interes', label: 'Interés', icon: Star, count: interes.length },

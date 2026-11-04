@@ -8,6 +8,16 @@ import { createSolicitudSchema, updateSolicitudSchema } from '../validation/soli
 import { uploadLimiter } from '../middlewares/rateLimiters';
 const router = Router();
 
+// LECTURAS CON PII (PRIV-03): la solicitud lleva el cliente entero (DNI, teléfono,
+// domicilio) y su situación crediticia; los adjuntos, el DNI escaneado y los recibos de
+// sueldo. Antes no tenían authorize y las leía cualquier rol del tenant.
+//  - Solicitud (listado y detalle): admin y vendedor, que la arman y la siguen, y
+//    `lectura` (contador / socio), que mira el estado de las operaciones. Cobrador,
+//    postventa y tasador no trabajan con financiación externa.
+//  - Adjuntos: admin y vendedor (el vendedor puro, sólo los de su cartera; lo resuelve el
+//    controller). El listado también recorta al vendedor puro a su cartera (repositorio).
+// Los roles van literales en cada ruta: el centinela de lecturas los lee del fuente.
+
 /**
  * @openapi
  * /financiacion-solicitudes:
@@ -32,7 +42,7 @@ const router = Router();
  *                 totalResults: { type: integer }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-router.get('/', SolicitudFinanciacionController.getAll);
+router.get('/', authorize('admin', 'vendedor', 'lectura'), SolicitudFinanciacionController.getAll);
 
 /**
  * @openapi
@@ -47,7 +57,7 @@ router.get('/', SolicitudFinanciacionController.getAll);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id', SolicitudFinanciacionController.getById);
+router.get('/:id', authorize('admin', 'vendedor', 'lectura'), SolicitudFinanciacionController.getById);
 
 /**
  * @openapi
@@ -134,7 +144,7 @@ router.delete('/:id', authorize('admin'), SolicitudFinanciacionController.delete
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.get('/:id/archivos', SolicitudFinanciacionController.listArchivos);
+router.get('/:id/archivos', authorize('admin', 'vendedor'), SolicitudFinanciacionController.listArchivos);
 
 /**
  * @openapi

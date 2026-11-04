@@ -480,7 +480,7 @@ export const ROLES: Rol[] = [
             'Reportes → Por vencer',
         ],
         notaMenu:
-            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas de atención (Consultas, Bandeja, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
+            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas de atención (Consultas, Bandeja, Mercado Libre, Seguimientos y Tasaciones), Financiación externa, Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
         tareas: [
             {
                 titulo: 'Cobrar una cuota',
@@ -559,7 +559,7 @@ export const ROLES: Rol[] = [
             'Reportes → Próx. service',
         ],
         notaMenu:
-            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas de atención (Consultas, Bandeja, Mercado Libre, Seguimientos y Tasaciones), Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
+            'Son los módulos donde trabaja, no un menú recortado: hoy el menú le esconde las bandejas de atención (Consultas, Bandeja, Mercado Libre, Seguimientos y Tasaciones), Financiación externa, Usuarios y Auditoría, y los reportes que no le corresponden no le abren. El resto de las pantallas de la concesionaria le siguen apareciendo, pero en Ventas, Movimientos y la ficha del auto va a ver sólo los botones que su perfil puede usar.',
         tareas: [
             {
                 titulo: 'Abrir un caso',
@@ -998,8 +998,10 @@ export const MODULOS: Modulo[] = [
     {
         nombre: 'Fin. Externa',
         seccion: 'Finanzas & Postventa',
-        qué: 'Las solicitudes a bancos y financieras: monto pedido, plazo, tasa estimada, papeles adjuntos y el seguimiento hasta que sale aprobada o rechazada, con el monto y la tasa finales. Puede existir sin auto elegido, para la pre-aprobación.',
-        roles: TODOS,
+        qué: 'Las solicitudes a bancos y financieras: monto pedido, plazo, tasa estimada, papeles adjuntos y el seguimiento hasta que sale aprobada o rechazada, con el monto y la tasa finales. Puede existir sin auto elegido, para la pre-aprobación. Los papeles (DNI, recibos de sueldo) los ven sólo el administrador y el vendedor del cliente; el perfil de consulta ve la solicitud sin los adjuntos.',
+        // Lleva el cliente entero y su situación crediticia: el servidor no se la abre a
+        // cobrador ni a postventa, y el menú tampoco se la muestra.
+        roles: ['admin', 'vendedor', 'lectura'],
     },
     {
         nombre: 'Gastos Fijos',
