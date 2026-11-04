@@ -46,14 +46,21 @@ const PARAMS_SENSIBLES = new Set([
 ]);
 
 /**
- * URL para el log: mismo path, con los valores sensibles enmascarados. Se
- * conserva el NOMBRE del parámetro (sirve para diagnosticar) y se tira el valor.
+ * Texto que viene del request, apto para una línea de log: sin CR/LF, para que nadie
+ * pueda fabricar líneas de log falsas (CWE-117).
+ */
+export const textoParaLog = (texto: string): string => texto.replace(/\n|\r/g, '');
+
+/**
+ * URL para el log: mismo path, con los valores sensibles enmascarados y sin saltos de
+ * línea. Se conserva el NOMBRE del parámetro (sirve para diagnosticar) y se tira el valor.
  */
 export const urlParaLog = (originalUrl: string): string => {
-    const corte = originalUrl.indexOf('?');
-    if (corte < 0) return originalUrl;
-    const path = originalUrl.slice(0, corte);
-    const params = new URLSearchParams(originalUrl.slice(corte + 1));
+    const url = textoParaLog(originalUrl);
+    const corte = url.indexOf('?');
+    if (corte < 0) return url;
+    const path = url.slice(0, corte);
+    const params = new URLSearchParams(url.slice(corte + 1));
     let hayQue = false;
     for (const clave of [...params.keys()]) {
         if (!PARAMS_SENSIBLES.has(clave.toLowerCase())) continue;
@@ -61,14 +68,14 @@ export const urlParaLog = (originalUrl: string): string => {
         hayQue = true;
     }
     // URLSearchParams codifica los corchetes: se devuelven legibles para el que lee el log.
-    return hayQue ? `${path}?${params.toString().replace(/%5Bredactado%5D/g, '[redactado]')}` : originalUrl;
+    return hayQue ? `${path}?${params.toString().replace(/%5Bredactado%5D/g, '[redactado]')}` : url;
 };
 
 export const requestLogger = (req: Request, res: Response, next: NextFunction) => {
     const start = Date.now();
     res.on('finish', () => {
         const duration = Date.now() - start;
-        logger.info(`${req.method} ${urlParaLog(req.originalUrl)} ${res.statusCode} ${duration}ms`, {
+        logger.info(`${textoParaLog(req.method)} ${urlParaLog(req.originalUrl)} ${res.statusCode} ${duration}ms`, {
             correlationId: context.getCorrelationId(),
             tenantId: context.getTenantId(),
             userId: context.getUser()?.userId

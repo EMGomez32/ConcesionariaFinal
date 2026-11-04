@@ -4,7 +4,7 @@ import { ForbiddenException } from '../../domain/exceptions/BaseException';
 import logger from '../../utils/logger';
 import { recordSecurityEvent } from '../../infrastructure/security/securityEvents';
 import { VentanaDeUso } from '../../infrastructure/security/ventanaDeuso';
-import { urlParaLog } from './requestLogger.middleware';
+import { textoParaLog, urlParaLog } from './requestLogger.middleware';
 
 /**
  * El mensaje que ve el usuario final. Es a propósito genérico y en español:
@@ -69,7 +69,7 @@ export const authorize = (...roles: string[]) => {
             // Sin contexto de usuario no hay a quién autorizar. Llegar acá significa
             // que la ruta se montó sin `authenticate` delante: es un bug de montaje,
             // no algo que el usuario pueda resolver.
-            logger.warn(`authorize sin contexto de usuario: ${req.method} ${urlParaLog(req.originalUrl)} (requería ${roles.join(', ')})`);
+            logger.warn(`authorize sin contexto de usuario: ${textoParaLog(req.method)} ${urlParaLog(req.originalUrl)} (requería ${roles.join(', ')})`);
             throw new ForbiddenException(MENSAJE_DENEGADO);
         }
 
@@ -78,7 +78,7 @@ export const authorize = (...roles: string[]) => {
         if (!hasRole && !user.roles.includes('super_admin')) {
             logger.warn(
                 `acceso denegado por rol: usuario ${user.userId} [${user.roles.join(', ') || 'sin roles'}] ` +
-                `intentó ${req.method} ${urlParaLog(req.originalUrl)}, que requiere ${roles.join(', ')}`
+                `intentó ${textoParaLog(req.method)} ${urlParaLog(req.originalUrl)}, que requiere ${roles.join(', ')}`
             );
             registrarDenegacion(req, user, roles);
             throw new ForbiddenException(MENSAJE_DENEGADO);

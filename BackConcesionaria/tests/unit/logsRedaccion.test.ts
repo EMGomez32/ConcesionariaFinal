@@ -5,7 +5,7 @@ jest.mock('../../src/infrastructure/logging/logger', () => ({ logger: { error: (
 const envMock: Record<string, unknown> = { NODE_ENV: 'production' };
 jest.mock('../../src/config/env', () => ({ env: envMock }));
 
-import { urlParaLog } from '../../src/interface/middlewares/requestLogger.middleware';
+import { textoParaLog, urlParaLog } from '../../src/interface/middlewares/requestLogger.middleware';
 import { errorHandler } from '../../src/interface/middlewares/error.middleware';
 
 describe('urlParaLog', () => {
@@ -25,6 +25,12 @@ describe('urlParaLog', () => {
         expect(urlParaLog('/api/clientes?page=2&dni=1&limit=20')).toBe('/api/clientes?page=2&dni=[redactado]&limit=20');
         expect(urlParaLog('/api/vehiculos?page=1')).toBe('/api/vehiculos?page=1');
         expect(urlParaLog('/api/vehiculos')).toBe('/api/vehiculos');
+    });
+
+    test('no deja saltos de línea: nadie puede fabricar líneas de log (CWE-117)', () => {
+        expect(urlParaLog('/api/x\r\n2026-11-04 INFO falso')).toBe('/api/x2026-11-04 INFO falso');
+        expect(urlParaLog('/api/x?page=1\n&dni=30111222')).not.toMatch(/[\r\n]/);
+        expect(textoParaLog('GET\r\nFALSO')).toBe('GETFALSO');
     });
 });
 

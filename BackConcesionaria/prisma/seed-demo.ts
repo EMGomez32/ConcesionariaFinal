@@ -43,8 +43,6 @@ try {
     console.error(`Rechazado: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
 }
-// En produccion la contrasena no se imprime en el resumen (queda en los logs del contenedor).
-const MOSTRAR_PASSWORD = process.env.NODE_ENV !== 'production';
 // Pisar la contrasena de un usuario que YA existe es destructivo, asi que no
 // pasa por default: hay que pedirlo explicito.
 const RESET_PASS = process.env.SEED_DEMO_RESET_PASS === 'true';
@@ -552,9 +550,13 @@ async function main() {
 
     console.log('✅ Datos demo cargados:');
     console.log(`   Concesionaria: ${nombreCargado}${TENANT_OBJETIVO ? ` (id ${TENANT_OBJETIVO})` : ''}`);
-    const passwordVisible = MOSTRAR_PASSWORD ? PASSWORD_DEMO : 'la de SEED_DEMO_PASSWORD';
-    if (!TENANT_OBJETIVO) console.log(`   Login admin:    admin@autosdelvalle.test / ${passwordVisible}`);
-    console.log(`   Cuentas (contraseña ${passwordVisible}):`);
+    // La contraseña nunca se imprime: la salida del seed queda en logs de terminal, CI o
+    // contenedor. Se dice de dónde sale, no cuál es.
+    const origenPassword = process.env.SEED_DEMO_PASSWORD
+        ? 'la de SEED_DEMO_PASSWORD'
+        : 'la demo por defecto (prisma/passwordDemo.ts)';
+    if (!TENANT_OBJETIVO) console.log('   Login admin:    admin@autosdelvalle.test');
+    console.log(`   Cuentas (contraseña: ${origenPassword}):`);
     for (const r of ['admin', 'vendedor', 'vendedor2', 'cobrador', 'postventa', 'lectura']) {
         console.log(`     ${r.padEnd(10)} ${r}@${EMAIL_DOMAIN}`);
     }
