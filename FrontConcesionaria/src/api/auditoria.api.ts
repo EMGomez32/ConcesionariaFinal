@@ -3,7 +3,9 @@ import client from './client';
 // Espejo del enum AccionAudit de Prisma.
 export type AccionAudit =
   | 'create' | 'update' | 'cancel' | 'delete_soft' | 'delete' | 'refinanciar'
-  | 'login' | 'logout' | 'login_fail' | 'password_reset_request' | 'password_reset_done';
+  | 'login' | 'logout' | 'login_fail' | 'password_reset_request' | 'password_reset_done'
+  // Privacidad (Ley 25.326): exportaciones, derechos del titular y accesos del soporte de AUTENZA.
+  | 'export' | 'suprimir' | 'bloquear' | 'desbloquear' | 'revocar_consentimiento' | 'acceso_soporte';
 
 export interface AuditLog {
   id: number;

@@ -83,6 +83,9 @@ const TENANT_TABLES = [
     'postventa_items',
     'tipos_postventa',
     'audit_log',
+    // Registro de pedidos de los titulares (arts. 14-16 Ley 25.326): nombre del
+    // titular y qué pidió. Es dato de cada concesionaria como cualquier otro.
+    'solicitudes_titular',
     'concesionaria_subscriptions',
     'invoices',
     'payments',

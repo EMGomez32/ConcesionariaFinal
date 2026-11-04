@@ -11,6 +11,7 @@
     "init-rls": "ts-node prisma/init-rls.ts",
     "setup-app-role": "ts-node prisma/setup-app-role.ts",
     "seed-ci": "ts-node prisma/seed-ci.ts",
+    "retencion": "ts-node prisma/retencion.ts",
     "sync:infoauto": "ts-node src/scripts/syncInfoauto.ts",
     "test": "jest --runInBand",
     "test:unit": "jest tests/unit",

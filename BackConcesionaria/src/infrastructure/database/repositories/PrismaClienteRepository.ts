@@ -213,6 +213,11 @@ export class PrismaClienteRepository implements IClienteRepository {
             c.consentimientoEn ?? null,
             c.vendedorAsignadoEn ?? null,
             c.ultimaInteraccionEn ?? null,
+            c.consentimientoVersion ?? null,
+            c.consentimientoRevocadoEn ?? null,
+            c.bloqueadoEn ?? null,
+            c.bloqueoMotivo ?? null,
+            c.suprimidoEn ?? null,
         );
     }
 }

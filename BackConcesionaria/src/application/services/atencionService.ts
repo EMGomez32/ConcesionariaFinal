@@ -3,6 +3,7 @@ import prisma from '../../infrastructure/database/prisma';
 import { ingestarConsulta, buscarClientePorContacto } from './consultaIngest';
 import { AvisoAsignacion, ClienteParaAviso, avisoDeAsignacion, configCartera, tocarUltimaInteraccion } from './carteraCliente';
 import { normalizarTelefono } from '../../domain/services/telefono';
+import { esVersionConsentimiento, VERSION_CONSENTIMIENTO_VIGENTE } from '../../domain/services/consentimiento';
 import {
     sugerir,
     calcularPresupuestoReal,
@@ -85,6 +86,22 @@ export class ClienteAsignadoAOtroVendedorError extends BaseException {
 export class ConsentimientoRequeridoError extends BaseException {
     constructor(mensaje: string) {
         super(409, mensaje, 'CONSENTIMIENTO_REQUERIDO');
+    }
+}
+
+/**
+ * Ley 25.326 art. 16: el titular pidió el BLOQUEO de sus datos (o se suprimieron y se
+ * conservan sólo por obligación legal). Mientras dure no se le cargan datos ni se
+ * registra interés comercial: el consentimiento NO se puede volver a otorgar desde el
+ * mostrador, porque el bloqueo lo levanta un admin con motivo (privacidad.routes.ts).
+ */
+export class TitularBloqueadoError extends BaseException {
+    constructor() {
+        super(
+            409,
+            'Este cliente pidió el bloqueo de sus datos (Ley 25.326): no se le pueden cargar datos ni registrar interés comercial. Si el titular quiere volver a operar, un administrador tiene que levantar el bloqueo desde su ficha.',
+            'TITULAR_BLOQUEADO',
+        );
     }
 }
 
@@ -372,9 +389,12 @@ async function cargarAtencionAbierta(id: number) {
  * parado delante del cliente, no puede descubrir el formulario de a un round-trip.
  */
 export function exigirDatosParaInteresReal(
-    cliente: { dni: string | null; email: string | null; direccion: string | null; consentimientoContacto: boolean },
+    cliente: { dni: string | null; email: string | null; direccion: string | null; consentimientoContacto: boolean; bloqueadoEn?: Date | null },
     queSeIntenta: string,
 ): void {
+    // Antes que cualquier faltante: a un titular bloqueado no se le pide el consentimiento
+    // (pedírselo sería el camino para saltear el bloqueo desde el mostrador).
+    if (cliente.bloqueadoEn) throw new TitularBloqueadoError();
     const faltantes: string[] = [];
     if (!cliente.dni?.trim()) faltantes.push('dni');
     if (!cliente.email?.trim()) faltantes.push('email');
@@ -723,10 +743,14 @@ export async function completarCliente(
         telefono?: string;
         direccion?: string;
         consentimientoContacto?: boolean;
+        /** Qué texto se le mostró al titular (domain/services/consentimiento). */
+        consentimientoVersion?: string;
     },
 ) {
     const atencion = await cargarAtencionAbierta(atencionId);
     const cliente = atencion.cliente;
+
+    if (cliente.bloqueadoEn) throw new TitularBloqueadoError();
 
     const traeContactoNuevo = Boolean(datos.email || datos.telefono || datos.direccion);
     const consiente = datos.consentimientoContacto === true || cliente.consentimientoContacto === true;
@@ -749,11 +773,23 @@ export async function completarCliente(
         data.telefonoNormalizado = normalizarTelefono(datos.telefono);
     }
     // El consentimiento se OTORGA. `false` no lo revoca desde acá: revocarlo es un
-    // acto del titular que se registra en la ficha del cliente, no un descuido de
-    // un checkbox en el mostrador.
+    // acto del titular que se registra en la ficha del cliente
+    // (POST /privacidad/clientes/:id/revocar-consentimiento), no un descuido de un
+    // checkbox en el mostrador.
+    //
+    // EVIDENCIA (PRIV-04): se guarda qué versión del texto se le informó. La app móvil
+    // todavía no la manda; se estampa la vigente, que es el texto que esa pantalla
+    // muestra hoy. Si el titular lo había revocado y ahora vuelve a darlo, la
+    // revocación vieja queda en la auditoría y la ficha vuelve a "otorgado".
+    let versionOtorgada: string | null = null;
     if (datos.consentimientoContacto === true && cliente.consentimientoContacto !== true) {
+        versionOtorgada = esVersionConsentimiento(datos.consentimientoVersion)
+            ? datos.consentimientoVersion
+            : VERSION_CONSENTIMIENTO_VIGENTE;
         data.consentimientoContacto = true;
         data.consentimientoEn = new Date();
+        data.consentimientoVersion = versionOtorgada;
+        data.consentimientoRevocadoEn = null;
     }
 
     const actualizado = await prisma.cliente.update({ where: { id: cliente.id }, data });
@@ -761,7 +797,7 @@ export async function completarCliente(
         entidad: 'Cliente',
         accion: 'update',
         entidadId: cliente.id,
-        detalle: `Datos completados en la atención #${atencionId}${data.consentimientoContacto ? ' (consentimiento otorgado)' : ''}`,
+        detalle: `Datos completados en la atención #${atencionId}${versionOtorgada ? ` (consentimiento otorgado, texto ${versionOtorgada})` : ''}`,
     });
     return actualizado;
 }

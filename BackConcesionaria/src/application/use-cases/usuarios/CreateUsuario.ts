@@ -39,11 +39,17 @@ export class CreateUsuario {
         // tenant), así que el pre-chequeo también es global: un email que ya existe en
         // OTRA concesionaria debe cortar acá con un 409 amistoso, no reventar en el
         // INSERT con un P2002 crudo.
+        //
+        // PRIV-20: el mensaje es GENÉRICO a propósito. Antes decía "Ya existe un usuario
+        // con el email X" aunque la cuenta fuera de OTRA concesionaria: el admin de un
+        // tenant podía averiguar si una persona trabaja en otra concesionaria cliente
+        // de AUTENZA. Que el email está tomado no se puede ocultar mientras sea único
+        // global (el alta igual falla); lo que no se confirma es dónde.
         const dup = await this.usuarioRepository.findByEmail(userData.email);
         if (dup) {
             throw new BaseException(
                 409,
-                `Ya existe un usuario con el email ${userData.email}`,
+                'Ese email no está disponible para un usuario nuevo. Usá otro (si es de alguien de tu equipo, buscalo en Usuarios).',
                 'EMAIL_DUPLICATED'
             );
         }

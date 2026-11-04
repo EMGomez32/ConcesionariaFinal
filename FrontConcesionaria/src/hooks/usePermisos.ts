@@ -91,6 +91,15 @@ export interface Permisos {
     /** GET/POST/PATCH/DELETE /cliente-seguimientos — la bitácora de la negociación. */
     seguimientosVer: boolean;
 
+    // ── Derechos del titular (Ley 25.326) ────────────────────────────────────
+    /**
+     * GET /privacidad/clientes/:id/informe, POST .../suprimir, .../bloquear,
+     * .../desbloquear y el registro /privacidad/solicitudes: todo admin.
+     */
+    privacidadGestionar: boolean;
+    /** POST /privacidad/clientes/:id/revocar-consentimiento — admin y vendedor (su cartera). */
+    privacidadRevocarConsentimiento: boolean;
+
     // ── Datos sensibles ──────────────────────────────────────────────────────
     /**
      * En un ingreso por compra, `valorTomado` ES el precio de compra de la unidad.
@@ -174,6 +183,9 @@ export function usePermisos(): Permisos {
         archivosMarcarPrincipal: esAdmin || esVendedor,
 
         seguimientosVer: esAdmin || esVendedor,
+
+        privacidadGestionar: esAdmin,
+        privacidadRevocarConsentimiento: esAdmin || esVendedor,
 
         veValorDeIngreso: esAdmin,
         vePrecioDeCompra: esAdmin,
