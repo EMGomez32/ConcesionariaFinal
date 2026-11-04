@@ -1,4 +1,5 @@
 import { api } from './client';
+import { Paginado } from '../lib/paginacion';
 import { Importe } from './atenciones.api';
 import type { BadgeTone } from '../components/ui';
 
@@ -37,7 +38,6 @@ export interface Presupuesto {
     canje?: PresupuestoCanje | null;
 }
 
-interface Paginado<T> { results: T[]; page: number; limit: number; totalPages: number; totalResults: number }
 
 export interface CreatePresupuestoDto {
     sucursalId: number;
@@ -51,8 +51,9 @@ export interface CreatePresupuestoDto {
 }
 
 export const presupuestosApi = {
-    list: (search?: string, page = 1, limit = 30) =>
-        api.get('/presupuestos', { params: { ...(search ? { search } : {}), page, limit } })
+    // Búsqueda en el servidor con `q` (cliente, unidad o número): contrato de la fase 2.
+    list: (q?: string, page = 1, limit = 30) =>
+        api.get('/presupuestos', { params: { ...(q ? { q } : {}), page, limit } })
             .then((r) => r.data as Paginado<Presupuesto>),
     getById: (id: number) => api.get(`/presupuestos/${id}`).then((r) => r.data as Presupuesto),
     create: (data: CreatePresupuestoDto) => api.post('/presupuestos', data).then((r) => r.data as Presupuesto),

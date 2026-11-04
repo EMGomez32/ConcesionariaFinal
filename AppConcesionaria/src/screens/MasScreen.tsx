@@ -1,26 +1,35 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { colors, spacing, radius, fontSize } from '../theme/tokens';
+import { spacing, radius, fontSize } from '../theme/tokens';
+import { makeStyles, useTheme } from '../theme/theme';
 import { T } from '../components/ui';
 import { useAuthStore } from '../store/authStore';
+import { rolesLegibles } from '../lib/formato';
 
 const ITEMS: { route: string; label: string; icon: keyof typeof Feather.glyphMap; desc: string }[] = [
-    { route: 'Presupuestos', label: 'Presupuestos', icon: 'file-text', desc: 'Cotizaciones para el cliente' },
-    { route: 'Ventas', label: 'Ventas', icon: 'dollar-sign', desc: 'Operaciones cerradas y pagos' },
+    { route: 'Presupuestos', label: 'Presupuestos', icon: 'file-text', desc: 'Los presupuestos para cada cliente' },
+    { route: 'Ventas', label: 'Ventas', icon: 'dollar-sign', desc: 'Las ventas registradas y sus pagos' },
     { route: 'Tasaciones', label: 'Tasaciones', icon: 'clipboard', desc: 'Valuar el usado que trae el cliente' },
 ];
 
 export default function MasScreen({ navigation }: any) {
-    const user = useAuthStore((s) => s.user);
+    const s = useStyles();
+    const { colors } = useTheme();
+    const user = useAuthStore((st) => st.user);
     return (
         <ScrollView style={s.root} contentContainerStyle={{ padding: spacing.lg }}>
-            <T.H1 style={{ marginTop: spacing.sm }}>Más</T.H1>
-            {user ? <T.Muted style={{ marginTop: spacing.xs, marginBottom: spacing.lg }}>{user.nombre} · {user.roles.join(', ')}</T.Muted> : null}
+            {user ? <T.Muted style={{ marginBottom: spacing.lg }}>{user.nombre} · {rolesLegibles(user.roles)}</T.Muted> : null}
 
             {ITEMS.map((it) => (
-                <Pressable key={it.route} onPress={() => navigation.navigate(it.route)} style={s.row}>
-                    <View style={s.icon}><Feather name={it.icon} size={20} color={colors.accent} /></View>
+                <Pressable
+                    key={it.route}
+                    onPress={() => navigation.navigate(it.route)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${it.label}. ${it.desc}`}
+                    style={({ pressed }) => [s.row, pressed && s.rowPressed]}
+                >
+                    <View style={s.icon}><Feather name={it.icon} size={20} color={colors.accentText} /></View>
                     <View style={{ flex: 1 }}>
                         <Text style={s.label}>{it.label}</Text>
                         <T.Muted>{it.desc}</T.Muted>
@@ -32,9 +41,10 @@ export default function MasScreen({ navigation }: any) {
     );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     root: { flex: 1, backgroundColor: colors.bg },
     row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.md },
+    rowPressed: { backgroundColor: colors.bgElevated, borderColor: colors.borderStrong },
     icon: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: colors.accent + '22', alignItems: 'center', justifyContent: 'center' },
     label: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
-});
+}));

@@ -1,4 +1,5 @@
 import { api } from './client';
+import { Paginado } from '../lib/paginacion';
 import { CondicionTasacion, CONDICION_LABEL, CONDICIONES, num, Importe } from './atenciones.api';
 
 export { CONDICION_LABEL, CONDICIONES };
@@ -51,12 +52,13 @@ export interface UpdateTasacionDto {
     observaciones?: string;
 }
 
-interface Paginado<T> { results: T[]; page: number; limit: number; totalPages: number; totalResults: number }
 
 export const tasacionesApi = {
     list: (search?: string, page = 1, limit = 20) =>
         api.get('/tasaciones', { params: { ...(search ? { search } : {}), page, limit } })
             .then((r) => r.data as Paginado<Tasacion>),
+
+    getById: (id: number) => api.get(`/tasaciones/${id}`).then((r) => r.data as Tasacion),
 
     create: (data: CreateTasacionDto) =>
         api.post('/tasaciones', data).then((r) => r.data as Tasacion),
