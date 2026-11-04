@@ -34,7 +34,8 @@ export class ConvertPresupuestoToVenta {
             precioVenta: body.precioVenta ?? primerItem.precioFinal ?? primerItem.precioLista,
             moneda: body.moneda ?? presupuesto.moneda ?? 'ARS',
             formaPago: body.formaPago ?? 'contado',
-            fechaVenta: body.fechaVenta ?? new Date().toISOString(),
+            // Ya llega como Date: convertirPresupuestoSchema normaliza "YYYY-MM-DD".
+            fechaVenta: body.fechaVenta ?? new Date(),
             observaciones: body.observaciones,
             pagos: body.pagos,
             externos: body.externos,

@@ -18,13 +18,16 @@ import { hoyLocal } from '../../utils/fecha';
 import { AlertCircle, ArrowLeft, Save } from 'lucide-react';
 
 type Opt = { value: number; label: string };
+// El motivo no es campo del vehículo: viaja en el PATCH y el backend lo guarda en
+// el historial de precios (pestaña Precios de la ficha).
+type VehiculoForm = Partial<Vehiculo> & { motivoCambioPrecio?: string };
 
 // Campos que el backend puede rechazar por validación y que tienen un control
 // en este formulario: el error se muestra junto al campo.
 const CAMPOS_FORM = new Set<string>([
     'tipo', 'origen', 'marca', 'modelo', 'version', 'anio', 'dominio', 'kmIngreso',
     'estado', 'sucursalId', 'color', 'fechaIngreso', 'moneda', 'precioLista', 'precioCompra',
-    'vencimientoVtv', 'vencimientoSeguro', 'proveedorCompraId', 'clienteOrigenId',
+    'vencimientoVtv', 'vencimientoSeguro', 'proveedorCompraId', 'clienteOrigenId', 'motivoCambioPrecio',
 ]);
 
 // Los obligatorios llevan "*": son los que exige `createVehiculoSchema` en el
@@ -59,10 +62,15 @@ const VehiculoFormPage = () => {
     const [sucursales, setSucursales] = useState<Opt[]>([]);
     const [proveedores, setProveedores] = useState<Opt[]>([]);
     const [clientes, setClientes] = useState<Opt[]>([]);
+    const [precioOriginal, setPrecioOriginal] = useState<number | null>(null);
 
-    const { register, handleSubmit, reset, setError, getValues, setValue, formState: { errors } } = useForm<Partial<Vehiculo>>({
+    const { register, handleSubmit, reset, setError, getValues, setValue, watch, formState: { errors } } = useForm<VehiculoForm>({
         defaultValues: isEdit ? {} : valoresIniciales(sucursalDelUsuario),
     });
+    // Sólo se pide el motivo si el precio de lista cambió respecto del guardado.
+    const precioLista = watch('precioLista');
+    const cambioPrecio = isEdit && precioLista != null && !Number.isNaN(Number(precioLista))
+        && Number(precioLista) !== precioOriginal;
 
     useEffect(() => {
         const toOpts = (res: unknown): Opt[] =>
@@ -81,6 +89,7 @@ const VehiculoFormPage = () => {
                 if (data.fechaCompra) data.fechaCompra = data.fechaCompra.split('T')[0];
                 if (data.vencimientoVtv) data.vencimientoVtv = data.vencimientoVtv.split('T')[0];
                 if (data.vencimientoSeguro) data.vencimientoSeguro = data.vencimientoSeguro.split('T')[0];
+                setPrecioOriginal(data.precioLista == null ? null : Number(data.precioLista));
                 reset(data);
             }).catch((err) => {
                 setErrorCarga(getErrorMessage(err, 'No se pudo cargar el vehículo'));
@@ -106,12 +115,13 @@ const VehiculoFormPage = () => {
         if (actual) setValue('clienteOrigenId', actual);
     }, [clientes, getValues, setValue]);
 
-    const onSubmit = async (data: Partial<Vehiculo>) => {
+    const onSubmit = async ({ motivoCambioPrecio, ...data }: VehiculoForm) => {
         setLoading(true);
         setErrorGeneral(null);
         try {
             if (isEdit) {
-                await vehiculosApi.update(Number(id), data);
+                const motivo = cambioPrecio ? motivoCambioPrecio?.trim() : '';
+                await vehiculosApi.update(Number(id), { ...data, ...(motivo ? { motivoCambioPrecio: motivo } : {}) });
                 addToast('Vehículo actualizado', 'success');
             } else {
                 await vehiculosApi.create(data);
@@ -276,6 +286,13 @@ const VehiculoFormPage = () => {
                                     valueAsNumber: true,
                                     validate: (v) => vacioONoNegativo(v) || 'El precio no puede ser negativo',
                                 })} />
+                            {cambioPrecio && (
+                                <Input id="veh-motivo-precio" label="Motivo del cambio de precio (opcional)"
+                                    placeholder="Ej.: más de 60 días en stock, ajuste a mercado…" maxLength={500}
+                                    hint="Queda en el historial de precios de la unidad."
+                                    error={errors.motivoCambioPrecio?.message}
+                                    {...register('motivoCambioPrecio')} />
+                            )}
                         </div>
                     </div>
 
