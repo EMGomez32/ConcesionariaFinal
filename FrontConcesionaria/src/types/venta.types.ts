@@ -11,6 +11,8 @@ export interface Venta {
     vendedorId: number;
     fechaVenta: string;
     precioVenta: number;
+    /** Se vendió por debajo del precio mínimo de la ficha, con autorización o por un admin. */
+    bajoPiso?: boolean;
     moneda: string;
     formaPago: FormaPagoVenta;
     observaciones?: string;

@@ -749,6 +749,11 @@ const VentasPage = () => {
                             <Badge variant={rotuloEstado(ENTREGA_ESTADO, detail.estadoEntrega).variant}>
                                 Entrega: {rotuloEstado(ENTREGA_ESTADO, detail.estadoEntrega).label}
                             </Badge>
+                            {/* Se vendió por debajo del precio mínimo, con autorización o por un
+                                admin (PROC-34). El valor del piso no viaja: sólo la marca. */}
+                            {detail.bajoPiso && (
+                                <Badge variant="warning">Bajo el precio mínimo</Badge>
+                            )}
                             <p className="font-bold flex items-center gap-2 text-sm">
                                 <Car size={16} aria-hidden="true" /> {detail.vehiculo?.marca} {detail.vehiculo?.modelo} · {detail.vehiculo?.dominio || 'sin dominio'}
                             </p>
