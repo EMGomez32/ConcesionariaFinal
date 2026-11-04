@@ -50,14 +50,26 @@ export interface Permisos {
     ventasQuitarExtra: boolean;
 
     // ── Reservas ─────────────────────────────────────────────────────────────
-    /** POST /reservas y PATCH /reservas/:id (incluye cancelar la seña). */
+    /** POST /reservas y PATCH /reservas/:id (extender el vencimiento, observaciones, vencerla ya vencida). */
     reservasOperar: boolean;
+    /**
+     * PATCH /reservas/:id con estado `cancelada` (con motivo) o con otro `monto`.
+     * Cancelar una seña es devolver plata y liberar la unidad: es del admin
+     * (PROC-33). El backend lo corta por CAMPO, no por ruta.
+     */
+    reservasCancelar: boolean;
 
     // ── Financiación ─────────────────────────────────────────────────────────
     /** POST /financiaciones, PATCH /financiaciones/:id, POST /:id/refinanciar */
     financiacionOperar: boolean;
     /** DELETE /financiaciones/:id — "Anular Contrato". */
     financiacionAnular: boolean;
+    /**
+     * PATCH /financiaciones/:id con estado `cancelada` ("Cancelar plan", con motivo).
+     * Cierra el contrato para siempre: es del admin (PROC-32). Mora / al día siguen
+     * en `financiacionOperar`.
+     */
+    financiacionCancelar: boolean;
     /** PATCH /financiaciones/cuotas/:cuotaId/pagar */
     financiacionCobrarCuota: boolean;
 
@@ -147,9 +159,11 @@ export function usePermisos(): Permisos {
         ventasQuitarExtra: esAdmin || esVendedor,
 
         reservasOperar: esAdmin || esVendedor,
+        reservasCancelar: esAdmin,
 
         financiacionOperar: esAdmin || esVendedor || esCobrador,
         financiacionAnular: esAdmin,
+        financiacionCancelar: esAdmin,
         financiacionCobrarCuota: esAdmin || esVendedor || esCobrador,
 
         ingresosCrear: esAdmin || esVendedor,
