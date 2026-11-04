@@ -155,7 +155,9 @@ export class UsuarioController {
             const antes: any = await getUsuarioByIdUC.execute(id);
             // STEP-UP: cambiarle el email a una cuenta (y pedir después el reset a la casilla
             // nueva) o fijarle una contraseña es tomarla. Se pide la contraseña del actor.
-            const cambiaEmail = !!data.email && data.email !== antes?.email;
+            // Sin distinguir mayúsculas: el schema pasa el email a minúscula y una ficha vieja con
+            // "Juan@X.com" no puede pedir contraseña sólo porque el form la reenvió igual.
+            const cambiaEmail = !!data.email && String(data.email).toLowerCase() !== String(antes?.email ?? '').toLowerCase();
             const fijaPassword = !!data.password;
             if (cambiaEmail || fijaPassword) await exigirContrasenaDelActor(currentPassword);
             const result = await updateUsuarioUC.execute(id, data);
