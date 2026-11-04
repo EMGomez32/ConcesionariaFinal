@@ -13,7 +13,7 @@
 ## ¿Toca algo sensible?
 
 Si marcás alguno, el cambio es de **riesgo alto**: completá la checklist de
-[desarrollo seguro](../docs/seguridad/desarrollo-seguro.md) y la segunda lectura.
+`docs/seguridad/desarrollo-seguro.md` y la segunda lectura.
 
 - [ ] **Autenticación o sesión** (login, 2FA, tokens, cookies, contraseñas)
 - [ ] **Autorización o tenant** (`authorize`, roles, extensión de Prisma, RLS, `rawPrisma` / `$queryRaw`, workers sin request)
