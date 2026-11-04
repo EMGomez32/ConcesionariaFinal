@@ -27,7 +27,7 @@ const CERRADOS: EstadoSolicitudTitular[] = ['resuelta', 'rechazada'];
 
 const DIA_MS = 86_400_000;
 
-type FilaSolicitud = Prisma.SolicitudTitularGetPayload<{ include: { cliente: { select: { id: true; nombre: true; apellido: true } } } }>;
+type FilaSolicitud = Prisma.SolicitudTitularGetPayload<{ include: { cliente: { select: { id: true; nombre: true; apellido: true; deletedAt: true; suprimidoEn: true } } } }>;
 
 /** Nombres de quién la registró / atendió. Sin FK (ver schema): se resuelven aparte. */
 async function nombresDeUsuarios(ids: number[]): Promise<Map<number, string>> {
@@ -62,7 +62,8 @@ async function clienteDelTenant(clienteId: number, concesionariaId: number): Pro
     return !!c;
 }
 
-const INCLUDE = { cliente: { select: { id: true, nombre: true, apellido: true } } } as const;
+// deletedAt / suprimidoEn: la pantalla no ofrece abrir una ficha que ya no existe.
+const INCLUDE = { cliente: { select: { id: true, nombre: true, apellido: true, deletedAt: true, suprimidoEn: true } } } as const;
 
 export async function listarSolicitudesTitular(q: {
     estado?: string;

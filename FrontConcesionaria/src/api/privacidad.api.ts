@@ -38,7 +38,8 @@ export interface SolicitudTitular {
     id: number;
     concesionariaId: number;
     clienteId: number | null;
-    cliente: { id: number; nombre: string; apellido?: string | null } | null;
+    /** La ficha vinculada. `deletedAt` = suprimida o dada de baja: ya no se abre. */
+    cliente: { id: number; nombre: string; apellido?: string | null; deletedAt?: string | null; suprimidoEn?: string | null } | null;
     tipo: TipoSolicitudTitular;
     titularNombre: string;
     canal: string | null;

@@ -18,7 +18,7 @@ describe('fraseAuditoria', () => {
         expect(fraseAuditoria({ accion: 'export', entidad: 'Exportacion' })).toBe('Exportó un listado');
         expect(fraseAuditoria({ accion: 'suprimir', entidad: 'Cliente' })).toBe('Suprimió los datos de un cliente');
         expect(fraseAuditoria({ accion: 'acceso_soporte', entidad: 'AccesoSoporte' })).toBe('El soporte de AUTENZA consultó datos');
-        expect(accionAuditoriaLabel('revocar_consentimiento')).toBe('Consentimiento revocado');
+        expect(accionAuditoriaLabel('revocar_consentimiento')).toBe('Revocación');
         expect(entidadAuditoriaLabel('SolicitudTitular')).toBe('Pedido de un titular de datos');
     });
 

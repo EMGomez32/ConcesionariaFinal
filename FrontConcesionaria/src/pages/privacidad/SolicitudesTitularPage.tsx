@@ -189,8 +189,8 @@ export default function SolicitudesTitularPage() {
                     <span className="listado-principal">{s.titularNombre}</span>
                     <span className="listado-secundario">
                         Recibido el {formatFecha(s.recibidaEl)}{s.canal ? ` · ${s.canal}` : ''}
-                        {s.clienteId ? ' · ' : ''}
-                        {s.clienteId && (
+                        {s.cliente?.deletedAt ? ' · datos suprimidos' : s.clienteId ? ' · ' : ''}
+                        {s.clienteId && !s.cliente?.deletedAt && (
                             <button
                                 type="button"
                                 style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--accent)', fontWeight: 700, fontFamily: 'inherit', fontSize: 'inherit' }}
@@ -389,7 +389,7 @@ export default function SolicitudesTitularPage() {
                                     onChange={(e) => setGResolucion(e.target.value)}
                                     maxLength={4000}
                                     hint={enGestion.tipo === 'supresion' || enGestion.tipo === 'acceso'
-                                        ? 'La supresión y la descarga de datos se hacen desde la ficha del cliente (sección Datos personales).'
+                                        ? 'La supresión y la descarga de datos se hacen desde la ficha del cliente (sección Privacidad).'
                                         : undefined}
                                 />
                             </>

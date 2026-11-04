@@ -12,7 +12,7 @@ import { useUIStore } from '../../store/uiStore';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 
 /**
- * Sección "Datos personales" de la ficha del cliente (Ley 25.326, arts. 5, 14 y 16).
+ * Sección "Privacidad" de la ficha del cliente (Ley 25.326, arts. 5, 14 y 16).
  *
  * Muestra en qué estado está el consentimiento de contacto (con el texto que se le
  * informó), si los datos están bloqueados o suprimidos, y las acciones que la ley le da
@@ -131,7 +131,7 @@ const PrivacidadTitular = ({ cliente, onActualizado, onSuprimidoTotal }: Props) 
     return (
         <div className="info-section full-width">
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <ShieldCheck size={18} aria-hidden="true" /> Datos personales (Ley 25.326)
+                <ShieldCheck size={18} aria-hidden="true" /> Privacidad (Ley 25.326)
             </h3>
 
             {suprimido && (
@@ -225,59 +225,61 @@ const PrivacidadTitular = ({ cliente, onActualizado, onSuprimidoTotal }: Props) 
                     </>
                 )}
             >
-                {accion === 'revocar' && (
-                    <p style={{ marginTop: 0 }}>
-                        El titular puede retirar su conformidad en cualquier momento (art. 5). Desde ahora sale de la agenda de
-                        seguimientos y, si vuelve a interesarse por una unidad, la atención le va a pedir el consentimiento otra vez.
-                    </p>
-                )}
-                {accion === 'bloquear' && (
-                    <p style={{ marginTop: 0 }}>
-                        Mientras dure el bloqueo no se lo contacta, no figura en la agenda y en la atención no se le pueden cargar
-                        datos ni registrar interés. Se usa mientras se atiende un pedido de rectificación o supresión, o cuando el
-                        titular se opone a que se usen sus datos. Lo puede levantar un administrador.
-                    </p>
-                )}
-                {accion === 'desbloquear' && (
-                    <p style={{ marginTop: 0 }}>
-                        Levantalo sólo si el titular lo pidió o si terminó el trámite que lo justificaba. Queda registrado con el motivo.
-                    </p>
-                )}
-                {accion === 'suprimir' && (
-                    <>
-                        <div className="uploader-alert uploader-alert-error" role="alert" style={{ marginTop: 0 }}>
-                            <span>
-                                <strong>No se puede deshacer.</strong> Se borran sus datos de contacto, observaciones, notas de
-                                seguimiento, mensajes de la bandeja y los adjuntos de sus solicitudes de financiación (DNI, recibos).
-                            </span>
-                        </div>
-                        <p>
-                            Si tiene ventas, reservas, financiaciones, comprobantes o le vendió un auto a la concesionaria, la ley
-                            obliga a conservar esos registros: en ese caso se conservan sólo los datos de identificación que exigen
-                            y quedan bloqueados. La respuesta explica qué se conservó y por qué, para contestarle al titular.
+                <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                    {accion === 'revocar' && (
+                        <p style={{ margin: 0 }}>
+                            El titular puede retirar su conformidad en cualquier momento (art. 5). Desde ahora sale de la agenda de
+                            seguimientos y, si vuelve a interesarse por una unidad, la atención le va a pedir el consentimiento otra vez.
                         </p>
-                    </>
-                )}
-                <Textarea
-                    dense
-                    label={accion === 'revocar' ? 'Motivo o canal (opcional)' : 'Motivo (obligatorio)'}
-                    placeholder={accion === 'revocar' ? 'Ej.: lo pidió por WhatsApp' : 'Ej.: pedido del titular por mail del 03/11'}
-                    rows={3}
-                    value={motivo}
-                    onChange={(e) => setMotivo(e.target.value)}
-                    maxLength={1000}
-                    hint={accion !== 'revocar' && !motivoValido ? `Al menos ${MIN_MOTIVO} caracteres: queda en la auditoría.` : undefined}
-                />
-                {accion === 'suprimir' && (
-                    <Input
+                    )}
+                    {accion === 'bloquear' && (
+                        <p style={{ margin: 0 }}>
+                            Mientras dure el bloqueo no se lo contacta, no figura en la agenda y en la atención no se le pueden cargar
+                            datos ni registrar interés. Se usa mientras se atiende un pedido de rectificación o supresión, o cuando el
+                            titular se opone a que se usen sus datos. Lo puede levantar un administrador.
+                        </p>
+                    )}
+                    {accion === 'desbloquear' && (
+                        <p style={{ margin: 0 }}>
+                            Levantalo sólo si el titular lo pidió o si terminó el trámite que lo justificaba. Queda registrado con el motivo.
+                        </p>
+                    )}
+                    {accion === 'suprimir' && (
+                        <>
+                            <div className="uploader-alert uploader-alert-error" role="alert" style={{ margin: 0 }}>
+                                <span>
+                                    <strong>No se puede deshacer.</strong> Se borran sus datos de contacto, observaciones, notas de
+                                    seguimiento, mensajes de la bandeja y los adjuntos de sus solicitudes de financiación (DNI, recibos).
+                                </span>
+                            </div>
+                            <p style={{ margin: 0 }}>
+                                Si tiene ventas, reservas, financiaciones, comprobantes o le vendió un auto a la concesionaria, la ley
+                                obliga a conservar esos registros: en ese caso se conservan sólo los datos de identificación que exigen
+                                y quedan bloqueados. La respuesta explica qué se conservó y por qué, para contestarle al titular.
+                            </p>
+                        </>
+                    )}
+                    <Textarea
                         dense
-                        label="Para confirmar, escribí SUPRIMIR"
-                        value={confirmacion}
-                        onChange={(e) => setConfirmacion(e.target.value)}
-                        autoComplete="off"
-                        spellCheck={false}
+                        label={accion === 'revocar' ? 'Motivo o canal (opcional)' : 'Motivo (obligatorio)'}
+                        placeholder={accion === 'revocar' ? 'Ej.: lo pidió por WhatsApp' : 'Ej.: pedido del titular por mail del 03/11'}
+                        rows={3}
+                        value={motivo}
+                        onChange={(e) => setMotivo(e.target.value)}
+                        maxLength={1000}
+                        hint={accion !== 'revocar' && !motivoValido ? `Al menos ${MIN_MOTIVO} caracteres: queda en la auditoría.` : undefined}
                     />
-                )}
+                    {accion === 'suprimir' && (
+                        <Input
+                            dense
+                            label="Para confirmar, escribí SUPRIMIR"
+                            value={confirmacion}
+                            onChange={(e) => setConfirmacion(e.target.value)}
+                            autoComplete="off"
+                            spellCheck={false}
+                        />
+                    )}
+                </div>
             </Modal>
 
             <Modal

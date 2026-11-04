@@ -28,11 +28,12 @@ export const ACCION_AUDITORIA: Record<string, { label: string; variant: BadgeVar
     password_reset_request: { label: 'Pedido de contraseña', variant: 'warning' },
     password_reset_done: { label: 'Contraseña restablecida', variant: 'default' },
     export: { label: 'Exportación', variant: 'warning' },
-    suprimir: { label: 'Supresión de datos', variant: 'danger' },
-    bloquear: { label: 'Bloqueo de datos', variant: 'warning' },
-    desbloquear: { label: 'Bloqueo levantado', variant: 'default' },
-    revocar_consentimiento: { label: 'Consentimiento revocado', variant: 'warning' },
-    acceso_soporte: { label: 'Acceso de soporte', variant: 'violet' },
+    // Rótulos cortos: van en un badge de la tabla. La frase larga la arma fraseAuditoria.
+    suprimir: { label: 'Supresión', variant: 'danger' },
+    bloquear: { label: 'Bloqueo', variant: 'warning' },
+    desbloquear: { label: 'Desbloqueo', variant: 'default' },
+    revocar_consentimiento: { label: 'Revocación', variant: 'warning' },
+    acceso_soporte: { label: 'Soporte', variant: 'violet' },
 };
 
 const capitalizar = (t: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
