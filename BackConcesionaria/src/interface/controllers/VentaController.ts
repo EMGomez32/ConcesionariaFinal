@@ -8,6 +8,7 @@ import { UpdateVenta } from '../../application/use-cases/ventas/UpdateVenta';
 import { ChangeEstadoEntrega } from '../../application/use-cases/ventas/ChangeEstadoEntrega';
 import { DeleteVenta } from '../../application/use-cases/ventas/DeleteVenta';
 import { audit } from '../../infrastructure/security/audit';
+import { detalleConCambio } from '../../infrastructure/security/auditTx';
 import { actorEsAdmin } from '../../infrastructure/security/roles';
 import { ForbiddenException } from '../../domain/exceptions/BaseException';
 
@@ -26,6 +27,20 @@ export class VentaController {
             const { limit, page, sortBy, sortOrder, ...filters } = req.query;
             const result = await getVentasUC.execute(filters, { limit, page, sortBy, sortOrder } as any);
             res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * GET /ventas/anuladas — el reporte de anulaciones (PROC-30): qué se anuló,
+     * cuándo, quién y por qué. Sólo admin (lo cierra la ruta): es la pantalla con la
+     * que el dueño controla las bajas, no un listado operativo.
+     */
+    static async anuladas(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { limit, page, ...filters } = req.query;
+            res.json(await repository.findAnuladas(filters, { limit, page } as any));
         } catch (error) {
             next(error);
         }
@@ -87,23 +102,54 @@ export class VentaController {
      */
     private static readonly ESTADOS_ENTREGA_DE_ADMIN = ['cancelada'];
 
+    private static assertPuedeFijarEstadoEntrega(estadoEntrega: unknown): void {
+        if (VentaController.ESTADOS_ENTREGA_DE_ADMIN.includes(String(estadoEntrega)) && !actorEsAdmin()) {
+            throw new ForbiddenException(
+                'Anular una operación es del administrador. Podés avanzar la entrega, no cancelarla.'
+            );
+        }
+    }
+
+    /**
+     * El mismo candado, como middleware que va ANTES de `validateBody`: desde que
+     * `cancelada` exige motivo, validar primero le contestaba 400 ("contá el
+     * motivo") a un vendedor, o sea que le explicaba cómo completar una anulación
+     * que no le corresponde. El permiso no puede depender de que el body esté bien.
+     */
+    static gateEstadoEntrega(req: Request, _res: Response, next: NextFunction) {
+        try {
+            VentaController.assertPuedeFijarEstadoEntrega(req.body?.estadoEntrega);
+            next();
+        } catch (error) {
+            next(error);
+        }
+    }
+
     static async changeEstadoEntrega(req: Request, res: Response, next: NextFunction) {
         try {
             const id = parseInt(req.params.id as string, 10);
-            const { estadoEntrega } = req.body;
-            if (VentaController.ESTADOS_ENTREGA_DE_ADMIN.includes(estadoEntrega) && !actorEsAdmin()) {
-                throw new ForbiddenException(
-                    'Anular una operación es del administrador. Podés avanzar la entrega, no cancelarla.'
-                );
-            }
-            const result = await changeEstadoEntregaUC.execute(id, estadoEntrega);
+            const { estadoEntrega, motivo } = req.body;
+            // Se repite acá (barato) por si alguien saca el middleware de la ruta.
+            VentaController.assertPuedeFijarEstadoEntrega(estadoEntrega);
+            const { venta, estadoAnterior } = await changeEstadoEntregaUC.execute(id, estadoEntrega);
+            // `motivo` sólo viaja (y el schema sólo lo exige) cuando se anula la operación.
+            const esAnulacion = estadoEntrega === 'cancelada';
             await audit({
                 entidad: 'Venta',
-                accion: 'update',
+                accion: esAnulacion ? 'cancel' : 'update',
                 entidadId: id,
-                detalle: `Estado de entrega: ${estadoEntrega}`,
+                detalle: detalleConCambio(
+                    esAnulacion
+                        ? `Operación de la venta ${id} anulada (entrega cancelada). Motivo: ${motivo}`
+                        : `Estado de entrega: ${estadoEntrega}`,
+                    {
+                        ...(esAnulacion ? { motivo } : {}),
+                        antes: { estadoEntrega: estadoAnterior },
+                        despues: { estadoEntrega },
+                    },
+                ),
             });
-            res.json(result);
+            res.json(venta);
         } catch (error) {
             next(error);
         }
@@ -112,13 +158,10 @@ export class VentaController {
     static async delete(req: Request, res: Response, next: NextFunction) {
         try {
             const id = parseInt(req.params.id as string, 10);
-            await deleteVentaUC.execute(id);
-            await audit({
-                entidad: 'Venta',
-                accion: 'delete_soft',
-                entidadId: id,
-                detalle: `Venta ${id} eliminada`,
-            });
+            // La auditoría (con el motivo y el antes/después) la escribe DeleteVenta
+            // dentro de su transacción: si el rastro no se puede escribir, la venta no
+            // se anula. Por eso acá ya no hay audit() suelto.
+            await deleteVentaUC.execute(id, { motivo: req.body.motivo });
             res.status(204).send();
         } catch (error) {
             next(error);

@@ -171,6 +171,7 @@ model Usuario {
   sucursal                 Sucursal?                 @relation(fields: [sucursalId], references: [id])
   vehiculoMovimientos      VehiculoMovimiento[]      @relation("MovimientoRegistradoPor")
   ventas                   Venta[]                   @relation("VentaVendedor")
+  ventasAnuladas           Venta[]                   @relation("VentaAnuladaPor")
   objetivos                ObjetivoVendedor[]
   seguimientos             ClienteSeguimiento[]
   tasaciones               Tasacion[]                @relation("TasacionTasador")
@@ -1104,6 +1105,13 @@ model Venta {
   createdAt               DateTime                @default(now()) @map("created_at")
   updatedAt               DateTime                @updatedAt @map("updated_at")
   deletedAt               DateTime?               @map("deleted_at")
+  // ANULACIÓN (PROC-30). Anular sigue siendo el soft-delete de siempre: con
+  // deletedAt la venta sale de listados y reportes. Lo nuevo es que deja de ser
+  // un borrado mudo: el POR QUÉ y el QUIÉN quedan en la propia fila (además del
+  // audit_log) para poder listar las anuladas sin reconstruirlas del rastro.
+  motivoAnulacion         String?                 @map("motivo_anulacion")
+  anuladaPorId            Int?                    @map("anulada_por_id")
+  anuladaPor              Usuario?                @relation("VentaAnuladaPor", fields: [anuladaPorId], references: [id])
   // Una venta puede acumular varias financiaciones a lo largo del tiempo: la
   // original y las sucesivas refinanciaciones de su saldo.
   financiaciones          Financiacion[]

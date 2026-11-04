@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, authHeaders, unique } from './helpers';
+import { api, loginAsSuperAdmin, authHeaders, unique, anularVenta } from './helpers';
 
 describe('State machines (transiciones inválidas → 422)', () => {
     let token: string;
@@ -88,7 +88,7 @@ describe('State machines (transiciones inválidas → 422)', () => {
 
         // Cleanup
         await api.delete(`/api/postventa-casos/${caso.data.id}`, authHeaders(token));
-        await api.delete(`/api/ventas/${venta.data.id}`, authHeaders(token));
+        await anularVenta(venta.data.id, token);
         await api.delete(`/api/vehiculos/${veh.data.id}`, authHeaders(token));
         await api.delete(`/api/clientes/${cli.data.id}`, authHeaders(token));
     });

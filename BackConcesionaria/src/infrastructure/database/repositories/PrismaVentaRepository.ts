@@ -66,6 +66,57 @@ export class PrismaVentaRepository implements IVentaRepository {
         return v ? this.mapToEntity(v) : null;
     }
 
+    /**
+     * Reporte de anulaciones. Va por el cliente extendido (tenant inyectado por la
+     * extensión, super_admin ve todo) con `deletedAt: { not: null }` EXPLÍCITO: la
+     * extensión sólo agrega `deletedAt: null` cuando el where no lo menciona.
+     *
+     * Proyección cerrada a propósito (VEHICULO_PUBLICO / USUARIO_PUBLICO, cliente
+     * con nombre y documento): es un listado y el centinela de lecturas no deja
+     * pasar includes anchos. Filtros: rango por FECHA DE ANULACIÓN (fechaDesde /
+     * fechaHasta, YYYY-MM-DD inclusive) y vendedor.
+     */
+    async findAnuladas(filter: any = {}, options: QueryOptions = {}): Promise<PaginatedResponse<any>> {
+        const { limit: limitNum, page: pageNum } = parsePagination(options);
+        const where: any = { deletedAt: { not: null } };
+        const { fechaDesde, fechaHasta, vendedorId } = filter ?? {};
+        if (vendedorId && Number.isInteger(Number(vendedorId))) where.vendedorId = Number(vendedorId);
+        const desde = typeof fechaDesde === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fechaDesde) ? new Date(`${fechaDesde}T00:00:00.000Z`) : null;
+        const hasta = typeof fechaHasta === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fechaHasta) ? new Date(`${fechaHasta}T23:59:59.999Z`) : null;
+        if (desde || hasta) where.deletedAt = { not: null, ...(desde ? { gte: desde } : {}), ...(hasta ? { lte: hasta } : {}) };
+
+        const results = await prisma.venta.findMany({
+            where,
+            take: limitNum,
+            skip: (pageNum - 1) * limitNum,
+            orderBy: { deletedAt: 'desc' },
+            select: {
+                id: true,
+                concesionariaId: true,
+                fechaVenta: true,
+                precioVenta: true,
+                moneda: true,
+                formaPago: true,
+                estadoEntrega: true,
+                deletedAt: true,
+                motivoAnulacion: true,
+                cliente: { select: { id: true, nombre: true, dni: true } },
+                vehiculo: { select: VEHICULO_PUBLICO },
+                vendedor: { select: USUARIO_PUBLICO },
+                anuladaPor: { select: USUARIO_PUBLICO },
+            },
+        });
+        const total = await prisma.venta.count({ where });
+
+        return {
+            results: results.map(({ deletedAt, ...v }) => ({ ...v, anuladaEn: deletedAt })),
+            page: pageNum,
+            limit: limitNum,
+            totalPages: Math.ceil(total / limitNum),
+            totalResults: total,
+        };
+    }
+
     async create(data: any): Promise<Venta> {
         const v = await prisma.venta.create({ data });
         return this.mapToEntity(v);

@@ -1,4 +1,4 @@
-import { api, loginAsAdmin, loginAsSuperAdmin, authHeaders, unique, tryDelete } from './helpers';
+import { api, loginAsAdmin, loginAsSuperAdmin, authHeaders, unique, tryDelete, anularVenta } from './helpers';
 
 /**
  * PROC-31: anular una venta y volver a vender la misma unidad.
@@ -55,8 +55,7 @@ describe('Anular una venta y revender la unidad (PROC-31)', () => {
         formaPago: 'contado', fechaVenta: '2026-04-25',
     }, authHeaders(adToken));
 
-    const anular = (ventaId: number) =>
-        api.delete(`/api/ventas/${ventaId}`, authHeaders(adToken));
+    const anular = (ventaId: number) => anularVenta(ventaId, adToken);
 
     const estadoDe = async (vehiculoId: number) =>
         (await api.get(`/api/vehiculos/${vehiculoId}`, authHeaders(adToken))).data.estado as string;
