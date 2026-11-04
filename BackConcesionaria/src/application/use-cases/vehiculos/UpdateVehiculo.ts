@@ -26,7 +26,8 @@ export class UpdateVehiculo {
         await assertMismoTenant('proveedor', data.proveedorCompraId, tenantId);
 
         // clienteOrigenId es dato del ingreso, no del vehículo: se descarta.
-        const { clienteOrigenId, ...vehiculoData } = data;
+        // motivoCambioPrecio tampoco es columna: va al historial de precios, más abajo.
+        const { clienteOrigenId, motivoCambioPrecio, ...vehiculoData } = data;
 
         // Los inputs type="date" mandan "YYYY-MM-DD" y los selects strings.
         if (vehiculoData.fechaIngreso) vehiculoData.fechaIngreso = new Date(vehiculoData.fechaIngreso);
@@ -65,6 +66,7 @@ export class UpdateVehiculo {
                     precioAnterior: anterior,
                     precioNuevo: nuevo,
                     moneda: updated?.moneda ?? exists.moneda,
+                    motivo: motivoCambioPrecio || null,
                 });
             }
         }

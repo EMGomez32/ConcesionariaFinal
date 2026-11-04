@@ -60,6 +60,13 @@ const optionalDecimal = z.preprocess(
 // convertirlo a undefined cambiaría ese comportamiento. Igual que en ingreso-vehiculo.
 const optionalStr = z.string().optional();
 
+// Igual que optionalStr pero acepta null, sólo para el UPDATE. El formulario de
+// edición hace GET + reset(data) y reenvía la entidad entera: los campos vacíos
+// vuelven como null (version, vin, fechaCompra, vencimientos...). Con optionalStr
+// eso era un 400 y la edición de casi cualquier vehículo no se podía guardar. Sólo
+// se usa en columnas nullable del modelo; null deja la columna como ya estaba.
+const nullableStr = z.string().nullable().optional();
+
 export const createVehiculoSchema = z.object({
     // Requeridos (equivalen a los isInt / notEmpty / isIn / isISO8601 SIN .optional()
     // del validador original).
@@ -131,21 +138,22 @@ export const updateVehiculoSchema = z.object({
     tipo: tipoEnum.optional(),
     origen: origenEnum.optional(),
     estado: estadoEnum.optional(),
-    version: optionalStr,
+    version: nullableStr,
     anio: optionalInt,
-    dominio: optionalStr,
-    vin: optionalStr,
+    dominio: nullableStr,
+    vin: nullableStr,
     kmIngreso: optionalInt,
-    color: optionalStr,
+    color: nullableStr,
+    // fechaIngreso es NOT NULL: no acepta null.
     fechaIngreso: optionalStr,
-    fechaCompra: optionalStr,
-    vencimientoVtv: optionalStr,
-    vencimientoSeguro: optionalStr,
+    fechaCompra: nullableStr,
+    vencimientoVtv: nullableStr,
+    vencimientoSeguro: nullableStr,
     moneda: monedaEnum.optional(),
     precioLista: optionalDecimal,
     precioCompra: optionalDecimal,
     proveedorCompraId: optionalFk,
-    formaPagoCompra: optionalStr,
+    formaPagoCompra: nullableStr,
     // PISO DE VENTA. Se acepta en el schema para que el ADMIN pueda cargarlo desde
     // el mismo formulario, pero VehiculoController llama a
     // `assertPuedeEscribirPrecioMinimo` antes del use-case: si lo manda alguien que
@@ -155,9 +163,13 @@ export const updateVehiculoSchema = z.object({
     // Segmento comercial (texto libre): lo consume el motor de sugerencias para
     // los criterios "mismo segmento" y "competencia directa". Sin esto acá, el
     // strip de Zod borraba el campo y la columna nunca se cargaba.
-    segmento: optionalStr,
-    observaciones: optionalStr,
+    segmento: nullableStr,
+    observaciones: nullableStr,
     clienteOrigenId: optionalFk,
+    // Por qué se cambió el precio de lista. NO es columna del vehículo: UpdateVehiculo
+    // lo saca del update y lo guarda en el historial (VehiculoPrecioHistorial.motivo)
+    // sólo si el precio cambió de verdad. '' cuenta como "sin motivo".
+    motivoCambioPrecio: z.string().trim().max(500, 'El motivo es demasiado largo').optional(),
 });
 
 // POST /vehiculos/:id/transferir. Antes sin validar: `Number(undefined)` llegaba como NaN.

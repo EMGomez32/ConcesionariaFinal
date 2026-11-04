@@ -20,7 +20,8 @@ export const vehiculosApi = {
         return client.post<Vehiculo>('/vehiculos', data);
     },
 
-    update: (id: number, data: Partial<Vehiculo>) => {
+    // motivoCambioPrecio no es campo del vehículo: el backend lo guarda en el historial de precios.
+    update: (id: number, data: Partial<Vehiculo> & { motivoCambioPrecio?: string }) => {
         return client.patch<Vehiculo>(`/vehiculos/${id}`, data);
     },
 

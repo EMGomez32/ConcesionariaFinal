@@ -21,6 +21,19 @@ const optionalFk = z.preprocess(
     z.coerce.number().int().positive().optional(),
 );
 
+// Fecha que el use-case pasa DIRECTO a Prisma (`...ventaData` / `...data` en el
+// create). El front la manda desde un <input type="date"> como "YYYY-MM-DD", y
+// Prisma rechaza ese string para un DateTime ("Expected ISO-8601 DateTime") → 500
+// al registrar la venta, al convertir un presupuesto y al agregar un pago. Se
+// valida y se convierte acá, con la misma convención que el resto del backend
+// (`new Date("YYYY-MM-DD")` = medianoche UTC, ver RegistrarPagoCuota). También
+// acepta un ISO completo, que es lo que mandan los tests y otros clientes.
+const fechaField = (msgVacia: string) =>
+    z.string()
+        .min(1, msgVacia)
+        .refine((s) => !Number.isNaN(new Date(s).getTime()), 'La fecha no es válida')
+        .transform((s) => new Date(s));
+
 const metodoPagoEnum = z.enum(['efectivo', 'transferencia', 'tarjeta', 'cheque', 'otro']);
 const monedaEnum = z.enum(['ARS', 'USD']);
 const formaPagoEnum = z.enum(['contado', 'transferencia', 'financiado_propio', 'financiado_externo', 'canje_mas_diferencia', 'mixto']);
@@ -31,7 +44,7 @@ const pagoItem = z.object({
     metodo: metodoPagoEnum,
     referencia: z.string().optional(),
     observaciones: z.string().optional(),
-    fecha: z.string().optional(),
+    fecha: fechaField('La fecha del pago no puede estar vacía').optional(),
 });
 
 const externoItem = z.object({
@@ -55,7 +68,7 @@ export const createVentaSchema = z.object({
     precioVenta: montoField('El precio de venta'),
     moneda: monedaEnum,
     formaPago: formaPagoEnum,
-    fechaVenta: z.string().min(1, 'La fecha de venta es obligatoria'),
+    fechaVenta: fechaField('La fecha de venta es obligatoria'),
     observaciones: z.string().optional(),
     pagos: z.array(pagoItem).optional(),
     externos: z.array(externoItem).optional(),
@@ -90,7 +103,7 @@ export const convertirPresupuestoSchema = z.object({
     precioVenta: montoField('El precio de venta').optional(),
     moneda: monedaEnum.optional(),
     formaPago: formaPagoEnum.optional(),
-    fechaVenta: z.string().min(1, 'La fecha de venta no puede estar vacía').optional(),
+    fechaVenta: fechaField('La fecha de venta no puede estar vacía').optional(),
     observaciones: z.string().optional(),
     pagos: z.array(pagoItem).optional(),
     externos: z.array(externoItem).optional(),

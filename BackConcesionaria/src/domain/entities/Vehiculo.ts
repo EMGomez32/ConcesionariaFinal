@@ -75,7 +75,15 @@ export class Vehiculo {
          * ±15%" y "competencia directa del segmento". Sin mapearlo, la columna se
          * cargaba y el motor la leía siempre en null, degradando a banda de precio.
          */
-        public readonly segmento: string | null = null
+        public readonly segmento: string | null = null,
+        /**
+         * Tipo (USADO / CERO_KM) y origen (compra, permuta...). Mismo bug que tuvo
+         * `precioCompra`: se persistían pero no estaban acá, así que el GET no los
+         * devolvía y el formulario de edición abría con "Tipo" vacío — que es
+         * obligatorio — y no dejaba guardar ningún cambio sin volver a elegirlo.
+         */
+        public readonly tipo: string | null = null,
+        public readonly origen: string | null = null
     ) { }
 
     public isAvailable(): boolean {
