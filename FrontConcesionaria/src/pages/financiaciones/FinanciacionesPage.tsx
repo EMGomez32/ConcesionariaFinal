@@ -30,6 +30,7 @@ import { useConfirm } from '../../hooks/useConfirm';
 import { waShareLink } from '../../utils/whatsapp';
 import { formatFecha, hoyLocal } from '../../utils/fecha';
 import { formatMoneda } from '../../utils/moneda';
+import { METODO_PAGO_LABEL } from '../../components/ventas/estados';
 import { getApiErrorMessage } from '../../utils/error';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -85,6 +86,8 @@ interface Cuota {
     montoCuota: number | string;
     saldoCuota: number | string;
     estado: EstadoCuota;
+    /** Cobros de la cuota (sólo en el detalle), con la referencia para conciliar. */
+    pagos?: { id: number; fechaPago: string; monto: number | string; metodo: string; referencia: string | null }[];
 }
 
 // Fila de financiación devuelta por la API
@@ -1212,6 +1215,13 @@ const FinanciacionesPage = () => {
                                                     <Badge variant={cuotaStatusMap[c.estado as EstadoCuota]?.variant ?? 'default'}>
                                                         {cuotaStatusMap[c.estado as EstadoCuota]?.label ?? c.estado}
                                                     </Badge>
+                                                    {/* Cada cobro con su referencia: es lo que se concilia contra el banco. */}
+                                                    {c.pagos?.map(p => (
+                                                        <div key={p.id} className="text-xs text-muted tabular-nums" style={{ marginTop: '0.25rem', whiteSpace: 'nowrap' }}>
+                                                            {formatFecha(p.fechaPago)} · {formatMoneda(p.monto, detail.moneda)} · {METODO_PAGO_LABEL[p.metodo] ?? p.metodo}
+                                                            {p.referencia ? ` · ${p.referencia}` : ''}
+                                                        </div>
+                                                    ))}
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
                                                     <div className="flex items-center gap-2 justify-end">
