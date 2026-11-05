@@ -27,6 +27,16 @@ updates:
       backend-menores:
         patterns: ['*']
         update-types: [minor, patch]
+    ignore:
+      # Los tipos de Node siguen a la major del RUNTIME (node:22 en el Dockerfile y en
+      # el CI): con tipos más nuevos el código compila usando APIs que en producción no
+      # existen. Se suben junto con la imagen de Node.
+      - dependency-name: '@types/node'
+        versions: ['>= 23']
+      # TypeScript 7 (compilador nativo): typescript-eslint, ts-node y jest-mock-extended
+      # todavía no lo soportan (nov-2026). Se revisa a mano cuando lo hagan.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: npm
     directory: /FrontConcesionaria
@@ -48,6 +58,12 @@ updates:
       # SheetJS se instala desde su CDN oficial (tarball versionado en package.json):
       # Dependabot no puede actualizarlo. Se revisa a mano en https://cdn.sheetjs.com.
       - dependency-name: xlsx
+      # Mismo criterio que en el back: tipos de Node = major del runtime (node:22 del build).
+      - dependency-name: '@types/node'
+        versions: ['>= 23']
+      # TypeScript 7: typescript-eslint todavía no lo soporta (nov-2026).
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: npm
     directory: /AppConcesionaria
@@ -75,13 +91,14 @@ updates:
         update-types: ['version-update:semver-major', 'version-update:semver-minor']
       - dependency-name: '@expo/*'
         update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      # React Native trae el renderer de React incorporado y exige la MISMA versión exacta
+      # de react (si no, la app se cae al abrir con "Incompatible React versions", y el
+      # tsc del CI no lo ve). Por eso react, react-dom y react-native no se tocan ni en
+      # parches: sólo con `npx expo install --fix`.
       - dependency-name: 'react-native'
-        update-types: ['version-update:semver-major', 'version-update:semver-minor']
-      - dependency-name: 'react-native-*'
-        update-types: ['version-update:semver-major', 'version-update:semver-minor']
       - dependency-name: 'react'
-        update-types: ['version-update:semver-major', 'version-update:semver-minor']
       - dependency-name: 'react-dom'
+      - dependency-name: 'react-native-*'
         update-types: ['version-update:semver-major', 'version-update:semver-minor']
       - dependency-name: '@types/react'
         update-types: ['version-update:semver-major', 'version-update:semver-minor']
