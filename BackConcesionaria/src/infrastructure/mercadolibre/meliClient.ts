@@ -251,6 +251,26 @@ export async function guardarTokens(cuentaId: number, tokens: TokensMeli): Promi
     });
 }
 
+/** Un segmento de ruta de la API de ML: ids (`MLA123`, `12345`) y nombres (`listing_prices`). */
+const SEGMENTO_ML = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * Ruta relativa de la API, segura para pegar detrás de `${API}/`.
+ *
+ * El Bearer de la cuenta va a donde diga la URL, y parte de la ruta sale de datos
+ * externos (el `resource` de una notificación de ML trae el id de la pregunta). Por
+ * eso sólo se acepta `/seg/seg/...` con segmentos simples: nada de URL absoluta,
+ * `//`, `..`, `?`, `#` ni `%`. El host lo fija la constante y `assertMismoOrigen`
+ * queda como segunda red. Cada segmento además va por encodeURIComponent.
+ */
+export function rutaDeApiSegura(ruta: string): string {
+    const segmentos = ruta.startsWith('/') ? ruta.slice(1).split('/') : [];
+    if (segmentos.length === 0 || !segmentos.every((s) => SEGMENTO_ML.test(s))) {
+        throw new DestinoNoPermitidoError('Ruta de Mercado Libre no permitida: tiene que ser relativa a la API y con segmentos simples');
+    }
+    return segmentos.map((s) => encodeURIComponent(s)).join('/');
+}
+
 /**
  * Llamada autenticada a la API. Si vuelve 401 renueva UNA vez y reintenta:
  * cubre el caso de un token invalidado antes de su vencimiento nominal.
@@ -275,14 +295,7 @@ export async function llamarApi<T>(
     const cuenta = await prisma.mercadoLibreCuenta.findFirst({ where: { id: cuentaId } });
     if (cuenta?.modo === 'demo') return simularLlamada<T>(cuenta, ruta, init);
 
-    // El Bearer va a donde diga la URL: sólo se aceptan rutas RELATIVAS de la API
-    // ("/items/123"). El host lo fija la constante (prefijo terminado en '/'), nunca
-    // el que llama; antes se aceptaba también una URL absoluta y la única barrera
-    // era assertMismoOrigen, que queda como segunda red.
-    if (!ruta.startsWith('/') || ruta.startsWith('//')) {
-        throw new DestinoNoPermitidoError(`Ruta de Mercado Libre no permitida: tiene que ser relativa a la API`);
-    }
-    const rutaRelativa = ruta.replace(/^\/+/, '');
+    const rutaRelativa = rutaDeApiSegura(ruta);
     const ejecutar = async (token: string): Promise<Response> => {
         const url = new URL(`${API}/${rutaRelativa}`);
         assertMismoOrigen(url, API);
