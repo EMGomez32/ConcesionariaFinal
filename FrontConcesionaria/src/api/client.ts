@@ -90,7 +90,7 @@ if (typeof window !== 'undefined') {
         if (e.key !== AUTH_STORAGE_KEY) return;
         const actual = useAuthStore.getState().user;
         if (!actual) return; // pestaña sin sesión (login, capacitación): no hay nada que sincronizar
-        let otro: User | null = null;
+        let otro: User | null;
         try { otro = (JSON.parse(e.newValue ?? 'null') as { state?: { user?: User | null } } | null)?.state?.user ?? null; } catch { return; }
         if (!otro) {
             // Se cerró la sesión en otra pestaña: acá también (el backend ya revocó la cookie).
