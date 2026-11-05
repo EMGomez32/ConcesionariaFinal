@@ -148,7 +148,7 @@ const VentasPage = () => {
     const puedeVerReporte = permisos.tiene('admin', 'super_admin', 'vendedor');
 
     // ── Indicadores: contados por el backend, no sobre la página visible ──
-    const mes = useMemo(rangoMesActual, []);
+    const mes = useMemo(() => rangoMesActual(), []);
     const ventasMes = useVentasConteo({ fechaDesde: mes.desde, fechaHasta: mes.hasta });
     const pendientes = useVentasConteo({ estadoEntrega: 'pendiente' });
     const bloqueadas = useVentasConteo({ estadoEntrega: 'bloqueada' });

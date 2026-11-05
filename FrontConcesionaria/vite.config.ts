@@ -11,14 +11,18 @@ export default defineConfig({
     setupFiles: './src/test/setup.ts',
   },
   build: {
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['lucide-react', 'react-helmet-async'],
-          utils: ['axios']
-        }
-      }
-    }
-  }
+        // Vite 8 empaqueta con Rolldown, que no acepta manualChunks como objeto: los
+        // mismos tres grupos de antes, decididos por la ruta del módulo.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router-dom|react-router|scheduler)[\\/]/.test(id)) return 'vendor';
+          if (/[\\/]node_modules[\\/](lucide-react|react-helmet-async)[\\/]/.test(id)) return 'ui';
+          if (/[\\/]node_modules[\\/]axios[\\/]/.test(id)) return 'utils';
+          return undefined;
+        },
+      },
+    },
+  },
 })
