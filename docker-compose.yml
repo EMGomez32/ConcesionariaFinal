@@ -67,9 +67,9 @@ services:
       - ALL
     # Node + Prisma + Baileys (una sesión de WhatsApp por número vinculado) ronda
     # 250-500 MB; el arranque además corre migrate deploy e init-rls/setup-app-role
-    # con ts-node, que compila TypeScript en memoria. 1,5 GB deja margen a todo eso.
+    # (ya compilados a JS: la imagen no trae ts-node). 1,5 GB deja margen a todo eso.
     mem_limit: 1536m
-    # Hilos de V8 y libuv + los procesos npx/ts-node del arranque: ~30-60 en uso.
+    # Hilos de V8 y libuv + los procesos npx/npm del arranque: ~30-60 en uso.
     pids_limit: 512
     # Sin ports: el frontend (nginx) le llega por la red interna de docker
     # en backend:3000. No hace falta exponerlo al host, y evita choques con
@@ -167,6 +167,10 @@ services:
     # requests NO tiene las credenciales de superusuario en su entorno (ni en /proc/<pid>/environ:
     # exec reemplaza al shell, que era quien las guardaba). Un RCE en la app ya no las hereda.
     # Si APP_DATABASE_URL está vacía (sólo posible con ALLOW_SUPERUSER_DB=1) se mantiene la admin.
+    #
+    # `npm run init-rls` / `setup-app-role` corren el JS compilado en la imagen
+    # (dist-ops/prisma/*.js, ver BackConcesionaria/package.json): la imagen de producción no
+    # trae ts-node ni typescript. `npx prisma` usa el CLI instalado como dependencia.
     command:
       - sh
       - -c
