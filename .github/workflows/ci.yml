@@ -68,6 +68,12 @@ jobs:
       DATABASE_URL: postgresql://postgres:testpg@localhost:5432/concesionaria_test?sslmode=disable
       JWT_SECRET: test_jwt_secret_ci_1234567890_abcdef
       JWT_REFRESH_SECRET: test_jwt_refresh_secret_ci_0987654321_zyxwv
+      # Clave de cifrado en reposo de PRUEBA (no es la de producción; repetitiva a
+      # propósito, para que se vea que no es real y gitleaks no la confunda con una):
+      # con ella el server cifra de verdad (formato v2 con AAD) y la suite de
+      # re-cifrado (recifrado-secretos.test.ts) corre en vez de saltearse. La
+      # comparten el server y jest: el test lee la base y corre el script con la misma.
+      INTEGRACIONES_SECRET_KEY: abababababababababababababababababababababababababababababababab
       # NODE_ENV=test es CRÍTICO: los rate limiters (apiLimiter/loginLimiter) sólo
       # se saltean en test; si no, las corridas repetidas pegan 429 y flakean.
       NODE_ENV: test
@@ -151,6 +157,8 @@ jobs:
       APP_DATABASE_URL: postgresql://app_rw:app_rw_ci_pw_7h2n@localhost:5432/concesionaria_test?sslmode=disable
       JWT_SECRET: test_jwt_secret_ci_1234567890_abcdef
       JWT_REFRESH_SECRET: test_jwt_refresh_secret_ci_0987654321_zyxwv
+      # Misma clave de PRUEBA que el job de arriba (ver el comentario ahí).
+      INTEGRACIONES_SECRET_KEY: abababababababababababababababababababababababababababababababab
       NODE_ENV: test
       PORT: '3000'
       LOG_LEVEL: warn
