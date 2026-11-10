@@ -22,20 +22,13 @@ interface AuthState {
   user: User | null;
   /** Access token: vive SÓLO en memoria. Al recargar se pide otro con /auth/refresh (cookie). */
   accessToken: string | null;
-  /**
-   * Refresh token de la sesión, SÓLO en memoria (nunca en localStorage) y sólo
-   * como dato informativo para el backend: Ajustes lo manda a /usuarios/me para
-   * que, al cerrar las demás sesiones, conserve ésta. El /auth/refresh del
-   * navegador NO lo usa: va con la cookie httpOnly `autenza_rt`. Tras una recarga
-   * queda en null hasta el próximo refresh (que lo vuelve a traer en el cuerpo).
-   */
-  refreshToken: string | null;
+  // El refresh token NO está acá (ni en memoria): lo tiene sólo el navegador, en la
+  // cookie httpOnly `autenza_rt`, y el backend no se lo manda a la web en ningún cuerpo
+  // (X-Autenza-Cliente: web). Así un XSS no tiene de dónde leerlo.
   /** Hay usuario Y access token: se pueden hacer requests autenticadas. */
   isAuthenticated: boolean;
-  setAuth: (user: User, accessToken: string, refreshToken?: string | null) => void;
+  setAuth: (user: User, accessToken: string) => void;
   setAccessToken: (token: string) => void;
-  /** Guarda el par rotado tras un /auth/refresh (el refresh sólo en memoria). */
-  setTokens: (accessToken: string, refreshToken?: string | null) => void;
   setUser: (user: Partial<User>) => void;
   logout: () => void;
 }
@@ -80,15 +73,11 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
-      setAuth: (user, accessToken, refreshToken = null) =>
-        set({ user, accessToken, refreshToken: refreshToken ?? null, isAuthenticated: true }),
+      setAuth: (user, accessToken) => set({ user, accessToken, isAuthenticated: true }),
       setAccessToken: (accessToken) => set((s) => ({ accessToken, isAuthenticated: !!s.user })),
-      setTokens: (accessToken, refreshToken = null) =>
-        set((s) => ({ accessToken, refreshToken: refreshToken ?? s.refreshToken, isAuthenticated: !!s.user })),
       setUser: (patch) => set((state) => ({ user: state.user ? { ...state.user, ...patch } as User : state.user })),
-      logout: () => set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false }),
+      logout: () => set({ user: null, accessToken: null, isAuthenticated: false }),
     }),
     {
       name: AUTH_STORAGE_KEY,

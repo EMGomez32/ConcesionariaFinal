@@ -37,7 +37,6 @@ const sesion = (mfaPendiente?: boolean) =>
     useAuthStore.setState({
         isAuthenticated: true,
         accessToken: 'a',
-        refreshToken: null,
         user: USUARIO(mfaPendiente),
     });
 
