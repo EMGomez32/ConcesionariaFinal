@@ -96,6 +96,8 @@ services:
       # Roles que DEBEN tener 2FA (separados por coma). Vacío = el default (super_admin en producción);
       # `none` = nadie (escape de emergencia). Ver BackConcesionaria/src/infrastructure/security/mfaPolicy.ts.
       - MFA_REQUIRED_ROLES=${MFA_REQUIRED_ROLES:-}
+      # Costo de bcrypt (10 a 14). Vacío = 12 en producción. Ver passwordHash.ts.
+      - BCRYPT_COST=${BCRYPT_COST:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       # 1 = hay un proxy (nginx) delante; deja que la app lea el X-Forwarded-For real.
       - TRUST_PROXY=1

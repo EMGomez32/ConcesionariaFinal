@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
 import { JwtTokenService } from '../../infrastructure/security/JwtTokenService';
 import { PrismaRefreshTokenRepository } from '../../infrastructure/database/repositories/PrismaRefreshTokenRepository';
 import { Login } from '../../application/use-cases/auth/Login';
@@ -17,6 +16,7 @@ import { logger } from '../../infrastructure/logging/logger';
 import { ponerCookieRefresh, limpiarCookieRefresh, refreshDeLaRequest } from './refreshCookie';
 import { recordSecurityEvent } from '../../infrastructure/security/securityEvents';
 import { notificarAlertaSeguridad } from '../../infrastructure/security/alertasSeguridad';
+import { hashearContrasena } from '../../infrastructure/security/passwordHash';
 
 const tokenService = new JwtTokenService();
 const refreshRepo = new PrismaRefreshTokenRepository();
@@ -189,7 +189,7 @@ export class AuthController {
                 return res.status(400).json({ error: 'INVALID_TOKEN', message: 'El enlace es inválido o expiró. Solicitá uno nuevo.' });
             }
 
-            const passwordHash = await bcrypt.hash(String(password), 10);
+            const passwordHash = await hashearContrasena(String(password));
             // withAuthBypass: transacción única (atómica) con la RLS salteada — el
             // update de `usuarios` es cross-tenant (reset sin sesión) y bajo app_rw la
             // RLS lo filtraría a 0 filas (la contraseña no cambiaría).

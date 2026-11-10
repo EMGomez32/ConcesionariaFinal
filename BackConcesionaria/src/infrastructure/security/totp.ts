@@ -128,6 +128,27 @@ export function normalizarCodigoRecuperacion(entrada: string): string | null {
     return `${limpio.slice(0, 5)}-${limpio.slice(5)}`;
 }
 
-/** Hash de un código de recuperación (se guarda el hash, nunca el código). */
+/**
+ * Hash v1 de un código de recuperación: SHA-256 sin sal. Se conserva SÓLO para leer los
+ * códigos emitidos antes de v2 (siguen valiendo hasta que se usen o se regeneren).
+ */
 export const hashCodigoRecuperacion = (codigoNormalizado: string): string =>
     crypto.createHash('sha256').update(`recovery-v1:${codigoNormalizado}`).digest('hex');
+
+/**
+ * Hash v2 (APP-13): scrypt con sal por usuario. Con v1, un volcado de la base permitía
+ * atacar los códigos de TODOS los usuarios a la vez (mismo hash para el mismo código) y a
+ * la velocidad de SHA-256. Con la sal por usuario cada cuenta se ataca por separado, y
+ * scrypt (N=8192, ~50 ms en una PC, unas 4 veces más en la Pi) vuelve impracticable
+ * recorrer los 50 bits del código. Es determinístico por usuario: la verificación busca
+ * por igualdad de hash, igual que antes. Async: corre en el threadpool de libuv y no
+ * frena el event loop.
+ */
+const scryptAsync = (clave: string, sal: string): Promise<Buffer> =>
+    new Promise((resolve, reject) => {
+        crypto.scrypt(clave, sal, 32, { N: 8192, r: 8, p: 1 }, (err, derivada) => (err ? reject(err) : resolve(derivada)));
+    });
+
+export async function hashCodigoRecuperacionV2(usuarioId: number, codigoNormalizado: string): Promise<string> {
+    return (await scryptAsync(codigoNormalizado, `autenza-recovery-v2:${usuarioId}`)).toString('hex');
+}

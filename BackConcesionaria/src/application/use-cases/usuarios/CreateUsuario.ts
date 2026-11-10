@@ -2,7 +2,7 @@ import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioReposit
 import { BaseException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
 import { assertRolesAsignables, assertLimiteUsuarios, assertSuperAdminSinConcesionaria, nombresDeRoles } from '../../../infrastructure/security/usuarioPolicy';
-import bcrypt from 'bcryptjs';
+import { hashearContrasena } from '../../../infrastructure/security/passwordHash';
 
 export class CreateUsuario {
     constructor(private readonly usuarioRepository: IUsuarioRepository) { }
@@ -57,7 +57,7 @@ export class CreateUsuario {
             );
         }
 
-        const passwordHash = await bcrypt.hash(password, 10);
+        const passwordHash = await hashearContrasena(password);
         return this.usuarioRepository.create({ ...userData, passwordHash });
     }
 }

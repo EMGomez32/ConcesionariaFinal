@@ -3,7 +3,7 @@ import { BaseException, NotFoundException } from '../../domain/exceptions/BaseEx
 import { cifrarSecreto, descifrarSecreto } from '../../infrastructure/security/secretBox';
 import {
     CANTIDAD_CODIGOS_RECUPERACION, generarCodigoRecuperacion, generarSecretoTotp, hashCodigoRecuperacion,
-    normalizarCodigoRecuperacion, otpauthUrl, verificarTotp,
+    hashCodigoRecuperacionV2, normalizarCodigoRecuperacion, otpauthUrl, verificarTotp,
 } from '../../infrastructure/security/totp';
 
 /**
@@ -53,10 +53,13 @@ export async function iniciarSetupMfa(usuarioId: number): Promise<SetupMfa> {
 /** Códigos de recuperación nuevos (reemplazan a todos los anteriores). Devuelve los EN CLARO, una sola vez. */
 async function emitirCodigos(usuarioId: number): Promise<string[]> {
     const codigos = Array.from({ length: CANTIDAD_CODIGOS_RECUPERACION }, generarCodigoRecuperacion);
+    // Los hashes se calculan ANTES de abrir la transacción: scrypt tarda y no tiene por qué
+    // tener una conexión tomada mientras tanto.
+    const hashes = await Promise.all(codigos.map((c) => hashCodigoRecuperacionV2(usuarioId, c)));
     await withAuthBypass(async (tx) => {
         await tx.recoveryCode.deleteMany({ where: { usuarioId } });
         await tx.recoveryCode.createMany({
-            data: codigos.map((c) => ({ usuarioId, codeHash: hashCodigoRecuperacion(c) })),
+            data: hashes.map((codeHash) => ({ usuarioId, codeHash })),
         });
     });
     return codigos;
@@ -105,8 +108,12 @@ export async function verificarSegundoFactor(
     if (entrada.recuperacion) {
         const normal = normalizarCodigoRecuperacion(entrada.recuperacion);
         if (!normal) return { ok: false, usoRecuperacion: false };
+        // v2 (scrypt con sal por usuario) o v1 (los emitidos antes): el código vale una sola
+        // vez en cualquiera de los dos formatos. Siempre se calcula el v2, aunque el código
+        // sea viejo, para que el tiempo de respuesta no diga en qué formato está.
+        const v2 = await hashCodigoRecuperacionV2(usuarioId, normal);
         const r = await withAuthBypass((tx) => tx.recoveryCode.updateMany({
-            where: { usuarioId, codeHash: hashCodigoRecuperacion(normal), usedAt: null },
+            where: { usuarioId, codeHash: { in: [v2, hashCodigoRecuperacion(normal)] }, usedAt: null },
             data: { usedAt: new Date() },
         }));
         return { ok: r.count === 1, usoRecuperacion: r.count === 1 };

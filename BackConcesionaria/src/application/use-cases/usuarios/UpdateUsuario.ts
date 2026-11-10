@@ -4,7 +4,7 @@ import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard'
 import { assertRolesAsignables, assertSuperAdminSinConcesionaria, nombresDeRoles } from '../../../infrastructure/security/usuarioPolicy';
 import { assertObjetivoGestionable } from '../../../infrastructure/security/objetivoGestionable';
 import { RevokeUserSessions } from '../auth/RevokeUserSessions';
-import bcrypt from 'bcryptjs';
+import { hashearContrasena } from '../../../infrastructure/security/passwordHash';
 
 export class UpdateUsuario {
     constructor(
@@ -79,7 +79,7 @@ export class UpdateUsuario {
         }
 
         if (password) {
-            (updateData as any).passwordHash = await bcrypt.hash(password, 10);
+            (updateData as any).passwordHash = await hashearContrasena(password);
         }
 
         // Cambian las credenciales o el estado (contraseña, email, desactivación):
