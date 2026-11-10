@@ -1,0 +1,27 @@
+{
+  // Scripts de operación (prisma/*.ts y scripts/*.ts) compilados a JS en dist-ops/.
+  // La imagen de producción NO trae ts-node ni typescript: el arranque (init-rls,
+  // setup-app-role) y los comandos que se corren a mano dentro del contenedor
+  // (retencion, reset-2fa, set-password, seeds...) usan este JS ya compilado.
+  //
+  // rootDir es la carpeta del back (no src/) porque estos scripts importan módulos de
+  // ../src: tsc los compila también, y la salida queda espejada:
+  //   prisma/init-rls.ts        -> dist-ops/prisma/init-rls.js
+  //   scripts/reset-2fa.ts      -> dist-ops/scripts/reset-2fa.js
+  //   src/... (lo que importen) -> dist-ops/src/...
+  // Así los imports relativos ('../src/...') siguen resolviendo sin tocar el código.
+  // scripts/debug/ queda afuera a propósito: es diagnóstico local, no va a producción.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./dist-ops"
+  },
+  "include": [
+    "prisma/*.ts",
+    "scripts/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts"
+  ]
+}

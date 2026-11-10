@@ -34,6 +34,9 @@ flowchart LR
   publica puertos (`docker-compose.yml`).
 - **Contenedores:** `no-new-privileges`, `cap_drop: ALL`, procesos sin root
   (`BackConcesionaria/Dockerfile`, imagen `nginx-unprivileged` en el front).
+  La imagen del backend es multi-etapa: lleva sólo dependencias de producción y
+  JS compilado (sin TypeScript, ts-node ni jest), y el código es de sólo
+  lectura para el proceso.
 - **Administración:** por una red privada de administración y SSH con llave.
   Prisma Studio solo arranca con el perfil `debug`.
 

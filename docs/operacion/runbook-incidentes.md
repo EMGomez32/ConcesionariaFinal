@@ -52,8 +52,9 @@ explicados en archivos, cuentas o llaves.
    solo lectura) y calculá un hash de cada archivo (`sha256sum * > hashes.txt`).
    Copiá la carpeta al archivo privado de evidencias.
 2. **Contené** según el alcance:
-   - Cuenta de la app comprometida → desactivala (`scripts/set-password.ts` con
-     `USER_DEACTIVATE=true`) y cerrá sus sesiones.
+   - Cuenta de la app comprometida → desactivala
+     (`docker compose exec -T -e USER_EMAIL=<email> -e USER_DEACTIVATE=true backend node dist-ops/scripts/set-password.js </dev/null`)
+     y cerrá sus sesiones.
    - Todas las sesiones en duda → rotá `JWT_SECRET` y `JWT_REFRESH_SECRET`
      con `scripts/rotate-secrets.sh` (todos vuelven a loguearse).
    - Host comprometido → cortá la exposición pública (`sudo systemctl stop cloudflared`),

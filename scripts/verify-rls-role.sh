@@ -34,9 +34,12 @@ for _ in $(seq 1 30); do docker exec "$CN" pg_isready -U postgres -d concesionar
 
 cd "$ROOT/BackConcesionaria"
 echo "== 2. Schema + RLS + rol app_rw =="
+# Las variantes :dev corren el .ts con ts-node: este script verifica el SQL de las policies
+# y no necesita compilar antes. El JS compilado (dist-ops/, el que corre la imagen) lo
+# prueban los jobs de integración del CI.
 DATABASE_URL="$ADMIN_URL" npx prisma db push --accept-data-loss >/dev/null 2>&1
-DATABASE_URL="$ADMIN_URL" npm run init-rls >/dev/null 2>&1
-DATABASE_URL="$ADMIN_URL" APP_DB_PASSWORD="$APP_PWD" APP_DATABASE_URL="postgresql://app_rw:${APP_PWD}@localhost:${PORT}/concesionaria?sslmode=disable" npm run setup-app-role >/dev/null 2>&1
+DATABASE_URL="$ADMIN_URL" npm run init-rls:dev >/dev/null 2>&1
+DATABASE_URL="$ADMIN_URL" APP_DB_PASSWORD="$APP_PWD" APP_DATABASE_URL="postgresql://app_rw:${APP_PWD}@localhost:${PORT}/concesionaria?sslmode=disable" npm run setup-app-role:dev >/dev/null 2>&1
 echo "  ✓ db push + init-rls + setup-app-role OK"
 
 echo "== 3. Seed cross-tenant (2 concesionarias + 2 sucursales) =="

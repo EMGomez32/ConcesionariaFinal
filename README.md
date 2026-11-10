@@ -62,13 +62,15 @@ JWT_REFRESH_SECRET=<otro valor largo distinto>
 npm ci
 npx prisma generate
 npx prisma migrate deploy      # aplica las migraciones versionadas
-npm run init-rls               # policies de RLS y triggers
+npm run init-rls:dev           # policies de RLS y triggers
 # Admin inicial: definí SEED_ADMIN_EMAIL y SEED_ADMIN_PASSWORD (10+ caracteres) en el .env
-npm run seed
+npm run seed:dev
 npm run dev                    # http://localhost:3001
 ```
 
-Datos de demostración (opcional, solo en local): `npm run seed-demo`.
+Datos de demostración (opcional, solo en local): `npm run seed-demo:dev`. Los
+`:dev` corren el `.ts` con ts-node; sin el sufijo corren el JS compilado (lo que
+usa la imagen de producción) y necesitan `npm run build` antes.
 
 ### 3. Frontend
 
@@ -115,11 +117,11 @@ cd BackConcesionaria
 export DATABASE_URL=postgresql://postgres:testpg@localhost:5477/concesionaria_test?sslmode=disable
 export JWT_SECRET=test_jwt_secret_local_1234567890
 export JWT_REFRESH_SECRET=test_jwt_refresh_secret_local_0987654321
+npm run build                  # src/ y scripts de operación (init-rls y seed-ci corren el JS)
 npx prisma migrate deploy
 npx prisma migrate diff --from-schema prisma/schema.prisma --to-config-datasource --exit-code  # drift guard
 npm run init-rls
 SEED_CI_FORCE=true npm run seed-ci
-npm run build
 NODE_ENV=test PORT=3077 node dist/server.js &
 API_BASE_URL=http://localhost:3077 npm run test:integration
 ```

@@ -38,6 +38,9 @@ jobs:
       - run: npm ci
       - name: Generar cliente Prisma
         run: npx prisma generate
+      # `npm run build` compila src/ (dist/) y también los scripts de operación de
+      # prisma/ y scripts/ (dist-ops/, tsconfig.ops.json): un error de tipos en
+      # retencion.ts o reset-2fa.ts rompe acá y no recién dentro del contenedor.
       - name: Typecheck + build (tsc)
         run: npm run build
       # Unit tests PUROS (dominio: cobro de cuota). No necesitan DB ni server.
@@ -93,6 +96,10 @@ jobs:
       - run: npm ci
       - name: Generar cliente Prisma
         run: npx prisma generate
+      # Build ANTES de init-rls / seed-ci: esos npm scripts corren el JS compilado de
+      # dist-ops/ (igual que la imagen de producción, que no trae ts-node).
+      - name: Build (src + scripts de operación)
+        run: npm run build
       - name: Aplicar schema (migrate deploy)
         run: npx prisma migrate deploy
       # Drift guard SIN shadow DB (evita el footgun de --from-migrations, que Prisma
@@ -104,8 +111,6 @@ jobs:
         run: npm run init-rls
       - name: Seed de CI (roles, plan, tenant, usuarios demo)
         run: npm run seed-ci
-      - name: Build
-        run: npm run build
       - name: Levantar backend + correr integración
         run: |
           node dist/server.js > /tmp/server.log 2>&1 &
@@ -176,6 +181,9 @@ jobs:
       - run: npm ci
       - name: Generar cliente Prisma
         run: npx prisma generate
+      # Build ANTES de init-rls / setup-app-role / seed-ci: corren el JS de dist-ops/.
+      - name: Build (src + scripts de operación)
+        run: npm run build
       - name: Aplicar schema (migrate deploy)
         run: npx prisma migrate deploy
       - name: Inicializar RLS (policies + triggers)
@@ -184,8 +192,6 @@ jobs:
         run: npm run setup-app-role
       - name: Seed de CI (roles, plan, tenant, usuarios demo)
         run: npm run seed-ci
-      - name: Build
-        run: npm run build
       - name: Levantar backend (app_rw) + correr integración
         run: |
           node dist/server.js > /tmp/server.log 2>&1 &
@@ -229,6 +235,29 @@ jobs:
       - name: Verificar RLS con rol app_rw
         # El script hace su propio `cd` a la raíz y levanta/baja su contenedor.
         run: bash ../scripts/verify-rls-role.sh
+
+  backend-image:
+    name: Backend (imagen de producción)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # Construye la imagen real del backend (multi-etapa, APP-20). El Dockerfile tiene un
+    # centinela que falla si a la imagen final llegan typescript, ts-node, jest o tsc: sin
+    # este job ese control recién corría al deployar, en la Pi. Además prueba que el JS de
+    # dist-ops/ que usa el arranque esté en la imagen.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: docker build
+        run: docker build -t autenza-backend-ci BackConcesionaria
+      - name: El arranque y los scripts de operación están compilados
+        run: |
+          docker run --rm --entrypoint sh autenza-backend-ci -c '
+            set -e
+            for f in dist/server.js dist-ops/prisma/init-rls.js dist-ops/prisma/setup-app-role.js \n                     dist-ops/prisma/retencion.js dist-ops/prisma/recifrar-secretos.js dist-ops/scripts/reset-2fa.js; do
+              test -f "$f" || { echo "falta $f"; exit 1; }
+            done
+            test ! -e dist-ops/prisma/seed-ci.js || { echo "seed-ci no puede ir en la imagen"; exit 1; }
+            echo ok'
 
   backup-script:
     name: Scripts (lógica de backup.sh)

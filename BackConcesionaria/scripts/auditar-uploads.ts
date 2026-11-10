@@ -9,7 +9,8 @@
  *   - archivos cuya extensión no corresponde a lo que realmente son.
  *
  * USO (en el servidor, dentro del contenedor del backend):
- *   docker compose exec -T backend npx ts-node scripts/auditar-uploads.ts [directorio]
+ *   docker compose exec -T backend node dist-ops/scripts/auditar-uploads.js [directorio] </dev/null
+ * (compilado en dist-ops/: la imagen no trae ts-node; en local `npx ts-node scripts/auditar-uploads.ts`).
  * Sale con código 1 si encontró algo sospechoso (sirve para un chequeo periódico).
  */
 import fs from 'fs/promises';

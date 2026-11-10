@@ -2,15 +2,16 @@
  * set-password.ts — cambia la contraseña (y opcionalmente activa/desactiva)
  * de un usuario existente, sin pasar por la UI ni Prisma Studio.
  *
- * Uso (dentro del contenedor backend):
- *   docker compose exec \
+ * Uso (dentro del contenedor backend; corre compilado en dist-ops/ porque la imagen no trae
+ * ts-node. En local, sin compilar: `npx ts-node scripts/set-password.ts`):
+ *   docker compose exec -T \
  *     -e USER_EMAIL=admin@demo.com \
  *     -e USER_PASSWORD='<contraseña-nueva>' \
- *     backend npx ts-node scripts/set-password.ts
+ *     backend node dist-ops/scripts/set-password.js </dev/null
  *
  * Para DESACTIVAR un usuario (ej. el super_admin demo) en vez de cambiarle la clave:
- *   docker compose exec -e USER_EMAIL=superadmin@demo.com -e USER_DEACTIVATE=true \
- *     backend npx ts-node scripts/set-password.ts
+ *   docker compose exec -T -e USER_EMAIL=superadmin@demo.com -e USER_DEACTIVATE=true \
+ *     backend node dist-ops/scripts/set-password.js </dev/null
  */
 import 'dotenv/config';
 import { Pool } from 'pg';
