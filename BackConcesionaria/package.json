@@ -12,6 +12,7 @@
     "setup-app-role": "ts-node prisma/setup-app-role.ts",
     "seed-ci": "ts-node prisma/seed-ci.ts",
     "retencion": "ts-node prisma/retencion.ts",
+    "recifrar-secretos": "ts-node prisma/recifrar-secretos.ts",
     "sync:infoauto": "ts-node src/scripts/syncInfoauto.ts",
     "test": "jest --runInBand",
     "test:unit": "jest tests/unit",
