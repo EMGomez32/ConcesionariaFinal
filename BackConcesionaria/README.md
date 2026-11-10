@@ -19,7 +19,8 @@ prisma/
   init-rls.ts       policies de RLS y triggers (idempotente, corre en cada arranque)
   setup-app-role.ts crea o actualiza el rol de runtime app_rw (idempotente)
   seed.ts           admin inicial (una sola vez, por variables SEED_*)
-  seed-ci.ts        bootstrap mínimo para los tests de integración (se niega a correr en prod)
+  seed-ci.ts        bootstrap mínimo para los tests de integración (se niega a correr en prod
+                    y no va en la imagen de producción)
   seed-demo.ts      datos de demostración
 scripts/            utilidades de operación (ver abajo)
 tests/unit          unitarios puros (sin base)

@@ -51,8 +51,11 @@ COPY . .
 # Generar el cliente de Prisma (prisma-client-js lo escribe en node_modules/.prisma)
 RUN npx prisma generate
 
-# Compilar TypeScript: src/ -> dist/ y los scripts de operación -> dist-ops/
-RUN npm run build
+# Compilar TypeScript: src/ -> dist/ y los scripts de operación -> dist-ops/.
+# seed-ci se compila (el CI lo corre fuera de la imagen) pero NO viaja a producción: planta
+# credenciales débiles y públicas. Tiene su guarda, pero lo que no está no se puede forzar.
+RUN npm run build \
+    && rm -f dist-ops/prisma/seed-ci.js
 
 # ---------------------------------------------------------------------------------------
 FROM base AS deps
@@ -62,8 +65,9 @@ COPY package*.json ./
 # Sólo dependencias de producción. El CLI de `prisma` está en `dependencies` (no en
 # devDependencies) A PROPÓSITO: el arranque corre `prisma migrate deploy` dentro de este
 # contenedor, y los runbooks usan `prisma migrate resolve` y Prisma Studio (perfil debug)
-# con esta misma imagen. Separarlo en otra imagen/servicio de migración sería más liviano,
-# pero cambia el arranque y los runbooks; por ahora pesa menos que lo que se saca.
+# con esta misma imagen. Tiene su costo: el CLI arrastra Studio, `prisma dev` (PGlite) y
+# effect, unos 220 MB de node_modules. Pasar las migraciones a un servicio/imagen aparte lo
+# sacaría del runtime, pero cambia el arranque y los runbooks: queda como mejora posible.
 # El postinstall de @prisma/engines baja acá el motor de migraciones para la arquitectura
 # de la imagen.
 #
