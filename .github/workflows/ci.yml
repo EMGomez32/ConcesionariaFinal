@@ -38,6 +38,9 @@ jobs:
       - run: npm ci
       - name: Generar cliente Prisma
         run: npx prisma generate
+      # `npm run build` compila src/ (dist/) y también los scripts de operación de
+      # prisma/ y scripts/ (dist-ops/, tsconfig.ops.json): un error de tipos en
+      # retencion.ts o reset-2fa.ts rompe acá y no recién dentro del contenedor.
       - name: Typecheck + build (tsc)
         run: npm run build
       # Unit tests PUROS (dominio: cobro de cuota). No necesitan DB ni server.
@@ -87,6 +90,10 @@ jobs:
       - run: npm ci
       - name: Generar cliente Prisma
         run: npx prisma generate
+      # Build ANTES de init-rls / seed-ci: esos npm scripts corren el JS compilado de
+      # dist-ops/ (igual que la imagen de producción, que no trae ts-node).
+      - name: Build (src + scripts de operación)
+        run: npm run build
       - name: Aplicar schema (migrate deploy)
         run: npx prisma migrate deploy
       # Drift guard SIN shadow DB (evita el footgun de --from-migrations, que Prisma
@@ -98,8 +105,6 @@ jobs:
         run: npm run init-rls
       - name: Seed de CI (roles, plan, tenant, usuarios demo)
         run: npm run seed-ci
-      - name: Build
-        run: npm run build
       - name: Levantar backend + correr integración
         run: |
           node dist/server.js > /tmp/server.log 2>&1 &
@@ -168,6 +173,9 @@ jobs:
       - run: npm ci
       - name: Generar cliente Prisma
         run: npx prisma generate
+      # Build ANTES de init-rls / setup-app-role / seed-ci: corren el JS de dist-ops/.
+      - name: Build (src + scripts de operación)
+        run: npm run build
       - name: Aplicar schema (migrate deploy)
         run: npx prisma migrate deploy
       - name: Inicializar RLS (policies + triggers)
@@ -176,8 +184,6 @@ jobs:
         run: npm run setup-app-role
       - name: Seed de CI (roles, plan, tenant, usuarios demo)
         run: npm run seed-ci
-      - name: Build
-        run: npm run build
       - name: Levantar backend (app_rw) + correr integración
         run: |
           node dist/server.js > /tmp/server.log 2>&1 &
