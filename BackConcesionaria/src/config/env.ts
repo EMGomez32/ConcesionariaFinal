@@ -39,9 +39,20 @@ const envSchema = z.object({
     // 64 hex = 32 bytes: `openssl rand -hex 32`. OBLIGATORIA en producción (ver el
     // superRefine). En desarrollo/test es opcional: sin ella los secretos se guardan en
     // claro (warning al arranque; los protege sólo la RLS).
+    // Es la clave ACTUAL: con ella se cifra todo lo que se guarda (formato v2, ver secretBox.ts).
     INTEGRACIONES_SECRET_KEY: z.preprocess(
         (v) => (v === '' ? undefined : v),
         z.string().regex(/^[0-9a-fA-F]{64}$/, 'INTEGRACIONES_SECRET_KEY debe ser 64 caracteres hex (openssl rand -hex 32)').optional(),
+    ),
+    // Rotación: claves VIEJAS, separadas por comas, que sólo sirven para LEER lo que se cifró
+    // con ellas hasta que `npm run recifrar-secretos -- --apply` lo pase a la actual. Nunca se
+    // cifra con estas. Vacía = sin rotación en curso (lo normal). Procedimiento completo en
+    // docs/seguridad/criptografia-y-secretos.md. Los mensajes de error nunca incluyen el valor.
+    INTEGRACIONES_SECRET_KEYS_ANTERIORES: z.preprocess(
+        (v) => (typeof v === 'string' ? v.split(',').map((s) => s.trim()).filter((s) => s !== '') : v),
+        z.array(
+            z.string().regex(/^[0-9a-fA-F]{64}$/, 'Cada clave de INTEGRACIONES_SECRET_KEYS_ANTERIORES debe ser de 64 caracteres hex (openssl rand -hex 32), separadas por comas'),
+        ).default([]),
     ),
     JWT_REFRESH_SECRET: z.string().min(10),
     JWT_EXPIRES_IN: z.string().default('15m'),
@@ -126,6 +137,16 @@ const envSchema = z.object({
             code: z.ZodIssueCode.custom,
             path: [data.APP_DATABASE_URL ? 'APP_DB_PASSWORD' : 'APP_DATABASE_URL'],
             message: 'APP_DATABASE_URL y APP_DB_PASSWORD deben setearse juntas (o ninguna): el cutover al rol app_rw necesita ambas.',
+        });
+    }
+    // Claves anteriores sin una actual: se podría leer lo viejo pero todo lo nuevo se
+    // guardaría EN CLARO (sin clave actual no hay con qué cifrar). Casi seguro es una rotación
+    // a medias (se movió la clave a ANTERIORES y no se cargó la nueva). Aplica en todo entorno.
+    if (data.INTEGRACIONES_SECRET_KEYS_ANTERIORES.length > 0 && !data.INTEGRACIONES_SECRET_KEY) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['INTEGRACIONES_SECRET_KEY'],
+            message: 'Hay INTEGRACIONES_SECRET_KEYS_ANTERIORES pero falta INTEGRACIONES_SECRET_KEY: la actual es la única con la que se cifra. Al rotar, la clave nueva va en INTEGRACIONES_SECRET_KEY y la vieja en ANTERIORES.',
         });
     }
     if (data.NODE_ENV !== 'production') return;

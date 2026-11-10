@@ -161,10 +161,13 @@ Todo rollback se registra en el log de deploys y, si hubo impacto, como incident
     actualizá la copia en el gestor de contraseñas y borrá los `.env.bak.*`
     que hayan quedado una vez verificado el cambio.
 15. **`INTEGRACIONES_SECRET_KEY`** es obligatoria en producción: sin ella el
-    backend no arranca. Si ya está en el `.env`, no se toca nunca: con otra clave
-    los secretos ya cifrados (integraciones y 2FA) quedan ilegibles. Si falta, se
-    genera en el host con `openssl rand -hex 32` y se guarda una copia en el gestor
-    de contraseñas; los secretos que estaban en claro se siguen leyendo.
+    backend no arranca. Si ya está en el `.env`, no se reemplaza a mano: con otra
+    clave los secretos ya cifrados (integraciones, Mercado Libre y 2FA) quedan
+    ilegibles. Para cambiarla está la rotación (la vieja va a
+    `INTEGRACIONES_SECRET_KEYS_ANTERIORES` y `npm run recifrar-secretos` pasa todo a
+    la nueva; ver [criptografía y secretos](../seguridad/criptografia-y-secretos.md#rotación-de-integraciones_secret_key)).
+    Si falta, se genera en el host con `openssl rand -hex 32` y se guarda una copia
+    en el gestor de contraseñas; los secretos que estaban en claro se siguen leyendo.
 
 ## 7. Una sola vez: primer deploy del hardening (PR #114)
 

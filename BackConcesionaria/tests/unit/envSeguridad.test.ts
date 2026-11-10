@@ -122,6 +122,46 @@ describe('INTEGRACIONES_SECRET_KEY obligatoria en producción', () => {
     });
 });
 
+describe('INTEGRACIONES_SECRET_KEYS_ANTERIORES (rotación)', () => {
+    const VIEJA_1 = 'cd'.repeat(32);
+    const VIEJA_2 = 'EF'.repeat(32);
+
+    test('sin definir (o vacía, como la pasa docker compose) = lista vacía', () => {
+        expect(cargarEnv({ NODE_ENV: 'production', ...APP_ROL }).env.INTEGRACIONES_SECRET_KEYS_ANTERIORES).toEqual([]);
+        expect(cargarEnv({ NODE_ENV: 'production', ...APP_ROL, INTEGRACIONES_SECRET_KEYS_ANTERIORES: '' }).env.INTEGRACIONES_SECRET_KEYS_ANTERIORES).toEqual([]);
+    });
+
+    test('lista separada por comas, con espacios y comas de más', () => {
+        const r = cargarEnv({ NODE_ENV: 'production', ...APP_ROL, INTEGRACIONES_SECRET_KEYS_ANTERIORES: ` ${VIEJA_1} ,, ${VIEJA_2},` });
+        expect(r.salidas).toEqual([]);
+        expect(r.env.INTEGRACIONES_SECRET_KEYS_ANTERIORES).toEqual([VIEJA_1, VIEJA_2]);
+    });
+
+    test('una que no es de 64 hex hace fallar el arranque, sin imprimir ningún valor de clave', () => {
+        const mala = 'zz'.repeat(32);
+        const r = cargarEnv({ NODE_ENV: 'production', ...APP_ROL, INTEGRACIONES_SECRET_KEYS_ANTERIORES: `${VIEJA_1},${mala}` });
+        expect(r.salidas).toEqual([1]);
+        expect(r.errores).toContain('INTEGRACIONES_SECRET_KEYS_ANTERIORES');
+        expect(r.errores).not.toContain(mala);
+        expect(r.errores).not.toContain(VIEJA_1);
+        expect(r.errores).not.toContain(CLAVE_SECRETOS.INTEGRACIONES_SECRET_KEY);
+    });
+
+    test('anteriores SIN clave actual es una rotación a medias: falla en todo entorno', () => {
+        for (const NODE_ENV of ['development', 'test']) {
+            const r = cargarEnv({ NODE_ENV, INTEGRACIONES_SECRET_KEYS_ANTERIORES: VIEJA_1 });
+            expect(r.salidas).toEqual([1]);
+            expect(r.errores).toContain('INTEGRACIONES_SECRET_KEY');
+        }
+    });
+
+    test('en desarrollo, actual + anteriores arranca', () => {
+        const r = cargarEnv({ NODE_ENV: 'development', ...CLAVE_SECRETOS, INTEGRACIONES_SECRET_KEYS_ANTERIORES: VIEJA_1 });
+        expect(r.salidas).toEqual([]);
+        expect(r.env.INTEGRACIONES_SECRET_KEYS_ANTERIORES).toEqual([VIEJA_1]);
+    });
+});
+
 describe('SECURITY_ALERT_WEBHOOK_URL', () => {
     test('opcional: sin ella arranca igual', () => {
         expect(cargarEnv({ NODE_ENV: 'production', ...APP_ROL }).env.SECURITY_ALERT_WEBHOOK_URL).toBeUndefined();
