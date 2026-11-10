@@ -37,8 +37,10 @@ cuentas SaaS y gestor de contraseñas.
   `MFA_REQUIRED_ROLES=none` es un escape de emergencia: se usa minutos, se
   registra como incidente y se revierte.
 - Sesión: access token de 15 minutos; refresh de 7 días con rotación y
-  detección de reuso. Cambiar la contraseña o el email, o desactivar la cuenta,
-  cierra las demás sesiones.
+  detección de reuso. Además, cada sesión vence a los `SESION_MAX_DIAS` (30 por
+  defecto) desde el login aunque se renueve todos los días. En la web el refresh
+  vive sólo en la cookie httpOnly: nunca llega al JavaScript de la página. Cambiar
+  la contraseña o el email, o desactivar la cuenta, cierra las demás sesiones.
 
 **Autorización por rol**
 
