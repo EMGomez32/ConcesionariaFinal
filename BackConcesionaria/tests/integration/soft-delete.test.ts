@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, authHeaders, unique } from './helpers';
+import { api, loginAsSuperAdmin, concesionariaDeTest, authHeaders, unique } from './helpers';
 
 describe('Soft delete (extension intercepta delete)', () => {
     let token: string;
@@ -7,7 +7,7 @@ describe('Soft delete (extension intercepta delete)', () => {
     beforeAll(async () => {
         const sa = await loginAsSuperAdmin();
         token = sa.token;
-        concesionariaId = sa.user.concesionariaId!;
+        concesionariaId = await concesionariaDeTest();
     });
 
     test('DELETE proveedor devuelve 204 y luego GET devuelve 404 (filtro deletedAt)', async () => {

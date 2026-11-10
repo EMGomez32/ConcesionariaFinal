@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, authHeaders, unique, anularVenta } from './helpers';
+import { api, loginAsSuperAdmin, concesionariaDeTest, authHeaders, unique, anularVenta } from './helpers';
 
 describe('Sub-recursos de venta + trigger Postgres', () => {
     let token: string;
@@ -10,7 +10,7 @@ describe('Sub-recursos de venta + trigger Postgres', () => {
     beforeAll(async () => {
         const sa = await loginAsSuperAdmin();
         token = sa.token;
-        concesionariaId = sa.user.concesionariaId!;
+        concesionariaId = await concesionariaDeTest();
 
         cliId = (await api.post('/api/clientes', { nombre: unique('Cli'), concesionariaId }, authHeaders(token))).data.id;
         vehId = (await api.post('/api/vehiculos', {

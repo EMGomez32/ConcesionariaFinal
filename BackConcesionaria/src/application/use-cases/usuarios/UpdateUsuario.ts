@@ -1,7 +1,7 @@
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
-import { assertRolesAsignables } from '../../../infrastructure/security/usuarioPolicy';
+import { assertRolesAsignables, assertSuperAdminSinConcesionaria, nombresDeRoles } from '../../../infrastructure/security/usuarioPolicy';
 import { assertObjetivoGestionable } from '../../../infrastructure/security/objetivoGestionable';
 import { RevokeUserSessions } from '../auth/RevokeUserSessions';
 import bcrypt from 'bcryptjs';
@@ -31,6 +31,20 @@ export class UpdateUsuario {
         // controller ya strippea roleIds cuando te editás a vos mismo (anti
         // auto-lockout); esto cubre el vector de asignárselo a un tercero.
         await assertRolesAsignables(updateData.roleIds);
+
+        // APP-02: el resultado del PATCH no puede ser un super_admin con concesionaria.
+        // Sólo se evalúa si el PATCH toca roles o concesionaria, igual que el trigger de
+        // la base: una cuenta vieja mal configurada se puede seguir editando en lo demás
+        // (y se arregla quitándole la concesionaria o el rol en el mismo PATCH).
+        const tocaRoles = Array.isArray(updateData.roleIds);
+        const tocaTenant = updateData.concesionariaId !== undefined;
+        if (tocaRoles || tocaTenant) {
+            const rolesFinales = tocaRoles
+                ? await nombresDeRoles(updateData.roleIds)
+                : (exists.roles ?? []).map((r: any) => String(r?.rol?.nombre ?? r?.nombre ?? r));
+            const tenantFinal = tocaTenant ? updateData.concesionariaId : (exists.concesionariaId ?? null);
+            assertSuperAdminSinConcesionaria(rolesFinales, tenantFinal);
+        }
 
         // Reasignar la sucursal no puede sacar al usuario de su tenant.
         //

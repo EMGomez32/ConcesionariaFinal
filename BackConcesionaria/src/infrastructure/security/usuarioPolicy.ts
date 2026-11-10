@@ -67,6 +67,35 @@ export async function assertRolesAsignables(roleIds: unknown): Promise<void> {
     }
 }
 
+/** Nombres de rol de una lista de ids (la tabla Rol es global, sin RLS). */
+export async function nombresDeRoles(roleIds: unknown): Promise<string[]> {
+    if (!Array.isArray(roleIds) || roleIds.length === 0) return [];
+    const ids = Array.from(new Set(roleIds.map(Number).filter((n) => Number.isInteger(n) && n > 0)));
+    if (ids.length === 0) return [];
+    const roles = await prisma.rol.findMany({ where: { id: { in: ids } }, select: { nombre: true } });
+    return roles.map((r: any) => String(r.nombre));
+}
+
+/**
+ * APP-02: una cuenta super_admin es de la PLATAFORMA, no de una concesionaria.
+ *
+ * Con concesionaria quedaba "colgada" de un tenant: aparecía en el listado de
+ * usuarios de ese tenant, la resolución de tenant por defecto (resolveConcesionariaId)
+ * la usaba como si fuera un usuario más y el admin del tenant la tenía a la vista
+ * como objetivo (assertObjetivoGestionable lo frena, pero es la segunda red). El
+ * candado duro está en la base (trigger de la migración super_admin_sin_concesionaria);
+ * esto lo adelanta con un 400 entendible en vez de un error de base.
+ */
+export function assertSuperAdminSinConcesionaria(nombresDeRol: string[], concesionariaId: unknown): void {
+    if (!nombresDeRol.includes('super_admin')) return;
+    if (concesionariaId === null || concesionariaId === undefined) return;
+    throw new BaseException(
+        400,
+        'Una cuenta super_admin es de la plataforma y no puede pertenecer a una concesionaria. Asignale otro rol o quitale la concesionaria.',
+        'SUPER_ADMIN_CON_CONCESIONARIA',
+    );
+}
+
 /**
  * Rechaza (409) si crear un usuario más superaría el cupo de la concesionaria.
  * Sólo aplica a actores no-super y cuando la concesionaria tiene un límite

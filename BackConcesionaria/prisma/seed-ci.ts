@@ -6,8 +6,9 @@
  *   - un plan Free (holgado, para no chocar con límites en los tests)
  *   - una concesionaria de test con una sucursal
  *   - los dos usuarios demo con que las suites loginean (helpers.ts):
- *       superadmin@demo.com / super123  (super_admin, CON concesionariaId — varias
- *                                        suites usan sa.user.concesionariaId!)
+ *       superadmin@demo.com / super123  (super_admin de PLATAFORMA, sin concesionaria:
+ *                                        APP-02. Las suites toman el tenant de prueba
+ *                                        con concesionariaDeTest() de helpers.ts)
  *       admin@demo.com     / admin123   (admin)
  *
  * NO carga datos de negocio: cada suite crea los suyos por la API.
@@ -56,8 +57,8 @@ async function ensureUsuario(
     email: string,
     nombre: string,
     password: string,
-    concesionariaId: number,
-    sucursalId: number,
+    concesionariaId: number | null,
+    sucursalId: number | null,
     rolId: number
 ): Promise<void> {
     const existing = await prisma.usuario.findFirst({ where: { email } });
@@ -127,7 +128,7 @@ async function main() {
     const adminRol = (await prisma.rol.findUnique({ where: { nombre: 'admin' as any } }))!;
 
     // 4. Usuarios demo que esperan los tests (helpers.ts).
-    await ensureUsuario('superadmin@demo.com', 'Super Admin CI', 'super123', cid, sid, superRol.id);
+    await ensureUsuario('superadmin@demo.com', 'Super Admin CI', 'super123', null, null, superRol.id);
     await ensureUsuario('admin@demo.com', 'Admin CI', 'admin123', cid, sid, adminRol.id);
 
     console.log('\n✅ seed-ci OK');

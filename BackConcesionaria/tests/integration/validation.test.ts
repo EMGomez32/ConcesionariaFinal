@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, authHeaders, unique, tryDelete } from './helpers';
+import { api, loginAsSuperAdmin, concesionariaDeTest, authHeaders, unique, tryDelete } from './helpers';
 
 // Regresión de la capa de validación Zod (unificación express-validator → Zod, PR #13).
 // Asegura que los endpoints migrados:
@@ -15,7 +15,7 @@ describe('Validación Zod (endpoints migrados de express-validator)', () => {
     beforeAll(async () => {
         const sa = await loginAsSuperAdmin();
         token = sa.token;
-        concesionariaId = sa.user.concesionariaId!;
+        concesionariaId = await concesionariaDeTest();
     });
 
     afterAll(async () => {

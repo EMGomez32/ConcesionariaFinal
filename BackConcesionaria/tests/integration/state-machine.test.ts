@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, authHeaders, unique, anularVenta } from './helpers';
+import { api, loginAsSuperAdmin, concesionariaDeTest, authHeaders, unique, anularVenta } from './helpers';
 
 describe('State machines (transiciones inválidas → 422)', () => {
     let token: string;
@@ -7,7 +7,7 @@ describe('State machines (transiciones inválidas → 422)', () => {
     beforeAll(async () => {
         const sa = await loginAsSuperAdmin();
         token = sa.token;
-        concesionariaId = sa.user.concesionariaId!;
+        concesionariaId = await concesionariaDeTest();
     });
 
     test('Vehículo: transición válida preparacion → publicado', async () => {

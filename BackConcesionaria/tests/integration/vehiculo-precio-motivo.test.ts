@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, authHeaders, unique } from './helpers';
+import { api, loginAsSuperAdmin, concesionariaDeTest, authHeaders, unique } from './helpers';
 
 /**
  * El historial de precios de lista guarda el motivo del cambio (pestaña Precios de
@@ -14,7 +14,7 @@ describe('Motivo del cambio de precio de lista', () => {
         const sa = await loginAsSuperAdmin();
         token = sa.token;
         vehId = (await api.post('/api/vehiculos', {
-            marca: unique('M'), modelo: 'Precio', anio: 2021, concesionariaId: sa.user.concesionariaId,
+            marca: unique('M'), modelo: 'Precio', anio: 2021, concesionariaId: await concesionariaDeTest(),
             sucursalId: 1, fechaIngreso: '2026-04-20', tipo: 'USADO',
             precioCompra: 5000, precioLista: 6000, estado: 'publicado', origen: 'compra',
         }, authHeaders(token))).data.id;

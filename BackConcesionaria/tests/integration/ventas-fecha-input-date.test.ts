@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, authHeaders, unique, anularVenta } from './helpers';
+import { api, loginAsSuperAdmin, concesionariaDeTest, authHeaders, unique, anularVenta } from './helpers';
 
 /**
  * El front manda las fechas de venta y de pago desde un <input type="date">, o sea
@@ -27,7 +27,7 @@ describe('Ventas con fecha "YYYY-MM-DD" (formato del <input type="date">)', () =
     beforeAll(async () => {
         const sa = await loginAsSuperAdmin();
         token = sa.token;
-        concesionariaId = sa.user.concesionariaId!;
+        concesionariaId = await concesionariaDeTest();
         const cli = await api.post('/api/clientes', { nombre: unique('Cli'), concesionariaId }, authHeaders(token));
         creados.clientes.push(cli.data.id);
     });
