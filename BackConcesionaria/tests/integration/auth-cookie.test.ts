@@ -4,7 +4,8 @@ import { hotp, pasoDe } from '../../src/infrastructure/security/totp';
 /**
  * Refresh token en cookie httpOnly `autenza_rt` (web). Login, 2FA, refresh y logout
  * la ponen / rotan / borran; refresh y logout toman el token de `body.refreshToken`
- * si viene (app móvil) y si no, de la cookie. El cuerpo de las respuestas no cambia.
+ * si viene (app móvil) y si no, de la cookie. Un refresh renovado con la COOKIE no
+ * vuelve en el cuerpo (APP-11; el resto del contrato web está en sesion-web-absoluta).
  *
  * Cada test usa su propio usuario: la detección de reuso revoca TODAS las sesiones
  * del usuario y no tiene que alcanzar a los usuarios seed.
@@ -66,24 +67,27 @@ describe('Refresh token en cookie httpOnly', () => {
         expect(maxAge).toBeLessThanOrEqual(7 * 24 * 60 * 60);
     });
 
-    test('refresh sin body usa la cookie, devuelve tokens nuevos y rota la cookie', async () => {
+    test('refresh sin body usa la cookie, devuelve el access nuevo y rota la cookie (el refresh NO va en el cuerpo)', async () => {
         const inicio = await login(await nuevoUsuario());
         const vieja = valorDe(setCookie(inicio)!);
 
         const r = await api.post('/api/auth/refresh', undefined, conCookie(vieja));
         expect(r.status).toBe(200);
         expect(typeof r.data.access).toBe('string');
-        expect(typeof r.data.refresh).toBe('string');
-        expect(r.data.refresh).not.toBe(vieja);
+        // Renovó con la cookie (un navegador): el refresh rotado viaja sólo en la cookie,
+        // aunque no venga la cabecera web. Si volviera en el JSON, un script inyectado se lo llevaría.
+        expect(r.data).not.toHaveProperty('refresh');
 
         const rotada = setCookie(r);
         expect(rotada).toBeDefined();
-        expect(valorDe(rotada!)).toBe(r.data.refresh);
+        const nueva = valorDe(rotada!);
+        expect(nueva).not.toBe(vieja);
 
         // La cookie rotada sigue renovando (también con un body vacío).
-        const otra = await api.post('/api/auth/refresh', {}, conCookie(r.data.refresh));
+        const otra = await api.post('/api/auth/refresh', {}, conCookie(nueva));
         expect(otra.status).toBe(200);
-        expect(valorDe(setCookie(otra)!)).toBe(otra.data.refresh);
+        expect(otra.data).not.toHaveProperty('refresh');
+        expect(valorDe(setCookie(otra)!)).not.toBe(nueva);
     });
 
     test('la detección de reuso sigue valiendo con la cookie', async () => {
@@ -91,10 +95,11 @@ describe('Refresh token en cookie httpOnly', () => {
         const vieja = valorDe(setCookie(inicio)!);
         const r = await api.post('/api/auth/refresh', undefined, conCookie(vieja));
         expect(r.status).toBe(200);
+        const rotada = valorDe(setCookie(r)!);
 
         // Reingresar la cookie ya rotada = token robado: 401 y se cierran TODAS las sesiones.
         expect((await api.post('/api/auth/refresh', undefined, conCookie(vieja))).status).toBe(401);
-        expect((await api.post('/api/auth/refresh', undefined, conCookie(r.data.refresh))).status).toBe(401);
+        expect((await api.post('/api/auth/refresh', undefined, conCookie(rotada))).status).toBe(401);
     });
 
     test('refresh sin body ni cookie es 401', async () => {
