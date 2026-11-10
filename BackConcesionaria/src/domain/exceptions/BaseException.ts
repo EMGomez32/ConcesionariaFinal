@@ -31,6 +31,22 @@ export class UnauthorizedException extends BaseException {
     }
 }
 
+/**
+ * La sesión llegó a su duración máxima (SESION_MAX_DIAS desde el login) y ya no se
+ * renueva. Es un 401 como cualquier refresh rechazado —los clientes ya mandan al login
+ * con eso—, pero con su propio código para que puedan decir POR QUÉ hay que volver a
+ * entrar (no es un error ni una sesión robada: es el tope).
+ */
+export class SesionMaximaVencidaException extends BaseException {
+    constructor(maxDias: number) {
+        super(
+            401,
+            `Por seguridad, la sesión dura como máximo ${maxDias} ${maxDias === 1 ? 'día' : 'días'}. Volvé a iniciar sesión.`,
+            'SESION_MAXIMA_VENCIDA',
+        );
+    }
+}
+
 export class ForbiddenException extends BaseException {
     constructor(message = 'Permisos insuficientes') {
         super(403, message, 'FORBIDDEN');

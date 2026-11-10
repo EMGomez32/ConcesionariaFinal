@@ -46,6 +46,16 @@ const envSchema = z.object({
     JWT_REFRESH_SECRET: z.string().min(10),
     JWT_EXPIRES_IN: z.string().default('15m'),
     JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+    // Vencimiento ABSOLUTO de la sesión, en días contados desde el login. Cada
+    // /auth/refresh rota y estira la sesión otros JWT_REFRESH_EXPIRES_IN (7 días):
+    // sin un tope, quien la renovara seguido (o un refresh robado que se siguiera
+    // rotando) no tenía que volver a poner la contraseña nunca. Pasado este plazo el
+    // refresh da 401 SESION_MAXIMA_VENCIDA y hay que volver a entrar, aunque la
+    // sesión se haya usado ayer. Entre 1 y 365; 30 por defecto.
+    SESION_MAX_DIAS: z.preprocess(
+        (v) => (v === undefined || v === '' ? undefined : Number(v)),
+        z.number().int().min(1).max(365).default(30),
+    ),
     LOG_LEVEL: z.string().default('debug'),
     CORS_ALLOWED_ORIGINS: z.string().optional().default('http://localhost:5173,http://localhost:3000'),
     UPLOADS_DIR: z.string().optional(),

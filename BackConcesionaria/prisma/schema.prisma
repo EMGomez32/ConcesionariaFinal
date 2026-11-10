@@ -2475,8 +2475,19 @@ model RefreshToken {
   expiresAt DateTime @map("expires_at")
   isRevoked Boolean  @default(false) @map("is_revoked")
   createdAt DateTime @default(now()) @map("created_at")
-  usuario   Usuario  @relation(fields: [usuarioId], references: [id])
+  // Familia de la sesión: el id que comparten todos los refresh de UN login (cada
+  // rotación hereda el del anterior). Viaja como `sid` en el access token, así una
+  // request puede decir "ésta es mi sesión" sin tener el refresh en la mano (la web
+  // no lo tiene: vive en la cookie httpOnly). Ver emitirSesion / ConservarSesionActual.
+  familia          String   @map("familia")
+  // Cuándo empezó la sesión (el login con contraseña y, si corresponde, 2FA). Cada
+  // rotación lo hereda tal cual: es lo que corta la sesión a los SESION_MAX_DIAS
+  // aunque se siga renovando todos los días. Los tokens anteriores a la columna
+  // tomaron su created_at (ver la migración sesion_vencimiento_absoluto).
+  sesionIniciadaAt DateTime @default(now()) @map("sesion_iniciada_at")
+  usuario          Usuario  @relation(fields: [usuarioId], references: [id])
 
+  @@index([familia])
   @@map("refresh_tokens")
 }
 

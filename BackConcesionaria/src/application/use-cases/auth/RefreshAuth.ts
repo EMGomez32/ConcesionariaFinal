@@ -1,12 +1,14 @@
 import { ITokenService } from '../../../domain/services/ITokenService';
 import { IRefreshTokenRepository } from '../../../domain/repositories/IRefreshTokenRepository';
-import { UnauthorizedException } from '../../../domain/exceptions/BaseException';
+import { SesionMaximaVencidaException, UnauthorizedException } from '../../../domain/exceptions/BaseException';
+import { TokenPayload } from '../../../domain/entities/Auth';
 import { withAuthBypass } from '../../../infrastructure/database/unitOfWork';
-import config from '../../../config';
 import { mfaPendiente } from '../../../infrastructure/security/mfaPolicy';
 import { recordSecurityEvent } from '../../../infrastructure/security/securityEvents';
 import { notificarAlertaSeguridad } from '../../../infrastructure/security/alertasSeguridad';
 import { context } from '../../../infrastructure/security/context';
+import { emitirRefresh } from './emitirSesion';
+import { maxDiasSesion, sesionPasoElMaximo } from './vigenciaSesion';
 
 export class RefreshAuth {
     constructor(
@@ -44,6 +46,28 @@ export class RefreshAuth {
                 throw new Error('Revoked');
             }
 
+            // VENCIMIENTO ABSOLUTO (APP-11): la sesión no vive más de SESION_MAX_DIAS desde el
+            // login, por más que se haya renovado ayer. Va DESPUÉS del reuso (un token robado
+            // de una sesión vieja sigue siendo la señal más importante) y ANTES del vencimiento
+            // deslizante: la fila vence a lo sumo en el fin de la sesión, y el cliente tiene que
+            // recibir el motivo real (SESION_MAXIMA_VENCIDA) y no un 401 genérico.
+            if (sesionPasoElMaximo(stored.sesionIniciadaAt)) {
+                const maxDias = maxDiasSesion();
+                // Se borra la familia entera: reintentar con este token (u otro ya rotado de
+                // la misma sesión) es después un 401 a secas, sin volver a registrar el corte.
+                await this.refreshTokenRepository.deleteFamilia(stored.familia).catch(() => 0);
+                await recordSecurityEvent({
+                    accion: 'sesion_vencida',
+                    entidad: 'Usuario',
+                    entidadId: stored.usuarioId,
+                    usuarioId: stored.usuarioId,
+                    detalle: `Sesión cortada por vencimiento absoluto: pasaron ${maxDias} días desde el login (${stored.sesionIniciadaAt.toISOString()})`,
+                    ip: context.getIp() ?? null,
+                    userAgent: context.getUserAgent() ?? null,
+                });
+                throw new SesionMaximaVencidaException(maxDias);
+            }
+
             if (stored.expiresAt < new Date()) throw new Error('Expired');
 
             // withAuthBypass: el refresh valida al usuario fuera de una sesión (sin
@@ -76,28 +100,30 @@ export class RefreshAuth {
             const roles = usuario.roles
                 .filter((r) => !r.deletedAt && !r.rol.deletedAt)
                 .map((r) => r.rol.nombre);
-            const newPayload = {
+            const newPayload: TokenPayload = {
                 userId: usuario.id,
                 concesionariaId: usuario.concesionariaId,
                 sucursalId: usuario.sucursalId,
                 roles,
                 // El rol exige 2FA y el usuario aún no lo activó: sigue restringido a configurarlo.
                 ...(mfaPendiente(roles, usuario.totpEnabled) ? { mfaPending: true } : {}),
+                // La sesión es la MISMA: el access nuevo la sigue nombrando igual.
+                sid: stored.familia,
             };
             const access = this.tokenService.generateAccessToken(newPayload);
-            const refresh = this.tokenService.generateRefreshToken(newPayload);
-
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + parseInt(config.jwt.refreshExpirationDays));
-
-            await this.refreshTokenRepository.create({
-                token: this.tokenService.hashToken(refresh),
-                usuarioId: usuario.id,
-                expiresAt
-            });
+            // Hereda familia e inicio: rotar no reinicia el reloj absoluto.
+            const refresh = await emitirRefresh(
+                newPayload,
+                { familia: stored.familia, sesionIniciadaAt: stored.sesionIniciadaAt },
+                this.tokenService,
+                this.refreshTokenRepository,
+            );
 
             return { access, refresh };
         } catch (e) {
+            // El vencimiento absoluto sale con su código; todo lo demás, el 401 genérico de
+            // siempre (no se le cuenta al cliente si el token no existe, venció o se reusó).
+            if (e instanceof SesionMaximaVencidaException) throw e;
             throw new UnauthorizedException('Refresh token inválido');
         }
     }
