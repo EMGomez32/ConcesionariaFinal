@@ -2,11 +2,11 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { logger } from '../../infrastructure/logging/logger';
 import { env } from '../../config/env';
 import prisma from '../../infrastructure/database/prisma';
-import { withAuthBypass } from '../../infrastructure/database/unitOfWork';
-import { cifrarSecreto, descifrarSecreto } from '../../infrastructure/security/secretBox';
+import { withAuthBypass, withTenantTransaction } from '../../infrastructure/database/unitOfWork';
+import { contextoSecreto, descifrarSecreto } from '../../infrastructure/security/secretBox';
 import { limpiarCookieDeState, verificarStateOauthMl } from '../../infrastructure/security/mlOauthState';
 import { conContextoSistema } from '../../application/services/consultaIngest';
-import { canjearCodigo, exigirClaveDeCifradoMeli, obtenerUsuario } from '../../infrastructure/mercadolibre/meliClient';
+import { canjearCodigo, datosDeTokens, exigirClaveDeCifradoMeli, obtenerUsuario } from '../../infrastructure/mercadolibre/meliClient';
 import { procesarNotificacionMl } from '../../application/services/meliPreguntas';
 import {
     buscarIntegracionMeta,
@@ -96,7 +96,7 @@ router.post('/meta/:integracionId', async (req: Request, res: Response, next: Ne
         const config = (integracion.config ?? {}) as { appSecret?: string };
         const firma = req.headers['x-hub-signature-256'];
         const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
-        if (!validarFirmaMeta(rawBody, typeof firma === 'string' ? firma : undefined, config.appSecret ? descifrarSecreto(config.appSecret) : undefined)) {
+        if (!validarFirmaMeta(rawBody, typeof firma === 'string' ? firma : undefined, config.appSecret ? descifrarSecreto(config.appSecret, contextoSecreto.integracion(integracionId, 'appSecret')) : undefined)) {
             logger.warn(`[meta-webhook] integración ${integracionId}: firma inválida o ausente`);
             res.status(403).send('Forbidden');
             return;
@@ -201,21 +201,32 @@ router.get('/mercadolibre/callback', async (req: Request, res: Response) => {
         // con el contexto sintético de la concesionaria del state para que la
         // extensión de Prisma inyecte el tenant y setee las GUC de RLS.
         await conContextoSistema(concesionariaId, async () => {
-            const secretos = {
-                accessToken: cifrarSecreto(tokens.access_token),
-                refreshToken: cifrarSecreto(tokens.refresh_token),
-                expiraEn: new Date(Date.now() + (tokens.expires_in ?? 21600) * 1000),
-                activa: true,
-                ultimoError: null,
-            };
-            const cuenta = await prisma.mercadoLibreCuenta.upsert({
-                where: { concesionariaId_mlUserId: { concesionariaId, mlUserId } },
-                create: { concesionariaId, mlUserId, siteId: ML_SITE_POR_DEFECTO, ...secretos },
-                // `deletedAt: null` revive la fila: el unique [concesionariaId,
-                // mlUserId] no distingue borrados, así que re-vincular después de
-                // desvincular cae SIEMPRE en este update. Sin esto la cuenta
-                // quedaba vinculada pero invisible para todo el resto del sistema.
-                update: { ...secretos, deletedAt: null },
+            // Los tokens se cifran con el id de la cuenta en el AAD
+            // (mercadolibre_cuentas:<id>:...), y en un alta el id recién existe
+            // después del INSERT. Por eso van DOS escrituras en UNA transacción: el
+            // upsert deja la fila (sin tokens si es nueva) y, ya con el id, se guardan
+            // cifrados. Si la segunda falla, el rollback se lleva también la primera:
+            // ni queda una cuenta a medio vincular ni un token se escribe en claro.
+            // La transacción es la cruda (withTenantTransaction, sin la extensión): el
+            // tenant va explícito en el where y en el create.
+            const cuenta = await withTenantTransaction(async (tx) => {
+                const fila = await tx.mercadoLibreCuenta.upsert({
+                    where: { concesionariaId_mlUserId: { concesionariaId, mlUserId } },
+                    create: {
+                        concesionariaId, mlUserId, siteId: ML_SITE_POR_DEFECTO,
+                        accessToken: '', refreshToken: '', expiraEn: new Date(), activa: false,
+                    },
+                    // `deletedAt: null` revive la fila: el unique [concesionariaId,
+                    // mlUserId] no distingue borrados, así que re-vincular después de
+                    // desvincular cae SIEMPRE en este update. Sin esto la cuenta
+                    // quedaba vinculada pero invisible para todo el resto del sistema.
+                    update: { deletedAt: null },
+                    select: { id: true },
+                });
+                return tx.mercadoLibreCuenta.update({
+                    where: { id: fila.id },
+                    data: datosDeTokens(fila.id, tokens),
+                });
             });
 
             // Hoy se soporta UNA sola cuenta por concesionaria, pero el unique es

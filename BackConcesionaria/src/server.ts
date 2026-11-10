@@ -6,7 +6,7 @@ import { iniciarWorkerCierreAtenciones } from './infrastructure/atencion/cierreD
 import { iniciarWorkerEnvioWhatsapp } from './infrastructure/whatsapp/envioWorker';
 import { iniciarWorkerMercadoLibre } from './infrastructure/mercadolibre/meliSyncWorker';
 import { iniciarCuentasActivas } from './application/services/whatsappManager';
-import { hayClaveDeSecretos } from './infrastructure/security/secretBox';
+import { hayClaveDeSecretos, kidsDeClaves } from './infrastructure/security/secretBox';
 
 const server = app.listen(config.port, () => {
     logger.info(`--------------------------------------------------`);
@@ -19,6 +19,17 @@ const server = app.listen(config.port, () => {
     if (config.env !== 'test') {
         if (!hayClaveDeSecretos()) {
             logger.warn('INTEGRACIONES_SECRET_KEY no está seteada: los secretos de integraciones se guardan EN CLARO (los protege sólo la RLS). Generar con openssl rand -hex 32.');
+        } else {
+            // Sólo los kids (8 hex del SHA-256 de cada clave), que no son secretos: es como se
+            // confirma, después de rotar, que el contenedor tomó la clave nueva y cuáles
+            // quedan para leer hasta correr el re-cifrado.
+            const kids = kidsDeClaves();
+            logger.info(
+                `[cifrado] secretos en reposo con la clave ${kids.actual}`
+                + (kids.anteriores.length > 0
+                    ? `; anteriores sólo para leer: ${kids.anteriores.join(', ')} (pasá todo a la actual con npm run recifrar-secretos -- --apply)`
+                    : ''),
+            );
         }
         iniciarWorkerIngestaEmail();
 

@@ -3,7 +3,7 @@ import { IntegracionCanal, OrigenLead } from '@prisma/client';
 import { withAuthBypass } from '../database/unitOfWork';
 import { logger } from '../logging/logger';
 import { conContextoSistema, ingestarConsulta } from '../../application/services/consultaIngest';
-import { descifrarSecreto } from '../security/secretBox';
+import { contextoSecreto, descifrarSecreto } from '../security/secretBox';
 import { ConfigMeta, canalMetaHabilitado, idDeCuentaMeta } from '../../domain/services/canalesMeta';
 import { llamarGraph } from './metaEnvio';
 import {
@@ -224,7 +224,7 @@ export async function procesarNotificacionMeta(integracion: IntegracionCanal, pa
                     const leadgenId = valor?.leadgen_id;
                     if (!leadgenId) break;
                     try {
-                        const lead = await obtenerLeadDeGraph(String(leadgenId), config.pageAccessToken ? descifrarSecreto(config.pageAccessToken) : '');
+                        const lead = await obtenerLeadDeGraph(String(leadgenId), config.pageAccessToken ? descifrarSecreto(config.pageAccessToken, contextoSecreto.integracion(integracion.id, 'pageAccessToken')) : '');
                         const origen: OrigenLead = config.origen ?? 'facebook';
                         await conContextoSistema(integracion.concesionariaId, () =>
                             ingestarConsulta({ origen, ...lead }));
