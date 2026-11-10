@@ -64,9 +64,9 @@ const LoginPage = () => {
     // pasa por performLogout), acá se descarta. En /login no hay queries de
     // datos montadas, así que el clear() no dispara ningún refetch.
     queryClient.clear();
-    // El refresh llega también en el cuerpo (lo usa la app móvil); el navegador lo
-    // tiene en la cookie httpOnly y acá sólo queda en memoria (ver authStore).
-    setAuth(user, tokens.access, tokens.refresh);
+    // Sólo el access (en memoria): el refresh lo tiene el navegador en la cookie
+    // httpOnly y el backend no se lo manda a la web en el cuerpo (ver api/client.ts).
+    setAuth(user, tokens.access);
     limpiarSalidaVoluntaria();
     limpiarRegreso();
     // Un rol que exige 2FA y todavía no lo activó va primero a activarlo.

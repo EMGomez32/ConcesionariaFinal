@@ -5,11 +5,13 @@ import { UnauthorizedException, ForbiddenException } from '../../../domain/excep
 import { withAuthBypass } from '../../../infrastructure/database/unitOfWork';
 import { emitirMfaToken } from '../../../infrastructure/security/mfaToken';
 import { emitirSesion } from './emitirSesion';
+import { costoBcrypt, hashearContrasena, necesitaRehash } from '../../../infrastructure/security/passwordHash';
 
 // Hash descartable para gastar el MISMO tiempo de bcrypt cuando el email no existe:
 // sin esto, 'no existe' respondía en milisegundos y 'existe con clave mala' en ~100 ms,
-// y esa diferencia enumera las cuentas registradas.
-const DUMMY_HASH = bcrypt.hashSync('autenza-dummy-password-no-usar', 10);
+// y esa diferencia enumera las cuentas registradas. Con el mismo costo que los hashes
+// nuevos, si no la diferencia de tiempo vuelve a delatar cuáles existen.
+const DUMMY_HASH = bcrypt.hashSync('autenza-dummy-password-no-usar', costoBcrypt());
 
 export class Login {
     constructor(
@@ -41,6 +43,17 @@ export class Login {
         if (!isMatch) throw new UnauthorizedException('Credenciales inválidas');
 
         if (!usuario.activo) throw new ForbiddenException('Usuario inactivo');
+
+        // APP-13: un hash con costo viejo se re-hashea ahora, que la contraseña ya se
+        // verificó. Si falla no se corta el login: queda para el próximo.
+        if (necesitaRehash(usuario.passwordHash)) {
+            try {
+                const passwordHash = await hashearContrasena(pass);
+                await withAuthBypass((tx) => tx.usuario.update({ where: { id: usuario.id }, data: { passwordHash } }));
+            } catch {
+                /* se reintenta en el próximo login */
+            }
+        }
 
         // 2FA: la contraseña sola NO alcanza. Se devuelve un token de 5 min que sólo sirve para
         // /auth/login/2fa; no hay sesión (ni refresh token) hasta presentar el segundo factor.

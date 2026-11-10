@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, authHeaders, unique } from './helpers';
+import { api, loginAsSuperAdmin, concesionariaDeTest, authHeaders, unique } from './helpers';
 
 describe('Auditoría', () => {
     let token: string;
@@ -7,7 +7,7 @@ describe('Auditoría', () => {
     beforeAll(async () => {
         const sa = await loginAsSuperAdmin();
         token = sa.token;
-        concesionariaId = sa.user.concesionariaId!;
+        concesionariaId = await concesionariaDeTest();
     });
 
     test('login dispara audit log con accion=login + ip + userAgent', async () => {

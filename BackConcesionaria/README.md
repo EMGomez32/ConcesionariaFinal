@@ -19,11 +19,14 @@ prisma/
   init-rls.ts       policies de RLS y triggers (idempotente, corre en cada arranque)
   setup-app-role.ts crea o actualiza el rol de runtime app_rw (idempotente)
   seed.ts           admin inicial (una sola vez, por variables SEED_*)
-  seed-ci.ts        bootstrap mínimo para los tests de integración (se niega a correr en prod)
+  seed-ci.ts        bootstrap mínimo para los tests de integración (se niega a correr en prod
+                    y no va en la imagen de producción)
   seed-demo.ts      datos de demostración
 scripts/            utilidades de operación (ver abajo)
 tests/unit          unitarios puros (sin base)
 tests/integration   integración por HTTP contra un backend real y un Postgres descartable
+dist/               salida de `tsc` (src/); la corre `npm start`
+dist-ops/           prisma/*.ts y scripts/*.ts compilados (tsconfig.ops.json); los corre la imagen
 ```
 
 ## Comandos
@@ -31,13 +34,21 @@ tests/integration   integración por HTTP contra un backend real y un Postgres d
 | Comando | Qué hace |
 |---|---|
 | `npm run dev` | Servidor con recarga (`ts-node-dev`). No recarga al editar `.env`: reiniciá a mano. |
-| `npm run build` / `npm start` | Compila con `tsc` y corre `dist/server.js`. |
+| `npm run build` | Compila `src/` a `dist/` y los scripts de operación a `dist-ops/`. |
+| `npm start` | Corre `dist/server.js`. |
 | `npm run test:unit` | Unitarios. |
 | `npm run test:integration` | Integración (necesita el backend levantado con `NODE_ENV=test`). |
 | `npm run init-rls` | Aplica RLS y triggers. |
 | `npm run setup-app-role` | Crea o actualiza el rol `app_rw` (requiere `APP_DB_PASSWORD`). |
 | `npm run seed` / `seed-ci` / `seed-demo` | Seeds (ver arriba). |
+| `npm run retencion` | Política de retención; simula salvo `-- --apply`. |
 | `npm run sync:infoauto` | Sincroniza el catálogo de marcas y modelos. |
+
+`init-rls`, `setup-app-role`, `seed*`, `retencion` y `sync:infoauto` corren el JS
+compilado, igual que dentro de la imagen de producción (que no trae ts-node ni
+typescript): necesitan un `npm run build` antes. En desarrollo, sin compilar,
+cada uno tiene su variante con ts-node: `npm run init-rls:dev`, `seed:dev`,
+`seed-demo:dev`, `retencion:dev`, etc.
 
 ## Cambios de schema
 
@@ -68,11 +79,16 @@ agregás una tabla con datos de un tenant, sumala a `TENANT_TABLES` en
 
 ## Scripts de operación
 
+En producción se corren compilados, dentro del contenedor:
+`docker compose exec -T backend node dist-ops/scripts/<script>.js ... </dev/null`.
+En local, sin compilar: `npx ts-node scripts/<script>.ts ...`.
+
 | Script | Uso |
 |---|---|
-| `scripts/reset-2fa.ts` | Apaga el 2FA de una cuenta (escape de emergencia; deja constancia en `security_events`). |
-| `scripts/set-password.ts` | Cambia la contraseña o desactiva un usuario. |
-| `scripts/auditar-uploads.ts` | Revisa, en solo lectura, que los archivos subidos sean lo que dicen ser. |
-| `scripts/debug/` | Diagnóstico local. No correr contra producción. |
+| `scripts/reset-2fa.ts` | Apaga el 2FA de una cuenta (escape de emergencia; deja constancia en `security_events`). `node dist-ops/scripts/reset-2fa.js <email>` |
+| `scripts/set-password.ts` | Cambia la contraseña o desactiva un usuario (`USER_EMAIL`, `USER_PASSWORD` o `USER_DEACTIVATE=true` por entorno). `node dist-ops/scripts/set-password.js` |
+| `scripts/auditar-uploads.ts` | Revisa, en solo lectura, que los archivos subidos sean lo que dicen ser. `node dist-ops/scripts/auditar-uploads.js [directorio]` |
+| `scripts/migrar-documentos-vehiculos.ts` | Mueve los documentos de vehículos a la zona privada (simula salvo `--aplicar`). `node dist-ops/scripts/migrar-documentos-vehiculos.js` |
+| `scripts/debug/` | Diagnóstico local. No correr contra producción (no se compila ni va a la imagen). |
 
 Las colecciones de Postman y `__legacy_tests__/` son históricas y no se mantienen.

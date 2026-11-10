@@ -34,6 +34,9 @@ flowchart LR
   publica puertos (`docker-compose.yml`).
 - **Contenedores:** `no-new-privileges`, `cap_drop: ALL`, procesos sin root
   (`BackConcesionaria/Dockerfile`, imagen `nginx-unprivileged` en el front).
+  La imagen del backend es multi-etapa: lleva sólo dependencias de producción y
+  JS compilado (sin TypeScript, ts-node ni jest), y el código es de sólo
+  lectura para el proceso.
 - **Administración:** por una red privada de administración y SSH con llave.
   Prisma Studio solo arranca con el perfil `debug`.
 
@@ -83,13 +86,14 @@ RLS lo deja pasar. Sus escrituras quedan en `security_events`
 sequenceDiagram
     participant W as Web
     participant A as API
-    W->>A: POST /api/auth/login (email, contraseña)
+    W->>A: POST /api/auth/login (email, contraseña) + X-Autenza-Cliente: web
     A-->>W: si el 2FA aplica: token intermedio (5 min, propósito MFA)
     W->>A: POST /api/auth/login/2fa (código TOTP o de recuperación)
-    A-->>W: access JWT (15 min, en memoria) + refresh (7 días) en cookie autenza_rt
+    A-->>W: access JWT (15 min, en memoria) en el cuerpo; refresh (7 días) SÓLO en la cookie autenza_rt
     Note over W,A: cookie httpOnly, SameSite=Strict, Path=/api/auth, Secure en producción
     W->>A: POST /api/auth/refresh (cookie)
-    A-->>W: tokens nuevos; el refresh anterior queda consumido
+    A-->>W: access nuevo; la cookie rota y el refresh anterior queda consumido
+    Note over W,A: a los SESION_MAX_DIAS (30) del login: 401 SESION_MAXIMA_VENCIDA
 ```
 
 - Contraseñas con bcrypt; política de 10+ caracteres y lista de contraseñas
@@ -100,6 +104,16 @@ sequenceDiagram
 - Refresh guardado hasheado, rotación atómica y detección de reuso: si se usa uno
   ya consumido se revocan todas las sesiones del usuario
   (`src/application/use-cases/auth/RefreshAuth.ts`).
+- Vencimiento absoluto: cada refresh guarda su sesión (`familia`) y cuándo fue el
+  login; las rotaciones lo heredan y, pasados `SESION_MAX_DIAS` (30 por defecto),
+  la sesión se corta con `SESION_MAXIMA_VENCIDA` y queda un `sesion_vencida` en
+  `security_events` (`src/application/use-cases/auth/vigenciaSesion.ts`).
+- La web se identifica con `X-Autenza-Cliente: web` y no recibe el refresh en
+  ningún cuerpo; un refresh renovado con la cookie tampoco vuelve en el JSON. La
+  app móvil (sin la cabecera, con `body.refreshToken`) mantiene su contrato. El
+  access token lleva `sid` (la sesión) para que Ajustes conserve la sesión del
+  navegador al cambiar la contraseña sin tener el refresh
+  (`src/application/use-cases/auth/ConservarSesionActual.ts`).
 - 2FA TOTP con anti-replay y códigos de recuperación de un solo uso
   (`src/application/services/mfaService.ts`, `src/infrastructure/security/totp.ts`).
   Qué roles lo deben tener lo define `MFA_REQUIRED_ROLES`
@@ -140,9 +154,11 @@ request: usan `withAuthBypass` o fijan el tenant explícito.
 | Cotización del dólar | `src/infrastructure/cotizacion/dolarBlue.ts` | Solo lectura desde el servidor; si falla, no convierte. |
 | AFIP | `src/infrastructure/afip/` | Hoy solo modo simulado (CAE de prueba, rotulado sin validez fiscal). |
 
-Los secretos de integraciones y los secretos TOTP se guardan cifrados con
-AES-256-GCM (`src/infrastructure/security/secretBox.ts`) usando
-`INTEGRACIONES_SECRET_KEY`.
+Los secretos de integraciones, los tokens de Mercado Libre y los secretos TOTP se
+guardan cifrados con AES-256-GCM (`src/infrastructure/security/secretBox.ts`) usando
+`INTEGRACIONES_SECRET_KEY`, atados a su fila con AAD y con el identificador de la
+clave para poder rotarla (`INTEGRACIONES_SECRET_KEYS_ANTERIORES` +
+`npm run recifrar-secretos`; ver [criptografía y secretos](../seguridad/criptografia-y-secretos.md)).
 
 ## Registro
 

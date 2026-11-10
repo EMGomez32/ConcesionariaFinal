@@ -14,7 +14,7 @@ import {
     type CanalMetaConversacion,
 } from '../../domain/services/canalesMeta';
 import { withAuthBypass } from '../database/unitOfWork';
-import { descifrarSecreto } from '../security/secretBox';
+import { contextoSecreto, descifrarSecreto } from '../security/secretBox';
 import { logger } from '../logging/logger';
 
 /**
@@ -262,7 +262,7 @@ async function credencialesDe(
     const campo = campoTokenParaCanal(config, canal);
     const crudo = campo ? config[campo] : '';
 
-    return { config, token: crudo ? descifrarSecreto(crudo) : '' };
+    return { config, token: campo && crudo ? descifrarSecreto(crudo, contextoSecreto.integracion(integracion.id, campo)) : '' };
 }
 
 /**

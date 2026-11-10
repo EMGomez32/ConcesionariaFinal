@@ -1,7 +1,7 @@
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { Usuario } from '../../../domain/entities/Usuario';
 import prisma from '../prisma';
-import { withTenantTransaction } from '../unitOfWork';
+import { withAuthBypass, withTenantTransaction } from '../unitOfWork';
 import { context } from '../../security/context';
 import { BaseException } from '../../../domain/exceptions/BaseException';
 import { QueryOptions, PaginatedResponse } from '../../../types/common';
@@ -70,8 +70,17 @@ export class PrismaUsuarioRepository implements IUsuarioRepository {
         return u ? this.mapToEntity(u) : null;
     }
 
+    /**
+     * Búsqueda GLOBAL por email, para el chequeo de duplicados del alta y la edición. El
+     * email es @unique en toda la base (todas las concesionarias, la plataforma y también
+     * las cuentas dadas de baja), así que el chequeo tiene que ver lo mismo que el índice.
+     * Con el cliente con extensión quedaba acotado al tenant de quien da el alta: un email
+     * de otra concesionaria o de una cuenta de plataforma no aparecía, el INSERT chocaba
+     * con el índice único y la API devolvía un 400 crudo en vez del 409 genérico (PRIV-20).
+     * Sólo lo usan esos chequeos: no devuelve datos de la otra cuenta a nadie.
+     */
     async findByEmail(email: string): Promise<Usuario | null> {
-        const u = await prisma.usuario.findFirst({
+        const u = await withAuthBypass((tx) => tx.usuario.findFirst({
             where: { email },
             include: {
                 roles: {
@@ -79,7 +88,7 @@ export class PrismaUsuarioRepository implements IUsuarioRepository {
                 },
                 sucursal: true
             }
-        });
+        }));
         return u ? this.mapToEntity(u) : null;
     }
 

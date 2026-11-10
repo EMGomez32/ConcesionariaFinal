@@ -52,8 +52,9 @@ explicados en archivos, cuentas o llaves.
    solo lectura) y calculá un hash de cada archivo (`sha256sum * > hashes.txt`).
    Copiá la carpeta al archivo privado de evidencias.
 2. **Contené** según el alcance:
-   - Cuenta de la app comprometida → desactivala (`scripts/set-password.ts` con
-     `USER_DEACTIVATE=true`) y cerrá sus sesiones.
+   - Cuenta de la app comprometida → desactivala
+     (`docker compose exec -T -e USER_EMAIL=<email> -e USER_DEACTIVATE=true backend node dist-ops/scripts/set-password.js </dev/null`)
+     y cerrá sus sesiones.
    - Todas las sesiones en duda → rotá `JWT_SECRET` y `JWT_REFRESH_SECRET`
      con `scripts/rotate-secrets.sh` (todos vuelven a loguearse).
    - Host comprometido → cortá la exposición pública (`sudo systemctl stop cloudflared`),
@@ -76,7 +77,7 @@ aunque se haya borrado. Rotalo en origen; borrar el rastro no alcanza.
 | `JWT_SECRET`, `JWT_REFRESH_SECRET` | `scripts/rotate-secrets.sh` en el host (respalda, rota, verifica y revierte si falla). | Todas las sesiones caen. |
 | `POSTGRES_PASSWORD` | `ALTER USER` en la base, actualizar `.env` y `docker compose up -d` de `backend` y `db-backup`. Probar primero el comando en una base descartable. | Corte breve. |
 | `APP_DB_PASSWORD` / `APP_DATABASE_URL` | Cambiar las dos con el mismo valor en el `.env` y `docker compose up -d backend` (`setup-app-role` actualiza el rol al arrancar). | Corte breve. |
-| `INTEGRACIONES_SECRET_KEY` | Rotar primero los secretos que protege en su origen (tokens de Meta y Mercado Libre, contraseñas IMAP); generar clave nueva (`openssl rand -hex 32`); volver a vincular las integraciones; los usuarios vuelven a configurar el 2FA. | Integraciones y 2FA a reconfigurar. |
+| `INTEGRACIONES_SECRET_KEY` | Rotar la clave con el procedimiento de [criptografía y secretos](../seguridad/criptografia-y-secretos.md#rotación-de-integraciones_secret_key) (clave nueva, la vieja a `INTEGRACIONES_SECRET_KEYS_ANTERIORES`, deploy, `npm run recifrar-secretos -- --apply`, sacar la vieja). Si se filtró la clave, quien además tenga un dump o un backup puede descifrar lo que protege: rotar también en origen los tokens de Meta y Mercado Libre y las contraseñas IMAP, y pedir a los usuarios con 2FA que lo vuelvan a configurar. | Sin corte por la rotación en sí; si se filtró, integraciones y 2FA a reconfigurar. |
 | SMTP (`SMTP_PASS`) | Revocar la clave en el panel del proveedor, crear otra, actualizar `.env`, `docker compose up -d backend`. Revisar el historial de envíos del proveedor. | Ninguno visible. |
 | `ML_CLIENT_SECRET` | Regenerarlo en el panel de developers de Mercado Libre, actualizar `.env`, recrear el backend. | Puede pedir revincular cuentas. |
 | Credenciales del offsite (R2) | Revocar el token en Cloudflare, crear otro con permisos mínimos sobre el bucket, actualizar `.env`, `docker compose up -d db-backup`. | Ninguno. |

@@ -17,6 +17,8 @@
  *   docker compose exec -T backend npm run retencion -- --apply </dev/null
  * (el `</dev/null` evita que `exec -T` se coma el stdin de un script pipeado por SSH).
  * Pensado para correr una vez por día o por semana desde un cron del host.
+ * `npm run retencion` corre el JS compilado (dist-ops/prisma/retencion.js): la imagen no trae
+ * ts-node. En local, sin compilar: `npm run retencion:dev [-- --apply ...]`.
  *
  * ── QUÉ HACE Y PLAZOS POR DEFECTO (configurables por variable de entorno) ─────────
  *   RETENCION_LEADS_MESES=24

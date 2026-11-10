@@ -1,8 +1,8 @@
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { BaseException } from '../../../domain/exceptions/BaseException';
 import { assertMismoTenant } from '../../../infrastructure/security/tenantGuard';
-import { assertRolesAsignables, assertLimiteUsuarios } from '../../../infrastructure/security/usuarioPolicy';
-import bcrypt from 'bcryptjs';
+import { assertRolesAsignables, assertLimiteUsuarios, assertSuperAdminSinConcesionaria, nombresDeRoles } from '../../../infrastructure/security/usuarioPolicy';
+import { hashearContrasena } from '../../../infrastructure/security/passwordHash';
 
 export class CreateUsuario {
     constructor(private readonly usuarioRepository: IUsuarioRepository) { }
@@ -26,6 +26,9 @@ export class CreateUsuario {
         // privilegios que rompería el aislamiento multi-tenant). Sólo un super_admin
         // puede otorgarlo. El candado real vive acá, no en el schema Zod.
         await assertRolesAsignables(userData.roleIds);
+        // El alta siempre es dentro de una concesionaria (concesionariaId obligatorio
+        // arriba), así que por acá nunca nace un super_admin: es una cuenta de plataforma.
+        assertSuperAdminSinConcesionaria(await nombresDeRoles(userData.roleIds), userData.concesionariaId);
 
         // Cupo de usuarios de la concesionaria (lo fija el super_admin). Un admin no
         // puede crear por encima del límite; super_admin no está topeado.
@@ -54,7 +57,7 @@ export class CreateUsuario {
             );
         }
 
-        const passwordHash = await bcrypt.hash(password, 10);
+        const passwordHash = await hashearContrasena(password);
         return this.usuarioRepository.create({ ...userData, passwordHash });
     }
 }

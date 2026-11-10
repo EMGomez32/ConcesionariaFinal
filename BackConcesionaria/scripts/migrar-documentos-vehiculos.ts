@@ -9,8 +9,9 @@
  * mismo con los viejos: mueve el binario y actualiza `url` y `storageKey` de la fila.
  *
  * USO (en el servidor, dentro del contenedor del backend):
- *   docker compose exec -T backend npx ts-node scripts/migrar-documentos-vehiculos.ts           # simulación
- *   docker compose exec -T backend npx ts-node scripts/migrar-documentos-vehiculos.ts --aplicar # mueve
+ *   docker compose exec -T backend node dist-ops/scripts/migrar-documentos-vehiculos.js </dev/null           # simulación
+ *   docker compose exec -T backend node dist-ops/scripts/migrar-documentos-vehiculos.js --aplicar </dev/null # mueve
+ *   (compilado en dist-ops/: la imagen no trae ts-node; en local `npx ts-node scripts/migrar-documentos-vehiculos.ts`)
  *   (opcional) --dir <carpeta de uploads>; por defecto UPLOADS_DIR o ./uploads
  *
  * Es IDEMPOTENTE: lo que ya está en la zona privada se saltea, y si una corrida anterior

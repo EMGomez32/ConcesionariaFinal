@@ -1,9 +1,9 @@
 import { withAuthBypass } from '../../infrastructure/database/unitOfWork';
 import { BaseException, NotFoundException } from '../../domain/exceptions/BaseException';
-import { cifrarSecreto, descifrarSecreto } from '../../infrastructure/security/secretBox';
+import { cifrarSecreto, contextoSecreto, descifrarSecreto } from '../../infrastructure/security/secretBox';
 import {
     CANTIDAD_CODIGOS_RECUPERACION, generarCodigoRecuperacion, generarSecretoTotp, hashCodigoRecuperacion,
-    normalizarCodigoRecuperacion, otpauthUrl, verificarTotp,
+    hashCodigoRecuperacionV2, normalizarCodigoRecuperacion, otpauthUrl, verificarTotp,
 } from '../../infrastructure/security/totp';
 
 /**
@@ -36,7 +36,10 @@ export async function estadoMfa(usuarioId: number) {
     return { activo: u.totpEnabled, codigosRestantes: restantes };
 }
 
-/** Genera un secreto NUEVO y lo guarda (cifrado) como pendiente: no vale hasta confirmar un código. */
+/**
+ * Genera un secreto NUEVO y lo guarda (cifrado) como pendiente: no vale hasta confirmar un código.
+ * El AAD lo ata a ESTE usuario (usuarios:<id>:totp_secret): copiado a la fila de otro, no descifra.
+ */
 export async function iniciarSetupMfa(usuarioId: number): Promise<SetupMfa> {
     const u = await cargar(usuarioId);
     if (u.totpEnabled) {
@@ -45,7 +48,7 @@ export async function iniciarSetupMfa(usuarioId: number): Promise<SetupMfa> {
     const secreto = generarSecretoTotp();
     await withAuthBypass((tx) => tx.usuario.update({
         where: { id: usuarioId },
-        data: { totpSecret: cifrarSecreto(secreto), totpEnabled: false, totpEnabledAt: null, totpLastStep: null },
+        data: { totpSecret: cifrarSecreto(secreto, contextoSecreto.totpUsuario(usuarioId)), totpEnabled: false, totpEnabledAt: null, totpLastStep: null },
     }));
     return { secreto, otpauthUrl: otpauthUrl({ secreto, cuenta: u.email, emisor: EMISOR }) };
 }
@@ -53,10 +56,13 @@ export async function iniciarSetupMfa(usuarioId: number): Promise<SetupMfa> {
 /** Códigos de recuperación nuevos (reemplazan a todos los anteriores). Devuelve los EN CLARO, una sola vez. */
 async function emitirCodigos(usuarioId: number): Promise<string[]> {
     const codigos = Array.from({ length: CANTIDAD_CODIGOS_RECUPERACION }, generarCodigoRecuperacion);
+    // Los hashes se calculan ANTES de abrir la transacción: scrypt tarda y no tiene por qué
+    // tener una conexión tomada mientras tanto.
+    const hashes = await Promise.all(codigos.map((c) => hashCodigoRecuperacionV2(usuarioId, c)));
     await withAuthBypass(async (tx) => {
         await tx.recoveryCode.deleteMany({ where: { usuarioId } });
         await tx.recoveryCode.createMany({
-            data: codigos.map((c) => ({ usuarioId, codeHash: hashCodigoRecuperacion(c) })),
+            data: hashes.map((codeHash) => ({ usuarioId, codeHash })),
         });
     });
     return codigos;
@@ -69,7 +75,7 @@ export async function confirmarSetupMfa(usuarioId: number, codigo: string): Prom
     if (!u.totpSecret) {
         throw new BaseException(400, 'Primero iniciá la configuración del 2FA.', 'MFA_SIN_SETUP');
     }
-    const paso = verificarTotp(descifrarSecreto(u.totpSecret), codigo);
+    const paso = verificarTotp(descifrarSecreto(u.totpSecret, contextoSecreto.totpUsuario(u.id)), codigo);
     if (paso === null) throw new BaseException(400, 'El código es incorrecto o venció. Probá con el siguiente.', 'MFA_CODIGO_INVALIDO');
 
     await withAuthBypass((tx) => tx.usuario.update({
@@ -93,7 +99,7 @@ export async function verificarSegundoFactor(
     if (!u.totpEnabled || !u.totpSecret) return { ok: false, usoRecuperacion: false };
 
     if (entrada.codigo) {
-        const paso = verificarTotp(descifrarSecreto(u.totpSecret), entrada.codigo, { ultimoPaso: u.totpLastStep });
+        const paso = verificarTotp(descifrarSecreto(u.totpSecret, contextoSecreto.totpUsuario(u.id)), entrada.codigo, { ultimoPaso: u.totpLastStep });
         if (paso === null) return { ok: false, usoRecuperacion: false };
         const r = await withAuthBypass((tx) => tx.usuario.updateMany({
             where: { id: usuarioId, OR: [{ totpLastStep: null }, { totpLastStep: { lt: paso } }] },
@@ -105,8 +111,12 @@ export async function verificarSegundoFactor(
     if (entrada.recuperacion) {
         const normal = normalizarCodigoRecuperacion(entrada.recuperacion);
         if (!normal) return { ok: false, usoRecuperacion: false };
+        // v2 (scrypt con sal por usuario) o v1 (los emitidos antes): el código vale una sola
+        // vez en cualquiera de los dos formatos. Siempre se calcula el v2, aunque el código
+        // sea viejo, para que el tiempo de respuesta no diga en qué formato está.
+        const v2 = await hashCodigoRecuperacionV2(usuarioId, normal);
         const r = await withAuthBypass((tx) => tx.recoveryCode.updateMany({
-            where: { usuarioId, codeHash: hashCodigoRecuperacion(normal), usedAt: null },
+            where: { usuarioId, codeHash: { in: [v2, hashCodigoRecuperacion(normal)] }, usedAt: null },
             data: { usedAt: new Date() },
         }));
         return { ok: r.count === 1, usoRecuperacion: r.count === 1 };

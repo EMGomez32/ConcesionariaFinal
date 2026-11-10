@@ -43,6 +43,17 @@ export const loginAsSuperAdmin = () =>
 export const loginAsAdmin = () =>
     login('admin@demo.com', 'admin123');
 
+/**
+ * Concesionaria de prueba: la del admin del seed. El super_admin del seed es una cuenta
+ * de PLATAFORMA (APP-02: un super_admin no pertenece a ninguna concesionaria), así que
+ * las suites que operan como super_admin sobre el tenant de prueba lo pasan explícito.
+ */
+export async function concesionariaDeTest(): Promise<number> {
+    const cid = (await loginAsAdmin()).user.concesionariaId;
+    if (cid == null) throw new Error('El admin del seed de CI no tiene concesionaria: revisá seed-ci.ts');
+    return cid;
+}
+
 /** Headers `Authorization: Bearer ...` listos para spread en config. */
 export const authHeaders = (token: string) => ({
     headers: { Authorization: `Bearer ${token}` },

@@ -79,7 +79,8 @@ export default function DosFactores({ onActivado }: Props) {
         try {
             const r = await mfaApi.enable(codigo);
             // Las sesiones anteriores se cerraron en el servidor: se adopta la nueva ya mismo.
-            setAuth(r.user, r.tokens.access, r.tokens.refresh);
+            // El refresh nuevo llegó en la cookie (Set-Cookie de esta misma respuesta).
+            setAuth(r.user, r.tokens.access);
             setCodigosRecuperacion(r.codigosRecuperacion);
             setSecreto('');
             setOtpauth('');

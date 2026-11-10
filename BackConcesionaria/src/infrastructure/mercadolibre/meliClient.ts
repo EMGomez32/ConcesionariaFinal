@@ -1,5 +1,5 @@
 import prisma from '../database/prisma';
-import { cifrarSecreto, descifrarSecreto, hayClaveDeSecretos } from '../security/secretBox';
+import { SecretoIlegibleError, cifrarSecreto, contextoSecreto, descifrarSecreto, hayClaveDeSecretos } from '../security/secretBox';
 import { logger } from '../logging/logger';
 import { BaseException } from '../../domain/exceptions/BaseException';
 import { simularLlamada } from './meliSimulador';
@@ -170,24 +170,33 @@ async function refrescarTokens(cuentaId: number, tokenQuemado?: string): Promise
         try {
             const cuenta = await prisma.mercadoLibreCuenta.findFirst({ where: { id: cuentaId } });
             if (!cuenta) throw new MeliError('La cuenta de Mercado Libre no existe', 404);
-            const vigente = descifrarSecreto(cuenta.accessToken);
+            const vigente = descifrarSecreto(cuenta.accessToken, contextoSecreto.cuentaMl(cuenta.id, 'access_token'));
             // Otro vuelo ya renovó mientras esta llamada estaba en camino.
             if (tokenQuemado !== undefined && vigente !== tokenQuemado) return vigente;
             if (tokenQuemado === undefined && cuenta.expiraEn.getTime() - Date.now() >= MARGEN_RENOVACION_MS) {
                 return vigente;
             }
 
-            const tokens = await renovarTokens(descifrarSecreto(cuenta.refreshToken));
+            const tokens = await renovarTokens(descifrarSecreto(cuenta.refreshToken, contextoSecreto.cuentaMl(cuenta.id, 'refresh_token')));
             await guardarTokens(cuentaId, tokens);
             logger.info(`[meli] tokens renovados para la cuenta ${cuentaId}`);
             return tokens.access_token;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
+            // Un token que no se puede DESCIFRAR no es un vínculo roto: es el servidor sin la
+            // clave con la que se cifró (p. ej. se sacó una clave de
+            // INTEGRACIONES_SECRET_KEYS_ANTERIORES antes de correr el re-cifrado). Desactivar
+            // la cuenta obligaría a re-vincularla aunque se reponga la clave, así que acá sólo
+            // se anota el motivo y la cuenta sigue activa.
+            const ilegible = err instanceof SecretoIlegibleError;
             // Un refresh rechazado casi siempre significa vínculo roto: se marca
             // para que la UI pida re-autorizar en vez de reintentar en loop.
             await prisma.mercadoLibreCuenta.update({
                 where: { id: cuentaId },
-                data: { ultimoError: `No se pudo renovar la sesión: ${msg}`.slice(0, 300), activa: false },
+                data: {
+                    ultimoError: `No se pudo renovar la sesión: ${msg}`.slice(0, 300),
+                    ...(ilegible ? {} : { activa: false }),
+                },
             }).catch(() => undefined);
             throw err;
         } finally {
@@ -211,7 +220,7 @@ export async function accessTokenVigente(cuentaId: number): Promise<string> {
     if (!cuenta.activa) throw new MeliError('La cuenta de Mercado Libre está desactivada', 409);
 
     const vencePronto = cuenta.expiraEn.getTime() - Date.now() < MARGEN_RENOVACION_MS;
-    if (!vencePronto) return descifrarSecreto(cuenta.accessToken);
+    if (!vencePronto) return descifrarSecreto(cuenta.accessToken, contextoSecreto.cuentaMl(cuenta.id, 'access_token'));
 
     return refrescarTokens(cuentaId);
 }
@@ -236,18 +245,29 @@ export function exigirClaveDeCifradoMeli(): void {
     }
 }
 
+/**
+ * Los campos de la fila con el par de tokens CIFRADO, cada uno atado a su cuenta y su
+ * columna (AAD `mercadolibre_cuentas:<id>:access_token|refresh_token`): el access token no
+ * se puede poner en el lugar del refresh, ni los de un vendedor en la fila de otro.
+ * Lo usan la renovación y el callback de OAuth (que primero inserta la fila y recién con el
+ * id cifra, ver webhook.routes.ts).
+ */
+export function datosDeTokens(cuentaId: number, tokens: TokensMeli) {
+    exigirClaveDeCifradoMeli();
+    return {
+        accessToken: cifrarSecreto(tokens.access_token, contextoSecreto.cuentaMl(cuentaId, 'access_token')),
+        refreshToken: cifrarSecreto(tokens.refresh_token, contextoSecreto.cuentaMl(cuentaId, 'refresh_token')),
+        expiraEn: new Date(Date.now() + (tokens.expires_in ?? 21600) * 1000),
+        activa: true,
+        ultimoError: null,
+    };
+}
+
 /** Persiste el par de tokens (cifrado) y su vencimiento. */
 export async function guardarTokens(cuentaId: number, tokens: TokensMeli): Promise<void> {
-    exigirClaveDeCifradoMeli();
     await prisma.mercadoLibreCuenta.update({
         where: { id: cuentaId },
-        data: {
-            accessToken: cifrarSecreto(tokens.access_token),
-            refreshToken: cifrarSecreto(tokens.refresh_token),
-            expiraEn: new Date(Date.now() + (tokens.expires_in ?? 21600) * 1000),
-            activa: true,
-            ultimoError: null,
-        },
+        data: datosDeTokens(cuentaId, tokens),
     });
 }
 

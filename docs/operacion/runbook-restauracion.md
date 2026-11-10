@@ -20,7 +20,10 @@ En el gestor de contraseñas:
 
 Sin la clave privada de `age`, los backups cifrados no se pueden leer. Sin
 `INTEGRACIONES_SECRET_KEY` (en el `.env`), los secretos de integraciones y del
-2FA que trae el dump no se pueden descifrar.
+2FA que trae el dump no se pueden descifrar. Si el backup es de **antes** de una
+rotación de esa clave, hace falta la clave de esa época: va en
+`INTEGRACIONES_SECRET_KEYS_ANTERIORES` (por eso las claves retiradas se conservan
+en el gestor) y después de restaurar se corre `npm run recifrar-secretos -- --apply`.
 
 ## 1. Simulacro (no toca producción)
 

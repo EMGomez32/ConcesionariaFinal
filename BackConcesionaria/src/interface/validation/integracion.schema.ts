@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DestinoNoPermitidoError, PUERTOS_IMAP_PERMITIDOS, validarHostSintaxis } from '../../infrastructure/security/destinoSeguro';
+import { CAMPOS_SECRETOS as CAMPOS_CIFRADOS, estaCifrado } from '../../infrastructure/security/secretBox';
 
 // Schemas de validación de las integraciones de canal: webhook de Meta
 // (formularios de campaña, mensajes y comentarios de Instagram/Facebook) o
@@ -116,6 +117,22 @@ export { CAMPOS_SECRETOS } from '../../infrastructure/security/secretBox';
 // del controller los dejaría pegados para siempre con el valor viejo.
 export const OPCIONALES_BORRABLES_META = ['pageId', 'igBusinessAccountId'] as const;
 
+/**
+ * Un secreto que llega por la API es SIEMPRE texto plano: el front nunca ve lo guardado
+ * (sale enmascarado), así que algo con forma de sobre cifrado (`enc:v1:…`, `enc:v2:…`) sólo
+ * puede ser un blob copiado de la base. Aceptarlo sería dejar que se "lave": al guardar, el
+ * controller lo abriría y lo re-cifraría como propio de ESTA integración (un v1 no trae AAD
+ * que lo impida). Se corta en la validación, sólo para lo ENTRANTE: el schema completo
+ * revalida también la config mergeada, que sí trae los secretos guardados cifrados.
+ */
+function sinSecretosCifrados(config: Record<string, unknown>, ctx: z.RefinementCtx): void {
+    for (const campo of CAMPOS_CIFRADOS) {
+        if (estaCifrado(config[campo])) {
+            ctx.addIssue({ code: 'custom', path: [campo], message: 'Ese valor es un secreto cifrado copiado de la base: pegá el valor original' });
+        }
+    }
+}
+
 // ── Create ───────────────────────────────────────────────────────────────────
 
 export const createIntegracionSchema = z.discriminatedUnion('tipo', [
@@ -126,14 +143,14 @@ export const createIntegracionSchema = z.discriminatedUnion('tipo', [
         tipo: z.literal('meta'),
         nombre: z.string({ error: 'El nombre es obligatorio' }).min(1, 'El nombre es obligatorio'),
         activo: z.boolean().optional(),
-        config: metaConfigSchema,
+        config: metaConfigSchema.superRefine(sinSecretosCifrados),
     }),
     z.object({
         concesionariaId: optionalFk,
         tipo: z.literal('email'),
         nombre: z.string({ error: 'El nombre es obligatorio' }).min(1, 'El nombre es obligatorio'),
         activo: z.boolean().optional(),
-        config: emailConfigSchema,
+        config: emailConfigSchema.superRefine(sinSecretosCifrados),
     }),
 ]);
 
@@ -178,7 +195,7 @@ export const updateMetaConfigSchema = metaConfigBase.partial().extend({
     appSecret: z.string().optional(),
     pageAccessToken: z.string().optional(),
     instagramAccessToken: z.string().optional(),
-});
+}).superRefine(sinSecretosCifrados);
 
 // OJO: NO se deriva con emailConfigSchema.partial() — en Zod los .default()
 // disparan igual bajo .partial() (verificado), y un PATCH parcial resetearía
@@ -194,7 +211,7 @@ export const updateEmailConfigSchema = z.object({
     user: z.string().min(1, 'El usuario no puede estar vacío').optional(),
     pass: z.string().optional(),
     carpeta: z.string().min(1).optional(),
-});
+}).superRefine(sinSecretosCifrados);
 
 export const updateIntegracionSchema = z.object({
     nombre: z.string().min(1, 'El nombre no puede estar vacío').optional(),

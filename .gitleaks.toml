@@ -23,7 +23,7 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Contraseña literal de prueba de los tests de integración (se crea y se usa sólo contra la base descartable del CI)"
+description = "Contraseñas literales de prueba de los tests de integración (se crea y se usa sólo contra la base descartable del CI)"
 # AND: archivo de tests de integración Y el valor detectado es exactamente este literal.
 # Cualquier otro valor en esos archivos se sigue detectando.
 condition = "AND"
@@ -32,5 +32,5 @@ paths = [
 ]
 regexTarget = "secret"
 regexes = [
-    '''^nueva-clave-12345$''',
+    '''^(nueva-clave-12345|otra-clave-segura-789)$''',
 ]

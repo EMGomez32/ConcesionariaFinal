@@ -85,7 +85,9 @@ app.use(cors({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-Id'],
+    // X-Autenza-Cliente: con la que el front web pide NO recibir el refresh en el cuerpo
+    // (ver refreshCookie.ts). Sin listarla, el preflight cross-origin (desarrollo) la rechaza.
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-Id', 'X-Autenza-Cliente'],
     // Por defecto el browser sólo deja leer un puñado de headers seguros: el
     // resto queda invisible para el JS aunque el server los mande. Los CSV de
     // reportes traen el nombre de archivo (con el período) en el

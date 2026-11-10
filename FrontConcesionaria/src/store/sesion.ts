@@ -14,10 +14,16 @@
 const CLAVE_REGRESO = 'autenza:volver-a';
 const CLAVE_AVISO = 'autenza:aviso-login';
 
-export type AvisoLogin = 'sesion-vencida';
+/**
+ * 'sesion-maxima': la sesión llegó a su duración máxima desde el login (el backend
+ * responde SESION_MAXIMA_VENCIDA). No es un error ni inactividad: es el tope, y se
+ * dice así para que nadie piense que algo anda mal.
+ */
+export type AvisoLogin = 'sesion-vencida' | 'sesion-maxima';
 
 export const TEXTO_AVISO: Record<AvisoLogin, string> = {
     'sesion-vencida': 'Tu sesión venció. Volvé a entrar.',
+    'sesion-maxima': 'Por seguridad, cada sesión dura un tiempo máximo. Volvé a entrar.',
 };
 
 /**
@@ -52,7 +58,7 @@ export const limpiarRegreso = () => escribir(CLAVE_REGRESO, null);
 export const marcarAvisoLogin = (aviso: AvisoLogin) => escribir(CLAVE_AVISO, aviso);
 export const leerAvisoLogin = (): AvisoLogin | null => {
     const v = leer(CLAVE_AVISO);
-    return v === 'sesion-vencida' ? v : null;
+    return v === 'sesion-vencida' || v === 'sesion-maxima' ? v : null;
 };
 export const limpiarAvisoLogin = () => escribir(CLAVE_AVISO, null);
 

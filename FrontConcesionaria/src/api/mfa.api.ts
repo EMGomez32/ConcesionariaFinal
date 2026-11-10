@@ -20,7 +20,11 @@ export interface UsuarioSesion {
 
 export interface SesionResponse {
     user: UsuarioSesion;
-    tokens: { access: string; refresh: string };
+    /**
+     * Sólo el access: el front se identifica como web (X-Autenza-Cliente) y el backend NO
+     * le manda el refresh en el cuerpo; queda únicamente en la cookie httpOnly.
+     */
+    tokens: { access: string };
 }
 
 /** Lo que devuelve /auth/login: sesión directa, o "falta el segundo factor". */

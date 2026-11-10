@@ -1,4 +1,4 @@
-import { api, loginAsSuperAdmin, authHeaders, unique, anularVenta } from './helpers';
+import { api, loginAsSuperAdmin, concesionariaDeTest, authHeaders, unique, anularVenta } from './helpers';
 
 /**
  * El front manda las fechas de venta y de pago desde un <input type="date">, o sea
@@ -27,7 +27,7 @@ describe('Ventas con fecha "YYYY-MM-DD" (formato del <input type="date">)', () =
     beforeAll(async () => {
         const sa = await loginAsSuperAdmin();
         token = sa.token;
-        concesionariaId = sa.user.concesionariaId!;
+        concesionariaId = await concesionariaDeTest();
         const cli = await api.post('/api/clientes', { nombre: unique('Cli'), concesionariaId }, authHeaders(token));
         creados.clientes.push(cli.data.id);
     });
@@ -63,7 +63,7 @@ describe('Ventas con fecha "YYYY-MM-DD" (formato del <input type="date">)', () =
     test('Convertir un presupuesto aceptado en venta con fechaVenta "YYYY-MM-DD" (antes 500)', async () => {
         const vehId = await nuevoVehiculo();
         const pres = await api.post('/api/presupuestos', {
-            nroPresupuesto: unique('P'), sucursalId: 1, clienteId: creados.clientes[0], vendedorId: 2,
+            nroPresupuesto: unique('P'), concesionariaId, sucursalId: 1, clienteId: creados.clientes[0], vendedorId: 2,
             moneda: 'ARS', fechaCreacion: '2026-04-20',
             items: [{ vehiculoId: vehId, precioLista: 6000, descuento: 0, precioFinal: 6000 }],
         }, authHeaders(token));

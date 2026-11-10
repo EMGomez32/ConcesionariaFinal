@@ -1,5 +1,5 @@
 import {
-    base32Decode, base32Encode, codigoTotp, generarCodigoRecuperacion, generarSecretoTotp, hashCodigoRecuperacion,
+    base32Decode, base32Encode, codigoTotp, generarCodigoRecuperacion, generarSecretoTotp, hashCodigoRecuperacion, hashCodigoRecuperacionV2,
     hotp, normalizarCodigoRecuperacion, otpauthUrl, pasoDe, verificarTotp,
 } from '../../src/infrastructure/security/totp';
 
@@ -132,5 +132,14 @@ describe('códigos de recuperación', () => {
         expect(h).toMatch(/^[0-9a-f]{64}$/);
         expect(h).not.toContain('ABCDE');
         expect(hashCodigoRecuperacion('ABCDE-FGHJL')).not.toBe(h);
+    });
+
+    test('v2: estable por usuario, distinto entre usuarios y distinto del v1 (APP-13)', async () => {
+        const a = await hashCodigoRecuperacionV2(7, 'ABCDE-FGHJK');
+        expect(a).toBe(await hashCodigoRecuperacionV2(7, 'ABCDE-FGHJK'));
+        expect(a).toMatch(/^[0-9a-f]{64}$/);
+        expect(await hashCodigoRecuperacionV2(8, 'ABCDE-FGHJK')).not.toBe(a);
+        expect(await hashCodigoRecuperacionV2(7, 'ABCDE-FGHJL')).not.toBe(a);
+        expect(a).not.toBe(hashCodigoRecuperacion('ABCDE-FGHJK'));
     });
 });

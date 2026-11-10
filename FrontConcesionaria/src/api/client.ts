@@ -8,7 +8,7 @@ import {
     olvidarRefreshHeredado,
     type User,
 } from '../store/authStore';
-import { guardarRegreso, marcarAvisoLogin, avisarOtrasPestanas, escucharOtrasPestanas } from '../store/sesion';
+import { guardarRegreso, marcarAvisoLogin, avisarOtrasPestanas, escucharOtrasPestanas, type AvisoLogin } from '../store/sesion';
 import { MENSAJES_ERROR, mensajePorEstado, traducirMensajeTecnico } from '../utils/getErrorMessage';
 import type { ApiErrorShape } from '../utils/error';
 
@@ -25,6 +25,15 @@ declare module 'axios' {
 
 const API_URL = import.meta.env.VITE_API_BASE_URL;
 
+/**
+ * Cabecera con la que el front se identifica como la WEB. Con ella el backend no manda
+ * el refresh token en ningún cuerpo (login, 2FA, refresh): queda sólo en la cookie
+ * httpOnly, fuera del alcance del JS de la página. La lleva TODA request de este
+ * cliente, incluido el /auth/refresh "pelado" de abajo. La app móvil no la manda y
+ * sigue recibiendo el refresh en el cuerpo.
+ */
+export const CABECERA_CLIENTE_WEB = { 'X-Autenza-Cliente': 'web' } as const;
+
 const axiosInstance = axios.create({
     baseURL: API_URL,
     // La cookie httpOnly del refresh (`autenza_rt`, Path=/api/auth) tiene que viajar
@@ -36,6 +45,7 @@ const axiosInstance = axios.create({
     timeout: 60_000,
     headers: {
         'Content-Type': 'application/json',
+        ...CABECERA_CLIENTE_WEB,
     },
 });
 
@@ -54,7 +64,8 @@ axiosInstance.interceptors.request.use(
  * Refresh de la sesión
  *
  * El refresh token vive en una cookie httpOnly que pone el backend: el front no
- * lo lee ni lo manda (sólo el access token, en memoria). /auth/refresh rota la
+ * lo lee, no lo manda y tampoco lo recibe en ningún cuerpo (X-Autenza-Cliente: web);
+ * sólo tiene el access token, en memoria. /auth/refresh rota la
  * cookie en cada uso y tiene detección de reuso (revokeAllForUser): si dos
  * requests mandan el MISMO refresh, el segundo revoca todas las sesiones →
  * logout espurio. Por eso:
@@ -110,12 +121,15 @@ async function performRefresh(): Promise<string> {
     // La primera vez después del deploy, el refresh del storage viejo migra la sesión
     // a la cookie (el backend lo acepta en el cuerpo). Después, cuerpo vacío: cookie.
     const heredado = leerRefreshHeredado();
-    let response: AxiosResponse<{ access: string; refresh?: string }>;
+    let response: AxiosResponse<{ access: string }>;
     try {
         // axios "pelado" (no axiosInstance) → no re-entra en el interceptor de abajo.
+        // Con la cabecera web: la respuesta trae sólo el access; el refresh rotado
+        // llega en la cookie.
         response = await axios.post(`${API_URL}/auth/refresh`, heredado ? { refreshToken: heredado } : {}, {
             withCredentials: true,
             timeout: 20_000,
+            headers: { ...CABECERA_CLIENTE_WEB },
         });
     } catch (err) {
         // Si el backend contestó (aunque sea rechazándolo), el heredado ya no sirve.
@@ -123,7 +137,7 @@ async function performRefresh(): Promise<string> {
         throw err;
     }
     olvidarRefreshHeredado();
-    const { access, refresh } = response.data;
+    const { access } = response.data;
     const payload = decodeJwtPayload(access);
     const { user } = useAuthStore.getState();
     if (user && payload?.userId != null && payload.userId !== user.id) {
@@ -133,7 +147,7 @@ async function performRefresh(): Promise<string> {
         window.location.reload();
         return new Promise<string>(() => {});
     }
-    useAuthStore.getState().setTokens(access, refresh ?? null);
+    useAuthStore.getState().setAccessToken(access);
     avisarOtrasPestanas({ tipo: 'renovada', access, userId: payload?.userId });
     return access;
 }
@@ -172,16 +186,23 @@ const sesionRechazada = (err: unknown): boolean => {
 };
 
 /**
+ * Qué decirle en el login: si la sesión llegó a su duración máxima desde el login
+ * (SESION_MAXIMA_VENCIDA), eso; si no, el "tu sesión venció" de siempre.
+ */
+const avisoPorRechazo = (err: unknown): AvisoLogin =>
+    (err as AxiosError<{ error?: string }>)?.response?.data?.error === 'SESION_MAXIMA_VENCIDA' ? 'sesion-maxima' : 'sesion-vencida';
+
+/**
  * La sesión venció: se recuerda dónde estaba el usuario y el aviso para el login,
  * se limpia el estado y (si se pide) se va a /login. El href recarga la página
  * (heap nuevo → caché nuevo); el clear() es defensa en profundidad por si algún
  * día esto pasa a ser navegación SPA (los datos del usuario saliente no deben
  * sobrevivir en el QueryClient).
  */
-function sesionVencida({ irAlLogin }: { irAlLogin: boolean }) {
+function sesionVencida({ irAlLogin, aviso = 'sesion-vencida' }: { irAlLogin: boolean; aviso?: AvisoLogin }) {
     const { pathname, search } = window.location;
     guardarRegreso(pathname + search);
-    marcarAvisoLogin('sesion-vencida');
+    marcarAvisoLogin(aviso);
     useAuthStore.getState().logout();
     queryClient.clear();
     if (irAlLogin && !pathname.startsWith('/login')) window.location.assign('/login');
@@ -206,7 +227,7 @@ export async function restaurarSesion(): Promise<ResultadoRestauracion> {
         return 'ok';
     } catch (err) {
         if (!sesionRechazada(err)) return 'sin-conexion';
-        sesionVencida({ irAlLogin: false });
+        sesionVencida({ irAlLogin: false, aviso: avisoPorRechazo(err) });
         return 'vencida';
     }
 }
@@ -292,7 +313,7 @@ axiosInstance.interceptors.response.use(
                     // request falla con el motivo real (sin conexión, servidor caído).
                     return Promise.reject(await normalizarError(refreshError));
                 }
-                sesionVencida({ irAlLogin: true });
+                sesionVencida({ irAlLogin: true, aviso: avisoPorRechazo(refreshError) });
                 const r: ApiErrorShape = { error: 'SESION_VENCIDA', message: MENSAJES_ERROR.sesionVencida, status: 401 };
                 return Promise.reject(r);
             }

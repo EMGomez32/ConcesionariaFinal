@@ -67,9 +67,9 @@ services:
       - ALL
     # Node + Prisma + Baileys (una sesión de WhatsApp por número vinculado) ronda
     # 250-500 MB; el arranque además corre migrate deploy e init-rls/setup-app-role
-    # con ts-node, que compila TypeScript en memoria. 1,5 GB deja margen a todo eso.
+    # (ya compilados a JS: la imagen no trae ts-node). 1,5 GB deja margen a todo eso.
     mem_limit: 1536m
-    # Hilos de V8 y libuv + los procesos npx/ts-node del arranque: ~30-60 en uso.
+    # Hilos de V8 y libuv + los procesos npx/npm del arranque: ~30-60 en uso.
     pids_limit: 512
     # Sin ports: el frontend (nginx) le llega por la red interna de docker
     # en backend:3000. No hace falta exponerlo al host, y evita choques con
@@ -88,14 +88,22 @@ services:
       - ALLOW_SUPERUSER_DB=${ALLOW_SUPERUSER_DB:-}
       - PORT=3000
       - NODE_ENV=production
+      # El CLI de Prisma consulta su servidor en cada `migrate deploy` para avisar de versiones
+      # nuevas (telemetría): en producción no tiene por qué salir nada a la red en el arranque.
+      - CHECKPOINT_DISABLE=1
       # Secretos SIN default: el arranque falla si no están definidos en el .env.
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET requerido en .env}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET requerido en .env}
       - JWT_EXPIRES_IN=15m
       - JWT_REFRESH_EXPIRES_IN=7d
+      # Vencimiento ABSOLUTO de la sesión (días desde el login): aunque se renueve todos
+      # los días, pasado este plazo hay que volver a entrar. Vacío = 30. Ver env.ts.
+      - SESION_MAX_DIAS=${SESION_MAX_DIAS:-}
       # Roles que DEBEN tener 2FA (separados por coma). Vacío = el default (super_admin en producción);
       # `none` = nadie (escape de emergencia). Ver BackConcesionaria/src/infrastructure/security/mfaPolicy.ts.
       - MFA_REQUIRED_ROLES=${MFA_REQUIRED_ROLES:-}
+      # Costo de bcrypt (10 a 14). Vacío = 12 en producción. Ver passwordHash.ts.
+      - BCRYPT_COST=${BCRYPT_COST:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       # 1 = hay un proxy (nginx) delante; deja que la app lea el X-Forwarded-For real.
       - TRUST_PROXY=1
@@ -116,11 +124,17 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
-      # Cifrado en reposo de los secretos de integraciones (Meta / IMAP).
-      # Opcional: sin ella el backend arranca igual, en claro y con warning.
+      # Cifrado en reposo de los secretos de integraciones (Meta / IMAP / Mercado
+      # Libre) y del 2FA. OBLIGATORIA: con NODE_ENV=production el backend no
+      # arranca sin ella. Es la clave ACTUAL (con la que se cifra).
       # OJO: el contenedor SÓLO ve las vars listadas acá (tomadas del .env de la
       # RAÍZ) — un valor puesto en BackConcesionaria/.env no llega al runtime.
       - INTEGRACIONES_SECRET_KEY=${INTEGRACIONES_SECRET_KEY:-}
+      # Rotación: claves VIEJAS (separadas por comas) que sólo sirven para leer lo
+      # que todavía no pasó a la actual con `npm run recifrar-secretos -- --apply`.
+      # Vacía = sin rotación en curso. Procedimiento en .env.example y en
+      # docs/seguridad/criptografia-y-secretos.md.
+      - INTEGRACIONES_SECRET_KEYS_ANTERIORES=${INTEGRACIONES_SECRET_KEYS_ANTERIORES:-}
       # Webhook (Slack/Discord/ntfy, etc.) al que el backend avisa eventos de
       # seguridad (p. ej. ráfagas de logins fallidos). Opcional: vacía = sin aviso
       # externo. Es un secreto (quien tenga la URL puede postear): sólo en el .env.
@@ -167,6 +181,10 @@ services:
     # requests NO tiene las credenciales de superusuario en su entorno (ni en /proc/<pid>/environ:
     # exec reemplaza al shell, que era quien las guardaba). Un RCE en la app ya no las hereda.
     # Si APP_DATABASE_URL está vacía (sólo posible con ALLOW_SUPERUSER_DB=1) se mantiene la admin.
+    #
+    # `npm run init-rls` / `setup-app-role` corren el JS compilado en la imagen
+    # (dist-ops/prisma/*.js, ver BackConcesionaria/package.json): la imagen de producción no
+    # trae ts-node ni typescript. `npx prisma` usa el CLI instalado como dependencia.
     command:
       - sh
       - -c

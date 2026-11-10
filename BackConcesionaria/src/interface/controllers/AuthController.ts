@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
 import { JwtTokenService } from '../../infrastructure/security/JwtTokenService';
 import { PrismaRefreshTokenRepository } from '../../infrastructure/database/repositories/PrismaRefreshTokenRepository';
 import { Login } from '../../application/use-cases/auth/Login';
@@ -14,9 +13,10 @@ import { withAuthBypass } from '../../infrastructure/database/unitOfWork';
 import { sendPasswordResetEmail } from '../../infrastructure/email/mailer';
 import { env } from '../../config/env';
 import { logger } from '../../infrastructure/logging/logger';
-import { ponerCookieRefresh, limpiarCookieRefresh, refreshDeLaRequest } from './refreshCookie';
+import { ponerCookieRefresh, limpiarCookieRefresh, refreshDeLaRequest, refreshParaElCuerpo, sinRefresh } from './refreshCookie';
 import { recordSecurityEvent } from '../../infrastructure/security/securityEvents';
 import { notificarAlertaSeguridad } from '../../infrastructure/security/alertasSeguridad';
+import { hashearContrasena } from '../../infrastructure/security/passwordHash';
 
 const tokenService = new JwtTokenService();
 const refreshRepo = new PrismaRefreshTokenRepository();
@@ -80,9 +80,11 @@ export class AuthController {
 
             await rastroLoginSuperAdmin(result.user, false);
 
-            // Web: el refresh va además en la cookie httpOnly. El cuerpo no cambia (app móvil).
+            // El refresh va siempre en la cookie httpOnly (web). En el cuerpo, sólo para los
+            // clientes que lo guardan ellos (app móvil): la web (X-Autenza-Cliente: web) recibe
+            // únicamente el access. Ver refreshParaElCuerpo.
             ponerCookieRefresh(res, result.tokens.refresh);
-            res.json(result);
+            res.json(refreshParaElCuerpo(req) ? result : { ...result, tokens: sinRefresh(result.tokens) });
         } catch (error) {
             next(error);
         }
@@ -107,7 +109,8 @@ export class AuthController {
             }
             await rastroLoginSuperAdmin(sesion.user, true);
             ponerCookieRefresh(res, sesion.tokens.refresh);
-            res.json({ ...sesion, ...(usoRecuperacion ? { usoRecuperacion: true } : {}) });
+            const tokens = refreshParaElCuerpo(req) ? sesion.tokens : sinRefresh(sesion.tokens);
+            res.json({ ...sesion, tokens, ...(usoRecuperacion ? { usoRecuperacion: true } : {}) });
         } catch (error) {
             next(error);
         }
@@ -120,9 +123,12 @@ export class AuthController {
             const result = await refreshUC.execute(refreshDeLaRequest(req) ?? '');
             // Rotación: la cookie pasa a tener el refresh nuevo. Si falla NO se borra:
             // con dos pestañas, el 401 del que pierde la carrera borraría la cookie que
-            // el ganador acaba de rotar.
+            // el ganador acaba de rotar (ni siquiera con SESION_MAXIMA_VENCIDA: la cookie
+            // ya no sirve y vence sola).
             ponerCookieRefresh(res, result.refresh);
-            res.json(result);
+            // El refresh nuevo vuelve en el cuerpo sólo a quien lo mandó en el cuerpo (app
+            // móvil). Al que renovó con la cookie (navegador) le basta la cookie rotada.
+            res.json(refreshParaElCuerpo(req, { exigirQueVengaEnElCuerpo: true }) ? result : sinRefresh(result));
         } catch (error) {
             next(error);
         }
@@ -189,7 +195,7 @@ export class AuthController {
                 return res.status(400).json({ error: 'INVALID_TOKEN', message: 'El enlace es inválido o expiró. Solicitá uno nuevo.' });
             }
 
-            const passwordHash = await bcrypt.hash(String(password), 10);
+            const passwordHash = await hashearContrasena(String(password));
             // withAuthBypass: transacción única (atómica) con la RLS salteada — el
             // update de `usuarios` es cross-tenant (reset sin sesión) y bajo app_rw la
             // RLS lo filtraría a 0 filas (la contraseña no cambiaría).

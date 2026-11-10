@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { IUsuarioRepository } from '../../../domain/repositories/IUsuarioRepository';
 import { BaseException, NotFoundException } from '../../../domain/exceptions/BaseException';
 import { RevokeUserSessions } from '../auth/RevokeUserSessions';
+import { hashearContrasena } from '../../../infrastructure/security/passwordHash';
 
 /**
  * Cambio de contraseña por el propio usuario (autogestión desde Configuración).
@@ -41,7 +42,7 @@ export class ChangeMyPassword {
             throw new BaseException(400, 'La nueva contraseña debe ser distinta de la actual', 'SAME_PASSWORD');
         }
 
-        const passwordHash = await bcrypt.hash(newPassword, 10);
+        const passwordHash = await hashearContrasena(newPassword);
         const result = await this.repository.update(usuarioId, { passwordHash });
         await this.revokeSessions.execute(usuarioId, keepRefreshToken);
         return result;

@@ -26,6 +26,33 @@ interface AuditParams {
     userAgent?: string | null;
 }
 
+/**
+ * Concesionaria dueña de la fila auditada, para cuando quien actúa no tiene una (un
+ * super_admin, que desde APP-02 es siempre de plataforma). Sin esto, lo que un super_admin
+ * hacía sobre los datos de una concesionaria —crear o borrar un proveedor, editar un
+ * usuario— iba a security_events y la concesionaria no lo veía en SU auditoría; y antes de
+ * APP-02, si el super_admin tenía concesionaria, quedaba anotado en la de ÉL, que podía ser
+ * otra. Se resuelve por el nombre del modelo de Prisma (entidad) e id, con el cliente crudo
+ * (ve también las filas dadas de baja, que es lo que pasa con un delete_soft). Si el modelo
+ * no tiene concesionaria o no existe, null: queda el camino de security_events.
+ */
+async function tenantDeLaEntidad(entidad: string, entidadId?: number | null): Promise<number | null> {
+    if (!entidadId || !Number.isInteger(entidadId)) return null;
+    if (entidad === 'Concesionaria') return entidadId;
+    const modelo = entidad.charAt(0).toLowerCase() + entidad.slice(1);
+    try {
+        const fila = await withAuthBypass(async (tx) => {
+            const delegado = (tx as any)[modelo];
+            if (!delegado?.findUnique) return null;
+            return delegado.findUnique({ where: { id: entidadId }, select: { concesionariaId: true } });
+        });
+        const cid = fila?.concesionariaId;
+        return Number.isInteger(cid) ? cid : null;
+    } catch {
+        return null; // el modelo no tiene concesionariaId (Rol, Plan...): rastro de plataforma
+    }
+}
+
 // Fire-and-forget audit log writer. Pulls user/ip/userAgent from the
 // AsyncLocalStorage context — callers don't need to thread `req` through.
 // Failures are logged but never thrown, so a busted audit insert can't
@@ -33,7 +60,9 @@ interface AuditParams {
 export async function audit(params: AuditParams): Promise<void> {
     try {
         const user = context.getUser();
-        const concesionariaId = params.concesionariaId ?? user?.concesionariaId ?? null;
+        const concesionariaId = params.concesionariaId
+            ?? user?.concesionariaId
+            ?? await tenantDeLaEntidad(params.entidad, params.entidadId);
 
         if (!concesionariaId) {
             // Sin tenant (típicamente super_admin) audit_log no puede guardarlo: concesionaria_id

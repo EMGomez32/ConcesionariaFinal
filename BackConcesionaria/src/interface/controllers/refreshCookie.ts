@@ -10,8 +10,12 @@ import { env } from '../../config/env';
  * navegador lo manda solo a /api/auth (login, refresh, logout) y nunca cross-site
  * (SameSite=Strict, así que tampoco sirve para CSRF).
  *
- * La app móvil sigue igual: recibe los tokens en el cuerpo (que NO cambia) y los
- * manda en `body.refreshToken`, que tiene prioridad sobre la cookie.
+ * La app móvil sigue igual: recibe los tokens en el cuerpo y los manda en
+ * `body.refreshToken`, que tiene prioridad sobre la cookie.
+ *
+ * La WEB, en cambio, ya no recibe el refresh en el cuerpo (APP-11): si lo recibía, quedaba
+ * en la memoria de la página y un XSS lo leía igual que antes del localStorage. Ver
+ * `esClienteWeb` y `refreshParaElCuerpo`.
  *
  * Sin cookie-parser a propósito: hace falta leer UNA cookie, y para eso alcanza con
  * partir la cabecera `Cookie` (ver `leerCookie`). `res.cookie`/`res.clearCookie`
@@ -69,9 +73,50 @@ export function leerCookie(req: Request, nombre: string): string | undefined {
     return undefined;
 }
 
+/** El refresh vino en `body.refreshToken` (app móvil), no en la cookie. */
+export function refreshVinoEnElCuerpo(req: Request): boolean {
+    const delBody = req.body?.refreshToken;
+    return typeof delBody === 'string' && delBody.length > 0;
+}
+
 /** El refresh de la request: el del body si viene (app móvil), si no el de la cookie (web). */
 export function refreshDeLaRequest(req: Request): string | undefined {
-    const delBody = req.body?.refreshToken;
-    if (typeof delBody === 'string' && delBody) return delBody;
+    if (refreshVinoEnElCuerpo(req)) return req.body.refreshToken as string;
     return leerCookie(req, COOKIE_REFRESH) || undefined;
+}
+
+/**
+ * Cabecera con la que el front web se identifica (la manda SÓLO su cliente axios). No es
+ * una credencial ni un control de acceso: un cliente que no la mande no gana nada que no
+ * tuviera (el contrato de la app móvil), y uno que la mande sólo se pierde el refresh en
+ * el cuerpo. Sirve para que la web no reciba nunca el refresh en un JSON.
+ */
+export const CABECERA_CLIENTE = 'x-autenza-cliente';
+
+/** La request viene del front web (`X-Autenza-Cliente: web`). */
+export function esClienteWeb(req: Request): boolean {
+    const v = req.headers[CABECERA_CLIENTE];
+    return typeof v === 'string' && v.trim().toLowerCase() === 'web';
+}
+
+/**
+ * ¿Va el refresh en el cuerpo de la respuesta? Sólo si el cliente lo maneja él mismo:
+ *  - con `X-Autenza-Cliente: web`, nunca (le alcanza la cookie);
+ *  - en /auth/refresh, además, sólo si el token vino en el CUERPO. Si vino en la cookie,
+ *    quien llama es un navegador, y devolverlo en el JSON lo dejaría al alcance de un
+ *    script inyectado en la página que llamara a /auth/refresh sin la cabecera: la cookie
+ *    httpOnly no serviría de nada. La app móvil siempre manda `body.refreshToken`, así
+ *    que su contrato no cambia.
+ */
+export function refreshParaElCuerpo(req: Request, opciones: { exigirQueVengaEnElCuerpo?: boolean } = {}): boolean {
+    if (esClienteWeb(req)) return false;
+    if (opciones.exigirQueVengaEnElCuerpo && !refreshVinoEnElCuerpo(req)) return false;
+    return true;
+}
+
+/** Los tokens de una sesión sin el refresh (lo que ve la web: el refresh queda en la cookie). */
+export function sinRefresh<T extends { refresh: string }>(tokens: T): Omit<T, 'refresh'> {
+    const { refresh, ...resto } = tokens;
+    void refresh;
+    return resto;
 }

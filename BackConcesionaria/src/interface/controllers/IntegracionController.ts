@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
-import type { ModoIntegracion } from '@prisma/client';
+import type { ModoIntegracion, Prisma } from '@prisma/client';
 import prisma from '../../infrastructure/database/prisma';
+import { withTenantTransaction } from '../../infrastructure/database/unitOfWork';
 import { audit } from '../../infrastructure/security/audit';
 import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
 import { BaseException, NotFoundException } from '../../domain/exceptions/BaseException';
 import { errorDeValidacion } from '../middlewares/validate.middleware';
 import { mapaDeErrores } from '../validation/mensajes';
-import { cifrarConfig, estaCifrado } from '../../infrastructure/security/secretBox';
+import { cifrarConfig, configSinSecretos, estaCifrado } from '../../infrastructure/security/secretBox';
 import { estadoCanalesMeta } from '../../domain/services/canalesMeta';
 import { DestinoNoPermitidoError, resolverDestinoPublico } from '../../infrastructure/security/destinoSeguro';
 import {
@@ -146,8 +147,22 @@ export class IntegracionController {
             // verdad. Mismo corte simétrico que ya tiene Mercado Libre.
             if (tipo === 'meta') await assertSinDemoMetaActiva(concesionariaId);
             if (tipo === 'email') await assertHostImapPublico((config as any)?.host);
-            const creada = await prisma.integracionCanal.create({
-                data: { concesionariaId, tipo, nombre, activo: activo ?? true, config: cifrarConfig(config) },
+            // Cada secreto se cifra con el id de la integración en el AAD
+            // (integraciones_canal:<id>:config.<campo>), y el id recién existe después
+            // del INSERT. Por eso el alta son DOS escrituras en UNA transacción: se
+            // inserta la config SIN los secretos y, ya con el id, se guardan cifrados.
+            // Si la segunda falla, el rollback se lleva la fila entera: no queda una
+            // integración a medio crear y ningún secreto se escribe en claro en ningún
+            // momento. Es la transacción cruda (sin la extensión): el tenant va explícito.
+            const creada = await withTenantTransaction(async (tx) => {
+                const fila = await tx.integracionCanal.create({
+                    data: { concesionariaId, tipo, nombre, activo: activo ?? true, config: configSinSecretos(config) as Prisma.InputJsonValue },
+                    select: { id: true },
+                });
+                return tx.integracionCanal.update({
+                    where: { id: fila.id },
+                    data: { config: cifrarConfig(config, fila.id) as Prisma.InputJsonValue },
+                });
             });
             await audit({
                 entidad: 'IntegracionCanal',
@@ -224,8 +239,11 @@ export class IntegracionController {
                 // Si cambió el host (o se edita la config de una casilla), se re-resuelve el DNS.
                 if (existente.tipo === 'email') await assertHostImapPublico((completa.data as any).host);
                 // Cifrar al persistir. Esto también es la migración lazy: una
-                // config legada en claro queda cifrada en su primer update.
-                configFinal = cifrarConfig(completa.data as Record<string, unknown>);
+                // config legada en claro, o con secretos en v1 o de una clave
+                // anterior, sale en v2 con la clave actual en su primer update. Los
+                // conservados se abren en el contexto de ESTA integración antes de
+                // re-cifrarse: un blob v2 que no sea suyo hace fallar el guardado.
+                configFinal = cifrarConfig(completa.data as Record<string, unknown>, id);
             }
 
             const actualizada = await prisma.integracionCanal.update({

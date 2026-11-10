@@ -9,6 +9,7 @@ import { ResetPassword } from '../../application/use-cases/usuarios/ResetPasswor
 import { ChangeMyPassword } from '../../application/use-cases/usuarios/ChangeMyPassword';
 import { UpdateMyProfile } from '../../application/use-cases/usuarios/UpdateMyProfile';
 import { RevokeUserSessions } from '../../application/use-cases/auth/RevokeUserSessions';
+import { ConservarSesionActual } from '../../application/use-cases/auth/ConservarSesionActual';
 import { JwtTokenService } from '../../infrastructure/security/JwtTokenService';
 import { PrismaRefreshTokenRepository } from '../../infrastructure/database/repositories/PrismaRefreshTokenRepository';
 import { cleanFilters } from '../../utils/cleanFilters';
@@ -19,6 +20,7 @@ import { actorEsAdmin } from '../../infrastructure/security/roles';
 import { detalleUpdate, nombresDeRoles } from './usuarioAuditoria';
 import { exigirContrasenaDelActor } from '../../application/services/reautenticacion';
 import { avisarCambioDeCuenta } from '../../infrastructure/email/mailer';
+import { esClienteWeb, ponerCookieRefresh } from './refreshCookie';
 
 /**
  * Lo que un no-admin puede ver de un colega: el nombre para el combo de "vendedor
@@ -65,12 +67,34 @@ const getUsuariosUC = new GetUsuarios(repository);
 const getUsuarioByIdUC = new GetUsuarioById(repository);
 const createUsuarioUC = new CreateUsuario(repository);
 // Cerrar sesiones (refresh tokens) cuando cambian credenciales o estado del usuario.
-const revokeSessions = new RevokeUserSessions(new JwtTokenService(), new PrismaRefreshTokenRepository());
+const tokenService = new JwtTokenService();
+const refreshRepo = new PrismaRefreshTokenRepository();
+const revokeSessions = new RevokeUserSessions(tokenService, refreshRepo);
+const conservarSesion = new ConservarSesionActual(tokenService, refreshRepo);
 const updateUsuarioUC = new UpdateUsuario(repository, revokeSessions);
 const updateMyProfileUC = new UpdateMyProfile(repository, updateUsuarioUC);
 const deleteUsuarioUC = new DeleteUsuario(repository, revokeSessions);
 const resetPasswordUC = new ResetPassword(repository, revokeSessions);
 const changeMyPasswordUC = new ChangeMyPassword(repository, revokeSessions);
+
+/**
+ * La web no tiene su refresh (vive en la cookie httpOnly, que ni siquiera viaja a
+ * /usuarios): para conservar SU sesión al cambiar la contraseña o el email propios, se
+ * identifica por el `sid` del access token y, si la operación la cerró, se le emite un
+ * refresh nuevo en la misma sesión y se rota la cookie (ver ConservarSesionActual).
+ * Quien manda `body.refreshToken` (app móvil) sigue por el camino de siempre.
+ */
+async function capturarSesionWeb(req: Request, uid: number, refreshToken: unknown) {
+    if (!esClienteWeb(req) || (typeof refreshToken === 'string' && refreshToken)) return null;
+    return conservarSesion.capturar(uid, context.getUser()?.sid);
+}
+
+async function restaurarSesionWeb(res: Response, captura: Awaited<ReturnType<typeof capturarSesionWeb>>) {
+    const user = context.getUser();
+    if (!captura || !user) return;
+    const refresh = await conservarSesion.restaurar(captura, user);
+    if (refresh) ponerCookieRefresh(res, refresh);
+}
 
 export class UsuarioController {
     static async getAll(req: Request, res: Response, next: NextFunction) {
@@ -232,7 +256,9 @@ export class UsuarioController {
             // `refreshToken` (opcional) es el de la sesión actual: se conserva al
             // cerrar las demás.
             const { nombre, email, currentPassword, refreshToken } = req.body ?? {};
+            const captura = await capturarSesionWeb(req, uid, refreshToken);
             const result = await updateMyProfileUC.execute(uid, { nombre, email, currentPassword }, refreshToken);
+            await restaurarSesionWeb(res, captura);
             await audit({
                 entidad: 'Usuario',
                 accion: 'update',
@@ -254,7 +280,9 @@ export class UsuarioController {
             const uid = context.getUser()?.userId;
             if (!uid) throw new BaseException(401, 'Sesión no válida', 'UNAUTHORIZED');
             const { currentPassword, newPassword, refreshToken } = req.body ?? {};
+            const captura = await capturarSesionWeb(req, uid, refreshToken);
             await changeMyPasswordUC.execute(uid, currentPassword, newPassword, refreshToken);
+            await restaurarSesionWeb(res, captura);
             await audit({
                 entidad: 'Usuario',
                 accion: 'update',

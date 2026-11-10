@@ -3,7 +3,7 @@ import prisma from '../database/prisma';
 import { logger } from '../logging/logger';
 import { conContextoSistema } from '../../application/services/consultaIngest';
 import { ConfigMeta, campoTokenParaCanal } from '../../domain/services/canalesMeta';
-import { descifrarSecreto } from '../security/secretBox';
+import { contextoSecreto, descifrarSecreto } from '../security/secretBox';
 import {
     CanalMetaConversacion,
     VENTANA_MENSAJERIA_MS,
@@ -283,13 +283,13 @@ async function nombreDesdeGraph(
     // descifra, que es lo que infraestructura sí puede hacer.
     const campo = campoTokenParaCanal(config, evento.canal);
     const crudo = campo ? config[campo] : '';
-    if (!crudo) return null;
+    if (!campo || !crudo) return null;
 
     try {
         const perfil = await llamarGraph<Record<string, unknown>>(
             encodeURIComponent(evento.contactoExternoId),
             {
-                token: descifrarSecreto(crudo),
+                token: descifrarSecreto(crudo, contextoSecreto.integracion(integracion.id, campo)),
                 // name/username son de Instagram; first_name/last_name de Messenger.
                 query: { fields: esInstagram ? 'name,username' : 'first_name,last_name' },
                 timeoutMs: 5_000,

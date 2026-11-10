@@ -6,7 +6,7 @@ import { withAuthBypass } from '../database/unitOfWork';
 import { logger } from '../logging/logger';
 import { env } from '../../config/env';
 import { conContextoSistema, ingestarConsulta } from '../../application/services/consultaIngest';
-import { descifrarSecreto } from '../security/secretBox';
+import { contextoSecreto, descifrarSecreto } from '../security/secretBox';
 import { resolverDestinoPublico, validarPuertoImap } from '../security/destinoSeguro';
 
 /**
@@ -93,7 +93,7 @@ async function procesarIntegracion(integracion: IntegracionCanal): Promise<void>
     try {
         // Contexto sintético del tenant: la extensión de Prisma scopea la ingesta
         // (dedupe, round-robin, create) a la concesionaria dueña del canal.
-        const resultado = await conContextoSistema(integracion.concesionariaId, () => revisarCasilla(config));
+        const resultado = await conContextoSistema(integracion.concesionariaId, () => revisarCasilla(integracion.id, config));
         ingeridas = resultado.ingeridas;
         ultimoErrorMsg = resultado.error;
     } catch (err) {
@@ -119,8 +119,12 @@ async function procesarIntegracion(integracion: IntegracionCanal): Promise<void>
     }
 }
 
-/** Conecta a la casilla, procesa los UNSEEN y devuelve el balance de la corrida. */
-async function revisarCasilla(config: ConfigEmail): Promise<{ ingeridas: number; error: string | null }> {
+/**
+ * Conecta a la casilla, procesa los UNSEEN y devuelve el balance de la corrida. El id de la
+ * integración viaja para descifrar la contraseña en SU contexto (AAD): la de otra casilla,
+ * copiada a esta fila, no abre.
+ */
+async function revisarCasilla(integracionId: number, config: ConfigEmail): Promise<{ ingeridas: number; error: string | null }> {
     // SSRF: el host lo cargó un admin de concesionaria. Se valida ACÁ, al conectar (no sólo al
     // guardar: el DNS puede haber cambiado a una IP interna desde entonces, 'DNS rebinding'),
     // y se conecta a la IP ya validada, no al nombre: así lo que se validó es lo que se usa.
@@ -133,7 +137,7 @@ async function revisarCasilla(config: ConfigEmail): Promise<{ ingeridas: number;
         secure: config.secure ?? true,
         // SNI y verificación del certificado TLS contra el NOMBRE del servidor, no contra la IP.
         servername: destino.host,
-        auth: { user: config.user ?? '', pass: config.pass ? descifrarSecreto(config.pass) : '' },
+        auth: { user: config.user ?? '', pass: config.pass ? descifrarSecreto(config.pass, contextoSecreto.integracion(integracionId, 'pass')) : '' },
         logger: false,
     });
     let ingeridas = 0;

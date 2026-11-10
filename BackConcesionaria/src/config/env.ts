@@ -39,13 +39,34 @@ const envSchema = z.object({
     // 64 hex = 32 bytes: `openssl rand -hex 32`. OBLIGATORIA en producción (ver el
     // superRefine). En desarrollo/test es opcional: sin ella los secretos se guardan en
     // claro (warning al arranque; los protege sólo la RLS).
+    // Es la clave ACTUAL: con ella se cifra todo lo que se guarda (formato v2, ver secretBox.ts).
     INTEGRACIONES_SECRET_KEY: z.preprocess(
         (v) => (v === '' ? undefined : v),
         z.string().regex(/^[0-9a-fA-F]{64}$/, 'INTEGRACIONES_SECRET_KEY debe ser 64 caracteres hex (openssl rand -hex 32)').optional(),
     ),
+    // Rotación: claves VIEJAS, separadas por comas, que sólo sirven para LEER lo que se cifró
+    // con ellas hasta que `npm run recifrar-secretos -- --apply` lo pase a la actual. Nunca se
+    // cifra con estas. Vacía = sin rotación en curso (lo normal). Procedimiento completo en
+    // docs/seguridad/criptografia-y-secretos.md. Los mensajes de error nunca incluyen el valor.
+    INTEGRACIONES_SECRET_KEYS_ANTERIORES: z.preprocess(
+        (v) => (typeof v === 'string' ? v.split(',').map((s) => s.trim()).filter((s) => s !== '') : v),
+        z.array(
+            z.string().regex(/^[0-9a-fA-F]{64}$/, 'Cada clave de INTEGRACIONES_SECRET_KEYS_ANTERIORES debe ser de 64 caracteres hex (openssl rand -hex 32), separadas por comas'),
+        ).default([]),
+    ),
     JWT_REFRESH_SECRET: z.string().min(10),
     JWT_EXPIRES_IN: z.string().default('15m'),
     JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+    // Vencimiento ABSOLUTO de la sesión, en días contados desde el login. Cada
+    // /auth/refresh rota y estira la sesión otros JWT_REFRESH_EXPIRES_IN (7 días):
+    // sin un tope, quien la renovara seguido (o un refresh robado que se siguiera
+    // rotando) no tenía que volver a poner la contraseña nunca. Pasado este plazo el
+    // refresh da 401 SESION_MAXIMA_VENCIDA y hay que volver a entrar, aunque la
+    // sesión se haya usado ayer. Entre 1 y 365; 30 por defecto.
+    SESION_MAX_DIAS: z.preprocess(
+        (v) => (v === undefined || v === '' ? undefined : Number(v)),
+        z.number().int().min(1).max(365).default(30),
+    ),
     LOG_LEVEL: z.string().default('debug'),
     CORS_ALLOWED_ORIGINS: z.string().optional().default('http://localhost:5173,http://localhost:3000'),
     UPLOADS_DIR: z.string().optional(),
@@ -126,6 +147,16 @@ const envSchema = z.object({
             code: z.ZodIssueCode.custom,
             path: [data.APP_DATABASE_URL ? 'APP_DB_PASSWORD' : 'APP_DATABASE_URL'],
             message: 'APP_DATABASE_URL y APP_DB_PASSWORD deben setearse juntas (o ninguna): el cutover al rol app_rw necesita ambas.',
+        });
+    }
+    // Claves anteriores sin una actual: se podría leer lo viejo pero todo lo nuevo se
+    // guardaría EN CLARO (sin clave actual no hay con qué cifrar). Casi seguro es una rotación
+    // a medias (se movió la clave a ANTERIORES y no se cargó la nueva). Aplica en todo entorno.
+    if (data.INTEGRACIONES_SECRET_KEYS_ANTERIORES.length > 0 && !data.INTEGRACIONES_SECRET_KEY) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['INTEGRACIONES_SECRET_KEY'],
+            message: 'Hay INTEGRACIONES_SECRET_KEYS_ANTERIORES pero falta INTEGRACIONES_SECRET_KEY: la actual es la única con la que se cifra. Al rotar, la clave nueva va en INTEGRACIONES_SECRET_KEY y la vieja en ANTERIORES.',
         });
     }
     if (data.NODE_ENV !== 'production') return;
