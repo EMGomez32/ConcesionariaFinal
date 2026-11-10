@@ -35,8 +35,8 @@ const PLANOS = {
     app: 'app-secret-plano',
     page: 'page-token-plano',
     pass: 'pass-imap-plana',
-    access: 'APP_USR-access-plano',
-    refresh: 'TG-refresh-plano',
+    accesoMl: 'acceso-ml-plano',
+    renovacionMl: 'renovacion-ml-plano',
     perdido: 'cifrado-con-clave-perdida',
 };
 
@@ -77,8 +77,8 @@ function armarBase(): Base {
         cuentas: [
             {
                 id: 20,
-                accessToken: cifrarSecreto(PLANOS.access, contextoSecreto.cuentaMl(20, 'access_token')),
-                refreshToken: cifrarSecreto(PLANOS.refresh, contextoSecreto.cuentaMl(20, 'refresh_token')),
+                accessToken: cifrarSecreto(PLANOS.accesoMl, contextoSecreto.cuentaMl(20, 'access_token')),
+                refreshToken: cifrarSecreto(PLANOS.renovacionMl, contextoSecreto.cuentaMl(20, 'refresh_token')),
                 updatedAt: AYER,
                 modo: 'real',
             },
@@ -189,8 +189,8 @@ describe('re-cifrado de secretos (rotación VIEJA → NUEVA)', () => {
         expect(descifrarSecreto(base.integraciones[1].config.pass as string, contextoSecreto.integracion(11, 'pass'))).toBe(PLANOS.pass);
 
         const [ml, vacia, demo] = base.cuentas;
-        expect(descifrarSecreto(ml.accessToken, contextoSecreto.cuentaMl(20, 'access_token'))).toBe(PLANOS.access);
-        expect(descifrarSecreto(ml.refreshToken, contextoSecreto.cuentaMl(20, 'refresh_token'))).toBe(PLANOS.refresh);
+        expect(descifrarSecreto(ml.accessToken, contextoSecreto.cuentaMl(20, 'access_token'))).toBe(PLANOS.accesoMl);
+        expect(descifrarSecreto(ml.refreshToken, contextoSecreto.cuentaMl(20, 'refresh_token'))).toBe(PLANOS.renovacionMl);
         expect(vacia.accessToken).toBe('');
         expect(demo.accessToken).toBe('demo:sin-token');
 
@@ -247,7 +247,7 @@ describe('re-cifrado de secretos (rotación VIEJA → NUEVA)', () => {
     });
 
     test('motivoSeguro: código de Prisma sí, mensaje no', () => {
-        const e = Object.assign(new Error(`falló con ${PLANOS.access}`), { name: 'PrismaClientKnownRequestError', code: 'P2002' });
+        const e = Object.assign(new Error(`falló con ${PLANOS.accesoMl}`), { name: 'PrismaClientKnownRequestError', code: 'P2002' });
         expect(motivoSeguro(e)).toBe('PrismaClientKnownRequestError (P2002)');
     });
 });

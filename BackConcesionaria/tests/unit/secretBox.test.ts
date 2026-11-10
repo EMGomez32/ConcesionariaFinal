@@ -259,7 +259,7 @@ describe('la API no acepta secretos con forma de sobre cifrado', () => {
     test('edición: lo entrante se valida; el valor en claro y el enmascarado pasan', () => {
         expect(schemas.updateMetaConfigSchema.safeParse({ pageAccessToken: blob }).success).toBe(false);
         expect(schemas.updateEmailConfigSchema.safeParse({ pass: blob }).success).toBe(false);
-        expect(schemas.updateMetaConfigSchema.safeParse({ pageAccessToken: 'EAAB-token-nuevo' }).success).toBe(true);
+        expect(schemas.updateMetaConfigSchema.safeParse({ pageAccessToken: 'nuevo' }).success).toBe(true);
         expect(schemas.updateMetaConfigSchema.safeParse({ appSecret: '••••••••' }).success).toBe(true);
     });
 
