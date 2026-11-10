@@ -2479,7 +2479,9 @@ model RefreshToken {
   // rotación hereda el del anterior). Viaja como `sid` en el access token, así una
   // request puede decir "ésta es mi sesión" sin tener el refresh en la mano (la web
   // no lo tiene: vive en la cookie httpOnly). Ver emitirSesion / ConservarSesionActual.
-  familia          String   @map("familia")
+  // La app siempre la pasa; el default de la base es para un INSERT a mano (scripts,
+  // tests): un token sin sesión conocida es una sesión propia.
+  familia          String   @default(dbgenerated("(gen_random_uuid())::text")) @map("familia")
   // Cuándo empezó la sesión (el login con contraseña y, si corresponde, 2FA). Cada
   // rotación lo hereda tal cual: es lo que corta la sesión a los SESION_MAX_DIAS
   // aunque se siga renovando todos los días. Los tokens anteriores a la columna

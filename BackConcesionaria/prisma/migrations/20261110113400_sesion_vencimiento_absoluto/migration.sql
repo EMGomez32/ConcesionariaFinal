@@ -19,6 +19,10 @@
 --    detección de reuso no depende de la familia (sigue cortando todas las
 --    sesiones del usuario).
 --
+-- Defaults: la app siempre pasa las dos columnas. Los defaults de la base son
+-- para un INSERT a mano (scripts de operación, tests): sin `familia` el token es
+-- su propia sesión (uuid nuevo) y sin inicio, la sesión empieza en ese momento.
+--
 -- Orden: columnas nulables → backfill → NOT NULL, para no fallar con la tabla
 -- con datos (el ADD COLUMN ... NOT NULL que genera Prisma sin default no se
 -- puede aplicar si hay filas).
@@ -32,6 +36,7 @@ UPDATE "refresh_tokens" SET "familia" = 'legado-' || "id" WHERE "familia" IS NUL
 UPDATE "refresh_tokens" SET "sesion_iniciada_at" = "created_at" WHERE "sesion_iniciada_at" IS NULL;
 
 ALTER TABLE "refresh_tokens" ALTER COLUMN "familia" SET NOT NULL,
+ALTER COLUMN "familia" SET DEFAULT (gen_random_uuid())::text,
 ALTER COLUMN "sesion_iniciada_at" SET NOT NULL,
 ALTER COLUMN "sesion_iniciada_at" SET DEFAULT CURRENT_TIMESTAMP;
 
