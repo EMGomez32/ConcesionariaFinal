@@ -49,13 +49,14 @@ describe('client: refresh con cookie (sin tokens en localStorage)', () => {
     beforeEach(() => {
         localStorage.clear();
         sessionStorage.clear();
-        useAuthStore.setState({ user: USUARIO, accessToken: 'viejo', refreshToken: null, isAuthenticated: true });
+        useAuthStore.setState({ user: USUARIO, accessToken: 'viejo', isAuthenticated: true });
     });
     afterEach(() => vi.restoreAllMocks());
 
     it('ante un 401 renueva UNA vez (single-flight) con cuerpo vacío + cookie y reintenta', async () => {
         const nuevo = jwt({ userId: 7 });
-        const post = vi.spyOn(axios, 'post').mockResolvedValue({ data: { access: nuevo, refresh: 'r2' } });
+        // La web recibe sólo el access: el refresh rotado viaja en la cookie.
+        const post = vi.spyOn(axios, 'post').mockResolvedValue({ data: { access: nuevo } });
         const vistos: string[] = [];
         const adapter: AxiosAdapter = async (config) => {
             const auth = String(new AxiosHeaders(config.headers).get('Authorization'));
@@ -69,10 +70,35 @@ describe('client: refresh con cookie (sin tokens en localStorage)', () => {
         const [url, body, cfg] = post.mock.calls[0];
         expect(url).toMatch(/\/auth\/refresh$/);
         expect(body).toEqual({});
-        expect(cfg).toMatchObject({ withCredentials: true });
+        // Con la cabecera web: el backend no manda el refresh en el cuerpo.
+        expect(cfg).toMatchObject({ withCredentials: true, headers: { 'X-Autenza-Cliente': 'web' } });
         expect(useAuthStore.getState().accessToken).toBe(nuevo);
-        // Nada de tokens en el storage: sólo el usuario.
+        // Nada de tokens en el storage: sólo el usuario. Y el refresh tampoco en memoria.
         expect(JSON.parse(localStorage.getItem('auth-storage') ?? '{}').state).toEqual({ user: USUARIO });
+        expect(useAuthStore.getState()).not.toHaveProperty('refreshToken');
+    });
+
+    it('toda request del cliente se identifica como la web (X-Autenza-Cliente: web)', async () => {
+        let cabecera: unknown;
+        const adapter: AxiosAdapter = async (config) => {
+            cabecera = new AxiosHeaders(config.headers).get('X-Autenza-Cliente');
+            return respuesta(config, 200, { ok: true });
+        };
+        await client.post('/auth/login', { email: 'v@x.com', password: 'x' }, { adapter });
+        expect(cabecera).toBe('web');
+    });
+
+    it('si la sesión llegó a su duración máxima, el login lo dice (no el "venció" genérico)', async () => {
+        useAuthStore.setState({ accessToken: null, isAuthenticated: false });
+        const config = { headers: new AxiosHeaders() } as InternalAxiosRequestConfig;
+        vi.spyOn(axios, 'post').mockRejectedValue(
+            new AxiosError('Request failed with status code 401', 'ERR_BAD_REQUEST', config, undefined, {
+                status: 401, statusText: '', data: { error: 'SESION_MAXIMA_VENCIDA', message: 'x' }, headers: {}, config,
+            }),
+        );
+        await expect(restaurarSesion()).resolves.toBe('vencida');
+        expect(useAuthStore.getState().user).toBeNull();
+        expect(leerAvisoLogin()).toBe('sesion-maxima');
     });
 
     it('un 401 del login (credenciales) no dispara el refresh', async () => {

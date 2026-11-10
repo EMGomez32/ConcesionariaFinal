@@ -7,6 +7,8 @@ export interface UserContext {
     roles: string[];
     /** Ver TokenPayload.mfaPending. */
     mfaPending?: boolean;
+    /** Id de la sesión (familia de sus refresh). Ver TokenPayload.sid. */
+    sid?: string;
 }
 
 export interface AppContext {

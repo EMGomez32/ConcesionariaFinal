@@ -1927,8 +1927,6 @@ const ConfiguracionPage = () => {
                 nombre: perfilForm.nombre.trim(),
                 email: perfilForm.email.trim(),
                 ...(emailCambio ? { currentPassword: perfilForm.currentPassword } : {}),
-                // Refresh de esta sesión: el backend la conserva al cerrar las demás.
-                refreshToken: useAuthStore.getState().refreshToken ?? undefined,
             });
             setUser({ nombre: perfilForm.nombre.trim(), email: perfilForm.email.trim() });
             addToast('Perfil actualizado', 'success');
@@ -1954,12 +1952,9 @@ const ConfiguracionPage = () => {
         }
         setSavingPass(true);
         try {
-            // Se cierran las demás sesiones; la de este navegador se conserva.
-            await usuariosApi.changeMyPassword(
-                passForm.current,
-                passForm.password,
-                useAuthStore.getState().refreshToken ?? undefined,
-            );
+            // Se cierran las demás sesiones; la de este navegador se conserva (el backend
+            // la reconoce por el access token y le rota la cookie).
+            await usuariosApi.changeMyPassword(passForm.current, passForm.password);
             addToast('Contraseña actualizada con éxito', 'success');
             setPassForm({ current: '', password: '', confirm: '' });
         } catch (err) {

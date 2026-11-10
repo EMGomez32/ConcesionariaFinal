@@ -12,7 +12,7 @@ import {
     confirmarSetupMfa, desactivarMfa, estadoMfa, iniciarSetupMfa, regenerarCodigosMfa, verificarSegundoFactor,
 } from '../../application/services/mfaService';
 import { emitirSesion } from '../../application/use-cases/auth/emitirSesion';
-import { ponerCookieRefresh } from './refreshCookie';
+import { ponerCookieRefresh, refreshParaElCuerpo, sinRefresh } from './refreshCookie';
 import { RevokeUserSessions } from '../../application/use-cases/auth/RevokeUserSessions';
 import { exigirContrasenaDelActor } from '../../application/services/reautenticacion';
 import { avisarCambioDeCuenta } from '../../infrastructure/email/mailer';
@@ -88,9 +88,11 @@ export class MfaController {
                 concesionariaId: u.concesionariaId,
                 detalle: '2FA activado (sesiones anteriores cerradas)',
             });
-            // La sesión vieja se acaba de cerrar: la cookie de la web pasa a la nueva.
+            // La sesión vieja se acaba de cerrar: la cookie de la web pasa a la nueva. La web
+            // no recibe el refresh en el cuerpo (ver refreshParaElCuerpo); la app móvil sí.
             ponerCookieRefresh(res, nueva.tokens.refresh);
-            res.json({ codigosRecuperacion, ...nueva });
+            const tokens = refreshParaElCuerpo(req) ? nueva.tokens : sinRefresh(nueva.tokens);
+            res.json({ codigosRecuperacion, ...nueva, tokens });
         } catch (error) { next(error); }
     }
 

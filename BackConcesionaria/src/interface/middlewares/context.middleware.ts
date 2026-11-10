@@ -29,6 +29,8 @@ export const contextMiddleware = (req: Request, res: Response, next: NextFunctio
                 sucursalId: decoded.sucursalId || null,
                 roles: decoded.roles || [],
                 ...(decoded.mfaPending === true ? { mfaPending: true } : {}),
+                // Sesión a la que pertenece el token (los anteriores al vencimiento absoluto no lo traen).
+                ...(typeof decoded.sid === 'string' && decoded.sid ? { sid: decoded.sid } : {}),
             };
         } catch (error) {
             // Token invalid or expired - we don't set user but keep going for public routes

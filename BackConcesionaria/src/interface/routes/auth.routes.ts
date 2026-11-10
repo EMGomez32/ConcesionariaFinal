@@ -28,7 +28,7 @@ const router = Router();
  *   post:
  *     tags: [Auth]
  *     summary: Iniciar sesión
- *     description: Devuelve el perfil del usuario y un par de tokens (access + refresh). El refresh también va en la cookie httpOnly `autenza_rt` (Path=/api/auth, SameSite=Strict) para la web. La auditoría registra `accion=login` con IP y userAgent.
+ *     description: Devuelve el perfil del usuario y un par de tokens (access + refresh). El refresh también va en la cookie httpOnly `autenza_rt` (Path=/api/auth, SameSite=Strict) para la web. Con la cabecera `X-Autenza-Cliente` en `web` el cuerpo trae sólo `tokens.access` (el refresh queda únicamente en la cookie). La auditoría registra `accion=login` con IP y userAgent.
  *     security: []
  *     requestBody:
  *       required: true
@@ -56,7 +56,7 @@ router.post('/login', loginLimiter, loginAccountLimiter, validateBody(loginSchem
  *   post:
  *     tags: [Auth]
  *     summary: Renovar access token
- *     description: Intercambia un refresh token válido por un par nuevo (rotación). El token sale de `body.refreshToken` si viene (app móvil) y si no de la cookie httpOnly `autenza_rt` (web); la respuesta rota esa cookie.
+ *     description: Intercambia un refresh token válido por un par nuevo (rotación). El token sale de `body.refreshToken` si viene (app móvil) y si no de la cookie httpOnly `autenza_rt` (web); la respuesta rota esa cookie. El refresh nuevo vuelve en el cuerpo SÓLO si el token vino en el cuerpo y sin `X-Autenza-Cliente` en `web`; si no, el cuerpo trae sólo `access`. La sesión dura como máximo SESION_MAX_DIAS (30) desde el login aunque se renueve: pasado ese plazo responde 401 con `error: SESION_MAXIMA_VENCIDA`.
  *     security: []
  *     requestBody:
  *       required: false
@@ -75,7 +75,7 @@ router.post('/login', loginLimiter, loginAccountLimiter, validateBody(loginSchem
  *               type: object
  *               properties:
  *                 access: { type: string }
- *                 refresh: { type: string }
+ *                 refresh: { type: string, description: 'Sólo si el refresh vino en el cuerpo y el cliente no es la web' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
 router.post('/refresh', refreshLimiter, validateBody(refreshSchema), AuthController.refresh);
@@ -142,7 +142,7 @@ router.post('/reset-password', resetPasswordLimiter, validateBody(resetPasswordS
  *   post:
  *     tags: [Auth]
  *     summary: Segundo paso del login con 2FA
- *     description: Con el mfaToken que devolvió /auth/login (5 min) y un código de la app o de recuperación. Devuelve la sesión y pone la cookie httpOnly `autenza_rt` con el refresh (igual que el login).
+ *     description: Con el mfaToken que devolvió /auth/login (5 min) y un código de la app o de recuperación. Devuelve la sesión y pone la cookie httpOnly `autenza_rt` con el refresh (igual que el login, también sin el refresh en el cuerpo para `X-Autenza-Cliente` en `web`).
  *     security: []
  */
 router.post('/login/2fa', mfaLoginIpLimiter, mfaLoginLimiter, validateBody(login2faSchema), AuthController.login2fa);
