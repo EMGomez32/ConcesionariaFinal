@@ -21,7 +21,7 @@ aplicación; cifrado de backups y de equipos.
 | Contraseñas de usuarios | bcrypt | `BackConcesionaria/src/application/use-cases/auth/Login.ts`, `use-cases/usuarios/` |
 | Tokens de sesión | JWT HS256 con algoritmo fijado | `BackConcesionaria/src/infrastructure/security/jwtOptions.ts` |
 | Refresh, reset y códigos de recuperación | Se guarda solo el hash | Repositorios de auth |
-| Secretos de integraciones y secretos TOTP | AES-256-GCM, IV aleatorio, formato versionado | `BackConcesionaria/src/infrastructure/security/secretBox.ts` |
+| Secretos de integraciones, tokens de Mercado Libre y secretos TOTP | AES-256-GCM, IV aleatorio, formato versionado (`enc:v2`) con AAD que ata cada valor a su fila y campo, e identificador de clave (`kid`) para rotar | `BackConcesionaria/src/infrastructure/security/secretBox.ts` |
 | Claves derivadas (MFA, URL firmada, `state` de OAuth) | HMAC con etiqueta de propósito | `mfaToken.ts`, `urlFirmada.ts`, `mlOauthState.ts` |
 | Webhooks de Meta | HMAC-SHA256 sobre el body, comparación en tiempo constante | `BackConcesionaria/src/infrastructure/integraciones/metaWebhook.ts` |
 | Backups | `age` (clave pública en el host, privada fuera) | `scripts/backup.sh`, [BACKUPS.md](../../scripts/BACKUPS.md) |
@@ -36,7 +36,7 @@ autenticación para proteger datos; los números aleatorios salen de
 |---|---|---|
 | `JWT_SECRET`, `JWT_REFRESH_SECRET` | `.env` de la raíz en el host | Gestor de contraseñas |
 | `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` / `APP_DATABASE_URL` | `.env` | Gestor |
-| `INTEGRACIONES_SECRET_KEY` | `.env` | Gestor (sin ella no se descifran integraciones ni 2FA de un dump) |
+| `INTEGRACIONES_SECRET_KEY` (y, durante una rotación, `INTEGRACIONES_SECRET_KEYS_ANTERIORES`) | `.env` | Gestor, **también las claves retiradas** mientras haya backups cifrados con ellas (sin la clave con que se cifró no se descifran integraciones ni 2FA de un dump) |
 | `SMTP_PASS`, `ML_CLIENT_SECRET` | `.env` | Gestor y panel del proveedor |
 | Credenciales del offsite | `.env` | Gestor |
 | `SECURITY_ALERT_WEBHOOK_URL`, `BACKUP_ALERT_CMD` | `.env` | Gestor |
@@ -66,12 +66,67 @@ autenticación para proteger datos; los números aleatorios salen de
 | JWT | Anual (`scripts/rotate-secrets.sh`) | Haya sospecha de robo de sesiones |
 | Contraseñas de base | Anual | Salga una persona con acceso al host |
 | SMTP, Mercado Libre, offsite, alertas | Anual | El proveedor avise de un incidente |
-| `INTEGRACIONES_SECRET_KEY` | Solo ante compromiso (rotarla exige re-vincular integraciones y reconfigurar el 2FA) | — |
+| `INTEGRACIONES_SECRET_KEY` | Cada 2 años (procedimiento de abajo; no hace falta re-vincular nada) | Salga una persona con acceso al `.env`, o haya sospecha de que se filtró (en ese caso, además, rotar en origen los secretos que protege: ver el runbook de incidentes) |
 | Clave de `age` | Cada 2 años | Se sospeche de la privada |
 | Llaves SSH | Al cambiar de equipo | Se pierda o se comparta un equipo |
 | Tokens de cuentas SaaS | Con vencimiento de 1 año como máximo | — |
 
 Pasos para cada secreto: [runbook de incidentes](../operacion/runbook-incidentes.md), sección C.
+
+### Rotación de `INTEGRACIONES_SECRET_KEY`
+
+Cómo funciona: cada secreto se guarda como `enc:v2:<kid>:<iv>:<tag>:<ct>`. El
+`kid` son los primeros 8 caracteres hex del SHA-256 de la clave: dice con qué
+clave se cifró sin revelarla. `INTEGRACIONES_SECRET_KEY` es la clave **actual**,
+la única con la que se cifra; `INTEGRACIONES_SECRET_KEYS_ANTERIORES` (lista
+separada por comas) son claves viejas que solo sirven para **leer** lo que todavía
+no se re-cifró. El backend loguea al arrancar el `kid` de la actual y de las
+anteriores (`[cifrado] …`), nunca las claves.
+
+Cada valor está atado a su lugar con datos autenticados (AAD) de la forma
+`<tabla>:<id>:<campo>` (`usuarios:<id>:totp_secret`,
+`integraciones_canal:<id>:config.<campo>`, `mercadolibre_cuentas:<id>:access_token`
+o `refresh_token`): un valor copiado a otra fila u otro campo no se descifra, falla.
+Los valores del formato anterior (`enc:v1`, sin AAD) y los que quedaron en claro
+se siguen leyendo, y pasan a v2 al volver a guardarse o con el script de abajo.
+
+Pasos (en el host, sin mostrar las claves en pantalla):
+
+1. Generar la clave nueva: `openssl rand -hex 32`. Guardarla en el gestor de
+   contraseñas **antes** de tocar el `.env`.
+2. En el `.env` de la raíz: la clave actual pasa a
+   `INTEGRACIONES_SECRET_KEYS_ANTERIORES` (si ya había otras, se agrega con una
+   coma) y la nueva va en `INTEGRACIONES_SECRET_KEY`.
+3. Deploy: `docker compose up -d backend`. En el log de arranque tiene que
+   aparecer el `kid` nuevo como actual y el viejo como anterior. Desde acá todo lo
+   que se guarda sale con la clave nueva y lo viejo se sigue leyendo.
+4. Simulación del re-cifrado:
+   `docker compose exec -T backend npm run recifrar-secretos </dev/null`.
+   Lista cuántos secretos hay por lugar y por versión/`kid`, y los ilegibles. No
+   modifica nada ni imprime ningún secreto.
+5. Aplicar: `docker compose exec -T backend npm run recifrar-secretos -- --apply </dev/null`.
+   Termina con «verificado: todo está en v2 con la clave …» si no quedó nada viejo.
+   Es idempotente: se puede repetir.
+6. Si la salida dice que hay ilegibles o que quedan secretos a re-cifrar, **no se
+   saca ninguna clave**: se revisa el motivo (un ilegible con `kid_desconocido` es
+   una clave que falta en `ANTERIORES`) y se repite el paso 5.
+7. Con la verificación en cero, sacar la clave vieja de
+   `INTEGRACIONES_SECRET_KEYS_ANTERIORES` y volver a hacer `docker compose up -d backend`.
+8. **No borrar la clave vieja del gestor** mientras existan backups tomados antes
+   de la rotación: esos dumps traen los secretos cifrados con ella (igual que la
+   clave de `age`). Anotar en el registro de rotaciones la fecha y los `kid`.
+
+Qué pasa si algo sale mal:
+
+- Si se saca una clave de `ANTERIORES` antes de tiempo, lo cifrado con ella falla
+  cerrado (no se manda a Meta, Mercado Libre ni IMAP, y el login con 2FA de esos
+  usuarios da error): se vuelve a poner la clave y se repite desde el paso 3. Las
+  cuentas de Mercado Libre no se desactivan por esto.
+- Volver a una imagen del backend anterior a este formato (rollback) deja
+  ilegible todo lo que se haya guardado en v2 desde el deploy: las versiones viejas
+  no conocen `enc:v2`. Si hace falta volver atrás, contar con re-vincular las
+  integraciones tocadas y con resetear el 2FA de los usuarios que lo configuraron
+  en el medio (`scripts/reset-2fa.ts`).
 
 ## Ante una filtración
 

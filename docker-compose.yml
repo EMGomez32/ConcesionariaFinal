@@ -116,11 +116,17 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
-      # Cifrado en reposo de los secretos de integraciones (Meta / IMAP).
-      # Opcional: sin ella el backend arranca igual, en claro y con warning.
+      # Cifrado en reposo de los secretos de integraciones (Meta / IMAP / Mercado
+      # Libre) y del 2FA. OBLIGATORIA: con NODE_ENV=production el backend no
+      # arranca sin ella. Es la clave ACTUAL (con la que se cifra).
       # OJO: el contenedor SÓLO ve las vars listadas acá (tomadas del .env de la
       # RAÍZ) — un valor puesto en BackConcesionaria/.env no llega al runtime.
       - INTEGRACIONES_SECRET_KEY=${INTEGRACIONES_SECRET_KEY:-}
+      # Rotación: claves VIEJAS (separadas por comas) que sólo sirven para leer lo
+      # que todavía no pasó a la actual con `npm run recifrar-secretos -- --apply`.
+      # Vacía = sin rotación en curso. Procedimiento en .env.example y en
+      # docs/seguridad/criptografia-y-secretos.md.
+      - INTEGRACIONES_SECRET_KEYS_ANTERIORES=${INTEGRACIONES_SECRET_KEYS_ANTERIORES:-}
       # Webhook (Slack/Discord/ntfy, etc.) al que el backend avisa eventos de
       # seguridad (p. ej. ráfagas de logins fallidos). Opcional: vacía = sin aviso
       # externo. Es un secreto (quien tenga la URL puede postear): sólo en el .env.

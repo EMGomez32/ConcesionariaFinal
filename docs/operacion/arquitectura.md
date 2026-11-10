@@ -140,9 +140,11 @@ request: usan `withAuthBypass` o fijan el tenant explícito.
 | Cotización del dólar | `src/infrastructure/cotizacion/dolarBlue.ts` | Solo lectura desde el servidor; si falla, no convierte. |
 | AFIP | `src/infrastructure/afip/` | Hoy solo modo simulado (CAE de prueba, rotulado sin validez fiscal). |
 
-Los secretos de integraciones y los secretos TOTP se guardan cifrados con
-AES-256-GCM (`src/infrastructure/security/secretBox.ts`) usando
-`INTEGRACIONES_SECRET_KEY`.
+Los secretos de integraciones, los tokens de Mercado Libre y los secretos TOTP se
+guardan cifrados con AES-256-GCM (`src/infrastructure/security/secretBox.ts`) usando
+`INTEGRACIONES_SECRET_KEY`, atados a su fila con AAD y con el identificador de la
+clave para poder rotarla (`INTEGRACIONES_SECRET_KEYS_ANTERIORES` +
+`npm run recifrar-secretos`; ver [criptografía y secretos](../seguridad/criptografia-y-secretos.md)).
 
 ## Registro
 
