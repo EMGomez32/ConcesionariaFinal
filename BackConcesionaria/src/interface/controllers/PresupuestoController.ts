@@ -11,6 +11,8 @@ import { PrismaVentaRepository } from '../../infrastructure/database/repositorie
 import { PrismaVehiculoRepository } from '../../infrastructure/database/repositories/PrismaVehiculoRepository';
 import { audit } from '../../infrastructure/security/audit';
 import { context } from '../../infrastructure/security/context';
+import { resolveConcesionariaId } from '../../infrastructure/security/resolveConcesionariaId';
+import { BaseException } from '../../domain/exceptions/BaseException';
 import prisma from '../../infrastructure/database/prisma';
 
 const repository = new PrismaPresupuestoRepository();
@@ -47,12 +49,18 @@ export class PresupuestoController {
 
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
-            // La concesionaria sale del token, no del body: el cliente nunca la
-            // manda. El use-case la necesita para numerar el presupuesto, y va
-            // después del spread para que un body malicioso no la pise.
+            // La concesionaria sale del token para todos los roles de una concesionaria
+            // (el body no la puede pisar: resolveConcesionariaId la ignora). Un super_admin
+            // es de plataforma (APP-02) y la elige en el body, como en el resto de los
+            // recursos; antes se tomaba la "suya", y el presupuesto quedaba en el tenant del
+            // super_admin en vez del que estaba operando. Va después del spread.
+            const concesionariaId = resolveConcesionariaId(req.body?.concesionariaId);
+            if (concesionariaId == null) {
+                throw new BaseException(400, 'Elegí una concesionaria para crear el presupuesto', 'VALIDATION_ERROR');
+            }
             const result = await createPresupuestoUC.execute({
                 ...req.body,
-                concesionariaId: context.getTenantId(),
+                concesionariaId,
             });
             await audit({
                 entidad: 'Presupuesto',

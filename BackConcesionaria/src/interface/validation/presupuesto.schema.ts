@@ -88,6 +88,9 @@ const canjeSchema = z.object({
 });
 
 export const createPresupuestoSchema = z.object({
+    // Sólo lo usa un super_admin para elegir la concesionaria (resolveConcesionariaId);
+    // para cualquier otro rol el controller lo ignora y toma la del token.
+    concesionariaId: optionalFk,
     // El front lo manda siempre; si faltara, CreatePresupuesto lo autogenera
     // (PRES-{YYYY}-{NNN}). Se declara opcional para PERSISTIR el que manda el front
     // (si se strippeara, se ignoraría su número y se autogeneraría uno distinto).

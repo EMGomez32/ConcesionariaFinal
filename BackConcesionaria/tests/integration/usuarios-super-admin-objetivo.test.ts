@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { api, loginAsAdmin, loginAsSuperAdmin, login, authHeaders, unique, tryDelete } from './helpers';
+import { api, loginAsAdmin, loginAsSuperAdmin, login, authHeaders, unique, tryDelete, concesionariaDeTest } from './helpers';
 
 const ADMIN_PASS = 'admin123';
 const SUPER_PASS = 'super123';
@@ -126,7 +126,7 @@ describe('Un super_admin no puede pertenecer a una concesionaria', () => {
     beforeAll(async () => {
         const sa = await loginAsSuperAdmin();
         saTok = sa.token;
-        tenantId = (await loginAsAdmin()).user.concesionariaId;
+        tenantId = await concesionariaDeTest();
         roles = await idsDeRoles(saTok);
     });
 
