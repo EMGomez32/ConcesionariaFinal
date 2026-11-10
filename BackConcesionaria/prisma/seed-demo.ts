@@ -4,7 +4,8 @@
  * pagos, una financiación con cuotas (algunas en mora) y gastos.
  *
  * Uso (en una instancia dedicada a demos, NO en la de un cliente real):
- *   docker compose exec backend npx ts-node prisma/seed-demo.ts
+ *   docker compose exec -T backend npm run seed-demo </dev/null
+ * (corre el JS compilado en dist-ops/: la imagen no trae ts-node. En local: `npm run seed-demo:dev`.)
  *
  * Seguridad: se niega a correr con NODE_ENV=production salvo SEED_DEMO_FORCE=true.
  * Es idempotente: si la concesionaria demo ya existe, no hace nada.

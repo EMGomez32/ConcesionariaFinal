@@ -12,8 +12,10 @@
  * Es idempotente: correrlo dos veces no duplica nada. No borra la columna vieja
  * ni la pisa, así que si algo sale mal el dato original sigue estando.
  *
- * Uso:  npx tsx prisma/backfill-tipos-postventa.ts
- *       npx tsx prisma/backfill-tipos-postventa.ts --dry-run
+ * Uso (en el contenedor del backend, compilado en dist-ops/; la imagen no trae ts-node):
+ *       docker compose exec -T backend node dist-ops/prisma/backfill-tipos-postventa.js --dry-run </dev/null
+ *       docker compose exec -T backend node dist-ops/prisma/backfill-tipos-postventa.js </dev/null
+ * En local, sin compilar: `npx ts-node prisma/backfill-tipos-postventa.ts [--dry-run]`.
  */
 import 'dotenv/config';
 import { Pool } from 'pg';

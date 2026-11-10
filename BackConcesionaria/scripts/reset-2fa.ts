@@ -3,7 +3,10 @@
  * hacerlo desde la app. El caso típico es el ÚNICO super_admin que perdió el teléfono y los códigos
  * de recuperación. Corre con acceso a la base (en el servidor):
  *
- *   docker compose exec -T backend npx ts-node scripts/reset-2fa.ts persona@dominio.com
+ *   docker compose exec -T backend node dist-ops/scripts/reset-2fa.js persona@dominio.com </dev/null
+ *
+ * (La imagen de producción no trae ts-node: corre este script compilado en dist-ops/. En local,
+ * sin compilar: `npx ts-node scripts/reset-2fa.ts <email>`.)
  *
  * Apaga el 2FA, borra los códigos de recuperación y cierra TODAS las sesiones de esa cuenta. Si el
  * rol exige 2FA (MFA_REQUIRED_ROLES), en el próximo login la cuenta tendrá que configurarlo de nuevo.
@@ -16,7 +19,7 @@ import { recordSecurityEvent } from '../src/infrastructure/security/securityEven
 async function main() {
     const email = String(process.argv[2] ?? '').trim().toLowerCase();
     if (!email) {
-        console.error('Uso: npx ts-node scripts/reset-2fa.ts <email>');
+        console.error('Uso: node dist-ops/scripts/reset-2fa.js <email>   (en local: npx ts-node scripts/reset-2fa.ts <email>)');
         process.exit(2);
     }
 

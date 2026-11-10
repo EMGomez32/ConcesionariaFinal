@@ -123,7 +123,9 @@ Todo rollback se registra en el log de deploys y, si hubo impacto, como incident
    `curl -d` se rompen: usá `-d '{}'` o un archivo.
 6. **Volúmenes nuevos:** Docker crea el punto de montaje como `root:root` si no
    existe en la imagen, y el backend corre como `node` (uid 1000). El
-   `Dockerfile` debe crear el directorio antes del `chown -R node:node /app`.
+   `Dockerfile` debe crear el directorio y darle dueño `node` en el
+   `mkdir -p ... && chown node:node ...` de la etapa final (el resto de `/app` es
+   de root y de solo lectura para la app).
    Para un volumen ya creado: `docker run --rm -v <volumen>:/vol alpine chown -R 1000:1000 /vol`.
 7. **Migraciones:** el arranque corre `prisma migrate deploy`. Nunca `db push`.
    Nunca `migrate diff --from-migrations` sin una shadow DB descartable: Prisma
@@ -146,7 +148,7 @@ Todo rollback se registra en el log de deploys y, si hubo impacto, como incident
     roles (`MFA_REQUIRED_ROLES` vacía). Para exigírselo sólo al super_admin:
     `MFA_REQUIRED_ROLES=super_admin` y `docker compose up -d backend`. Si se pierde el
     segundo factor y no quedan códigos de recuperación:
-    `docker compose exec -T backend npx ts-node scripts/reset-2fa.ts <email> </dev/null`
+    `docker compose exec -T backend node dist-ops/scripts/reset-2fa.js <email> </dev/null`
     (queda en `security_events`). Es un incidente: registralo.
 11. **Prisma Studio** es acceso de superusuario sin autenticación. Solo con
     `docker compose --profile debug up -d prisma-studio`, por túnel SSH al
@@ -165,6 +167,12 @@ Todo rollback se registra en el log de deploys y, si hubo impacto, como incident
     los secretos ya cifrados (integraciones y 2FA) quedan ilegibles. Si falta, se
     genera en el host con `openssl rand -hex 32` y se guarda una copia en el gestor
     de contraseñas; los secretos que estaban en claro se siguen leyendo.
+16. **La imagen del backend no trae ts-node ni typescript** (build multi-etapa).
+    Los scripts de operación van compilados en `dist-ops/`:
+    `docker compose exec -T backend node dist-ops/scripts/<script>.js ... </dev/null`.
+    Los de `npm run` (`retencion`, `seed`, `seed-demo`, `init-rls`,
+    `setup-app-role`) ya corren ese JS. Nunca `npx ts-node` dentro del
+    contenedor: sin TTY, npx lo baja del registro de npm en vez de fallar.
 
 ## 7. Una sola vez: primer deploy del hardening (PR #114)
 
@@ -184,8 +192,8 @@ Después:
 1. Documentos de vehículos a la zona privada: primero la simulación y, si la
    lista es la esperada, `--aplicar`; al final otra simulación tiene que dar cero.
    ```bash
-   docker compose exec -T backend npx ts-node scripts/migrar-documentos-vehiculos.ts </dev/null
-   docker compose exec -T backend npx ts-node scripts/migrar-documentos-vehiculos.ts --aplicar </dev/null
+   docker compose exec -T backend node dist-ops/scripts/migrar-documentos-vehiculos.js </dev/null
+   docker compose exec -T backend node dist-ops/scripts/migrar-documentos-vehiculos.js --aplicar </dev/null
    ```
 2. Purgar en Cloudflare la caché de las URLs que listó el script y de
    `/uploads/solicitudes-*` (antes se servían como públicas).
